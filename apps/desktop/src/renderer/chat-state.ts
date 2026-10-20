@@ -127,6 +127,95 @@ export function applyEvent(state: ChatState, seq: number, raw: unknown): ChatSta
   }
 }
 
+/**
+ * Pi의 `get_messages` 결과(확정된 대화 전체)로 화면 상태를 다시 만든다 (설계 §3.4 스냅샷 복구).
+ *
+ * 저널 앞부분이 잘렸거나, 데몬이 재시작되어 세션 파일로 다시 연 경우에 쓴다.
+ * - 응답 속 toolCall 블록마다 툴 카드를 만들고, 뒤따르는 toolResult로 결과를 채운다
+ * - `!` 셸 명령(bashExecution)도 툴 카드로 보여준다
+ * - 실행 중(running)인데 마지막이 응답이 아니면, 진행 중인 응답의 델타를 받을 빈 응답을 하나 둔다
+ *   (get_messages에는 아직 끝나지 않은 메시지가 없으므로)
+ *
+ * @param lastSeq 스냅샷 시점까지 반영한 저널 순번. 이후 실시간 이벤트만 이어서 적용된다.
+ */
+export function snapshotState(messages: unknown[], lastSeq: number, running: boolean): ChatState {
+  const items: ChatItem[] = [];
+  messages.forEach((raw, index) => {
+    if (typeof raw !== "object" || raw === null) return;
+    const message = raw as AnyEvent;
+    const key = `s${index}`;
+    switch (message.role) {
+      case "user":
+        items.push({ kind: "user", key, text: contentText(message.content) });
+        break;
+      case "assistant": {
+        const item: Extract<ChatItem, { kind: "assistant" }> = {
+          kind: "assistant",
+          key,
+          blocks: blocksFromContent(message.content),
+          done: true,
+        };
+        if (typeof message.stopReason === "string") item.stopReason = message.stopReason;
+        if (typeof message.errorMessage === "string") item.errorMessage = message.errorMessage;
+        items.push(item);
+        // 툴 호출은 결과가 올 때까지 실행 중으로 둔다.
+        const calls = Array.isArray(message.content) ? (message.content as AnyEvent[]) : [];
+        calls
+          .filter((part) => part.type === "toolCall")
+          .forEach((part, i) =>
+            items.push({
+              kind: "tool",
+              key: `${key}-t${i}`,
+              toolCallId: String(part.id),
+              toolName: String(part.name ?? ""),
+              args: part.arguments ?? {},
+              status: running ? "running" : "done",
+              output: "",
+            }),
+          );
+        break;
+      }
+      case "toolResult": {
+        const index = items.findIndex((item) => item.kind === "tool" && item.toolCallId === String(message.toolCallId));
+        const tool = items[index];
+        if (tool?.kind === "tool") {
+          items[index] = {
+            ...tool,
+            status: message.isError === true ? "error" : "done",
+            output: contentText(message.content),
+          };
+        }
+        break;
+      }
+      case "bashExecution":
+        items.push({
+          kind: "tool",
+          key,
+          toolCallId: key,
+          toolName: "!bash",
+          args: { command: message.command },
+          status: message.exitCode === 0 ? "done" : "error",
+          output: String(message.output ?? ""),
+        });
+        break;
+      case "compactionSummary":
+        items.push({ kind: "notice", key, level: "info", text: "이전 대화가 요약(컴팩션)되었습니다." });
+        break;
+      default:
+        // custom, branchSummary 등은 M1 후반에 표시 방법을 정한다.
+        break;
+    }
+  });
+
+  // 툴이 아직 실행 중이면 다음 응답은 실시간 message_start로 새로 생기므로 자리를 만들지 않는다.
+  const last = items.at(-1);
+  const toolStillRunning = last?.kind === "tool" && last.status === "running";
+  if (running && last?.kind !== "assistant" && !toolStillRunning) {
+    items.push({ kind: "assistant", key: "s-live", blocks: [], done: false });
+  }
+  return { items, running, lastSeq };
+}
+
 /** 프롬프트를 보냈는데 Pi가 거부했을 때처럼, 이벤트가 아닌 안내를 끼워 넣는다. */
 export function addNotice(state: ChatState, level: "info" | "error", text: string): ChatState {
   return { ...state, items: [...state.items, { kind: "notice", key: `n${Date.now()}-${state.items.length}`, level, text }] };
