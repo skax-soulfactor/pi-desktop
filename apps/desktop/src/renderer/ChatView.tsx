@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AssistantBlock, ChatItem } from "./chat-state";
+import { Markdown } from "./markdown/Markdown";
 
 /** 대화 목록. 새 내용이 오면 사용자가 위로 스크롤해 둔 경우가 아니면 맨 아래로 따라간다. */
 export function ChatView({ items, running }: { items: ChatItem[]; running: boolean }) {
@@ -60,7 +61,7 @@ function Block({ block }: { block: AssistantBlock }) {
     ) : null;
   }
   if (block.type === "toolCall") return null; // 툴 실행 카드에서 따로 보여준다.
-  return <div className="text">{block.text}</div>;
+  return <Markdown text={block.text} />;
 }
 
 function ToolCard({ item }: { item: Extract<ChatItem, { kind: "tool" }> }) {

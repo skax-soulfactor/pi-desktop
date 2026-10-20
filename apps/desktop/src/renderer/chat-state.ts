@@ -1,3 +1,5 @@
+import { formatTokens } from "./format";
+
 /**
  * Pi RPC 이벤트를 채팅 화면 상태로 바꾸는 순수 함수 (설계 §4.1).
  *
@@ -122,9 +124,50 @@ export function applyEvent(state: ChatState, seq: number, raw: unknown): ChatSta
         return updated;
       });
 
+    case "compaction_start":
+      return withNotice(next, `c${seq}`, "info", `컨텍스트를 요약(컴팩션)하는 중… (${COMPACTION_REASONS[String(event.reason)] ?? "요청"})`);
+
+    case "compaction_end": {
+      const result = event.result as { tokensBefore?: number; estimatedTokensAfter?: number } | undefined;
+      if (result) {
+        return withNotice(
+          next,
+          `c${seq}`,
+          "info",
+          `요약 완료: ${formatTokens(result.tokensBefore)} → 약 ${formatTokens(result.estimatedTokensAfter)} 토큰`,
+        );
+      }
+      if (event.aborted === true) return withNotice(next, `c${seq}`, "info", "요약을 중단했습니다.");
+      return withNotice(next, `c${seq}`, "error", `요약 실패: ${String(event.errorMessage ?? "알 수 없는 오류")}`);
+    }
+
+    case "auto_retry_start":
+      return withNotice(
+        next,
+        `r${seq}`,
+        "info",
+        `응답 오류로 ${Math.round(Number(event.delayMs ?? 0) / 1000)}초 뒤 다시 시도합니다 ` +
+          `(${String(event.attempt)}/${String(event.maxAttempts)}): ${String(event.errorMessage ?? "")}`,
+      );
+
+    case "auto_retry_end":
+      return event.success === false
+        ? withNotice(next, `r${seq}`, "error", `재시도 실패: ${String(event.finalError ?? "알 수 없는 오류")}`)
+        : next;
+
     default:
       return next;
   }
+}
+
+const COMPACTION_REASONS: Record<string, string> = {
+  manual: "수동",
+  threshold: "컨텍스트 임계치 도달",
+  overflow: "컨텍스트 초과",
+};
+
+function withNotice(state: ChatState, key: string, level: "info" | "error", text: string): ChatState {
+  return { ...state, items: [...state.items, { kind: "notice", key, level, text }] };
 }
 
 /**

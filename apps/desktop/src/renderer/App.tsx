@@ -1,6 +1,8 @@
 import { useState, type KeyboardEvent } from "react";
 import { ChatView } from "./ChatView";
 import { useSession } from "./use-session";
+import { SessionBar } from "./SessionBar";
+import { useSessionInfo } from "./use-session-info";
 
 export function App() {
   const { hosts, host, hostId, selectHost, connection, sessions, session, lost, chat, openSession, reopenLost, switchTo, send } =
@@ -12,6 +14,7 @@ export function App() {
   const [error, setError] = useState<string | undefined>();
 
   const connected = connection.status === "connected";
+  const sessionInfo = useSessionInfo(hostId, session, connected && !lost);
 
   async function guard(task: () => Promise<void>) {
     setBusy(true);
@@ -146,6 +149,17 @@ export function App() {
         </div>
       )}
       {error && <div className="banner error">{error}</div>}
+
+      {session && (
+        <SessionBar
+          info={sessionInfo.info}
+          running={chat.running}
+          disabled={!connected || Boolean(lost) || busy}
+          onModel={(provider, id) => void guard(() => sessionInfo.setModel(provider, id))}
+          onThinking={(level) => void guard(() => sessionInfo.setThinkingLevel(level))}
+          onCompact={() => void guard(sessionInfo.compact)}
+        />
+      )}
 
       <ChatView items={chat.items} running={chat.running} />
 

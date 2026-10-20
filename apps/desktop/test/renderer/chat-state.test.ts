@@ -130,3 +130,35 @@ describe("applyEvent", () => {
     expect(state.lastSeq).toBe(5);
   });
 });
+
+describe("applyEvent — 컴팩션·재시도 안내", () => {
+  it("컴팩션 시작과 결과(토큰 감소)를 안내한다", () => {
+    const state = run([
+      { type: "compaction_start", reason: "threshold" },
+      { type: "compaction_end", reason: "threshold", result: { tokensBefore: 150000, estimatedTokensAfter: 32000 } },
+    ]);
+    expect(state.items.map((i) => (i.kind === "notice" ? i.text : ""))).toEqual([
+      "컨텍스트를 요약(컴팩션)하는 중… (컨텍스트 임계치 도달)",
+      "요약 완료: 150k → 약 32k 토큰",
+    ]);
+  });
+
+  it("컴팩션 실패는 오류로, 중단은 안내로 보여준다", () => {
+    const failed = run([{ type: "compaction_end", reason: "manual", aborted: false, errorMessage: "boom" }]);
+    expect(failed.items[0]).toMatchObject({ kind: "notice", level: "error", text: "요약 실패: boom" });
+    const aborted = run([{ type: "compaction_end", reason: "manual", aborted: true }]);
+    expect(aborted.items[0]).toMatchObject({ kind: "notice", level: "info", text: "요약을 중단했습니다." });
+  });
+
+  it("자동 재시도 시작과 최종 실패를 안내하고, 성공한 재시도는 조용히 넘어간다", () => {
+    const state = run([
+      { type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 2000, errorMessage: "529 overloaded" },
+      { type: "auto_retry_end", success: true, attempt: 2 },
+      { type: "auto_retry_end", success: false, attempt: 3, finalError: "429" },
+    ]);
+    expect(state.items).toMatchObject([
+      { kind: "notice", level: "info", text: "응답 오류로 2초 뒤 다시 시도합니다 (1/3): 529 overloaded" },
+      { kind: "notice", level: "error", text: "재시도 실패: 429" },
+    ]);
+  });
+});
