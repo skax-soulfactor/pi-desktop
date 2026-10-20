@@ -17,5 +17,8 @@
   },
   "dependencies": {
     "@pi-desktop/host-protocol": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.3.0"
   }
 }
