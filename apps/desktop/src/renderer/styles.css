@@ -415,11 +415,63 @@ button.small {
 }
 
 .composer {
+  position: relative;
   display: flex;
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--border);
   background: var(--panel);
+}
+
+/* `/` 명령 자동완성: 입력창 바로 위에 뜬다 */
+.suggestions {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 100%;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0 0 4px;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+  z-index: 5;
+}
+
+.suggestions li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.suggestions li.selected {
+  background: var(--panel-2);
+}
+
+.suggestion-name {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.suggestion-source {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.suggestion-desc {
+  flex: 1;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .composer textarea {
