@@ -33,7 +33,8 @@ export const Notifications = {
 export interface HostInfo {
   protocolVersion: number;
   agentVersion: string;
-  platform: NodeJS.Platform;
+  /** Node의 process.platform 값 (win32, linux, darwin 등) */
+  platform: string;
   arch: string;
   nodeVersion: string;
   pid: number;
