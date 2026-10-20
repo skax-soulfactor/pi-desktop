@@ -19,6 +19,7 @@ import {
   type SessionAttachResult,
   type SessionEventNotification,
   type SessionExitNotification,
+  type SessionUiResolvedNotification,
   type SessionOpenParams,
   type SessionOpenResult,
   type SessionRef,
@@ -216,6 +217,7 @@ export class AgentDaemon {
         session: session.summary(),
         truncated,
         replayed: first && last ? { fromSeq: first.seq, toSeq: last.seq } : null,
+        pendingUi: session.dialogs.ids(),
       };
     });
 
@@ -262,6 +264,12 @@ export class AgentDaemon {
       const notification: SessionEventNotification = { sessionId: session.id, ...entry };
       for (const client of this.clients) {
         if (client.attached.has(session.id)) client.peer.notify(Notifications.sessionEvent, notification);
+      }
+    });
+    session.onDialogResolved((id) => {
+      const notification: SessionUiResolvedNotification = { sessionId: session.id, id };
+      for (const client of this.clients) {
+        if (client.attached.has(session.id)) client.peer.notify(Notifications.sessionUiResolved, notification);
       }
     });
     session.onExit((exit) => {

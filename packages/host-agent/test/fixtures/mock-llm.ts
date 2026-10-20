@@ -7,6 +7,7 @@ import type { AddressInfo } from "node:net";
  * API 키 없이 실제 Pi를 끝까지 돌려 보기 위한 것이다. 응답 규칙은 고정이다.
  * - 마지막 메시지가 툴 결과면 → "파일 내용: <결과>" 텍스트
  * - 사용자 메시지에 "read:<경로>"가 있으면 → read 툴 호출
+ * - 사용자 메시지에 "bash:<명령>"이 있으면 → bash 툴 호출 (확장의 위험 명령 확인 테스트용)
  * - 그 밖에는 → "echo: <사용자 메시지>" 텍스트를 단어 단위로 스트리밍
  */
 export interface MockLlm {
@@ -58,17 +59,23 @@ export async function startMockLlm(port = 0): Promise<MockLlm> {
 
     const userText = textOf([...messages].reverse().find((m) => m.role === "user")?.content);
     const readTarget = /read:(\S+)/.exec(userText)?.[1];
+    const bashCommand = /bash:(.+)$/.exec(userText)?.[1]?.trim();
+    const toolCall = (name: string, args: Record<string, unknown>) => {
+      send({
+        role: "assistant",
+        tool_calls: [{ index: 0, id: "call_1", type: "function", function: { name, arguments: "" } }],
+      });
+      send({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] });
+      send({}, "tool_calls");
+    };
 
     if (last?.role === "tool") {
       for (const word of `파일 내용: ${textOf(last.content).trim()}`.split(/(?<= )/)) send({ content: word });
       send({}, "stop");
     } else if (readTarget) {
-      send({
-        role: "assistant",
-        tool_calls: [{ index: 0, id: "call_1", type: "function", function: { name: "read", arguments: "" } }],
-      });
-      send({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify({ path: readTarget }) } }] });
-      send({}, "tool_calls");
+      toolCall("read", { path: readTarget });
+    } else if (bashCommand) {
+      toolCall("bash", { command: bashCommand });
     } else {
       send({ role: "assistant", content: "" });
       for (const word of `echo: ${userText}`.split(/(?<= )/)) {

@@ -5,6 +5,8 @@
 // 3. 데몬 홈도 저장소의 .dev/ 아래로 격리해 실제 ~/.pi-desktop, ~/.pi 와 섞이지 않게 한다
 // 4. electron-vite dev를 실행한다
 //
+// --demo-ext: Pi 패키지에 들어 있는 rpc-demo 확장을 함께 불러온다 (확장 UI 다이얼로그 확인용).
+//
 // 앱을 껐다 켜도 같은 데몬·세션에 다시 붙는지 확인할 수 있도록 경로와 포트를 고정한다.
 // mock-llm.ts는 Node 22.18+/24의 TypeScript 타입 제거 기능으로 바로 import한다.
 import { spawn } from "node:child_process";
@@ -16,6 +18,9 @@ const repo = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const devDir = join(repo, ".dev");
 const piAgentDir = join(devDir, "pi-agent");
 const port = Number(process.env.MOCK_LLM_PORT ?? 18911);
+const demoExtension = process.argv.includes("--demo-ext")
+  ? join(repo, "node_modules", "@earendil-works", "pi-coding-agent", "examples", "extensions", "rpc-demo.ts")
+  : undefined;
 
 const { startMockLlm } = await import(
   new URL("../../../packages/host-agent/test/fixtures/mock-llm.ts", import.meta.url).href
@@ -40,13 +45,16 @@ const env = {
   ...process.env,
   PI_DESKTOP_HOME: join(devDir, "pi-desktop-home"),
   PI_DESKTOP_PI_CLI: join(repo, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "bundle", "cli.js"),
-  PI_DESKTOP_PI_ARGS: "--provider mock --model mock-model",
+  PI_DESKTOP_PI_ARGS: ["--provider mock --model mock-model", demoExtension ? `-e ${demoExtension}` : ""].join(" ").trim(),
   PI_CODING_AGENT_DIR: piAgentDir,
   PI_CODING_AGENT_SESSION_DIR: join(piAgentDir, "sessions"),
 };
 
 console.log(`[dev-mock] mock LLM: ${llm.baseUrl}`);
-console.log(`[dev-mock] 프롬프트 예: "안녕" → echo, "read:package.json" → read 툴 호출`);
+console.log(`[dev-mock] 프롬프트 예: "안녕" → echo, "read:package.json" → read 툴 호출, "bash:<명령>" → bash 툴 호출`);
+if (demoExtension) {
+  console.log("[dev-mock] rpc-demo 확장 사용: /rpc-input, /rpc-editor, /rpc-prefill, \"bash:rm -rf ./x\"(위험 명령 확인)");
+}
 
 const child = spawn("npm", ["run", "dev"], {
   cwd: fileURLToPath(new URL("..", import.meta.url)),

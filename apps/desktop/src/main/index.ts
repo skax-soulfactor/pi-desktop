@@ -7,13 +7,15 @@ import {
   type PiLocation,
   type PiResponse,
   type SessionAttachResult,
+  type SessionEventNotification,
   type SessionOpenParams,
   type SessionOpenResult,
   type SessionSummary,
 } from "@pi-desktop/host-protocol";
-import { IpcChannels, type OpenSessionRequest } from "../shared/api";
+import { IpcChannels, type AttachResult, type OpenSessionRequest } from "../shared/api";
 import { devSessionOverrides } from "./dev-overrides";
 import { HostManager, LOCAL_HOST_ID } from "./host-manager";
+import { ReplayCollector } from "./replay-collector";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -38,6 +40,8 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT) {
 
 let mainWindow: BrowserWindow | undefined;
 let hosts: HostManager | undefined;
+const replays = new ReplayCollector<SessionEventNotification>();
+const replayKey = (hostId: string, sessionId: string) => `${hostId}::${sessionId}`;
 
 /** 렌더러로 알림을 보낸다. 창이 닫혀 있으면 버린다 (다시 열면 저널에서 재생하므로 잃지 않음). */
 function sendToRenderer(channel: string, ...payload: unknown[]): void {
@@ -95,9 +99,17 @@ function registerIpc(manager: HostManager): void {
     const result = await conn(hostId).request<SessionOpenResult>(Methods.sessionOpen, params);
     return result.session;
   });
-  ipcMain.handle(IpcChannels.attachSession, (_event, hostId: string, sessionId: string, lastSeq: number) =>
-    conn(hostId).request<SessionAttachResult>(Methods.sessionAttach, { sessionId, lastSeq }),
-  );
+  ipcMain.handle(IpcChannels.attachSession, async (_event, hostId: string, sessionId: string, lastSeq: number) => {
+    const key = replayKey(hostId, sessionId);
+    const events = replays.begin(key);
+    try {
+      const result = await conn(hostId).request<SessionAttachResult>(Methods.sessionAttach, { sessionId, lastSeq });
+      const reply: AttachResult = { ...result, events };
+      return reply;
+    } finally {
+      replays.end(key, events);
+    }
+  });
   ipcMain.handle(IpcChannels.closeSession, (_event, hostId: string, sessionId: string) =>
     conn(hostId).request(Methods.sessionClose, { sessionId }),
   );
@@ -105,6 +117,12 @@ function registerIpc(manager: HostManager): void {
     IpcChannels.sendCommand,
     (_event, hostId: string, sessionId: string, command: Record<string, unknown>) =>
       conn(hostId).request<PiResponse>(Methods.sessionSend, { sessionId, command }),
+  );
+  ipcMain.handle(
+    IpcChannels.sendRecord,
+    async (_event, hostId: string, sessionId: string, record: Record<string, unknown>) => {
+      await conn(hostId).request(Methods.sessionSend, { sessionId, command: record, noResponse: true });
+    },
   );
   ipcMain.handle(IpcChannels.pickDirectory, async () => {
     const options = { properties: ["openDirectory" as const] };
@@ -119,8 +137,12 @@ app.whenReady().then(() => {
     agentScript: script,
     agentVersion: agentVersion(script),
     onState: (hostId, state) => sendToRenderer(IpcChannels.connectionChanged, hostId, state),
-    onSessionEvent: (hostId, n) => sendToRenderer(IpcChannels.sessionEvent, hostId, n),
+    // attach 중인 세션의 이벤트는 attach 결과에 담아 보낸다 (replay-collector.ts 참고).
+    onSessionEvent: (hostId, n) => {
+      if (!replays.capture(replayKey(hostId, n.sessionId), n)) sendToRenderer(IpcChannels.sessionEvent, hostId, n);
+    },
     onSessionExit: (hostId, n) => sendToRenderer(IpcChannels.sessionExit, hostId, n),
+    onUiResolved: (hostId, n) => sendToRenderer(IpcChannels.uiResolved, hostId, n),
   });
   registerIpc(hosts);
   createWindow();

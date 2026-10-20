@@ -504,3 +504,151 @@ textarea {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
+
+/* ── 확장 UI: 다이얼로그 ──────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 45%);
+  z-index: 20;
+}
+
+.modal {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 35%);
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.modal-badge {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.modal-timer {
+  color: var(--warn);
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-title {
+  font-size: 16px;
+  margin: 10px 0 6px;
+  word-break: break-word;
+}
+
+.modal-message {
+  margin: 0 0 12px;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.modal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.modal-options button {
+  text-align: left;
+}
+
+.modal-input,
+.modal-editor {
+  width: 100%;
+  margin: 8px 0 12px;
+}
+
+.modal-editor {
+  font: 13px/1.5 ui-monospace, Consolas, monospace;
+  resize: vertical;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* ── 확장 UI: 토스트·위젯·상태 ────────────────────────── */
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 30;
+  max-width: min(420px, calc(100vw - 32px));
+}
+
+.toast {
+  text-align: left;
+  border-left: 4px solid var(--accent);
+  background: var(--panel);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+  white-space: pre-wrap;
+}
+
+.toast.warning {
+  border-left-color: var(--warn);
+}
+
+.toast.error {
+  border-left-color: var(--bad);
+}
+
+.widgets {
+  padding: 6px 16px 0;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+.widgets.belowEditor {
+  border-top: 0;
+  padding: 0 16px 6px;
+}
+
+.widget {
+  margin: 0;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 12px/1.5 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.status-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 16px 6px;
+  background: var(--panel);
+  font-size: 12px;
+}
+
+.status-item {
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 8px;
+}

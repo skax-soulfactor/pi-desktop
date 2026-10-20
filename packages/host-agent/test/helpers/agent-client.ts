@@ -10,6 +10,7 @@ import {
   Methods,
   Notifications,
   type SessionEventNotification,
+  type SessionUiResolvedNotification,
 } from "@pi-desktop/host-protocol";
 
 /** 번들된 Host Agent. 테스트 전에 `npm run build`가 실행된다. */
@@ -27,6 +28,8 @@ export async function isolatedEnv(extra: Record<string, string> = {}): Promise<N
 export class TestClient {
   readonly peer: JsonRpcPeer;
   readonly events: SessionEventNotification[] = [];
+  /** session.uiResolved로 받은 다이얼로그 id */
+  readonly uiResolved: string[] = [];
   private readonly child: ChildProcessWithoutNullStreams;
   private readonly waiters = new Set<() => void>();
 
@@ -40,6 +43,9 @@ export class TestClient {
     this.child.stdout.on("data", (c: Buffer) => reader.push(c));
     this.child.stdin.on("error", () => {});
     this.child.on("exit", () => this.peer.close());
+    this.peer.on(Notifications.sessionUiResolved, (p) => {
+      this.uiResolved.push((p as SessionUiResolvedNotification).id);
+    });
     this.peer.on(Notifications.sessionEvent, (p) => {
       this.events.push(p as SessionEventNotification);
       for (const w of this.waiters) w();

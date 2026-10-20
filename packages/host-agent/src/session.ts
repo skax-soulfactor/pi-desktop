@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PiLocation, PiResponse, SessionSummary } from "@pi-desktop/host-protocol";
 import { EventJournal, type JournalEntry } from "./journal";
+import { PendingDialogs } from "./pending-dialogs";
 import { PiProcess, type PiExit } from "./pi-process";
 
 export interface AgentSessionOptions {
@@ -27,6 +28,11 @@ export class AgentSession {
   private exitInfo: PiExit | undefined;
   private readonly entryListeners = new Set<(entry: JournalEntry) => void>();
   private readonly exitListeners = new Set<(exit: PiExit) => void>();
+  private readonly dialogListeners = new Set<(id: string) => void>();
+  /** 아직 아무도 답하지 않은 확장 다이얼로그 */
+  readonly dialogs = new PendingDialogs((id) => {
+    for (const listener of this.dialogListeners) listener(id);
+  });
 
   constructor(private readonly options: AgentSessionOptions) {
     this.journal = new EventJournal(options.journalCapacity);
@@ -48,11 +54,13 @@ export class AgentSession {
    */
   async start(): Promise<void> {
     this.process.onRecord((record) => {
+      this.dialogs.observe(record);
       const entry = this.journal.append(record);
       for (const listener of this.entryListeners) listener(entry);
     });
     this.process.onExit((exit) => {
       this.exitInfo = exit;
+      this.dialogs.clear();
       for (const listener of this.exitListeners) listener(exit);
     });
     this.process.start();
@@ -79,8 +87,16 @@ export class AgentSession {
     return this.process.send(command);
   }
 
+  /** 응답이 없는 레코드를 Pi에 보낸다. 확장 다이얼로그 응답이면 대기 목록에서 뺀다. */
   sendRaw(record: Record<string, unknown>): void {
     this.process.sendRaw(record);
+    if (record.type === "extension_ui_response" && typeof record.id === "string") this.dialogs.resolve(record.id);
+  }
+
+  /** 확장 다이얼로그가 처리될 때 (응답, 제한 시간, Pi 종료) */
+  onDialogResolved(listener: (id: string) => void): () => void {
+    this.dialogListeners.add(listener);
+    return () => this.dialogListeners.delete(listener);
   }
 
   onEntry(listener: (entry: JournalEntry) => void): () => void {
@@ -113,6 +129,7 @@ export class AgentSession {
       lastSeq: this.journal.lastSeq,
       piVersion: this.options.pi.version,
       startedAt: this.startedAt,
+      pendingUi: this.dialogs.size,
     };
     if (this.sessionFile) summary.sessionFile = this.sessionFile;
     if (this.exitInfo) summary.exitCode = this.exitInfo.exitCode;
