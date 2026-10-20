@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { SessionSummary } from "@pi-desktop/host-protocol/messages";
+import type { SessionSummary, StoredSession } from "@pi-desktop/host-protocol/messages";
 import type { ConnectionState, HostDescriptor } from "../shared/api";
 import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState } from "./chat-state";
 import {
@@ -217,6 +217,52 @@ export function useSession() {
     }
   }, []);
 
+  /**
+   * Pi가 저장한 세션을 연다. 같은 파일로 이미 실행 중인 세션이 있으면 거기로 전환하고,
+   * 없으면 그 파일로 Pi를 새로 띄운 뒤 대화 기록을 스냅샷으로 채운다.
+   */
+  const openStored = useCallback(
+    async (stored: StoredSession) => {
+      const live = (await refreshSessions()).find((s) => s.state === "running" && s.sessionFile === stored.path);
+      if (live) {
+        await switchTo(live);
+        return;
+      }
+      const created = await api().openSession(hostRef.current, { cwd: stored.cwd, sessionFile: stored.path });
+      await refreshSessions();
+      await switchTo(created, { snapshot: true });
+    },
+    [refreshSessions, switchTo],
+  );
+
+  /**
+   * fork·clone처럼 같은 Pi 프로세스가 새 세션 파일로 옮겨 가는 명령을 보낸다.
+   * 성공하면 세션 요약(파일 경로)을 다시 읽고 대화 화면을 스냅샷으로 다시 그린다.
+   * @returns Pi 응답의 data (fork는 분기한 메시지 원문 text를 준다). 확장이 취소했으면 undefined
+   */
+  const branchSession = useCallback(
+    async (command: Record<string, unknown>): Promise<Record<string, unknown> | undefined> => {
+      const current = sessionRef.current;
+      if (!current) return undefined;
+      const response = await api().sendCommand(hostRef.current, current.sessionId, command);
+      if (response.success !== true) throw new Error(String(response.error ?? `${String(command.type)} 실패`));
+      const data = response.data as Record<string, unknown> | undefined;
+      if (data?.cancelled === true) {
+        dispatch({ type: "notice", level: "info", text: "확장이 분기를 취소했습니다." });
+        return undefined;
+      }
+      const updated = (await refreshSessions()).find((s) => s.sessionId === current.sessionId);
+      if (updated) {
+        sessionRef.current = updated;
+        setSession(updated);
+        writeStorage(lastSessionKey(hostRef.current), remember(updated));
+      }
+      await restoreSnapshot(updated ?? current);
+      return data;
+    },
+    [refreshSessions, restoreSnapshot],
+  );
+
   /** 확장 다이얼로그에 답한다. 화면에서는 바로 닫고, 데몬이 다른 창에도 처리됨을 알린다. */
   const respondDialog = useCallback(
     async (dialog: DialogRequest, answer: { value?: string; confirmed?: boolean; cancelled?: boolean }) => {
@@ -327,6 +373,8 @@ export function useSession() {
     switchTo,
     ui,
     respondDialog,
+    openStored,
+    branchSession,
     dismissToast: (key: string) => dispatchUi({ type: "dismiss", key }),
     send,
     refreshSessions,

@@ -13,6 +13,7 @@ const api: PiDesktopApi = {
   connectHost: (hostId) => ipcRenderer.invoke(IpcChannels.connectHost, hostId),
   locatePi: (hostId) => ipcRenderer.invoke(IpcChannels.locatePi, hostId),
   listSessions: (hostId) => ipcRenderer.invoke(IpcChannels.listSessions, hostId),
+  listHistory: (hostId, cwd) => ipcRenderer.invoke(IpcChannels.listHistory, hostId, cwd),
   openSession: (hostId, request) => ipcRenderer.invoke(IpcChannels.openSession, hostId, request),
   attachSession: (hostId, sessionId, lastSeq) =>
     ipcRenderer.invoke(IpcChannels.attachSession, hostId, sessionId, lastSeq),
