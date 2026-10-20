@@ -1,5 +1,8 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { ChatView } from "./ChatView";
+import { ChoiceDialog } from "./ChoiceDialog";
+import { formatRelative } from "./format";
+import { tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
 import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
 import { SessionBar } from "./SessionBar";
@@ -26,6 +29,12 @@ export function App() {
     respondDialog,
     openStored,
     branchSession,
+    follow,
+    pendingOpen,
+    cancelPendingOpen,
+    stopFollow,
+    handOffToTui,
+    continueFollowedAsFork,
     dismissToast,
   } = useSession();
   const isLocal = host?.kind !== "wsl";
@@ -34,6 +43,8 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [treeOpen, setTreeOpen] = useState(false);
+  const [handoffAsk, setHandoffAsk] = useState(false);
+  const [handoffCommand, setHandoffCommand] = useState<string | undefined>();
 
   const connected = connection.status === "connected";
   const sessionInfo = useSessionInfo(hostId, session, connected && !lost);
@@ -72,6 +83,28 @@ export function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // 팔로우가 끝나면 터미널 안내도 지운다.
+  useEffect(() => {
+    if (!follow) setHandoffCommand(undefined);
+  }, [follow]);
+
+  /** 지금 세션을 터미널 pi로 넘긴다: GUI 쪽 Pi를 닫고 명령을 복사한 뒤 읽기 전용으로 따라 보여준다. */
+  async function handOff() {
+    setHandoffAsk(false);
+    await guard(async () => {
+      const target = await handOffToTui();
+      if (!target) return;
+      const posix = host?.kind === "wsl" || connection.status !== "connected" || connection.host.platform !== "win32";
+      const command = tuiCommand(posix ? "posix" : "windows", target.cwd, target.sessionFile);
+      setHandoffCommand(command);
+      try {
+        await navigator.clipboard.writeText(command);
+      } catch {
+        // 복사에 실패해도 배너에 명령이 보이므로 직접 복사할 수 있다.
+      }
+    });
   }
 
   /** 트리에서 고른 질문 직전에서 분기한다. Pi가 돌려준 질문 원문을 입력창에 채워 고쳐 보낼 수 있게 한다. */
@@ -125,6 +158,11 @@ export function App() {
           <div className="session-meta" title={session.sessionFile}>
             Pi {session.piVersion} · {session.cwd}
           </div>
+        )}
+        {session?.sessionFile && !lost && (
+          <button type="button" onClick={() => setHandoffAsk(true)} title="이 세션을 터미널의 pi로 이어서 엽니다">
+            TUI에서 열기
+          </button>
         )}
       </header>
 
@@ -196,6 +234,25 @@ export function App() {
         </div>
       )}
       {error && <div className="banner error">{error}</div>}
+      {follow && (
+        <div className="banner follow">
+          <span>
+            읽기 전용으로 따라가는 중입니다{follow.title ? `: ${follow.title}` : ""}. 다른 프로그램이 이 세션 파일에 쓰는 내용이
+            그대로 보입니다.
+            {handoffCommand && (
+              <>
+                {"\n"}터미널에서 실행하세요 (클립보드에 복사됨): <code>{handoffCommand}</code>
+              </>
+            )}
+          </span>
+          <button type="button" className="primary" disabled={busy} onClick={() => void guard(continueFollowedAsFork)}>
+            분기해서 이어 쓰기
+          </button>
+          <button type="button" onClick={() => stopFollow()}>
+            그만 보기
+          </button>
+        </div>
+      )}
 
       {session && (
         <SessionBar
@@ -219,7 +276,7 @@ export function App() {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
-          disabled={!session || !connected || Boolean(lost)}
+          disabled={!session || !connected || Boolean(lost) || Boolean(follow)}
           rows={3}
         />
         <div className="actions">
@@ -261,6 +318,30 @@ export function App() {
           dialog={ui.dialogs[0]}
           onAnswer={(answer) => void guardQuiet(() => respondDialog(ui.dialogs[0]!, answer))}
         />
+      )}
+      {pendingOpen && (
+        <ChoiceDialog
+          title="다른 곳에서 쓰고 있을 수 있는 세션입니다"
+          onCancel={cancelPendingOpen}
+          choices={[
+            { label: "읽기 전용으로 따라가기", kind: "primary", onSelect: () => void guard(() => openStored(pendingOpen, "follow")) },
+            { label: "분기해서 새 세션으로 이어 쓰기", onSelect: () => void guard(() => openStored(pendingOpen, "fork")) },
+            { label: "그래도 이 파일로 열기", kind: "danger", onSelect: () => void guard(() => openStored(pendingOpen, "open")) },
+          ]}
+        >
+          이 세션 파일은 {formatRelative(pendingOpen.modified)} 수정되었고, 이 앱이 쓰고 있는 파일이 아닙니다. 터미널의 Pi(TUI)
+          등에서 열려 있다면 같은 파일에 함께 쓸 때 기록이 꼬일 수 있습니다.
+        </ChoiceDialog>
+      )}
+      {handoffAsk && session && (
+        <ChoiceDialog
+          title="터미널 Pi(TUI)로 넘기기"
+          onCancel={() => setHandoffAsk(false)}
+          choices={[{ label: "GUI 세션을 닫고 명령 복사", kind: "primary", onSelect: () => void handOff() }]}
+        >
+          같은 파일에 GUI와 TUI가 함께 쓰지 않도록 GUI 쪽 Pi를 먼저 닫습니다. 그 뒤 터미널에서 실행할 명령을 복사하고, 이
+          창에서는 읽기 전용으로 계속 따라 보여줍니다.
+        </ChoiceDialog>
       )}
       <Toasts toasts={ui.toasts} onDismiss={dismissToast} />
     </div>

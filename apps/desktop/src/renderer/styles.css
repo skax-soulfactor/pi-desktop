@@ -891,3 +891,33 @@ button.toggled {
 .tree-fork:focus-visible {
   visibility: visible;
 }
+
+/* ── 팔로우 모드 ──────────────────────────────────────── */
+.banner.follow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.banner.follow span {
+  flex: 1;
+}
+
+.banner code {
+  font: 12px ui-monospace, Consolas, monospace;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  user-select: all;
+}
+
+.modal-options button.danger {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.modal-options button.primary {
+  color: #fff;
+}
