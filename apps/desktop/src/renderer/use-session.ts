@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { SessionSummary, StoredSession } from "@pi-desktop/host-protocol/messages";
-import type { ConnectionState, HostDescriptor } from "../shared/api";
+import type { SessionEventNotification, SessionSummary, StoredSession } from "@pi-desktop/host-protocol/messages";
+import type { AttachResult, ConnectionState, HostDescriptor } from "../shared/api";
 import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState } from "./chat-state";
 import {
   applyUiEvent,
@@ -130,6 +130,8 @@ export function useSession() {
   const [follow, setFollow] = useState<FollowState | undefined>();
   const [pendingOpen, setPendingOpen] = useState<StoredSession | undefined>();
   const followRef = useRef<FollowState | undefined>(undefined);
+  /** attach 진행 중이면 그 사이 알림으로 온 이벤트를 모으는 곳 */
+  const attachQueueRef = useRef<SessionEventNotification[] | undefined>(undefined);
   const [chat, dispatch] = useReducer(reducer, initialChatState);
   const [ui, dispatchUi] = useReducer(uiReducer, initialExtensionUiState);
 
@@ -174,14 +176,27 @@ export function useSession() {
       sessionRef.current = target;
       setSession(target);
       setLost(undefined);
-      const result = await api().attachSession(hostRef.current, target.sessionId, fromSeq);
+      // attach 중에 알림으로 오는 이벤트는 결과보다 먼저 도착할 수 있으므로 모아 두었다가 결과 뒤에 적용한다.
+      const queued: SessionEventNotification[] = [];
+      attachQueueRef.current = queued;
+      let result: AttachResult;
+      try {
+        result = await api().attachSession(hostRef.current, target.sessionId, fromSeq);
+      } finally {
+        if (attachQueueRef.current === queued) attachQueueRef.current = undefined;
+      }
       // 재생 이벤트는 결과에 함께 온다. 먼저 모두 적용한 뒤 대기 목록으로 다이얼로그를 거른다
       // (순서가 바뀌면 이미 답한 다이얼로그가 다시 뜬다).
       for (const n of result.events) {
         dispatch({ type: "event", seq: n.seq, event: n.event });
         dispatchUi({ type: "event", seq: n.seq, at: n.at, event: n.event, replay: true });
       }
-      const replayedTo = result.events.at(-1)?.seq;
+      // 그 사이 알림으로 온 것 중 결과에 없던 것만 실시간 이벤트로 적용된다 (리듀서가 순번으로 중복을 거름).
+      for (const n of queued) {
+        dispatch({ type: "event", seq: n.seq, event: n.event });
+        dispatchUi({ type: "event", seq: n.seq, at: n.at, event: n.event, replay: false });
+      }
+      const replayedTo = Math.max(result.events.at(-1)?.seq ?? 0, queued.at(-1)?.seq ?? 0) || undefined;
       if (replayedTo !== undefined) lastSeqRef.current = Math.max(lastSeqRef.current, replayedTo);
       dispatchUi({ type: "prune", ids: result.pendingUi ?? [] });
       setSession(result.session);
@@ -453,6 +468,10 @@ export function useSession() {
       id === hostRef.current && sessionId === sessionRef.current?.sessionId;
     const offEvent = api().onSessionEvent((id, n) => {
       if (!isCurrent(id, n.sessionId)) return;
+      if (attachQueueRef.current) {
+        attachQueueRef.current.push(n);
+        return;
+      }
       dispatch({ type: "event", seq: n.seq, event: n.event });
       dispatchUi({ type: "event", seq: n.seq, at: n.at, event: n.event, replay: false });
     });
