@@ -1,0 +1,29 @@
+{
+  "name": "pi-desktop-monorepo",
+  "private": true,
+  "type": "module",
+  "description": "Pi coding agent를 포크하지 않고 GUI로 사용하는 데스크톱 앱",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "dev": "npm run dev -w @pi-desktop/desktop"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "allowScripts": {
+    "electron@44.9.1": true
+  }
+}

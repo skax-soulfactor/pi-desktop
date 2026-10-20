@@ -1,0 +1,24 @@
+{
+  "name": "@pi-desktop/host-agent",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "대상 호스트에서 도는 Host Agent: 상주 데몬(agentd)과 연결기(connect)",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "pi-desktop-agent": "./dist/host-agent.mjs"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "npm run build && vitest run"
+  },
+  "dependencies": {
+    "@pi-desktop/host-protocol": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.3.0"
+  }
+}

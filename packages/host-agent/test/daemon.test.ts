@@ -1,0 +1,119 @@
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  Methods,
+  type HostInfo,
+  type SessionAttachResult,
+  type SessionOpenResult,
+  type SessionSummary,
+} from "@pi-desktop/host-protocol";
+import { isolatedEnv, joinedText, TestClient } from "./helpers/agent-client";
+
+const FAKE_PI = fileURLToPath(new URL("./fixtures/fake-pi.mjs", import.meta.url));
+
+describe("Host Agent 데몬 (가짜 Pi)", () => {
+  const clients: TestClient[] = [];
+  const connect = (env: NodeJS.ProcessEnv) => {
+    const client = new TestClient(env);
+    clients.push(client);
+    return client;
+  };
+
+  afterEach(async () => {
+    // 마지막 클라이언트로 데몬을 끝내고 나머지 연결을 정리한다.
+    const last = clients.at(-1);
+    if (last) await last.shutdownDaemon();
+    await Promise.all(clients.map((c) => c.disconnect()));
+    clients.length = 0;
+  });
+
+  it("connect가 데몬을 띄우고 host.info에 답한다", async () => {
+    const client = connect(await isolatedEnv({ PI_DESKTOP_PI_CLI: FAKE_PI }));
+    const info = await client.request<HostInfo>(Methods.hostInfo);
+    expect(info.protocolVersion).toBe(1);
+    expect(info.platform).toBe(process.platform);
+  });
+
+  it("세션을 열고 프롬프트의 스트리밍 이벤트를 순번대로 받는다", async () => {
+    const client = connect(await isolatedEnv({ PI_DESKTOP_PI_CLI: FAKE_PI }));
+    const { session } = await client.request<SessionOpenResult>(Methods.sessionOpen, { cwd: process.cwd() });
+    expect(session.sessionFile).toBe("/fake/session.jsonl");
+
+    await client.request<SessionAttachResult>(Methods.sessionAttach, { sessionId: session.sessionId, lastSeq: 0 });
+    const response = await client.request<Record<string, unknown>>(Methods.sessionSend, {
+      sessionId: session.sessionId,
+      command: { type: "prompt", message: "hello world" },
+    });
+    expect(response).toMatchObject({ type: "response", success: true });
+
+    await client.waitForEvent((e) => e.type === "agent_settled");
+    expect(joinedText(client.events)).toBe("echo: hello world");
+    const seqs = client.events.map((e) => e.seq);
+    expect(seqs).toEqual(seqs.map((_, i) => i + 1));
+  });
+
+  it("연결이 끊겨도 작업은 계속되고, 다시 붙으면 놓친 이벤트를 재생한다", async () => {
+    const env = await isolatedEnv({ PI_DESKTOP_PI_CLI: FAKE_PI, FAKE_PI_DELAY_MS: "80" });
+    const first = connect(env);
+    const { session } = await first.request<SessionOpenResult>(Methods.sessionOpen, { cwd: process.cwd() });
+    await first.request(Methods.sessionAttach, { sessionId: session.sessionId, lastSeq: 0 });
+    await first.request(Methods.sessionSend, {
+      sessionId: session.sessionId,
+      command: { type: "prompt", message: "a b c d e f g h" },
+    });
+
+    // 스트리밍 도중에 앱이 꺼진 상황
+    await first.waitForEvent((e) => e.type === "message_update");
+    const lastSeq = first.events.at(-1)!.seq;
+    await first.disconnect();
+
+    // 앱을 다시 열어 같은 데몬에 붙는다
+    const second = connect(env);
+    const sessions = await second.request<SessionSummary[]>(Methods.sessionList);
+    expect(sessions.map((s) => s.sessionId)).toContain(session.sessionId);
+
+    const attach = await second.request<SessionAttachResult>(Methods.sessionAttach, {
+      sessionId: session.sessionId,
+      lastSeq,
+    });
+    expect(attach.truncated).toBe(false);
+    await second.waitForEvent((e) => e.type === "agent_settled");
+
+    // 끊기기 전 + 재연결 후 이벤트를 합치면 빠짐없이 이어져야 한다
+    const all = [...first.events.filter((e) => e.seq <= lastSeq), ...second.events];
+    expect(all.map((e) => e.seq)).toEqual(all.map((_, i) => i + 1));
+    expect(joinedText(all)).toBe("echo: a b c d e f g h");
+  });
+
+  it("저널에서 잘린 구간을 요청하면 truncated로 알린다", async () => {
+    const env = await isolatedEnv({ PI_DESKTOP_PI_CLI: FAKE_PI, FAKE_PI_DELAY_MS: "1", PI_DESKTOP_JOURNAL_CAPACITY: "3" });
+    const client = connect(env);
+    const { session } = await client.request<SessionOpenResult>(Methods.sessionOpen, { cwd: process.cwd() });
+    await client.request(Methods.sessionAttach, { sessionId: session.sessionId, lastSeq: 0 });
+    await client.request(Methods.sessionSend, { sessionId: session.sessionId, command: { type: "prompt", message: "x y z" } });
+    await client.waitForEvent((e) => e.type === "agent_settled");
+
+    const attach = await client.request<SessionAttachResult>(Methods.sessionAttach, {
+      sessionId: session.sessionId,
+      lastSeq: 0,
+    });
+    expect(attach.truncated).toBe(true);
+    expect(attach.replayed?.toSeq).toBe(attach.session.lastSeq);
+  });
+
+  it("없는 작업 폴더로 세션을 열면 InvalidParams와 경로를 알려준다", async () => {
+    const client = connect(await isolatedEnv({ PI_DESKTOP_PI_CLI: FAKE_PI }));
+    const missing = `${process.cwd()}/no-such-dir-for-test`;
+    await expect(client.request(Methods.sessionOpen, { cwd: missing })).rejects.toMatchObject({
+      code: -32602,
+      message: expect.stringContaining("no-such-dir-for-test"),
+    });
+  });
+
+  it("없는 세션에 명령하면 SessionNotFound", async () => {
+    const client = connect(await isolatedEnv({ PI_DESKTOP_PI_CLI: FAKE_PI }));
+    await expect(
+      client.request(Methods.sessionSend, { sessionId: "nope", command: { type: "get_state" } }),
+    ).rejects.toMatchObject({ code: -32010 });
+  });
+});

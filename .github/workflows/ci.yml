@@ -1,0 +1,49 @@
+# 타입 검사·테스트·앱 빌드를 Windows와 Linux에서 실행한다.
+# host-agent 테스트는 실제 Pi(devDependency)를 mock LLM과 함께 띄우므로 API 키가 필요 없다.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        # 22: Pi가 요구하는 최소 버전대, 24: 현재 개발 환경
+        node: [22, 24]
+    env:
+      # 테스트에는 Electron 실행 파일이 필요 없다. 다운로드 시간을 줄인다.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 타입 검사
+        run: npm run typecheck
+
+      - name: 테스트
+        run: npm test
+
+      - name: 데스크톱 앱 빌드
+        run: npm run build -w @pi-desktop/desktop

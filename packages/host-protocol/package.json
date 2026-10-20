@@ -1,0 +1,15 @@
+{
+  "name": "@pi-desktop/host-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "앱과 Host Agent 사이의 메시지 형식(JSONL 프레이밍, JSON-RPC 2.0)",
+  "exports": {
+    ".": "./src/index.ts",
+    "./messages": "./src/messages.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}
