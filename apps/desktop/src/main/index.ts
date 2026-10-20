@@ -150,7 +150,8 @@ function registerIpc(manager: HostManager): void {
   ipcMain.handle(
     IpcChannels.sendCommand,
     (_event, hostId: string, sessionId: string, command: Record<string, unknown>) =>
-      conn(hostId).request<PiResponse>(Methods.sessionSend, { sessionId, command }),
+      // `!` 셸 명령은 끝나야 응답이 오므로 시간 제한을 두지 않는다. 멈추려면 abort_bash를 보낸다.
+      conn(hostId).request<PiResponse>(Methods.sessionSend, { sessionId, command }, command.type === "bash" ? 0 : undefined),
   );
   ipcMain.handle(
     IpcChannels.sendRecord,

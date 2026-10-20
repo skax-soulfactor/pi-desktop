@@ -70,12 +70,13 @@ export class HostConnection {
   }
 
   /** 연결될 때까지 기다린 뒤 요청한다. */
-  async request<T>(method: string, params?: unknown): Promise<T> {
+  /** @param timeoutMs 응답 제한 시간. 생략하면 기본값(2분), 0이면 제한 없음 */
+  async request<T>(method: string, params?: unknown, timeoutMs?: number): Promise<T> {
     this.start();
     if (this.state.status !== "connected" || !this.peer) {
       await new Promise<void>((resolve) => this.readyWaiters.push(resolve));
     }
-    return this.peer!.request<T>(method, params);
+    return this.peer!.request<T>(method, params, timeoutMs);
   }
 
   /** 앱 종료 시 호출. 연결기만 끝내고 데몬·세션은 그대로 둔다 (설계 §3.4). */
