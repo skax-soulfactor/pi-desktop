@@ -443,3 +443,64 @@ textarea {
     color: var(--shiki-dark);
   }
 }
+
+/* ── 세션 바 (모델·thinking·사용량) ───────────────────── */
+.session-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.session-bar .field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.session-bar select {
+  max-width: 260px;
+  padding: 3px 8px;
+}
+
+.usage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.usage-track {
+  width: 90px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.usage-fill {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+  transition: width 0.3s;
+}
+
+.usage.mid .usage-fill {
+  background: var(--warn);
+}
+
+.usage.high .usage-fill {
+  background: var(--bad);
+}
+
+.usage-value,
+.cost {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
