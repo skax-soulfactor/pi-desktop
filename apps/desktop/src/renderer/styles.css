@@ -189,10 +189,6 @@ textarea {
   border-radius: 10px;
 }
 
-.msg.assistant.streaming .text:last-child::after {
-  content: "▍";
-  color: var(--accent);
-}
 
 .thinking {
   color: var(--muted);
@@ -313,4 +309,137 @@ textarea {
 
 .banner.warn span {
   flex: 1;
+}
+
+/* ── 마크다운 ─────────────────────────────────────────── */
+.markdown {
+  white-space: normal;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown table,
+.markdown blockquote {
+  margin: 0.5em 0;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  margin: 0.9em 0 0.4em;
+  line-height: 1.3;
+}
+
+.markdown h1 {
+  font-size: 1.35em;
+}
+
+.markdown h2 {
+  font-size: 1.2em;
+}
+
+.markdown h3 {
+  font-size: 1.08em;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.5em;
+}
+
+.markdown a {
+  color: var(--accent);
+}
+
+.markdown :not(pre) > code {
+  font: 0.9em ui-monospace, Consolas, monospace;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 10px;
+  color: var(--muted);
+}
+
+.markdown table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+}
+
+/* 스트리밍 중인 응답의 마지막 블록 끝에 커서를 보여준다. */
+.msg.assistant.streaming > .markdown:last-child > :last-child::after {
+  content: "▍";
+  color: var(--accent);
+}
+
+/* ── 코드 블록 ────────────────────────────────────────── */
+.code-block {
+  margin: 0.6em 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.code-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 6px 2px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.code-copy {
+  font-size: 12px;
+  padding: 1px 8px;
+}
+
+.code-body,
+.code-body pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font: 13px/1.5 ui-monospace, Consolas, monospace;
+  background: transparent !important;
+}
+
+.code-body .shiki {
+  padding: 0;
+}
+
+/* shiki 이중 테마: 시스템 테마에 맞는 색을 고른다. */
+.code-body .shiki,
+.code-body .shiki span {
+  color: var(--shiki-light);
+}
+
+@media (prefers-color-scheme: dark) {
+  .code-body .shiki,
+  .code-body .shiki span {
+    color: var(--shiki-dark);
+  }
 }
