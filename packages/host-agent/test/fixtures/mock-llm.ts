@@ -21,7 +21,7 @@ interface ChatMessage {
   content?: unknown;
 }
 
-export async function startMockLlm(): Promise<MockLlm> {
+export async function startMockLlm(port = 0): Promise<MockLlm> {
   const requests: Array<Record<string, unknown>> = [];
   const server: Server = createServer(async (req, res) => {
     if (req.method !== "POST" || !req.url?.endsWith("/chat/completions")) {
@@ -81,10 +81,10 @@ export async function startMockLlm(): Promise<MockLlm> {
     res.end("data: [DONE]\n\n");
   });
 
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as AddressInfo;
+  await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
+  const { port: boundPort } = server.address() as AddressInfo;
   return {
-    baseUrl: `http://127.0.0.1:${port}/v1`,
+    baseUrl: `http://127.0.0.1:${boundPort}/v1`,
     requests,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
