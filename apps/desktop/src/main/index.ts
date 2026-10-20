@@ -144,6 +144,9 @@ function registerIpc(manager: HostManager): void {
   ipcMain.handle(IpcChannels.closeSession, (_event, hostId: string, sessionId: string) =>
     conn(hostId).request(Methods.sessionClose, { sessionId }),
   );
+  ipcMain.handle(IpcChannels.clearExternalWrite, async (_event, hostId: string, sessionId: string) => {
+    await conn(hostId).request(Methods.sessionClearExternalWrite, { sessionId });
+  });
   ipcMain.handle(
     IpcChannels.sendCommand,
     (_event, hostId: string, sessionId: string, command: Record<string, unknown>) =>
@@ -175,6 +178,7 @@ app.whenReady().then(() => {
     onSessionExit: (hostId, n) => sendToRenderer(IpcChannels.sessionExit, hostId, n),
     onUiResolved: (hostId, n) => sendToRenderer(IpcChannels.uiResolved, hostId, n),
     onStoredChanged: (hostId, n) => sendToRenderer(IpcChannels.storedChanged, hostId, n),
+    onExternalWrite: (hostId, n) => sendToRenderer(IpcChannels.externalWrite, hostId, n),
   });
   registerIpc(hosts);
   createWindow();

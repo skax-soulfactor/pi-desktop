@@ -1,15 +1,13 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  createJsonlReader,
-  encodeJsonl,
   Methods,
   type SessionOpenResult,
   type StoredInspectResult,
   type StoredReadResult,
 } from "@pi-desktop/host-protocol";
 import { isolatedEnv, TestClient, waitUntil } from "./helpers/agent-client";
+import { ExternalPi } from "./helpers/external-pi";
 import { MOCK_MODEL_ARGS, PI_CLI, setupRealPi, type RealPiFixture } from "./helpers/real-pi";
 
 /**
@@ -18,53 +16,6 @@ import { MOCK_MODEL_ARGS, PI_CLI, setupRealPi, type RealPiFixture } from "./help
  * 데몬 밖에서 따로 띄운 Pi 프로세스를 "TUI"로 보고 그 세션 파일에 쓰게 한 뒤,
  * 데몬이 그 파일을 검사·읽기·팔로우하고, 같은 파일에 쓰지 않도록 분기(--fork)해서 여는지 확인한다.
  */
-
-/** 데몬과 무관하게 직접 띄운 Pi (TUI 대역) */
-class ExternalPi {
-  private readonly child: ChildProcessWithoutNullStreams;
-  private readonly records: Array<Record<string, unknown>> = [];
-  private nextId = 1;
-
-  constructor(cwd: string, env: Record<string, string>) {
-    this.child = spawn(process.execPath, [PI_CLI, "--mode", "rpc", ...MOCK_MODEL_ARGS], {
-      cwd,
-      env: { ...process.env, ...env },
-    });
-    const reader = createJsonlReader((r) => this.records.push(r as Record<string, unknown>));
-    this.child.stdout.on("data", (c: Buffer) => reader.push(c));
-  }
-
-  async command(command: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const id = `ext-${this.nextId++}`;
-    this.child.stdin.write(encodeJsonl({ ...command, id }));
-    return this.waitFor((r) => r.type === "response" && r.id === id);
-  }
-
-  async prompt(message: string): Promise<void> {
-    const settled = this.records.filter((r) => r.type === "agent_settled").length;
-    await this.command({ type: "prompt", message });
-    await this.waitFor(() => this.records.filter((r) => r.type === "agent_settled").length > settled);
-  }
-
-  async sessionFile(): Promise<string> {
-    const state = await this.command({ type: "get_state" });
-    return String((state.data as { sessionFile: string }).sessionFile);
-  }
-
-  stop(): void {
-    this.child.stdin.end();
-  }
-
-  private async waitFor(check: (r: Record<string, unknown>) => boolean): Promise<Record<string, unknown>> {
-    const deadline = Date.now() + 20_000;
-    for (;;) {
-      const hit = this.records.find(check) ?? (check({}) ? {} : undefined);
-      if (hit) return hit;
-      if (Date.now() > deadline) throw new Error("외부 Pi 응답 시간 초과");
-      await new Promise((r) => setTimeout(r, 30));
-    }
-  }
-}
 
 /** 사용자 메시지 본문. content는 문자열이거나 {type:"text"} 블록 배열이다. */
 const userTexts = (messages: unknown[]) =>

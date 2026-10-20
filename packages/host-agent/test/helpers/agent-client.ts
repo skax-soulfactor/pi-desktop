@@ -10,6 +10,7 @@ import {
   Methods,
   Notifications,
   type SessionEventNotification,
+  type SessionExternalWriteNotification,
   type SessionUiResolvedNotification,
   type StoredChangedNotification,
 } from "@pi-desktop/host-protocol";
@@ -33,6 +34,8 @@ export class TestClient {
   readonly uiResolved: string[] = [];
   /** stored.changed로 받은 파일 변경 */
   readonly storedChanges: StoredChangedNotification[] = [];
+  /** session.externalWrite로 받은 감지 알림 */
+  readonly externalWrites: SessionExternalWriteNotification[] = [];
   private readonly child: ChildProcessWithoutNullStreams;
   private readonly waiters = new Set<() => void>();
 
@@ -46,6 +49,9 @@ export class TestClient {
     this.child.stdout.on("data", (c: Buffer) => reader.push(c));
     this.child.stdin.on("error", () => {});
     this.child.on("exit", () => this.peer.close());
+    this.peer.on(Notifications.sessionExternalWrite, (p) => {
+      this.externalWrites.push(p as SessionExternalWriteNotification);
+    });
     this.peer.on(Notifications.storedChanged, (p) => {
       this.storedChanges.push(p as StoredChangedNotification);
     });

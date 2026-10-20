@@ -8,6 +8,7 @@ import {
   type HostInfo,
   type SessionEventNotification,
   type SessionExitNotification,
+  type SessionExternalWriteNotification,
   type SessionUiResolvedNotification,
   type StoredChangedNotification,
 } from "@pi-desktop/host-protocol";
@@ -32,6 +33,7 @@ export interface HostConnectionOptions {
   onSessionExit: (notification: SessionExitNotification) => void;
   onUiResolved: (notification: SessionUiResolvedNotification) => void;
   onStoredChanged: (notification: StoredChangedNotification) => void;
+  onExternalWrite: (notification: SessionExternalWriteNotification) => void;
 }
 
 const RECONNECT_MIN_MS = 500;
@@ -113,6 +115,7 @@ export class HostConnection {
     peer.on(Notifications.sessionExit, (p) => this.options.onSessionExit(p as SessionExitNotification));
     peer.on(Notifications.sessionUiResolved, (p) => this.options.onUiResolved(p as SessionUiResolvedNotification));
     peer.on(Notifications.storedChanged, (p) => this.options.onStoredChanged(p as StoredChangedNotification));
+    peer.on(Notifications.sessionExternalWrite, (p) => this.options.onExternalWrite(p as SessionExternalWriteNotification));
 
     // stdout에 프로토콜이 아닌 줄(예: 셸 안내 문구)이 섞여도 무시하고 계속 읽는다.
     const reader = createJsonlReader((record) => peer.receive(record));

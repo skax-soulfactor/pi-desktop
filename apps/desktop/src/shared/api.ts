@@ -11,6 +11,7 @@ import type {
   SessionAttachResult,
   SessionEventNotification,
   SessionExitNotification,
+  SessionExternalWriteNotification,
   SessionSummary,
   SessionUiResolvedNotification,
   StoredChangedNotification,
@@ -70,6 +71,8 @@ export interface PiDesktopApi {
    */
   attachSession(hostId: string, sessionId: string, lastSeq: number): Promise<AttachResult>;
   closeSession(hostId: string, sessionId: string): Promise<void>;
+  /** 다른 프로그램의 끼어들기 표시를 지운다 ("무시하고 계속") */
+  clearExternalWrite(hostId: string, sessionId: string): Promise<void>;
   /** Pi RPC 명령을 보내고 Pi의 응답을 받는다 */
   sendCommand(hostId: string, sessionId: string, command: Record<string, unknown>): Promise<PiResponse>;
   /** 응답이 없는 레코드를 Pi에 보낸다 (예: 확장 다이얼로그 응답 extension_ui_response) */
@@ -84,6 +87,8 @@ export interface PiDesktopApi {
   onUiResolved(listener: (hostId: string, notification: SessionUiResolvedNotification) => void): () => void;
   /** 감시 중인 세션 파일이 바뀌었다 */
   onStoredChanged(listener: (hostId: string, notification: StoredChangedNotification) => void): () => void;
+  /** 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 쓴 것이 감지되었다 */
+  onExternalWrite(listener: (hostId: string, notification: SessionExternalWriteNotification) => void): () => void;
 }
 
 /** IPC 채널 이름. invoke(요청/응답)와 send(main → renderer 알림)를 구분한다. */
@@ -100,6 +105,7 @@ export const IpcChannels = {
   unwatchStored: "pi:unwatch-stored",
   attachSession: "pi:attach-session",
   closeSession: "pi:close-session",
+  clearExternalWrite: "pi:clear-external-write",
   sendCommand: "pi:send-command",
   sendRecord: "pi:send-record",
   pickDirectory: "pi:pick-directory",
@@ -108,4 +114,5 @@ export const IpcChannels = {
   sessionExit: "pi:session-exit",
   uiResolved: "pi:ui-resolved",
   storedChanged: "pi:stored-changed",
+  externalWrite: "pi:external-write",
 } as const;
