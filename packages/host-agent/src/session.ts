@@ -12,6 +12,8 @@ export interface AgentSessionOptions {
   pi: PiLocation;
   nodePath: string;
   sessionFile?: string;
+  /** 이 세션 파일에서 분기한 새 세션으로 연다 (pi --fork) */
+  forkFrom?: string;
   piArgs?: string[];
   env?: NodeJS.ProcessEnv;
   journalCapacity?: number;
@@ -41,6 +43,7 @@ export class AgentSession {
     this.journal = new EventJournal(options.journalCapacity);
     const args = [...(options.piArgs ?? [])];
     if (options.sessionFile) args.push("--session", options.sessionFile);
+    if (options.forkFrom) args.push("--fork", options.forkFrom);
     this.process = new PiProcess({
       nodePath: options.nodePath,
       cliPath: options.pi.cliPath,

@@ -1,13 +1,14 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { PiLocation, SessionHistoryParams, StoredSession } from "@pi-desktop/host-protocol";
+import { readFile, stat } from "node:fs/promises";
+import type { PiLocation, SessionHistoryParams, StoredReadResult, StoredSession } from "@pi-desktop/host-protocol";
 
 /**
  * 설치된 Pi의 SDK를 동적으로 불러와 쓴다 (설계 §2 "SDK는 메타데이터 조회에만").
  *
  * Host Agent 번들에 Pi를 넣지 않으므로, 실행 시점에 그 호스트에 설치된 Pi 패키지에서 import한다.
  * 그래서 Pi가 업데이트되어 세션 저장 방식이 바뀌어도 그 버전의 코드가 그대로 처리한다.
- * 여기서 쓰는 SDK 표면은 최소한으로 둔다: SessionManager.list / listAll.
+ * 여기서 쓰는 SDK 표면은 최소한으로 둔다: SessionManager.list / listAll, 세션 파일 해석용 순수 함수.
  */
 
 /** 이 파일이 쓰는 Pi SDK의 일부 (타입은 Pi의 SessionInfo에서 필요한 필드만) */
@@ -24,6 +25,15 @@ interface PiSessionInfo {
 }
 
 interface PiSdk {
+  /** 세션 JSONL 내용을 항목 배열로 (첫 항목은 헤더) */
+  parseSessionEntries(content: string): Array<Record<string, unknown>>;
+  /** 예전 형식 항목을 현재 형식으로 (메모리 안에서만 바꾼다) */
+  migrateSessionEntries(entries: Array<Record<string, unknown>>): void;
+  /** 항목들에서 현재 갈래의 모델 컨텍스트(메시지)를 만든다 */
+  buildSessionContext(
+    entries: Array<Record<string, unknown>>,
+    leafId?: string | null,
+  ): { messages: unknown[]; model: { provider: string; modelId: string } | null };
   SessionManager: {
     list(cwd: string, sessionDir?: string): Promise<PiSessionInfo[]>;
     listAll(sessionDir?: string): Promise<PiSessionInfo[]>;
@@ -77,4 +87,31 @@ function toStoredSession(info: PiSessionInfo): StoredSession {
 
 function toMs(value: Date | string | number): number {
   return value instanceof Date ? value.getTime() : new Date(value).getTime();
+}
+
+/**
+ * 저장된 세션 파일을 읽어 현재 갈래의 대화를 만든다. **파일에는 절대 쓰지 않는다.**
+ *
+ * 다른 프로그램(TUI 등)이 쓰고 있는 파일일 수 있어 SessionManager.open(마이그레이션 등으로 파일을 다시 쓸 수
+ * 있음)은 쓰지 않고, 내용을 직접 읽어 SDK의 순수 함수로만 해석한다.
+ * 상대가 마지막 줄을 쓰는 중이면 그 줄은 잘려 있을 수 있으므로 마지막 줄바꿈까지만 해석한다.
+ * 세션은 항목을 뒤에 덧붙이는 트리라서, 마지막으로 덧붙은 항목이 현재 위치(leaf)다.
+ */
+export async function readStoredSession(sdk: PiSdk, path: string): Promise<StoredReadResult> {
+  const [raw, info] = await Promise.all([readFile(path, "utf8"), stat(path)]);
+  const complete = raw.slice(0, raw.lastIndexOf("\n") + 1);
+  const entries = sdk.parseSessionEntries(complete);
+  sdk.migrateSessionEntries(entries);
+  const body = entries.filter((entry) => entry.type !== "session");
+  const leaf = body.at(-1);
+  const leafId = typeof leaf?.id === "string" ? leaf.id : null;
+  const context = sdk.buildSessionContext(body, leafId);
+  return {
+    path,
+    messages: context.messages,
+    leafId,
+    model: context.model,
+    size: info.size,
+    modified: info.mtimeMs,
+  };
 }
