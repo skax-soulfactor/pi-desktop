@@ -10,12 +10,21 @@ import {
   type SessionExitNotification,
 } from "@pi-desktop/host-protocol";
 import type { ConnectionState } from "../shared/api";
-import type { NodeRuntime } from "./node-runtime";
+
+/** 연결기(`host-agent connect`)를 띄우는 명령. 호스트 종류(로컬·WSL·SSH)마다 다르다. */
+export interface LaunchSpec {
+  command: string;
+  args: string[];
+  /** 앱 프로세스 환경에 덧붙일 변수 */
+  env?: Record<string, string>;
+}
 
 export interface HostConnectionOptions {
-  runtime: NodeRuntime;
-  /** 번들된 Host Agent 스크립트(dist/host-agent.mjs) 경로 */
-  agentScript: string;
+  /**
+   * 연결을 시도할 때마다 호출된다. 여기서 Agent 배포·버전 확인 같은 준비를 하고 실행 명령을 돌려준다.
+   * 예외를 던지면 그 메시지를 연결 끊김 사유로 보여주고 나중에 다시 시도한다.
+   */
+  prepare: () => Promise<LaunchSpec>;
   onState: (state: ConnectionState) => void;
   onSessionEvent: (notification: SessionEventNotification) => void;
   onSessionExit: (notification: SessionExitNotification) => void;
@@ -25,11 +34,11 @@ const RECONNECT_MIN_MS = 500;
 const RECONNECT_MAX_MS = 10_000;
 
 /**
- * 로컬 호스트의 Host Agent 연결 (설계 §3.2 Local transport).
+ * 호스트 하나의 Host Agent 연결 (설계 §3.2).
  *
- * `host-agent connect`를 자식 프로세스로 띄워 stdio로 JSON-RPC를 주고받는다.
- * 연결기는 앱과 함께 죽지만 데몬과 Pi 세션은 남는다. 연결기가 끊기면 지수 백오프로 다시 붙는다.
- * WSL·SSH는 M3에서 같은 인터페이스로 transport만 바꿔 추가한다.
+ * 연결기를 자식 프로세스로 띄워 stdio로 JSON-RPC를 주고받는다. 로컬이면 node를 직접,
+ * WSL이면 wsl.exe를 거쳐 띄운다. 연결기는 앱과 함께 죽지만 데몬과 Pi 세션은 남는다.
+ * 연결기가 끊기면 지수 백오프로 다시 붙는다.
  */
 export class HostConnection {
   private child: ChildProcessWithoutNullStreams | undefined;
@@ -38,12 +47,16 @@ export class HostConnection {
   private retryDelay = RECONNECT_MIN_MS;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
+  private started = false;
   private readyWaiters: Array<() => void> = [];
 
   constructor(private readonly options: HostConnectionOptions) {}
 
+  /** 처음 한 번만 연결을 시작한다. 이미 시작했으면 아무것도 하지 않는다. */
   start(): void {
-    this.connect();
+    if (this.started) return;
+    this.started = true;
+    void this.connect();
   }
 
   get current(): ConnectionState {
@@ -52,6 +65,7 @@ export class HostConnection {
 
   /** 연결될 때까지 기다린 뒤 요청한다. */
   async request<T>(method: string, params?: unknown): Promise<T> {
+    this.start();
     if (this.state.status !== "connected" || !this.peer) {
       await new Promise<void>((resolve) => this.readyWaiters.push(resolve));
     }
@@ -65,12 +79,22 @@ export class HostConnection {
     this.child?.kill();
   }
 
-  private connect(): void {
+  private async connect(): Promise<void> {
     if (this.disposed) return;
     this.setState({ status: "connecting" });
 
-    const child = spawn(this.options.runtime.command, [this.options.agentScript, "connect"], {
-      env: { ...process.env, ...this.options.runtime.env },
+    let spec: LaunchSpec;
+    try {
+      spec = await this.options.prepare();
+    } catch (error) {
+      this.setState({ status: "disconnected", reason: error instanceof Error ? error.message : String(error) });
+      this.scheduleReconnect();
+      return;
+    }
+    if (this.disposed) return;
+
+    const child = spawn(spec.command, spec.args, {
+      env: { ...process.env, ...spec.env },
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
@@ -84,6 +108,7 @@ export class HostConnection {
     peer.on(Notifications.sessionEvent, (p) => this.options.onSessionEvent(p as SessionEventNotification));
     peer.on(Notifications.sessionExit, (p) => this.options.onSessionExit(p as SessionExitNotification));
 
+    // stdout에 프로토콜이 아닌 줄(예: 셸 안내 문구)이 섞여도 무시하고 계속 읽는다.
     const reader = createJsonlReader((record) => peer.receive(record));
     child.stdout.on("data", (chunk: Buffer) => reader.push(chunk));
     let stderr = "";
@@ -94,12 +119,12 @@ export class HostConnection {
       peer.close("Host Agent 연결이 끊겼습니다");
       if (this.child === child) this.child = undefined;
       if (this.disposed) return;
-      this.setState({ status: "disconnected", reason: stderr.trim() || `연결기 종료 (code ${code})` });
+      this.setState({ status: "disconnected", reason: lastLines(stderr) || `연결기 종료 (code ${code})` });
       this.scheduleReconnect();
     });
 
     peer
-      .request<HostInfo>(Methods.hostInfo, undefined, 30_000)
+      .request<HostInfo>(Methods.hostInfo, undefined, 60_000)
       .then((host) => {
         this.retryDelay = RECONNECT_MIN_MS;
         this.setState({ status: "connected", host });
@@ -112,7 +137,7 @@ export class HostConnection {
 
   private scheduleReconnect(): void {
     if (this.retryTimer) clearTimeout(this.retryTimer);
-    this.retryTimer = setTimeout(() => this.connect(), this.retryDelay);
+    this.retryTimer = setTimeout(() => void this.connect(), this.retryDelay);
     this.retryDelay = Math.min(this.retryDelay * 2, RECONNECT_MAX_MS);
   }
 
@@ -120,4 +145,13 @@ export class HostConnection {
     this.state = state;
     this.options.onState(state);
   }
+}
+
+/** 오류 표시용으로 stderr 마지막 몇 줄만 남긴다. WSL의 경로 변환 경고처럼 의미 없는 줄은 뺀다. */
+function lastLines(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => line.trim() && !line.includes("Failed to translate"))
+    .slice(-5)
+    .join("\n");
 }

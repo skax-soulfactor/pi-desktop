@@ -86,10 +86,11 @@ function registerIpc(conn: HostConnection): void {
 }
 
 app.whenReady().then(async () => {
-  const runtime = await resolveNodeRuntime();
   connection = new HostConnection({
-    runtime,
-    agentScript: agentScriptPath(),
+    prepare: async () => {
+      const runtime = await resolveNodeRuntime();
+      return { command: runtime.command, args: [agentScriptPath(), "connect"], env: runtime.env };
+    },
     onState: (state) => sendToRenderer(IpcChannels.connectionChanged, state),
     onSessionEvent: (n) => sendToRenderer(IpcChannels.sessionEvent, n),
     onSessionExit: (n) => sendToRenderer(IpcChannels.sessionExit, n),
