@@ -7,9 +7,13 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "bin": {
+    "pi-desktop-agent": "./dist/host-agent.mjs"
+  },
   "scripts": {
+    "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "npm run build && vitest run"
   },
   "dependencies": {
     "@pi-desktop/host-protocol": "*"
