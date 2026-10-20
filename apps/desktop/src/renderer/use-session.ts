@@ -122,6 +122,10 @@ export function useSession() {
       setSession(target);
       setLost(undefined);
       const result = await api().attachSession(hostRef.current, target.sessionId, fromSeq);
+      // 재생 이벤트는 결과에 함께 온다 (IPC 알림과 응답의 도착 순서가 보장되지 않기 때문).
+      for (const n of result.events) dispatch({ type: "event", seq: n.seq, event: n.event });
+      const replayedTo = result.events.at(-1)?.seq;
+      if (replayedTo !== undefined) lastSeqRef.current = Math.max(lastSeqRef.current, replayedTo);
       setSession(result.session);
       writeStorage(lastSessionKey(hostRef.current), remember(result.session));
       if (result.session.state === "exited") {

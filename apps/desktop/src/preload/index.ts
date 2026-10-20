@@ -19,10 +19,12 @@ const api: PiDesktopApi = {
   closeSession: (hostId, sessionId) => ipcRenderer.invoke(IpcChannels.closeSession, hostId, sessionId),
   sendCommand: (hostId, sessionId, command) =>
     ipcRenderer.invoke(IpcChannels.sendCommand, hostId, sessionId, command),
+  sendRecord: (hostId, sessionId, record) => ipcRenderer.invoke(IpcChannels.sendRecord, hostId, sessionId, record),
   pickDirectory: () => ipcRenderer.invoke(IpcChannels.pickDirectory),
   onConnection: (listener) => subscribe(IpcChannels.connectionChanged, listener),
   onSessionEvent: (listener) => subscribe(IpcChannels.sessionEvent, listener),
   onSessionExit: (listener) => subscribe(IpcChannels.sessionExit, listener),
+  onUiResolved: (listener) => subscribe(IpcChannels.uiResolved, listener),
 };
 
 contextBridge.exposeInMainWorld("piDesktop", api);
