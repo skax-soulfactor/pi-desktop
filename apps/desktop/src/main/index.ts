@@ -12,6 +12,8 @@ import {
   type SessionOpenParams,
   type SessionOpenResult,
   type SessionSummary,
+  type StoredInspectResult,
+  type StoredReadResult,
   type StoredSession,
 } from "@pi-desktop/host-protocol";
 import { IpcChannels, type AttachResult, type OpenSessionRequest } from "../shared/api";
@@ -90,6 +92,21 @@ function registerIpc(manager: HostManager): void {
   ipcMain.handle(IpcChannels.locatePi, (_event, hostId: string) =>
     conn(hostId).request<PiLocation>(Methods.piLocate, hostId === LOCAL_HOST_ID ? { piCliPath: process.env.PI_DESKTOP_PI_CLI } : {}),
   );
+  // 저장된 세션 파일 검사·읽기·감시 (팔로우 모드). Pi CLI 경로는 SDK를 불러올 때만 필요하다.
+  const storedParams = (hostId: string, path: string) =>
+    hostId === LOCAL_HOST_ID && process.env.PI_DESKTOP_PI_CLI ? { path, piCliPath: process.env.PI_DESKTOP_PI_CLI } : { path };
+  ipcMain.handle(IpcChannels.inspectStored, (_event, hostId: string, path: string) =>
+    conn(hostId).request<StoredInspectResult>(Methods.storedInspect, { path }),
+  );
+  ipcMain.handle(IpcChannels.readStored, (_event, hostId: string, path: string) =>
+    conn(hostId).request<StoredReadResult>(Methods.storedRead, storedParams(hostId, path)),
+  );
+  ipcMain.handle(IpcChannels.watchStored, async (_event, hostId: string, path: string) => {
+    await conn(hostId).request(Methods.storedWatch, { path });
+  });
+  ipcMain.handle(IpcChannels.unwatchStored, async (_event, hostId: string, path: string) => {
+    await conn(hostId).request(Methods.storedUnwatch, { path });
+  });
   ipcMain.handle(IpcChannels.listHistory, (_event, hostId: string, cwd: string | undefined) => {
     const params: SessionHistoryParams = cwd ? { cwd } : {};
     // 개발용 덮어쓰기(격리된 Pi 설정)는 로컬 호스트에만 적용한다.
@@ -109,6 +126,7 @@ function registerIpc(manager: HostManager): void {
     const overrides = hostId === LOCAL_HOST_ID ? devSessionOverrides() : {};
     const params: SessionOpenParams = { ...overrides, cwd: request.cwd };
     if (request.sessionFile) params.sessionFile = request.sessionFile;
+    if (request.forkFrom) params.forkFrom = request.forkFrom;
     const result = await conn(hostId).request<SessionOpenResult>(Methods.sessionOpen, params);
     return result.session;
   });
@@ -156,6 +174,7 @@ app.whenReady().then(() => {
     },
     onSessionExit: (hostId, n) => sendToRenderer(IpcChannels.sessionExit, hostId, n),
     onUiResolved: (hostId, n) => sendToRenderer(IpcChannels.uiResolved, hostId, n),
+    onStoredChanged: (hostId, n) => sendToRenderer(IpcChannels.storedChanged, hostId, n),
   });
   registerIpc(hosts);
   createWindow();

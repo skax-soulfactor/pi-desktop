@@ -26,11 +26,15 @@ import {
   type SessionSendParams,
   type SessionHistoryParams,
   type SessionSummary,
+  type StoredInspectResult,
+  type StoredPathParams,
+  type StoredReadResult,
   type StoredSession,
 } from "@pi-desktop/host-protocol";
 import { runDir, socketPath } from "./paths";
 import { locatePi } from "./pi-locator";
-import { listStoredSessions, loadPiSdk } from "./pi-sdk";
+import { FileWatcher } from "./file-watcher";
+import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
 import { AgentSession } from "./session";
 import { AGENT_VERSION } from "./version";
 
@@ -50,6 +54,8 @@ interface Client {
   peer: JsonRpcPeer;
   /** 이 클라이언트가 이벤트를 받고 있는 세션들 */
   attached: Set<string>;
+  /** 이 클라이언트가 팔로우 중인 세션 파일과 감시 해제 함수 */
+  watches: Map<string, () => void>;
 }
 
 const DEFAULT_IDLE_SHUTDOWN_MS = 30 * 60 * 1000;
@@ -68,6 +74,7 @@ export class AgentDaemon {
   private readonly startedAt = Date.now();
   private readonly clients = new Set<Client>();
   private readonly sessions = new Map<string, AgentSession>();
+  private readonly files = new FileWatcher();
   private readonly env: NodeJS.ProcessEnv;
   private readonly idleShutdownMs: number;
 
@@ -135,6 +142,7 @@ export class AgentDaemon {
       id: this.nextClientId++,
       socket,
       attached: new Set(),
+      watches: new Map(),
       peer: new JsonRpcPeer({ send: (message) => socket.write(encodeJsonl(message)) }),
     };
     this.clients.add(client);
@@ -145,6 +153,8 @@ export class AgentDaemon {
     socket.on("error", () => {});
     socket.on("close", () => {
       client.peer.close();
+      for (const off of client.watches.values()) off();
+      client.watches.clear();
       this.clients.delete(client);
       this.scheduleIdleCheck();
     });
@@ -174,6 +184,9 @@ export class AgentDaemon {
       if (!p?.cwd) throw new JsonRpcError(ErrorCodes.InvalidParams, "cwd가 필요합니다");
       // 없는 폴더로 spawn하면 Windows는 "node.exe ENOENT"처럼 엉뚱한 오류를 내므로 미리 확인한다.
       const cwdStat = await stat(p.cwd).catch(() => undefined);
+      if (p.sessionFile && p.forkFrom) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "sessionFile과 forkFrom은 함께 줄 수 없습니다");
+      }
       if (!cwdStat?.isDirectory()) {
         throw new JsonRpcError(ErrorCodes.InvalidParams, `작업 폴더를 찾을 수 없습니다: ${p.cwd}`);
       }
@@ -184,6 +197,7 @@ export class AgentDaemon {
         // 관리형 설치가 자체 Node를 가지고 있으면 그 node로, 아니면 데몬의 node로 실행한다.
         nodePath: pi.nodePath ?? process.execPath,
         sessionFile: p.sessionFile,
+        forkFrom: p.forkFrom,
         piArgs: p.piArgs,
         env: { ...this.env, ...pi.env, ...p.env },
         journalCapacity: this.options.journalCapacity ?? (Number(this.env.PI_DESKTOP_JOURNAL_CAPACITY) || undefined),
@@ -203,6 +217,42 @@ export class AgentDaemon {
     });
 
     peer.handle(Methods.sessionList, (): SessionSummary[] => this.sessionSummaries());
+
+    peer.handle(Methods.storedInspect, async (params): Promise<StoredInspectResult> => {
+      const { path } = requirePath(params);
+      const info = await stat(path).catch(() => undefined);
+      const owner = [...this.sessions.values()].find((s) => s.isRunning && s.summary().sessionFile === path);
+      const result: StoredInspectResult = {
+        path,
+        exists: Boolean(info?.isFile()),
+        size: info?.size ?? 0,
+        modified: info?.mtimeMs ?? 0,
+      };
+      if (owner) result.ownedBy = owner.id;
+      return result;
+    });
+
+    peer.handle(Methods.storedRead, async (params): Promise<StoredReadResult> => {
+      const p = requirePath(params);
+      const pi = await locatePi({ piCliPath: p.piCliPath, env: this.env });
+      return readStoredSession(await loadPiSdk(pi), p.path);
+    });
+
+    // 팔로우 모드: 다른 프로그램이 쓰는 세션 파일의 변경을 이 앱에 알린다. 앱이 끊기면 함께 멈춘다.
+    peer.handle(Methods.storedWatch, (params) => {
+      const { path } = requirePath(params);
+      if (!client.watches.has(path)) {
+        client.watches.set(path, this.files.watch(path, (change) => peer.notify(Notifications.storedChanged, change)));
+      }
+      return null;
+    });
+
+    peer.handle(Methods.storedUnwatch, (params) => {
+      const { path } = requirePath(params);
+      client.watches.get(path)?.();
+      client.watches.delete(path);
+      return null;
+    });
 
     peer.handle(Methods.sessionHistory, async (params): Promise<StoredSession[]> => {
       const p = (params ?? {}) as SessionHistoryParams;
@@ -349,4 +399,10 @@ function isAlive(path: string): Promise<boolean> {
     });
     socket.once("error", () => resolve(false));
   });
+}
+
+function requirePath(params: unknown): StoredPathParams {
+  const p = params as StoredPathParams | undefined;
+  if (!p?.path) throw new JsonRpcError(ErrorCodes.InvalidParams, "path가 필요합니다");
+  return p;
 }

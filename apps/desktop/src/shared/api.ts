@@ -13,6 +13,9 @@ import type {
   SessionExitNotification,
   SessionSummary,
   SessionUiResolvedNotification,
+  StoredChangedNotification,
+  StoredInspectResult,
+  StoredReadResult,
   StoredSession,
 } from "@pi-desktop/host-protocol/messages";
 
@@ -40,6 +43,8 @@ export interface OpenSessionRequest {
   cwd: string;
   /** 이어서 열 Pi 세션 파일. 없으면 새 세션 */
   sessionFile?: string;
+  /** 이 세션 파일에서 분기한 새 세션으로 연다 (다른 프로그램이 쓰는 세션을 이어 갈 때) */
+  forkFrom?: string;
 }
 
 export interface PiDesktopApi {
@@ -51,6 +56,13 @@ export interface PiDesktopApi {
   listSessions(hostId: string): Promise<SessionSummary[]>;
   /** Pi가 디스크에 저장한 세션 기록. cwd를 주면 그 폴더의 세션만 */
   listHistory(hostId: string, cwd?: string): Promise<StoredSession[]>;
+  /** 세션 파일 상태 (다른 프로그램이 쓰고 있는지 판단용) */
+  inspectStored(hostId: string, path: string): Promise<StoredInspectResult>;
+  /** 세션 파일을 읽기만 해서 현재 대화를 받는다 (팔로우 모드) */
+  readStored(hostId: string, path: string): Promise<StoredReadResult>;
+  /** 세션 파일 변경 감시 시작·해제 (팔로우 모드) */
+  watchStored(hostId: string, path: string): Promise<void>;
+  unwatchStored(hostId: string, path: string): Promise<void>;
   openSession(hostId: string, request: OpenSessionRequest): Promise<SessionSummary>;
   /**
    * 세션에 붙는다. 재생된 이벤트는 알림이 아니라 결과의 events로 함께 돌려준다.
@@ -70,6 +82,8 @@ export interface PiDesktopApi {
   onSessionExit(listener: (hostId: string, notification: SessionExitNotification) => void): () => void;
   /** 확장 다이얼로그가 처리되었다 (다른 창에서 답했거나 제한 시간이 지남) */
   onUiResolved(listener: (hostId: string, notification: SessionUiResolvedNotification) => void): () => void;
+  /** 감시 중인 세션 파일이 바뀌었다 */
+  onStoredChanged(listener: (hostId: string, notification: StoredChangedNotification) => void): () => void;
 }
 
 /** IPC 채널 이름. invoke(요청/응답)와 send(main → renderer 알림)를 구분한다. */
@@ -80,6 +94,10 @@ export const IpcChannels = {
   listSessions: "pi:list-sessions",
   openSession: "pi:open-session",
   listHistory: "pi:list-history",
+  inspectStored: "pi:inspect-stored",
+  readStored: "pi:read-stored",
+  watchStored: "pi:watch-stored",
+  unwatchStored: "pi:unwatch-stored",
   attachSession: "pi:attach-session",
   closeSession: "pi:close-session",
   sendCommand: "pi:send-command",
@@ -89,4 +107,5 @@ export const IpcChannels = {
   sessionEvent: "pi:session-event",
   sessionExit: "pi:session-exit",
   uiResolved: "pi:ui-resolved",
+  storedChanged: "pi:stored-changed",
 } as const;

@@ -19,6 +19,10 @@ export const Methods = {
   sessionSend: "session.send",
   sessionClose: "session.close",
   sessionHistory: "session.history",
+  storedInspect: "stored.inspect",
+  storedRead: "stored.read",
+  storedWatch: "stored.watch",
+  storedUnwatch: "stored.unwatch",
   daemonStatus: "daemon.status",
   daemonShutdown: "daemon.shutdown",
 } as const;
@@ -31,6 +35,8 @@ export const Notifications = {
   sessionExit: "session.exit",
   /** 확장 다이얼로그가 처리되었다 */
   sessionUiResolved: "session.uiResolved",
+  /** 감시 중인 저장 세션 파일이 바뀌었다 (다른 프로그램이 쓰는 중) */
+  storedChanged: "stored.changed",
 } as const;
 
 export interface HostInfo {
@@ -70,6 +76,11 @@ export interface SessionOpenParams {
   cwd: string;
   /** 이어서 열 Pi 세션 파일. 없으면 새 세션 */
   sessionFile?: string;
+  /**
+   * 이 세션 파일에서 분기한 새 세션으로 연다 (pi --fork). 다른 프로그램이 쓰고 있는 세션을
+   * 같은 파일에 함께 쓰지 않고 이어 갈 때 쓴다. sessionFile과 함께 줄 수 없다.
+   */
+  forkFrom?: string;
   /** Pi CLI 경로를 직접 지정할 때 */
   piCliPath?: string;
   /** `pi --mode rpc` 뒤에 붙일 추가 인자 (예: `--provider`, `--model`) */
@@ -196,3 +207,39 @@ export interface DaemonStatus {
 
 /** 답을 보내야 하는 확장 UI 메서드 (rpc-extension-ui.md). 나머지(notify, setStatus 등)는 알림만 한다. */
 export const DIALOG_METHODS: readonly string[] = ["select", "confirm", "input", "editor"];
+
+/** stored.inspect / stored.read / stored.watch 요청 */
+export interface StoredPathParams {
+  /** 세션 파일 경로 */
+  path: string;
+  piCliPath?: string;
+}
+
+/** 저장된 세션 파일의 상태. 다른 프로그램이 쓰고 있는지 판단하는 데 쓴다 */
+export interface StoredInspectResult {
+  path: string;
+  exists: boolean;
+  size: number;
+  /** 마지막 수정 시각 (ms) */
+  modified: number;
+  /** 이 데몬의 실행 중인 세션이 이 파일을 쓰고 있으면 그 세션 id */
+  ownedBy?: string;
+}
+
+/** 저장된 세션 파일을 읽어 만든 현재 갈래의 대화 (파일은 읽기만 한다) */
+export interface StoredReadResult {
+  path: string;
+  /** Pi AgentMessage 목록 (현재 갈래, 컴팩션 반영) */
+  messages: unknown[];
+  leafId: string | null;
+  model: { provider: string; modelId: string } | null;
+  size: number;
+  modified: number;
+}
+
+/** stored.changed 알림 */
+export interface StoredChangedNotification {
+  path: string;
+  size: number;
+  modified: number;
+}

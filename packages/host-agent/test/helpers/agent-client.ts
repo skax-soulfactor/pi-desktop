@@ -11,6 +11,7 @@ import {
   Notifications,
   type SessionEventNotification,
   type SessionUiResolvedNotification,
+  type StoredChangedNotification,
 } from "@pi-desktop/host-protocol";
 
 /** 번들된 Host Agent. 테스트 전에 `npm run build`가 실행된다. */
@@ -30,6 +31,8 @@ export class TestClient {
   readonly events: SessionEventNotification[] = [];
   /** session.uiResolved로 받은 다이얼로그 id */
   readonly uiResolved: string[] = [];
+  /** stored.changed로 받은 파일 변경 */
+  readonly storedChanges: StoredChangedNotification[] = [];
   private readonly child: ChildProcessWithoutNullStreams;
   private readonly waiters = new Set<() => void>();
 
@@ -43,6 +46,9 @@ export class TestClient {
     this.child.stdout.on("data", (c: Buffer) => reader.push(c));
     this.child.stdin.on("error", () => {});
     this.child.on("exit", () => this.peer.close());
+    this.peer.on(Notifications.storedChanged, (p) => {
+      this.storedChanges.push(p as StoredChangedNotification);
+    });
     this.peer.on(Notifications.sessionUiResolved, (p) => {
       this.uiResolved.push((p as SessionUiResolvedNotification).id);
     });
@@ -111,4 +117,16 @@ export function joinedText(events: SessionEventNotification[]): string {
     .filter((e) => e.type === "message_update" && e.assistantMessageEvent?.type === "text_delta")
     .map((e) => e.assistantMessageEvent?.delta ?? "")
     .join("");
+}
+
+/**
+ * 조건이 참이 될 때까지 기다린다. 서로 다른 연결(클라이언트)로 오는 알림은 도착 순서가 보장되지 않으므로,
+ * 한 클라이언트의 응답을 받은 직후 다른 클라이언트의 알림을 검사할 때 쓴다.
+ */
+export async function waitUntil(check: () => boolean, timeoutMs = 10_000, message = "조건 대기 시간 초과"): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error(message);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
 }

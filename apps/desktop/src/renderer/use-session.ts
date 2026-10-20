@@ -64,6 +64,23 @@ export interface RememberedSession {
 }
 
 /** 데몬이 재시작되었거나 Pi가 종료되어 지금은 붙을 수 없는 세션 */
+/** 다른 프로그램이 쓰는 세션 파일을 읽기 전용으로 따라가는 중 */
+export interface FollowState {
+  hostId: string;
+  path: string;
+  cwd: string;
+  title?: string;
+}
+
+/** 저장된 세션을 여는 방식 (openStored 참고) */
+export type OpenMode = "auto" | "follow" | "fork" | "open";
+
+/**
+ * 이 시간 안에 수정된 세션 파일은 다른 곳(TUI 등)에서 쓰는 중일 수 있다고 본다.
+ * TUI는 사용자 입력과 응답이 끝날 때 파일에 덧붙이므로, 대화 중이면 보통 몇 분 안에 수정된다.
+ */
+const RECENTLY_WRITTEN_MS = 2 * 60_000;
+
 export interface LostSession extends RememberedSession {
   reason: "missing" | "exited";
 }
@@ -110,6 +127,9 @@ export function useSession() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [session, setSession] = useState<SessionSummary | undefined>();
   const [lost, setLost] = useState<LostSession | undefined>();
+  const [follow, setFollow] = useState<FollowState | undefined>();
+  const [pendingOpen, setPendingOpen] = useState<StoredSession | undefined>();
+  const followRef = useRef<FollowState | undefined>(undefined);
   const [chat, dispatch] = useReducer(reducer, initialChatState);
   const [ui, dispatchUi] = useReducer(uiReducer, initialExtensionUiState);
 
@@ -176,9 +196,19 @@ export function useSession() {
     [restoreSnapshot],
   );
 
+  /** 팔로우 모드를 끝낸다 (파일 감시 해제). ref만 쓰므로 어느 동작에서든 부를 수 있다. */
+  const leaveFollow = () => {
+    const current = followRef.current;
+    if (!current) return;
+    followRef.current = undefined;
+    setFollow(undefined);
+    void api().unwatchStored(current.hostId, current.path).catch(() => {});
+  };
+
   /** 다른 세션으로 전환: 화면을 비우고 처음(seq 0)부터 재생한다. snapshot이면 대화 기록을 스냅샷으로 채운다. */
   const switchTo = useCallback(
     async (target: SessionSummary, options: { snapshot?: boolean } = {}) => {
+      leaveFollow();
       dispatch({ type: "reset" });
       dispatchUi({ type: "reset" });
       lastSeqRef.current = 0;
@@ -217,23 +247,95 @@ export function useSession() {
     }
   }, []);
 
+  const stopFollow = useCallback(() => leaveFollow(), []);
+
+  /** 팔로우 중인 파일을 다시 읽어 화면을 그린다. */
+  const reloadFollow = useCallback(async () => {
+    const current = followRef.current;
+    if (!current) return;
+    const read = await api().readStored(current.hostId, current.path);
+    if (followRef.current?.path !== current.path) return;
+    dispatch({ type: "snapshot", state: snapshotState(read.messages, 0, false) });
+  }, []);
+
   /**
-   * Pi가 저장한 세션을 연다. 같은 파일로 이미 실행 중인 세션이 있으면 거기로 전환하고,
-   * 없으면 그 파일로 Pi를 새로 띄운 뒤 대화 기록을 스냅샷으로 채운다.
+   * 팔로우 모드: 다른 프로그램(TUI 등)이 쓰는 세션 파일을 읽기 전용으로 따라가며 보여준다 (설계 §5.4).
+   * Pi를 띄우지 않고 파일만 읽으므로 그 파일에 쓰지 않는다. 파일이 바뀔 때마다 다시 읽는다.
+   */
+  const startFollow = useCallback(
+    async (target: { path: string; cwd: string; title?: string }) => {
+      stopFollow();
+      sessionRef.current = undefined;
+      setSession(undefined);
+      setLost(undefined);
+      dispatch({ type: "reset" });
+      dispatchUi({ type: "reset" });
+      const next: FollowState = { ...target, hostId: hostRef.current };
+      followRef.current = next;
+      setFollow(next);
+      await reloadFollow();
+      await api().watchStored(next.hostId, next.path);
+    },
+    [stopFollow, reloadFollow],
+  );
+
+  /**
+   * Pi가 저장한 세션을 연다 (설계 §5.4).
+   * - 같은 파일로 이 데몬에서 실행 중인 세션이 있으면 거기로 전환
+   * - "auto"인데 파일이 최근에 수정됐고 이 데몬이 쓰는 파일이 아니면, 다른 곳(TUI 등)에서 쓰는 중일 수 있으므로
+   *   바로 열지 않고 선택을 요청한다(pendingOpen). 같은 파일에 두 Pi가 함께 쓰면 기록이 꼬일 수 있다.
+   * - "follow": 읽기 전용으로 따라가기, "fork": 그 파일에서 분기한 새 세션으로 열기, "open": 그래도 같은 파일로 열기
    */
   const openStored = useCallback(
-    async (stored: StoredSession) => {
+    async (stored: StoredSession, mode: OpenMode = "auto") => {
+      setPendingOpen(undefined);
       const live = (await refreshSessions()).find((s) => s.state === "running" && s.sessionFile === stored.path);
-      if (live) {
+      if (live && mode !== "fork") {
+        stopFollow();
         await switchTo(live);
         return;
       }
-      const created = await api().openSession(hostRef.current, { cwd: stored.cwd, sessionFile: stored.path });
+      if (mode === "auto") {
+        const info = await api().inspectStored(hostRef.current, stored.path);
+        if (!info.ownedBy && Date.now() - info.modified < RECENTLY_WRITTEN_MS) {
+          setPendingOpen(stored);
+          return;
+        }
+      }
+      if (mode === "follow") {
+        await startFollow({ path: stored.path, cwd: stored.cwd, title: stored.name ?? stored.firstMessage });
+        return;
+      }
+      stopFollow();
+      const request = mode === "fork" ? { cwd: stored.cwd, forkFrom: stored.path } : { cwd: stored.cwd, sessionFile: stored.path };
+      const created = await api().openSession(hostRef.current, request);
       await refreshSessions();
       await switchTo(created, { snapshot: true });
     },
-    [refreshSessions, switchTo],
+    [refreshSessions, switchTo, startFollow, stopFollow],
   );
+
+  /** 팔로우 중인 세션을 같은 파일에 쓰지 않고, 분기한 새 세션으로 이어 쓴다. */
+  const continueFollowedAsFork = useCallback(async () => {
+    const current = followRef.current;
+    if (!current) return;
+    const created = await api().openSession(hostRef.current, { cwd: current.cwd, forkFrom: current.path });
+    await refreshSessions();
+    await switchTo(created, { snapshot: true });
+  }, [refreshSessions, switchTo]);
+
+  /**
+   * 지금 세션을 터미널 Pi(TUI)로 넘긴다. 같은 파일에 GUI와 TUI가 함께 쓰지 않도록 GUI 쪽 Pi를 먼저 닫고,
+   * 그 파일을 팔로우 모드로 계속 보여준다. 터미널에서 실행할 명령은 화면이 만든다.
+   */
+  const handOffToTui = useCallback(async (): Promise<{ cwd: string; sessionFile: string } | undefined> => {
+    const current = sessionRef.current;
+    if (!current?.sessionFile) return undefined;
+    await api().closeSession(hostRef.current, current.sessionId);
+    await refreshSessions();
+    await startFollow({ path: current.sessionFile, cwd: current.cwd });
+    return { cwd: current.cwd, sessionFile: current.sessionFile };
+  }, [refreshSessions, startFollow]);
 
   /**
    * fork·clone처럼 같은 Pi 프로세스가 새 세션 파일로 옮겨 가는 명령을 보낸다.
@@ -283,6 +385,7 @@ export function useSession() {
     setHostId(next);
     setSession(undefined);
     setSessions([]);
+    leaveFollow();
     setLost(undefined);
     dispatch({ type: "reset" });
     dispatchUi({ type: "reset" });
@@ -296,6 +399,13 @@ export function useSession() {
   useEffect(() => {
     const onConnected = async () => {
       const list = await refreshSessions();
+      // 팔로우 중이면 데몬이 재시작됐을 수 있으므로 감시를 다시 걸고 다시 읽는다.
+      const following = followRef.current;
+      if (following && following.hostId === hostRef.current) {
+        await api().watchStored(following.hostId, following.path);
+        await reloadFollow();
+        return;
+      }
       const current = sessionRef.current;
       if (current) {
         const alive = list.find((s) => s.sessionId === current.sessionId);
@@ -323,7 +433,7 @@ export function useSession() {
     setConnection({ status: "connecting" });
     void api().connectHost(hostId).then(handle, reportError);
     return off;
-  }, [hostId, attach, refreshSessions, switchTo, reportError]);
+  }, [hostId, attach, refreshSessions, switchTo, reportError, reloadFollow]);
 
   // 세션 이벤트·종료 구독 (선택된 호스트의 보고 있는 세션만)
   useEffect(() => {
@@ -350,12 +460,22 @@ export function useSession() {
     const offResolved = api().onUiResolved((id, n) => {
       if (isCurrent(id, n.sessionId)) dispatchUi({ type: "resolve", id: n.id });
     });
+    // 팔로우 중인 파일이 바뀌면 잠시 모았다가 다시 읽는다 (상대가 여러 줄을 연달아 쓰므로).
+    let followTimer: ReturnType<typeof setTimeout> | undefined;
+    const offStored = api().onStoredChanged((id, n) => {
+      const following = followRef.current;
+      if (!following || id !== following.hostId || n.path !== following.path) return;
+      if (followTimer) clearTimeout(followTimer);
+      followTimer = setTimeout(() => void reloadFollow().catch(reportError), 300);
+    });
     return () => {
       offEvent();
       offExit();
       offResolved();
+      offStored();
+      if (followTimer) clearTimeout(followTimer);
     };
-  }, [refreshSessions]);
+  }, [refreshSessions, reloadFollow, reportError]);
 
   const host = hosts.find((h) => h.id === hostId);
   return {
@@ -375,6 +495,12 @@ export function useSession() {
     respondDialog,
     openStored,
     branchSession,
+    follow,
+    pendingOpen,
+    cancelPendingOpen: () => setPendingOpen(undefined),
+    stopFollow,
+    handOffToTui,
+    continueFollowedAsFork,
     dismissToast: (key: string) => dispatchUi({ type: "dismiss", key }),
     send,
     refreshSessions,

@@ -2,6 +2,7 @@ import type {
   SessionEventNotification,
   SessionExitNotification,
   SessionUiResolvedNotification,
+  StoredChangedNotification,
 } from "@pi-desktop/host-protocol";
 import type { ConnectionState, HostDescriptor } from "../shared/api";
 import { HostConnection } from "./host-connection";
@@ -19,6 +20,7 @@ export interface HostManagerOptions {
   onSessionEvent: (hostId: string, notification: SessionEventNotification) => void;
   onSessionExit: (hostId: string, notification: SessionExitNotification) => void;
   onUiResolved: (hostId: string, notification: SessionUiResolvedNotification) => void;
+  onStoredChanged: (hostId: string, notification: StoredChangedNotification) => void;
 }
 
 /**
@@ -46,6 +48,7 @@ export class HostManager {
         onSessionEvent: (n) => this.options.onSessionEvent(hostId, n),
         onSessionExit: (n) => this.options.onSessionExit(hostId, n),
         onUiResolved: (n) => this.options.onUiResolved(hostId, n),
+        onStoredChanged: (n) => this.options.onStoredChanged(hostId, n),
       });
       this.connections.set(hostId, connection);
       connection.start();
