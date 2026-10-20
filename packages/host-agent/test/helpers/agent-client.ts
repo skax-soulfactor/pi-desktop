@@ -11,6 +11,7 @@ import {
   Notifications,
   type SessionEventNotification,
   type SessionUiResolvedNotification,
+  type StoredChangedNotification,
 } from "@pi-desktop/host-protocol";
 
 /** 번들된 Host Agent. 테스트 전에 `npm run build`가 실행된다. */
@@ -30,6 +31,8 @@ export class TestClient {
   readonly events: SessionEventNotification[] = [];
   /** session.uiResolved로 받은 다이얼로그 id */
   readonly uiResolved: string[] = [];
+  /** stored.changed로 받은 파일 변경 */
+  readonly storedChanges: StoredChangedNotification[] = [];
   private readonly child: ChildProcessWithoutNullStreams;
   private readonly waiters = new Set<() => void>();
 
@@ -43,6 +46,9 @@ export class TestClient {
     this.child.stdout.on("data", (c: Buffer) => reader.push(c));
     this.child.stdin.on("error", () => {});
     this.child.on("exit", () => this.peer.close());
+    this.peer.on(Notifications.storedChanged, (p) => {
+      this.storedChanges.push(p as StoredChangedNotification);
+    });
     this.peer.on(Notifications.sessionUiResolved, (p) => {
       this.uiResolved.push((p as SessionUiResolvedNotification).id);
     });
