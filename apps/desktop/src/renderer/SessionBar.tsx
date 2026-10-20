@@ -19,10 +19,12 @@ interface Props {
   onModel: (provider: string, id: string) => void;
   onThinking: (level: string) => void;
   onCompact: () => void;
+  treeOpen: boolean;
+  onToggleTree: () => void;
 }
 
 /** 모델·thinking 수준·컨텍스트 사용량·비용·Compact (설계 §4.1 상단 바) */
-export function SessionBar({ info, running, disabled, onModel, onThinking, onCompact }: Props) {
+export function SessionBar({ info, running, disabled, onModel, onThinking, onCompact, treeOpen, onToggleTree }: Props) {
   const groups = useMemo(() => groupByProvider(info.models, info.model), [info.models, info.model]);
   const usage = info.stats?.contextUsage;
   const percent = usage?.percent ?? null;
@@ -98,6 +100,15 @@ export function SessionBar({ info, running, disabled, onModel, onThinking, onCom
       </span>
 
       <div className="spacer" />
+      <button
+        type="button"
+        className={treeOpen ? "toggled" : ""}
+        aria-pressed={treeOpen}
+        onClick={onToggleTree}
+        title="대화의 분기 구조를 보고, 질문에서 분기하거나 현재 위치를 복제합니다"
+      >
+        트리
+      </button>
       <button
         type="button"
         disabled={disabled || running}

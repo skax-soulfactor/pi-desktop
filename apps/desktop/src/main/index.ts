@@ -7,10 +7,12 @@ import {
   type PiLocation,
   type PiResponse,
   type SessionAttachResult,
+  type SessionHistoryParams,
   type SessionEventNotification,
   type SessionOpenParams,
   type SessionOpenResult,
   type SessionSummary,
+  type StoredSession,
 } from "@pi-desktop/host-protocol";
 import { IpcChannels, type AttachResult, type OpenSessionRequest } from "../shared/api";
 import { devSessionOverrides } from "./dev-overrides";
@@ -88,6 +90,17 @@ function registerIpc(manager: HostManager): void {
   ipcMain.handle(IpcChannels.locatePi, (_event, hostId: string) =>
     conn(hostId).request<PiLocation>(Methods.piLocate, hostId === LOCAL_HOST_ID ? { piCliPath: process.env.PI_DESKTOP_PI_CLI } : {}),
   );
+  ipcMain.handle(IpcChannels.listHistory, (_event, hostId: string, cwd: string | undefined) => {
+    const params: SessionHistoryParams = cwd ? { cwd } : {};
+    // 개발용 덮어쓰기(격리된 Pi 설정)는 로컬 호스트에만 적용한다.
+    if (hostId === LOCAL_HOST_ID) {
+      const overrides = devSessionOverrides();
+      if (overrides.piCliPath) params.piCliPath = overrides.piCliPath;
+      const sessionDir = overrides.env?.PI_CODING_AGENT_SESSION_DIR;
+      if (sessionDir) params.sessionDir = sessionDir;
+    }
+    return conn(hostId).request<StoredSession[]>(Methods.sessionHistory, params);
+  });
   ipcMain.handle(IpcChannels.listSessions, (_event, hostId: string) =>
     conn(hostId).request<SessionSummary[]>(Methods.sessionList),
   );

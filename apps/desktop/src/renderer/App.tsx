@@ -3,6 +3,8 @@ import { ChatView } from "./ChatView";
 import { useSession } from "./use-session";
 import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
 import { SessionBar } from "./SessionBar";
+import { Sidebar } from "./Sidebar";
+import { TreePanel } from "./TreePanel";
 import { useSessionInfo } from "./use-session-info";
 
 export function App() {
@@ -22,6 +24,8 @@ export function App() {
     switchTo,
     send,
     respondDialog,
+    openStored,
+    branchSession,
     dismissToast,
   } = useSession();
   const isLocal = host?.kind !== "wsl";
@@ -29,6 +33,7 @@ export function App() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [treeOpen, setTreeOpen] = useState(false);
 
   const connected = connection.status === "connected";
   const sessionInfo = useSessionInfo(hostId, session, connected && !lost);
@@ -67,6 +72,14 @@ export function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  /** 트리에서 고른 질문 직전에서 분기한다. Pi가 돌려준 질문 원문을 입력창에 채워 고쳐 보낼 수 있게 한다. */
+  function forkAt(entryId: string) {
+    void guard(async () => {
+      const data = await branchSession({ type: "fork", entryId });
+      if (typeof data?.text === "string") setDraft(data.text);
+    });
   }
 
   /** 실행 중이면 Pi 규칙대로 steer/followUp 중 하나를 지정해야 한다. */
@@ -146,26 +159,19 @@ export function App() {
         >
           새 세션
         </button>
-        {sessions.length > 0 && (
-          <select
-            value={session?.sessionId ?? ""}
-            onChange={(e) => {
-              const target = sessions.find((s) => s.sessionId === e.target.value);
-              if (target) void guard(() => switchTo(target));
-            }}
-          >
-            <option value="" disabled>
-              세션 선택
-            </option>
-            {sessions.map((s) => (
-              <option key={s.sessionId} value={s.sessionId}>
-                {s.state === "running" ? "● " : "○ "}
-                {s.cwd} ({new Date(s.startedAt).toLocaleTimeString()})
-              </option>
-            ))}
-          </select>
-        )}
       </section>
+
+      <div className="workspace">
+        <Sidebar
+          hostId={hostId}
+          connected={connected}
+          sessions={sessions}
+          current={session}
+          disabled={!connected || busy}
+          onSelect={(target) => void guard(() => switchTo(target))}
+          onOpenStored={(stored) => void guard(() => openStored(stored))}
+        />
+        <div className="main">
 
       {connection.status === "disconnected" && (
         <div className="banner error">
@@ -199,6 +205,8 @@ export function App() {
           onModel={(provider, id) => void guard(() => sessionInfo.setModel(provider, id))}
           onThinking={(level) => void guard(() => sessionInfo.setThinkingLevel(level))}
           onCompact={() => void guard(sessionInfo.compact)}
+          treeOpen={treeOpen}
+          onToggleTree={() => setTreeOpen((open) => !open)}
         />
       )}
 
@@ -236,6 +244,18 @@ export function App() {
       </footer>
       <Widgets ui={ui} placement="belowEditor" />
       <StatusLine ui={ui} />
+        </div>
+        {session && treeOpen && (
+          <TreePanel
+            hostId={hostId}
+            session={session}
+            disabled={!connected || Boolean(lost) || busy || chat.running}
+            onFork={forkAt}
+            onClone={() => void guard(async () => void (await branchSession({ type: "clone" })))}
+            onClose={() => setTreeOpen(false)}
+          />
+        )}
+      </div>
       {ui.dialogs[0] && (
         <ExtensionDialog
           dialog={ui.dialogs[0]}

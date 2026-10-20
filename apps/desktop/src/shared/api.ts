@@ -13,6 +13,7 @@ import type {
   SessionExitNotification,
   SessionSummary,
   SessionUiResolvedNotification,
+  StoredSession,
 } from "@pi-desktop/host-protocol/messages";
 
 export type ConnectionState =
@@ -48,6 +49,8 @@ export interface PiDesktopApi {
   connectHost(hostId: string): Promise<ConnectionState>;
   locatePi(hostId: string): Promise<PiLocation>;
   listSessions(hostId: string): Promise<SessionSummary[]>;
+  /** Pi가 디스크에 저장한 세션 기록. cwd를 주면 그 폴더의 세션만 */
+  listHistory(hostId: string, cwd?: string): Promise<StoredSession[]>;
   openSession(hostId: string, request: OpenSessionRequest): Promise<SessionSummary>;
   /**
    * 세션에 붙는다. 재생된 이벤트는 알림이 아니라 결과의 events로 함께 돌려준다.
@@ -76,6 +79,7 @@ export const IpcChannels = {
   locatePi: "pi:locate",
   listSessions: "pi:list-sessions",
   openSession: "pi:open-session",
+  listHistory: "pi:list-history",
   attachSession: "pi:attach-session",
   closeSession: "pi:close-session",
   sendCommand: "pi:send-command",
