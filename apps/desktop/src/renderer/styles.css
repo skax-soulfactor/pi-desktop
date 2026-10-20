@@ -165,6 +165,11 @@ textarea {
   gap: 10px;
 }
 
+/* 대화가 길어지면 flex가 항목을 줄이려 한다. overflow: hidden인 툴 카드는 내용보다 작게 찌그러지므로 막는다. */
+.chat > * {
+  flex-shrink: 0;
+}
+
 .empty,
 .muted,
 .working {
@@ -289,4 +294,12 @@ textarea {
   flex-direction: column;
   gap: 6px;
   justify-content: flex-end;
+}
+
+.banner {
+  white-space: pre-wrap;
+}
+
+.host-select {
+  max-width: 220px;
 }

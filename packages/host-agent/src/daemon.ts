@@ -177,10 +177,11 @@ export class AgentDaemon {
       const session = new AgentSession({
         cwd: p.cwd,
         pi,
-        nodePath: process.execPath,
+        // 관리형 설치가 자체 Node를 가지고 있으면 그 node로, 아니면 데몬의 node로 실행한다.
+        nodePath: pi.nodePath ?? process.execPath,
         sessionFile: p.sessionFile,
         piArgs: p.piArgs,
-        env: { ...this.env, ...p.env },
+        env: { ...this.env, ...pi.env, ...p.env },
         journalCapacity: this.options.journalCapacity ?? (Number(this.env.PI_DESKTOP_JOURNAL_CAPACITY) || undefined),
       });
       this.sessions.set(session.id, session);

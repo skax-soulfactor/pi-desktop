@@ -3,7 +3,9 @@ import { ChatView } from "./ChatView";
 import { useSession } from "./use-session";
 
 export function App() {
-  const { connection, sessions, session, chat, openSession, switchTo, send } = useSession();
+  const { hosts, host, hostId, selectHost, connection, sessions, session, chat, openSession, switchTo, send } =
+    useSession();
+  const isLocal = host?.kind !== "wsl";
   const [cwd, setCwd] = useState("");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,6 +46,22 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">Pi Desktop</div>
+        <select
+          className="host-select"
+          aria-label="호스트"
+          value={hostId}
+          onChange={(e) => {
+            setCwd("");
+            selectHost(e.target.value);
+          }}
+        >
+          {hosts.length === 0 && <option value={hostId}>{hostId}</option>}
+          {hosts.map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.label}
+            </option>
+          ))}
+        </select>
         <ConnectionBadge connection={connection} />
         <div className="spacer" />
         {session && (
@@ -56,23 +74,26 @@ export function App() {
       <section className="toolbar">
         <input
           className="cwd"
-          placeholder="작업 폴더 경로"
+          placeholder={isLocal ? "작업 폴더 경로" : "WSL 안의 작업 폴더 경로 (예: /home/me/project)"}
           value={cwd}
           onChange={(e) => setCwd(e.target.value)}
           disabled={!connected || busy}
         />
-        <button
-          type="button"
-          disabled={!connected || busy}
-          onClick={() =>
-            void guard(async () => {
-              const picked = await window.piDesktop.pickDirectory();
-              if (picked) setCwd(picked);
-            })
-          }
-        >
-          폴더 선택
-        </button>
+        {/* 폴더 선택 대화상자는 Windows 파일 시스템만 보여주므로 로컬 호스트에서만 쓴다. WSL 탐색은 M1 후반. */}
+        {isLocal && (
+          <button
+            type="button"
+            disabled={!connected || busy}
+            onClick={() =>
+              void guard(async () => {
+                const picked = await window.piDesktop.pickDirectory();
+                if (picked) setCwd(picked);
+              })
+            }
+          >
+            폴더 선택
+          </button>
+        )}
         <button
           type="button"
           className="primary"
@@ -102,6 +123,13 @@ export function App() {
         )}
       </section>
 
+      {connection.status === "disconnected" && (
+        <div className="banner error">
+          {host?.label ?? hostId}에 연결하지 못했습니다. 자동으로 다시 시도합니다.
+          {"\n"}
+          {connection.reason}
+        </div>
+      )}
       {error && <div className="banner error">{error}</div>}
 
       <ChatView items={chat.items} running={chat.running} />
@@ -140,18 +168,24 @@ export function App() {
 }
 
 function ConnectionBadge({ connection }: { connection: ReturnType<typeof useSession>["connection"] }) {
-  if (connection.status === "connected") {
-    const { host } = connection;
-    return (
-      <span className="badge ok" title={`데몬 pid ${host.pid} · Node ${host.nodeVersion}`}>
-        로컬 연결됨 · agent {host.agentVersion}
-      </span>
-    );
+  switch (connection.status) {
+    case "connected": {
+      const { host } = connection;
+      return (
+        <span className="badge ok" title={`데몬 pid ${host.pid} · ${host.platform} · Node ${host.nodeVersion}`}>
+          연결됨 · agent {host.agentVersion}
+        </span>
+      );
+    }
+    case "connecting":
+      return <span className="badge">연결 중…</span>;
+    case "idle":
+      return <span className="badge">대기</span>;
+    case "disconnected":
+      return (
+        <span className="badge bad" title={connection.reason}>
+          연결 끊김 · 재시도 중
+        </span>
+      );
   }
-  if (connection.status === "connecting") return <span className="badge">연결 중…</span>;
-  return (
-    <span className="badge bad" title={connection.reason}>
-      연결 끊김 · 재시도 중
-    </span>
-  );
 }

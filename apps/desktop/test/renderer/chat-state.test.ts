@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEvent, initialChatState, type ChatState } from "../src/renderer/chat-state";
+import { applyEvent, initialChatState, type ChatState } from "../../src/renderer/chat-state";
 
 /** 이벤트 목록을 seq 1부터 차례로 적용한다. */
 function run(events: unknown[], start: ChatState = initialChatState): ChatState {

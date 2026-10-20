@@ -4,7 +4,7 @@
 Pi를 업데이트하면 앱도 그대로 따라갑니다.
 
 - 설계: [docs/DESIGN.md](docs/DESIGN.md)
-- 현재 단계: **M0 스파이크** — 로컬 Pi와 스트리밍 채팅, GUI를 닫아도 작업이 계속되고 다시 열면 이어 붙기
+- 현재 단계: **M1 진행 중** — 로컬·WSL의 Pi와 스트리밍 채팅, GUI를 닫아도 작업이 계속되고 다시 열면 이어 붙기
 
 ## 구조
 
@@ -46,7 +46,15 @@ npm run dev:mock -w @pi-desktop/desktop
 npm run dev
 ```
 
-`npm install -g @earendil-works/pi-coding-agent`로 설치되어 있고 `pi`에서 `/login`이 끝나 있어야 합니다.
+상단의 호스트 선택에서 Pi가 설치된 곳을 고릅니다.
+
+- **로컬 (Windows)**: `npm install -g @earendil-works/pi-coding-agent`로 설치하고 `pi`에서 `/login`을 해 두어야 합니다.
+- **WSL: <배포판>**: WSL 안에 Pi가 설치되어 있고(공식 설치기 또는 npm) 로그인되어 있으면 됩니다.
+  - 앱이 Host Agent를 WSL 홈의 `~/.pi-desktop/agent/`에 자동으로 올리고, WSL 안에 데몬을 띄웁니다.
+  - 작업 폴더는 WSL 안의 경로(예: `/home/me/project`)로 입력합니다. 폴더 선택 대화상자는 로컬 전용입니다.
+  - WSL에 Node.js 22 이상이 필요합니다. Pi 공식 설치기가 깐 Node도 자동으로 찾습니다.
+
+앱은 마지막으로 고른 호스트를 기억하고, 다시 열면 그 호스트의 최근 세션에 자동으로 다시 붙습니다.
 
 ## 테스트
 
