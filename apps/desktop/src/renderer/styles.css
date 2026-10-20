@@ -295,3 +295,11 @@ textarea {
   gap: 6px;
   justify-content: flex-end;
 }
+
+.banner {
+  white-space: pre-wrap;
+}
+
+.host-select {
+  max-width: 220px;
+}
