@@ -52,10 +52,10 @@ export class TestClient {
 
   /** 조건을 만족하는 이벤트가 올 때까지 기다린다. */
   waitForEvent(
-    predicate: (event: Record<string, unknown>) => boolean,
+    predicate: (event: Record<string, unknown>, notification: SessionEventNotification) => boolean,
     timeoutMs = 20_000,
   ): Promise<SessionEventNotification> {
-    const find = () => this.events.find((n) => predicate(n.event as Record<string, unknown>));
+    const find = () => this.events.find((n) => predicate(n.event as Record<string, unknown>, n));
     const found = find();
     if (found) return Promise.resolve(found);
     return new Promise((resolve, reject) => {
