@@ -1,0 +1,455 @@
+# Pi Desktop — 설계 문서 (v0.3)
+
+> 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
+> 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
+
+## 0. 확정된 결정 (v0.2)
+
+| 항목 | 결정 |
+|---|---|
+| Pi 연결 방식 | **RPC 자식 프로세스** (`pi --mode rpc`). SDK는 메타데이터 조회와 Playground에만 사용 |
+| 셸 | **Electron** |
+| 최우선 완성 영역 | **채팅 (TUI 대체)** |
+| 지원할 사용 패턴 | 여러 프로젝트 동시 작업 · TUI와 병행 사용 · **WSL 안의 Pi** · **원격(SSH) Pi** |
+| 추가 기능 | **Pi 설치/업데이트/제거 관리** · **커뮤니티 리소스(패키지·스킬·프롬프트·확장) 검색 및 설치/제거** |
+| 원격 작업 수명 | **GUI를 닫아도 원격 작업은 계속 실행**한다. GUI를 다시 열면 기존 세션에 다시 붙어 그대로 이어서 작업한다 (§3.4) |
+| 커뮤니티 검색 소스 | **npm `pi-package` 키워드 검색**을 사용한다. pi.dev 갤러리는 공개 API가 없다(`/api/packages` → 501) |
+| 저장소 관리 | GitHub 저장소. 코드 리뷰가 가능한 단위로 커밋하고, 주석과 커밋 메시지는 한글로 쓴다 (§11) |
+
+v0.1 대비 가장 큰 구조 변화: WSL과 SSH를 지원하기 위해 **Host Agent**(§3.2)를 도입했다. 로컬·WSL·원격을 모두 같은 코드 경로로 다룬다.
+v0.3에서는 Host Agent를 **상주 데몬 + 얇은 연결기**로 나눴다(§3.4). GUI가 꺼져도 원격 작업이 살아남게 하기 위해서다.
+
+---
+
+## 1. 핵심 원칙
+
+| 원칙 | 의미 |
+|---|---|
+| **Zero-fork** | Pi 소스를 수정하지 않는다. 공식 통합 지점(RPC 모드, SDK, 설정 파일, 확장, CLI)만 쓴다 |
+| **Pi가 소유한 파일이 진실의 원천** | 설정을 GUI 자체 DB에 복제하지 않는다. `~/.pi/agent/*`, `.pi/*`, `AGENTS.md`를 직접 읽고 쓴다. 그래서 TUI와 GUI를 섞어 써도 항상 일치한다 |
+| **설치된 Pi를 따라간다** | GUI 번들에 Pi를 넣지 않는다. 대상 호스트에 설치된 Pi를 찾아 실행한다. `pi update` 결과가 GUI에 바로 반영된다 |
+| **기능 감지 > 버전 하드코딩** | `get_commands`, JSON Schema, 응답 형태로 기능을 감지한다. 모르는 이벤트와 필드는 버리지 않고 raw로 보여준다 |
+| **GUI 메타데이터는 분리 보관** | 창 배치, 워크스페이스 목록, 카탈로그 캐시처럼 GUI만 쓰는 상태는 Electron `userData`에 둔다. `~/.pi`는 오염시키지 않는다 |
+
+## 2. Pi가 제공하는 통합 지점 (문서로 확인함)
+
+| 통합 지점 | 용도 |
+|---|---|
+| `pi --mode rpc` + `RpcClient` | 채팅 세션 제어: prompt / steer / follow_up / abort, set_model, thinking level, compact, bash, 세션 switch·fork·clone·get_tree, get_commands, export_html |
+| RPC Extension UI 서브프로토콜 | 확장의 `ctx.ui.select/confirm/input/editor`를 네이티브 다이얼로그로, `notify/setStatus/setWidget/setTitle`을 토스트·상태바·패널로 렌더링 |
+| SDK export (`DefaultResourceLoader`, `DefaultPackageManager`, `SessionManager`, `ModelRegistry`, `parseSessionEntries`, `buildSessionProjection` 등) | 리소스 목록과 진단, 세션 파싱, 모델 목록 |
+| `schemas/*.schema.json` | settings / models / keybindings / theme 폼을 스키마로 자동 생성 |
+| CLI: `pi install/remove/update/list/config`, `pi update [--extensions\|--models\|--all]`, `pi auth check --json` | 패키지 관리, Pi 자체 업데이트, 인증 상태 확인 |
+| 공식 설치기 `https://pi.dev/install.sh` (macOS/Linux) | 관리형 설치, 재설치, 제거. 의존성이 고정되고 `pi update`로 갱신된다 |
+| npm 키워드 `pi-package` + [pi.dev/packages](https://pi.dev/packages) 갤러리 | 커뮤니티 패키지 검색 |
+
+**한계와 보완책**
+- RPC에 `reload` 명령이 없다. → §5.3의 bridge 확장으로 `ctx.reload()`를 호출한다.
+- `/login`은 TUI 전용이다. → API 키는 GUI 폼으로 받고, OAuth는 내장 터미널(§4.7)로 처리한다.
+- 세션 파일에 잠금이 문서화되어 있지 않다. → GUI가 세션 소유권(lease)을 관리한다(§5.4).
+- RPC 모드에서는 `ctx.ui.custom()`, footer/header, 테마 전환 같은 TUI 전용 기능이 동작하지 않는다. → 해당 확장에 "TUI 전용" 배지를 달고, 필요하면 내장 터미널로 연다.
+
+## 3. 아키텍처
+
+### 3.1 전체 구조
+
+```
+┌──────────────────────────────── Electron App ─────────────────────────────────┐
+│ Renderer (React) — 창마다 워크스페이스 탭                                     │
+│  Chat · Sessions · Context · Prompts · Skills · Extensions · Marketplace ·    │
+│  Providers · Settings · Pi Manager · Playground · Inspector · Terminal(xterm) │
+│                    ▲ typed IPC (contextBridge + zod)                          │
+├────────────────────┼──────────────────────────────────────────────────────────┤
+│ Main process                                                                  │
+│  HostManager ── HostConnection(local) ─┐                                      │
+│              ├─ HostConnection(wsl:Ubuntu) ─┤   한 연결 = Host Agent 1개      │
+│              └─ HostConnection(ssh:devbox) ─┘   (멀티플렉스 JSON-RPC 채널)    │
+│  WorkspaceManager · CatalogService · LeaseManager · Telemetry(local only)     │
+└────────┬──────────────────────┬───────────────────────────┬───────────────────┘
+         │ stdio                │ wsl.exe -d <distro> --    │ ssh <host> (ControlMaster)
+   node host-agent.js      node host-agent.js           node ~/.pi-desktop/host-agent.js
+         │                      │                           │
+   ┌─────┴───────── 각 호스트에서 동일하게 동작 ────────────────────────┐
+   │ Host Agent: fs(read/write/list/stat/watch) · exec · pty ·           │
+   │   pi 프로세스 풀(pi --mode rpc, 세션별) · SDK facade(설치본 import) │
+   └─────────────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 Host Agent — 로컬/WSL/SSH를 하나로
+
+GUI가 Pi와 직접 대화하지 않고, **대상 호스트에서 도는 작은 Node 프로그램(Host Agent)**을 거친다.
+
+**왜 필요한가**
+- WSL이나 원격의 Pi는 **그 호스트의 파일**(`~/.pi/agent`, 프로젝트의 `.pi`)과 **그 호스트의 Node**로 동작한다. SDK import, 파일 감시, `pi install`을 전부 그 호스트 안에서 해야 한다.
+- 호스트마다 다른 코드를 쓰는 대신 Agent 하나를 배포하면 로컬·WSL·SSH 모두 **같은 프로토콜**이 된다. 로컬도 같은 Agent를 자식 프로세스로 띄운다.
+
+**프로토콜** (stdio 위의 JSON-RPC 2.0, 채널 멀티플렉싱)
+
+| 네임스페이스 | 메서드 예시 |
+|---|---|
+| `host.*` | `info`(OS, arch, node 버전, 홈 경로), `ping` |
+| `fs.*` | `read`, `write`(원자적: tmp 파일 → rename), `list`, `stat`, `watch`/`unwatch`, `mkdir`, `remove`(휴지통 폴더로 이동) |
+| `proc.*` | `exec`(출력 스트리밍), `spawn`, `kill` |
+| `pty.*` | `open`, `write`, `resize`, `close` (node-pty. 설치기·OAuth 로그인·TUI 폴백용) |
+| `pi.*` | `locate`, `version`, `rpc.open(cwd, sessionFile?)` → 채널 ID, `rpc.send`, `rpc.close` |
+| `session.*` | `list`(데몬이 소유한 살아 있는 세션), `attach(sessionId, lastSeq)`, `detach`, `claimWriter`, `pendingUi` (§3.4) |
+| `daemon.*` | `status`, `shutdown`, `upgrade` |
+| `sdk.*` | `resources(cwd)`, `contextFiles(cwd)`, `effectiveSystemPrompt(cwd)`, `listSessions(cwd)`, `models()` |
+
+**배포와 부트스트랩**
+1. 연결 전에 Agent가 없을 수 있으므로, 먼저 **plain shell exec**(`wsl.exe -- sh -c …`, `ssh host …`)로 `node --version`과 Agent 버전을 확인한다.
+2. Agent는 의존성 없는 단일 번들(esbuild)로 만든다. `node-pty`처럼 네이티브 모듈이 필요한 pty 기능은 선택 사항으로 두고, 없으면 `script`/`python pty`로 대체하거나 해당 기능만 비활성화한다.
+3. 버전이 다르면 `~/.pi-desktop/host-agent-<ver>.js`로 업로드한다(SSH는 stdin 파이프 또는 sftp, WSL은 `\\wsl$` 경로).
+4. Node가 없으면 Pi 설치 마법사(§4.9)로 연결한다.
+
+**전송 계층**
+
+| 종류 | 실행 방법 | 비고 |
+|---|---|---|
+| Local | `child_process.spawn(process.execPath 또는 시스템 node, [agent])` | Electron 내장 Node와 시스템 Node 중 Pi가 쓰는 쪽을 사용 |
+| WSL | `wsl.exe -d <distro> --cd <linux-path> -- node <agent>` | 배포판 목록은 `wsl.exe -l -q`. 경로는 `/mnt/c/...`와 `C:\...` 사이를 변환 |
+| SSH | 시스템 `ssh`(ControlMaster로 연결 재사용) 또는 `ssh2` 라이브러리 | `~/.ssh/config`의 호스트 목록을 가져온다. 키·에이전트 인증은 OS ssh에 맡기고 **비밀번호는 저장하지 않는다** |
+
+**연결 끊김**: §3.4의 상주 데몬 구조로 처리한다. 연결이 끊겨도 Pi 프로세스는 데몬 아래에서 계속 돌고, 다시 연결하면 놓친 이벤트를 재생한다.
+
+### 3.3 워크스페이스 모델 (여러 프로젝트 동시 작업)
+
+```
+Workspace = { id, hostId, cwd, title, pinned, lastSessionFile, layout }
+```
+- 창 하나에 워크스페이스 탭 여러 개. 탭을 끌어 새 창으로 분리할 수 있다.
+- 워크스페이스마다 열린 세션이 여러 개일 수 있고, **세션 하나 = RPC 프로세스 하나**다. 비활성 세션은 유휴 타임아웃 뒤 프로세스를 종료하고, 다시 열 때 `sessionFile`로 재개한다. 메모리를 아끼기 위해서다.
+- 사이드바 "Activity"에서 모든 워크스페이스의 실행 중·대기 중·입력 필요(확장 다이얼로그) 상태를 한눈에 본다. 백그라운드 세션이 끝나거나 입력을 기다리면 OS 알림을 보낸다.
+- 워크스페이스 목록은 GUI 메타데이터로 `userData`에 저장한다.
+
+### 3.4 상주 세션 — GUI를 닫아도 작업은 계속된다 (v0.3 신규)
+
+**요구사항**
+- 원격(SSH) 작업은 GUI를 닫거나 네트워크가 끊겨도 계속 실행된다.
+- GUI를 다시 열면 기존 세션에 다시 붙는다. 그동안 진행된 대화, 툴 실행, 대기 중인 확장 다이얼로그를 그대로 보고 이어서 작업한다.
+
+**구조: Host Agent를 둘로 나눈다**
+
+```
+GUI ──ssh──▶ host-agent connect ──unix socket──▶ host-agentd (상주 데몬)
+             (얇은 연결기: stdio ↔ 소켓 중계)        ├ pi --mode rpc  (세션 A)
+             GUI가 꺼지면 함께 종료                   ├ pi --mode rpc  (세션 B)
+                                                     └ 세션별 이벤트 저널
+```
+
+| 구성 요소 | 역할 | 수명 |
+|---|---|---|
+| `host-agentd` (데몬) | Pi RPC 프로세스 소유, 이벤트 저널 기록, fs/proc 처리 | SSH 연결과 무관하게 계속 실행 (`setsid`/`nohup`으로 분리 실행, 선택적으로 `systemd --user` 유닛) |
+| `host-agent connect` (연결기) | SSH stdio와 데몬의 unix socket을 이어주기만 함. 데몬이 없으면 띄운 뒤 연결 | SSH 세션과 같이 죽음 |
+
+- 소켓 위치: `~/.pi-desktop/run/agentd.sock`, 권한 `0600`. 같은 사용자만 접근할 수 있다.
+- 데몬은 호스트당 1개, 사용자당 1개다. 이미 떠 있으면 연결기는 그 데몬에 붙는다.
+- 데몬 버전이 새 GUI와 맞지 않으면, 실행 중인 세션이 없을 때만 교체한다. 세션이 있으면 기존 데몬을 유지하고 GUI에 "작업이 끝나면 업데이트" 배지를 띄운다.
+
+**세션 이벤트 저널과 재연결**
+1. 데몬은 세션마다 Pi가 보낸 모든 RPC 이벤트에 **순번(seq)**을 붙여 저널에 쌓는다. 메모리 링버퍼에 두고, 디스크(`~/.pi-desktop/journal/<sessionId>.jsonl`)에도 남긴다.
+2. GUI는 세션별로 마지막으로 받은 `seq`를 기억한다.
+3. 다시 연결하면 `session.attach(sessionId, lastSeq)`를 호출한다.
+   - 저널에 그 뒤의 이벤트가 남아 있으면 **빠짐없이 재생**한 다음 실시간 스트림으로 이어간다.
+   - 너무 오래되어 저널에서 잘렸으면 **스냅샷 복구**를 한다. `get_messages`, `get_state`, `get_tree`로 현재 상태를 통째로 받아 화면을 다시 그린 뒤 실시간 스트림을 붙인다.
+4. 저널은 Pi의 세션 파일을 대신하지 않는다. 대화의 진짜 기록은 여전히 Pi의 세션 JSONL이고, 저널은 **스트리밍 중간 상태**(진행 중인 메시지 델타, 툴 실행 출력)를 잃지 않기 위한 보조 장치다. `agent_settled` 이후 일정 시간이 지나면 정리한다.
+
+**GUI가 없는 동안 생기는 일**
+
+| 상황 | 동작 |
+|---|---|
+| 에이전트가 계속 작업 | 그대로 진행한다. 결과는 세션 파일과 저널에 쌓인다 |
+| 확장이 다이얼로그를 띄움 (`select`/`confirm` 등) | 데몬이 요청을 **보류 목록**에 보관한다. 다시 연결하면 GUI가 바로 띄운다. 확장이 timeout을 지정했다면 Pi가 기본값으로 자동 처리하고, 그 사실을 GUI에 알린다 |
+| Steer / Follow-up 큐 | Pi 프로세스 안에 그대로 남아 있다 |
+| Pi 프로세스가 죽음 | 데몬이 감지해 저널에 기록한다. 다시 연결하면 오류와 함께 "세션 재개" 버튼을 보여준다 (`sessionFile`로 재시작) |
+| 원격 서버 재부팅 | 데몬과 진행 중이던 턴은 사라진다. 세션 파일은 남아 있으므로 마지막 확정 지점부터 재개할 수 있다 |
+
+**GUI를 다시 열었을 때의 화면**
+- 시작하면 등록된 모든 호스트에 연결해 `sessions.list`로 **살아 있는 세션 목록**을 가져온다. Activity 사이드바에 실행 중·완료·입력 대기 상태로 표시한다.
+- GUI가 꺼져 있던 동안 끝난 작업에는 "새 결과" 배지를 단다.
+- 워크스페이스 탭과 창 배치는 `userData`에 저장해 두었다가 그대로 복원한다.
+
+**여러 GUI가 같은 세션에 붙을 때** (예: 노트북과 데스크톱)
+- 한 세션에 **입력 권한(writer)을 가진 클라이언트는 하나**다. 나머지는 읽기 전용으로 실시간 스트림을 본다.
+- 읽기 전용 쪽에서 "제어 가져오기"를 누르면 기존 writer에게 알린 뒤 권한을 넘긴다.
+
+**호스트별 기본값**
+
+| 호스트 | GUI 종료 시 기본 동작 | 비고 |
+|---|---|---|
+| SSH 원격 | **계속 실행** (요청 사항) | |
+| WSL | 계속 실행 | WSL은 클라이언트 프로세스가 모두 끝나면 배포판을 멈출 수 있다. M3 스파이크에서 데몬이 살아남는지 확인하고, 안 되면 `systemd` 사용 또는 keep-alive 방식을 적용한다 |
+| 로컬 | 실행 중인 세션이 있으면 **물어본다** ("백그라운드에서 계속" / "모두 중지") | 같은 데몬 구조라서 기술적으로는 원격과 똑같이 동작한다 |
+
+**데몬 정리 규칙**: 살아 있는 세션이 없고 연결된 GUI도 없는 상태가 설정 시간(기본 30분) 동안 이어지면 스스로 종료한다. Pi Manager 화면에서 호스트별 데몬 상태 확인과 강제 종료를 할 수 있다.
+
+## 4. 기능 모듈
+
+### 4.1 Chat (최우선, TUI 대체)
+
+**목표: TUI에서 하던 모든 일을 마우스와 키보드로 더 편하게.** M1에서 이 화면의 완성도를 가장 높인다.
+
+- **스트리밍 렌더링**: `message_update` 델타로 그리고 `message_end`로 확정본을 교체한다(json.md 규칙). 완료 판정은 `agent_end`가 아니라 `agent_settled`다.
+- **사고(thinking) 블록**: 접기/펼치기, 기본 상태는 `hideThinkingBlock` 설정을 따른다.
+- **툴 호출 카드**: 툴별 렌더러를 둔다.
+  - `edit`/`write`: side-by-side diff, 파일 열기 버튼
+  - `bash`/`powershell`: 터미널 스타일 출력, 종료 코드, 실행 시간
+  - `read`/`grep`/`find`: 파일 링크와 결과 요약
+  - 알 수 없는 툴(확장·MCP): 인자와 결과를 JSON 트리로
+- **입력창**
+  - 멀티라인 에디터, 히스토리(↑), 초안 자동 저장
+  - `/` 자동완성: `get_commands`(프롬프트 템플릿, 스킬, 확장 커맨드)와 각 설명을 표시
+  - `@` 파일 피커(Host Agent의 `fs.list`로 원격에서도 동작), 이미지 붙여넣기와 드래그 앤 드롭
+  - `!` 셸 명령은 RPC `bash`로 실행
+  - 스트리밍 중에는 **Steer**(현재 턴 뒤에 끼워넣기)와 **Follow-up**(실행이 끝난 뒤) 버튼을 따로 보여주고, 대기 중인 큐를 표시하고 비울 수 있다.
+- **상단 바**: 모델 선택(`get_available_models`, 프로바이더별 그룹·검색), thinking level, 컨텍스트 사용량 게이지(`get_session_stats`), 비용, Compact 버튼, 자동 컴팩션 토글
+- **세션 사이드바**: 워크스페이스별 세션 목록과 검색, 이름 변경, HTML export, **트리 뷰(`get_tree`)에서 노드를 골라 fork/clone**
+- **확장 UI**: select/confirm/input/editor는 모달로, timeout이 있으면 카운트다운을 보여준다. notify는 토스트, setStatus는 상태바, setWidget은 우측 패널, setTitle은 탭 제목으로.
+- **재시도·오류**: 자동 재시도 진행 표시와 `abort_retry`, 오류 메시지 카드에 "다시 시도" 버튼
+- **키보드 우선**: 명령 팔레트(Ctrl+K), 단축키는 Pi `keybindings.json`의 의미를 가능한 한 따른다.
+
+### 4.2 Context & Instructions
+- **AGENTS.md 계층 뷰**: agent-dir → 상위 디렉터리들 → cwd 순서로 실제 로드되는 파일을 나열한다(`sdk.contextFiles`). 각 파일을 Monaco로 편집하고, `AGENTS.override.md`가 있으면 무엇을 대체하는지 표시한다.
+- `SYSTEM.md` / `APPEND_SYSTEM.md`(user/project) 편집과 **실제 적용되는 시스템 프롬프트 미리보기**
+
+### 4.3 Prompt Templates · 4.4 Skills · 4.5 Extensions
+v0.1과 같다. 목록마다 출처 배지(user / project / package 이름)를 달고, 생성 마법사, 활성/비활성 토글, 로드 진단을 제공한다. Extension Dev Mode는 저장할 때마다 자동 reload한다.
+
+### 4.6 Marketplace (신규) — 커뮤니티 리소스 검색·설치·제거
+
+**카탈로그 소스**는 플러그형 `CatalogProvider` 인터페이스로 만든다.
+
+| Provider | 데이터 출처 | 설치 방식 |
+|---|---|---|
+| **npm** | `registry.npmjs.org/-/v1/search?text=keywords:pi-package` (다운로드 수, 최근 업데이트 포함) | `pi install npm:<name>@<ver>` |
+| ~~pi.dev 갤러리~~ | 공개 API 없음(`/api/packages` → 501, 페이지는 서버 렌더링 HTML). 갤러리도 npm `pi-package` 키워드를 기준으로 하므로 npm 검색으로 충분하다. 미리보기는 `package.json`의 `pi.image`/`pi.video`를 직접 읽고, 상세 화면에 "pi.dev에서 보기" 링크만 둔다 | — |
+| **GitHub 저장소** | 사용자가 등록한 저장소(기본 예시: `anthropics/skills`, `badlogic/pi-skills`). GitHub API로 `SKILL.md`, `prompts/*.md`, `package.json`의 `pi` 매니페스트를 스캔 | 패키지 형태면 `pi install git:...@<ref>`, 개별 스킬·프롬프트면 해당 폴더만 복사(§아래) |
+| **URL / 로컬 경로** | 직접 입력 | `pi install <url\|path>` |
+
+**화면**
+- 검색창 + 필터(종류: extension / skill / prompt / theme, 정렬: 인기·최신, 출처)
+- 상세 페이지: README 렌더링, 포함된 리소스 목록(매니페스트 분석), 버전 목록, 저장소 링크, 다운로드 수, **보안 요약**(확장 코드 포함 여부, `dependencies` 목록, 설치 스크립트 유무)
+- 설치 대화상자: 범위(User / 이 프로젝트), 버전 고정 여부, **포함할 리소스 선택**(settings의 패키지 필터로 저장)
+- "설치됨" 탭: `pi list` 결과, 업데이트 가능 표시(`pi update <source>`), 제거(`pi remove`), 리소스 필터 편집(`pi config`에 해당)
+
+**개별 스킬·프롬프트 가져오기** (패키지가 아닌 단일 폴더나 파일)
+- 패키지 매니저를 거치지 않고 해당 폴더(`SKILL.md` + 부속 파일)나 `.md`만 `~/.pi/agent/skills/<name>/`(또는 `.pi/skills/`)로 복사한다.
+- 출처, 커밋 SHA, 파일 해시를 GUI 메타데이터(`userData/imports.json`)에 기록한다. 이를 근거로 **업데이트 확인**과 **로컬 수정 감지**(수정됐으면 덮어쓰기 전에 diff를 보여줌), **깨끗한 제거**를 한다.
+- 이름이 충돌하면 이름 변경, 덮어쓰기, 취소 중에서 고르게 한다.
+
+**보안 원칙** (Pi 문서의 권고를 그대로 반영)
+- 확장이 포함된 패키지는 설치 전에 "임의 코드가 실행됩니다" 경고와 소스 링크를 보여준다.
+- 프로젝트 범위 설치는 프로젝트 trust 상태를 함께 표시한다.
+- 설치와 제거는 모두 활동 로그에 남긴다.
+
+### 4.7 Providers & Models
+- 프로바이더별 상태는 `pi auth check --provider X --json`으로 확인한다(ready / not_ready / invalid). **키 값은 렌더러로 보내지 않는다.**
+- **API 키 등록**: GUI 폼으로 입력받아 Host Agent가 `auth.json`에 원자적으로 쓴다. 저장 후 `auth check`로 검증한다. `!command` 형식(시크릿 매니저 연동)도 지원한다.
+- **OAuth 로그인**: 내장 터미널(xterm.js + `pty.open`)에서 `pi`를 띄워 `/login <provider>`를 실행한다. 원격이나 WSL에서 콜백이 닿지 않으면, Pi가 안내하는 대로 리다이렉트 URL을 붙여넣는 흐름을 그대로 쓴다.
+- `models.json`은 스키마 기반 폼으로 편집한다(OpenAI 호환 엔드포인트, Ollama, llama.cpp 등). "연결 테스트" 버튼과 `pi update --models`(모델 카탈로그 새로고침)를 제공한다.
+
+### 4.8 Settings
+v0.1과 같다. 스키마 기반 폼, User/Project 탭, diff 미리보기 후 저장, 원본 JSON 편집 모드.
+
+### 4.9 Pi Manager (신규) — 설치·업데이트·사용·제거
+
+호스트마다(로컬, WSL 배포판, SSH 서버) 하나씩 있는 화면이다.
+
+**상태 감지** (`pi.locate`)
+
+| 항목 | 방법 |
+|---|---|
+| 설치 여부와 경로 | `command -v pi` / `where pi`, `npm root -g` |
+| **설치 방식** | 관리형 설치기(`managed-install.json` 마커) / npm 전역 / Nix(`/nix/store` 경로) / 기타 |
+| 버전 | `pi --version`, 최신 버전은 `npm view @earendil-works/pi-coding-agent version` |
+| 전제 조건 | Node ≥ 22.19, Windows는 Git Bash(또는 `shellPath`, PowerShell 툴 설정) |
+| 데이터 | `~/.pi/agent` 크기, 세션 수, 인증된 프로바이더 수 |
+
+**설치 마법사**
+
+| 대상 | 기본 방법 | 대안 |
+|---|---|---|
+| macOS / Linux / WSL / SSH | 공식 설치기: `curl -fsSL https://pi.dev/install.sh \| sh` (스크립트 내용을 먼저 보여주고 동의를 받은 뒤 **내장 터미널에서 실행**. 설치기가 대화형 메뉴를 쓰기 때문) | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent` |
+| Windows 네이티브 | Node가 22.19 이상인지 확인 → 없으면 `winget install OpenJS.NodeJS.LTS` 안내(동의 후 실행) → `npm install -g --ignore-scripts @earendil-works/pi-coding-agent` | — |
+| 공통 후속 단계 | Git Bash 확인(Windows), 프로바이더 로그인(§4.7), 기본 모델 선택, 첫 워크스페이스 열기 | |
+
+**업데이트**
+- 시작할 때와 주기적으로 최신 버전을 확인하고 배지로 알린다. CHANGELOG의 해당 구간을 보여준다.
+- 실행: `pi update`(Pi만) / `pi update --extensions` / `pi update --all`. Nix 설치는 `nix profile upgrade pi` 명령을 안내만 한다.
+- 실행 중인 세션은 안전하게 정지(`agent_settled`까지 대기하거나 사용자 확인 후 abort)한 다음 업데이트하고, 끝나면 각 세션을 `sessionFile`로 다시 연다.
+- **특정 버전 설치·롤백**: `npm i -g @earendil-works/pi-coding-agent@<ver>`. GUI 호환 범위(`supportedPi`) 밖이면 경고한다.
+
+**제거**
+- 방식별 명령: 관리형 설치는 설치기의 uninstall 동작(내장 터미널), npm은 `npm uninstall -g @earendil-works/pi-coding-agent`, Nix는 안내만.
+- 데이터 처리 선택: **유지**(기본) / **백업 후 삭제**(`~/.pi/agent`를 zip으로 보관한 뒤 삭제) / 그대로 삭제. 삭제 옵션은 두 번 확인한다. `auth.json`이 포함된다는 점을 명시한다.
+
+**"사용"**: 호스트 카드에서 바로 "워크스페이스 열기", "터미널에서 pi 열기"(내장 xterm)를 제공한다.
+
+### 4.10 SDK Playground · 4.11 Event Inspector
+v0.1과 같다. Playground 스크립트도 Host Agent를 통해 **대상 호스트에서** 실행되므로 WSL이나 원격의 Pi SDK로 개발하고 테스트할 수 있다.
+
+### 4.12 내장 터미널 (신규, 공통 인프라)
+xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인, TUI 전용 확장 폴백, 사용자가 원할 때 진짜 `pi` TUI 열기다.
+
+## 5. 상세 설계 포인트
+
+### 5.1 PiLocator (Host Agent 내부)
+1. 탐색 순서: 사용자 지정 경로 → 관리형 설치 경로 → `npm root -g`/`@earendil-works/pi-coding-agent` → PATH의 `pi` → 구 패키지 `@mariozechner/pi-coding-agent`(감지되면 이전 안내)
+2. 실행은 `node <pkg>/dist/bundle/cli.js --mode rpc`로 한다. Windows `.cmd` shim 문제를 피하기 위해서다.
+3. SDK는 `import(pathToFileURL(<pkg>/dist/index.js))`로 동적 로드한다.
+
+### 5.2 SessionHost
+- 세션 하나에 RpcClient 하나. 모든 명령에 `id`를 붙여 응답을 매칭하고 타임아웃을 건다.
+- 프로세스가 죽으면 마지막 `sessionFile`로 재시작하고 사용자에게 알린다.
+
+### 5.3 pi-desktop-bridge 확장
+RPC 프로세스를 띄울 때 `-e <bridge>`로 주입한다. 사용자 settings에는 기록하지 않는다.
+- `/desktop:reload` → `ctx.reload()`: 리소스를 편집한 뒤 프로세스 재시작 없이 반영
+- `/desktop:resources` → 현재 로드된 확장·스킬·프롬프트·툴 목록을 JSON으로 반환
+- `/desktop:lease` → 세션 소유권 하트비트(§5.4)
+
+### 5.4 TUI와 병행 사용 (신규)
+
+Pi는 세션 파일 잠금을 문서화하지 않았다. 그래서 **같은 세션 파일에 두 프로세스가 동시에 쓰는 상황을 GUI가 막는다.**
+
+| 상황 | 동작 |
+|---|---|
+| GUI만 사용 | 정상 |
+| TUI가 세션 X를 쓰는 중에 GUI가 X를 엶 | 감지: 세션 JSONL의 최근 mtime과 append 감시, 그리고 같은 `sessionFile`을 인자로 가진 `pi` 프로세스 탐색(로컬은 프로세스 목록, 원격은 Agent의 `ps`). **팔로우 모드(읽기 전용)**로 열어 파일 tail로 실시간 표시한다. 버튼: "포크해서 GUI에서 계속" / "TUI 종료 후 이어받기" |
+| GUI가 세션 X를 쓰는 중에 TUI가 X를 엶 | 막을 수 없다. GUI가 자기가 쓰지 않은 append를 감지하면 경고 배너를 띄우고 GUI 쪽 입력을 잠근다 |
+| 설정·리소스 파일을 TUI/에디터에서 수정 | `fs.watch`로 즉시 반영한다. GUI에서 편집 중이었다면 3-way 병합 다이얼로그 |
+| GUI에서 리소스 수정 → 실행 중인 TUI | TUI 쪽에는 `/reload` 안내만 표시한다(TUI를 원격 조작하지 않음) |
+
+추가로 **"이 세션을 TUI에서 열기"** 버튼을 둔다. GUI 쪽 세션을 정지한 뒤 내장 터미널이나 외부 터미널에서 `pi --session <file>`로 연다.
+
+### 5.5 WSL 특이사항
+- 호스트 목록에 설치된 배포판을 자동으로 표시한다.
+- 경로 변환: Windows 경로로 연 프로젝트(`C:\src\app`)를 WSL Pi로 돌리면 `/mnt/c/src/app`. 성능 경고를 보여주고 WSL 내부 경로 사용을 권장한다.
+- WSL 쪽 `~/.pi/agent`와 Windows 쪽 `~/.pi/agent`는 **별개의 설정**이다. 호스트 배지로 항상 구분해서 보여준다. 리소스를 호스트 간에 복사하는 기능은 M5에서 검토한다.
+
+### 5.6 원격(SSH) 특이사항
+- 인증은 OS `ssh`와 ssh-agent에 맡긴다. GUI는 비밀번호나 키를 저장하지 않는다.
+- 파일 피커, diff, 편집은 모두 Agent의 `fs.*`로 처리한다. 큰 파일은 스트리밍하고 크기 제한을 둔다.
+- 이미지 붙여넣기는 원격 임시 폴더로 업로드한 뒤 경로를 전달한다.
+- 네트워크가 끊기거나 GUI를 닫아도 Pi 프로세스는 원격 데몬 아래에서 계속 실행된다. 다시 연결하면 저널로 이어 붙인다(§3.4).
+- SSH 연결이 끊긴 것을 빨리 알아채도록 `ServerAliveInterval`을 설정하고, 지수 백오프로 자동 재연결한다.
+
+### 5.7 ConfigService — 안전한 파일 편집
+- 모든 쓰기는 Host Agent의 원자적 쓰기를 쓴다. JSON은 jsonc-parser로 부분 수정해서 원본 포맷과 주석을 보존한다. 저장 전 스키마 검증, `.bak` 1개 유지.
+- 저장 후 열린 세션에 "리로드" 배너 → `/desktop:reload`
+- `auth.json`은 쓰기만 하고, 렌더러로는 프로바이더 이름과 상태만 보낸다.
+
+### 5.8 보안
+- 렌더러: `contextIsolation`, `sandbox`, nodeIntegration 끔. IPC 채널은 화이트리스트와 zod로 검증한다.
+- 외부 스크립트(설치기 등)는 항상 내용을 보여주고 동의를 받은 뒤 실행한다.
+- 원격 명령 실행은 Agent 프로토콜로만 한다. 임의 셸 문자열은 사용자가 직접 입력한 경우에만 허용한다.
+
+## 6. 기술 스택
+
+| 영역 | 선택 |
+|---|---|
+| 셸 | Electron + electron-vite, electron-builder (Windows 우선, macOS/Linux) |
+| UI | React 19 + TypeScript + Tailwind + shadcn/ui, Zustand, TanStack Query |
+| 에디터 / 터미널 | Monaco / xterm.js + node-pty |
+| 채팅 렌더링 | react-markdown + shiki, diff는 `diff` + 자체 뷰어 |
+| 폼 | JSON Schema 기반 자동 폼 |
+| Host Agent | Node 22+, 의존성 없는 esbuild 단일 번들, JSON-RPC 2.0 over stdio |
+| SSH | 시스템 `ssh`(ControlMaster), 필요 시 `ssh2` |
+| 테스트 | Vitest, Playwright-Electron(E2E), **Pi 계약 테스트**(실제 `pi --mode rpc` 대상, Pi 최신 버전으로 매일 실행), WSL·SSH는 Docker sshd 컨테이너로 통합 테스트 |
+
+## 7. 폴더 구조 (안)
+
+```
+pi-desktop/
+├ apps/desktop/
+│  ├ src/main/      HostManager, transports/{local,wsl,ssh}, WorkspaceManager, CatalogService, LeaseManager, ipc/
+│  ├ src/preload/   contextBridge API (typed)
+│  └ src/renderer/  features/{chat,sessions,context,prompts,skills,extensions,marketplace,providers,settings,pi-manager,playground,inspector,terminal}
+├ packages/
+│  ├ host-agent/    대상 호스트에서 도는 Agent: agentd(상주 데몬, 세션·저널) + connect(연결기)
+│  ├ host-protocol/ Agent ↔ App 메시지 타입 (zod)
+│  ├ pi-protocol/   Pi RPC·이벤트 타입 (관대한 파싱)
+│  ├ bridge/        pi-desktop-bridge 확장
+│  ├ catalog/       CatalogProvider: npm, pi.dev, github, url
+│  └ harness/       Playground용 observe(session)
+├ templates/        스킬·프롬프트·확장·SDK 스캐폴드
+└ docs/DESIGN.md
+```
+
+## 8. 로드맵 (채팅 우선으로 재조정)
+
+| 단계 | 범위 | 완료 기준 |
+|---|---|---|
+| **M0 스파이크** | 로컬 `host-agentd` + `connect` + `pi.rpc.open` + 스트리밍 채팅 1회 + 툴 이벤트 표시 | Electron 창에서 로컬 `pi`와 대화 가능. **처음부터 데몬 구조로 만든다** (나중에 바꾸면 비용이 큼) |
+| **M1 Chat 완성** | §4.1 전체, 세션 목록·재개·트리·fork, 확장 UI 다이얼로그, 워크스페이스 탭(여러 프로젝트), Activity 사이드바, **세션 lease와 TUI 팔로우 모드**, **이벤트 저널·재연결·GUI 재시작 후 세션 복원(로컬)** | 일상 작업에서 TUI 없이 지낼 수 있다 |
+| **M2 Pi Manager + Providers** | 로컬 설치·업데이트·제거·롤백, API 키 폼, OAuth용 내장 터미널, models.json | 새 PC에서 GUI만으로 Pi 설치부터 첫 대화까지 가능 |
+| **M3 WSL · SSH** | WSL/SSH transport, Agent 부트스트랩·배포, 원격 데몬 분리 실행, 원격 파일 피커, 자동 재연결, 다중 GUI writer 권한 | 원격 작업 중 GUI를 닫았다 다시 열어도 그대로 이어서 작업할 수 있다 |
+| **M4 리소스 관리 + Marketplace** | AGENTS.md 계층, 프롬프트·스킬·확장 CRUD, bridge reload, 설정 폼, npm·GitHub 카탈로그 검색·설치·제거·업데이트 | 클릭으로 커뮤니티 리소스를 찾아 설치하고 즉시 쓸 수 있다 |
+| **M5 개발자 도구 + 다듬기** | SDK Playground, Event Inspector, Extension Dev Mode, "다른 호스트에도 설치", 인스톨러·자동 업데이트 | 배포 |
+
+> M3(WSL/SSH)를 M4보다 앞에 둔 이유: Host Agent 구조가 원격에서 실제로 버티는지 일찍 검증해야, 그 위에 올라가는 리소스 관리·Marketplace를 다시 만들 일이 없다.
+
+## 9. 리스크
+
+| 리스크 | 대응 |
+|---|---|
+| Pi RPC·이벤트 스키마 변경 | 관대한 파싱 + raw 폴백, 매일 계약 테스트, 설치 버전의 d.ts로 타입 생성 |
+| 패키지 스코프·이름 변경 (이미 한 번 있었음) | PiLocator 후보 목록 + 사용자 지정 경로 |
+| 세션 파일 동시 쓰기 | §5.4의 lease·팔로우 모드. Pi가 공식 잠금을 추가하면 그쪽으로 전환 |
+| 원격 호스트에 Node 없음 또는 버전 낮음 | 부트스트랩 단계에서 감지하고 설치 마법사로 연결 |
+| node-pty 네이티브 빌드 (원격) | pty 기능을 선택 사항으로 두고 `script`/python 대체 경로 사용 |
+| 데몬과 GUI의 버전 불일치 | 프로토콜 버전 협상, 세션이 없을 때만 데몬 교체 (§3.4) |
+| WSL 배포판 자동 종료로 데몬이 죽음 | M3 스파이크에서 검증, `systemd` 또는 keep-alive로 대응 |
+| 저널 디스크 사용량 | `agent_settled` 이후 정리, 세션당 크기 상한 |
+| 커뮤니티 확장의 악성 코드 | 설치 전 경고, 소스·의존성 요약, 프로젝트 trust 연동. 코드 실행 자체를 막지는 못한다는 점을 명시 |
+| Windows 셸 (Git Bash 필요) | Pi Manager 전제 조건 점검에서 안내 |
+
+## 10. 정리된 질문들 (v0.3)
+
+| 질문 | 결론 |
+|---|---|
+| pi.dev 갤러리 공개 API | 없음. npm `pi-package` 키워드 검색을 사용한다 (§4.6) |
+| GUI를 닫아도 원격 작업 유지 | 유지한다. 상주 데몬과 이벤트 저널로 재연결한다 (§3.4) |
+| 호스트 간 리소스 공유 | **잠정: 복사만 지원.** Marketplace의 "다른 호스트에도 설치"와 리소스 화면의 "다른 호스트로 복사" 버튼으로 처리한다. 자동 동기화는 넣지 않는다. 사용자 확인 대기 중 |
+
+## 11. 개발 방식
+
+### 11.1 언어 규칙
+- 소스 주석, 커밋 메시지(제목·본문), PR 설명, 문서는 **모두 한글**로 쓴다.
+- 코드 식별자(변수·함수·타입 이름)와 로그 키는 영어로 쓴다. 사용자에게 보이는 UI 문자열은 i18n 리소스로 분리하고, 기본 언어는 한국어로 한다.
+
+### 11.2 커밋 단위 — 코드 리뷰가 가능한 크기
+- **한 커밋 = 한 가지 관심사.** 리팩터링, 기능 추가, 포맷 변경을 섞지 않는다.
+- 커밋마다 빌드와 테스트가 통과해야 한다. 중간 커밋을 체크아웃해도 동작해야 한다.
+- 크기는 diff 기준 대략 400줄 이하를 목표로 한다. 자동 생성 파일과 lockfile은 별도 커밋으로 분리한다.
+- 새 모듈은 "타입·인터페이스 → 구현 → 테스트 → 연결(wiring)" 순서로 나눠 커밋하면 리뷰하기 쉽다.
+
+### 11.3 커밋 메시지 형식
+[Conventional Commits](https://www.conventionalcommits.org/) 타입 접두어 + 한글 설명:
+
+```
+feat(host-agent): 세션 이벤트 저널과 seq 기반 재연결 추가
+
+- 세션마다 RPC 이벤트에 순번을 붙여 링버퍼와 디스크에 기록
+- attach(sessionId, lastSeq) 호출 시 누락 이벤트를 재생
+- 저널에서 잘린 경우 get_messages 스냅샷으로 복구
+
+관련: docs/DESIGN.md §3.4
+```
+
+| 타입 | 용도 |
+|---|---|
+| `feat` | 기능 추가 |
+| `fix` | 버그 수정 |
+| `refactor` | 동작 변화 없는 구조 변경 |
+| `test` | 테스트만 추가·수정 |
+| `docs` | 문서 |
+| `build` / `ci` | 빌드 설정, CI |
+| `chore` | 그 밖의 잡무 (의존성 갱신 등) |
+
+범위(scope)는 §7의 폴더 이름을 쓴다: `host-agent`, `pi-protocol`, `bridge`, `catalog`, `desktop-main`, `desktop-renderer` 등.
+
+### 11.4 브랜치와 PR
+- `main`은 항상 동작하는 상태를 유지한다. 작업은 `feat/<마일스톤>-<주제>` 브랜치에서 하고 PR로 합친다.
+- PR 하나는 마일스톤 안의 기능 하나 단위로 만든다. 설명에는 변경 요약, 관련 설계 문서 절, 테스트 방법, 스크린샷(UI 변경 시)을 넣는다.
+- 병합은 커밋 이력이 그대로 남도록 rebase merge나 merge commit을 쓴다. squash하면 리뷰 단위로 나눈 커밋이 사라지므로 쓰지 않는다.
