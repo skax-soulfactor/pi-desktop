@@ -371,6 +371,37 @@ textarea {
   white-space: pre-wrap;
 }
 
+/* `!` 셸 명령 카드: 터미널처럼 명령과 출력을 바로 보여준다 */
+.shell-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+}
+
+.shell-command {
+  flex: 1;
+  font: 600 13px/1.5 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.shell-output {
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  font: 12px/1.5 ui-monospace, Consolas, monospace;
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+button.small {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
 .notice {
   padding: 6px 10px;
   border-radius: 6px;
