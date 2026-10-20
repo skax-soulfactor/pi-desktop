@@ -35,6 +35,7 @@ export function App() {
     stopFollow,
     handOffToTui,
     continueFollowedAsFork,
+    ignoreExternalWrite,
     dismissToast,
   } = useSession();
   const isLocal = host?.kind !== "wsl";
@@ -48,6 +49,8 @@ export function App() {
 
   const connected = connection.status === "connected";
   const sessionInfo = useSessionInfo(hostId, session, connected && !lost);
+  // 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 썼다 (TUI 등). 같은 파일에 함께 쓰면 기록이 꼬이므로 입력을 잠근다.
+  const externalWrite = session?.externalWriteAt !== undefined && !lost;
 
   // 확장이 setTitle로 바꾼 제목을 창 제목에 반영한다.
   useEffect(() => {
@@ -233,6 +236,34 @@ export function App() {
           </button>
         </div>
       )}
+      {externalWrite && (
+        <div className="banner warn">
+          <span>
+            다른 프로그램(터미널의 pi 등)이 이 세션 파일에 쓰고 있습니다. 같은 파일에 함께 쓰면 기록이 꼬일 수 있어 입력을
+            잠갔습니다.
+          </span>
+          <button
+            type="button"
+            className="primary"
+            disabled={busy}
+            onClick={() => void guard(async () => void (await handOffToTui()))}
+            title="이 앱의 Pi를 닫고, 다른 프로그램이 쓰는 내용을 읽기 전용으로 따라갑니다"
+          >
+            닫고 따라가기
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void guard(async () => void (await branchSession({ type: "clone" })))}
+            title="지금까지의 이 앱 쪽 대화를 새 파일로 복제해 따로 이어 갑니다"
+          >
+            복제해서 계속
+          </button>
+          <button type="button" disabled={busy} onClick={() => void guard(ignoreExternalWrite)} title="기록이 섞일 수 있습니다">
+            무시하고 계속
+          </button>
+        </div>
+      )}
       {error && <div className="banner error">{error}</div>}
       {follow && (
         <div className="banner follow">
@@ -276,7 +307,7 @@ export function App() {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
-          disabled={!session || !connected || Boolean(lost) || Boolean(follow)}
+          disabled={!session || !connected || Boolean(lost) || Boolean(follow) || Boolean(externalWrite)}
           rows={3}
         />
         <div className="actions">

@@ -315,6 +315,18 @@ export function useSession() {
     [refreshSessions, switchTo, startFollow, stopFollow],
   );
 
+  /** 다른 프로그램의 끼어들기를 무시하고 이 파일에 계속 쓴다 (기록이 섞일 수 있음을 사용자가 감수). */
+  const ignoreExternalWrite = useCallback(async () => {
+    const current = sessionRef.current;
+    if (!current) return;
+    await api().clearExternalWrite(hostRef.current, current.sessionId);
+    setSession((prev) => {
+      if (!prev) return prev;
+      const { externalWriteAt: _cleared, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
   /** 팔로우 중인 세션을 같은 파일에 쓰지 않고, 분기한 새 세션으로 이어 쓴다. */
   const continueFollowedAsFork = useCallback(async () => {
     const current = followRef.current;
@@ -460,6 +472,11 @@ export function useSession() {
     const offResolved = api().onUiResolved((id, n) => {
       if (isCurrent(id, n.sessionId)) dispatchUi({ type: "resolve", id: n.id });
     });
+    // 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 썼다: 세션 요약에 표시해 화면이 입력을 잠그게 한다.
+    const offExternal = api().onExternalWrite((id, n) => {
+      if (!isCurrent(id, n.sessionId)) return;
+      setSession((prev) => (prev && prev.sessionId === n.sessionId ? { ...prev, externalWriteAt: n.at } : prev));
+    });
     // 팔로우 중인 파일이 바뀌면 잠시 모았다가 다시 읽는다 (상대가 여러 줄을 연달아 쓰므로).
     let followTimer: ReturnType<typeof setTimeout> | undefined;
     const offStored = api().onStoredChanged((id, n) => {
@@ -473,6 +490,7 @@ export function useSession() {
       offExit();
       offResolved();
       offStored();
+      offExternal();
       if (followTimer) clearTimeout(followTimer);
     };
   }, [refreshSessions, reloadFollow, reportError]);
@@ -501,6 +519,7 @@ export function useSession() {
     stopFollow,
     handOffToTui,
     continueFollowedAsFork,
+    ignoreExternalWrite,
     dismissToast: (key: string) => dispatchUi({ type: "dismiss", key }),
     send,
     refreshSessions,
