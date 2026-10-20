@@ -24,10 +24,13 @@ import {
   type SessionOpenResult,
   type SessionRef,
   type SessionSendParams,
+  type SessionHistoryParams,
   type SessionSummary,
+  type StoredSession,
 } from "@pi-desktop/host-protocol";
 import { runDir, socketPath } from "./paths";
 import { locatePi } from "./pi-locator";
+import { listStoredSessions, loadPiSdk } from "./pi-sdk";
 import { AgentSession } from "./session";
 import { AGENT_VERSION } from "./version";
 
@@ -200,6 +203,12 @@ export class AgentDaemon {
     });
 
     peer.handle(Methods.sessionList, (): SessionSummary[] => this.sessionSummaries());
+
+    peer.handle(Methods.sessionHistory, async (params): Promise<StoredSession[]> => {
+      const p = (params ?? {}) as SessionHistoryParams;
+      const pi = await locatePi({ piCliPath: p.piCliPath, env: this.env });
+      return listStoredSessions(await loadPiSdk(pi), p);
+    });
 
     peer.handle(Methods.sessionAttach, (params): SessionAttachResult => {
       const p = params as SessionAttachParams;

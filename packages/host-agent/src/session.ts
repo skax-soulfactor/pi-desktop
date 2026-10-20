@@ -4,6 +4,9 @@ import { EventJournal, type JournalEntry } from "./journal";
 import { PendingDialogs } from "./pending-dialogs";
 import { PiProcess, type PiExit } from "./pi-process";
 
+/** 같은 Pi 프로세스 안에서 다른 세션 파일로 옮겨 가는 명령 */
+const SESSION_SWITCHING_COMMANDS = new Set(["fork", "clone", "switch_session", "new_session"]);
+
 export interface AgentSessionOptions {
   cwd: string;
   pi: PiLocation;
@@ -83,8 +86,27 @@ export class AgentSession {
     }
   }
 
-  send(command: Record<string, unknown>): Promise<PiResponse> {
-    return this.process.send(command);
+  /**
+   * Pi RPC 명령을 보낸다. 같은 프로세스 안에서 다른 세션 파일로 옮겨 가는 명령
+   * (fork, clone, switch_session, new_session)이 성공하면 세션 파일 경로를 다시 읽어 둔다.
+   * 그래야 나중에 Pi가 종료되었을 때 "다시 열기"가 지금 보던 파일로 열린다.
+   */
+  async send(command: Record<string, unknown>): Promise<PiResponse> {
+    const response = await this.process.send(command);
+    if (response.success === true && SESSION_SWITCHING_COMMANDS.has(String(command.type))) {
+      await this.refreshSessionFile();
+    }
+    return response;
+  }
+
+  private async refreshSessionFile(): Promise<void> {
+    try {
+      const state = await this.process.send({ type: "get_state" });
+      const file = (state.data as { sessionFile?: unknown } | undefined)?.sessionFile;
+      if (typeof file === "string") this.sessionFile = file;
+    } catch {
+      // 다음 기회에 다시 읽는다. 명령 자체의 응답은 그대로 돌려준다.
+    }
   }
 
   /** 응답이 없는 레코드를 Pi에 보낸다. 확장 다이얼로그 응답이면 대기 목록에서 뺀다. */

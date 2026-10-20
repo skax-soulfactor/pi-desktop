@@ -18,6 +18,7 @@ export const Methods = {
   sessionDetach: "session.detach",
   sessionSend: "session.send",
   sessionClose: "session.close",
+  sessionHistory: "session.history",
   daemonStatus: "daemon.status",
   daemonShutdown: "daemon.shutdown",
 } as const;
@@ -153,6 +154,34 @@ export interface SessionExitNotification {
   signal: string | null;
   /** 마지막 stderr 일부. 시작 실패 원인을 보여줄 때 쓴다 */
   stderrTail: string;
+}
+
+/** session.history 요청. cwd를 주면 그 폴더의 세션만, 없으면 모든 폴더의 세션 */
+export interface SessionHistoryParams {
+  cwd?: string;
+  /** Pi 세션 저장 위치를 직접 지정할 때 (기본: Pi 설정을 따름) */
+  sessionDir?: string;
+  piCliPath?: string;
+  /** 최대 개수 (최근 수정 순). 기본 200 */
+  limit?: number;
+}
+
+/** Pi가 디스크에 저장한 세션 하나 (Pi SDK SessionManager.list의 SessionInfo에서 필요한 부분) */
+export interface StoredSession {
+  /** 세션 파일 경로 */
+  path: string;
+  id: string;
+  cwd: string;
+  name?: string;
+  /** fork로 만들어졌으면 원래 세션 파일 */
+  parentSessionPath?: string;
+  /** ms */
+  created: number;
+  /** ms */
+  modified: number;
+  messageCount: number;
+  /** 첫 사용자 메시지 (목록 표시용, 최대 200자) */
+  firstMessage: string;
 }
 
 export interface DaemonStatus {
