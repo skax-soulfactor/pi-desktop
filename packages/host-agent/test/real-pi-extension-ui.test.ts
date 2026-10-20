@@ -7,7 +7,7 @@ import {
   type SessionOpenResult,
   type SessionSummary,
 } from "@pi-desktop/host-protocol";
-import { isolatedEnv, TestClient } from "./helpers/agent-client";
+import { isolatedEnv, TestClient, waitUntil } from "./helpers/agent-client";
 import { MOCK_MODEL_ARGS, PI_CLI, PI_PACKAGE_DIR, setupRealPi, type RealPiFixture } from "./helpers/real-pi";
 
 /**
@@ -97,6 +97,8 @@ describe("확장 UI 계약 테스트 (rpc-demo 확장)", () => {
 
     const list = await client.request<SessionSummary[]>(Methods.sessionList);
     expect(list.find((s) => s.sessionId === session.sessionId)?.pendingUi).toBe(0);
+    // 처리됨 알림은 observer 자신의 연결로 오므로, client의 응답보다 늦게 도착할 수 있다.
+    await waitUntil(() => observer.uiResolved.includes(request.id), 10_000, "observer가 uiResolved를 받지 못함");
     expect(observer.uiResolved).toContain(request.id);
   });
 

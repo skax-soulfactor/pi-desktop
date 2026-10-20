@@ -118,3 +118,15 @@ export function joinedText(events: SessionEventNotification[]): string {
     .map((e) => e.assistantMessageEvent?.delta ?? "")
     .join("");
 }
+
+/**
+ * 조건이 참이 될 때까지 기다린다. 서로 다른 연결(클라이언트)로 오는 알림은 도착 순서가 보장되지 않으므로,
+ * 한 클라이언트의 응답을 받은 직후 다른 클라이언트의 알림을 검사할 때 쓴다.
+ */
+export async function waitUntil(check: () => boolean, timeoutMs = 10_000, message = "조건 대기 시간 초과"): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error(message);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}

@@ -9,7 +9,7 @@ import {
   type StoredInspectResult,
   type StoredReadResult,
 } from "@pi-desktop/host-protocol";
-import { isolatedEnv, TestClient } from "./helpers/agent-client";
+import { isolatedEnv, TestClient, waitUntil } from "./helpers/agent-client";
 import { MOCK_MODEL_ARGS, PI_CLI, setupRealPi, type RealPiFixture } from "./helpers/real-pi";
 
 /**
@@ -120,8 +120,7 @@ describe("TUI와 병행 사용 (외부 Pi 프로세스)", () => {
     const seen = client.storedChanges.length;
     await external.prompt("외부 두 번째 질문");
     // 파일 감시는 주기적으로 stat하므로 알림이 조금 늦게 올 수 있다.
-    const deadline = Date.now() + 10_000;
-    while (client.storedChanges.length === seen && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
+    await waitUntil(() => client.storedChanges.length > seen, 10_000, "stored.changed를 받지 못함");
     expect(client.storedChanges.length).toBeGreaterThan(seen);
     expect(client.storedChanges.at(-1)?.path).toBe(externalFile);
 
