@@ -22,6 +22,7 @@ const api: PiDesktopApi = {
   attachSession: (hostId, sessionId, lastSeq) =>
     ipcRenderer.invoke(IpcChannels.attachSession, hostId, sessionId, lastSeq),
   closeSession: (hostId, sessionId) => ipcRenderer.invoke(IpcChannels.closeSession, hostId, sessionId),
+  clearExternalWrite: (hostId, sessionId) => ipcRenderer.invoke(IpcChannels.clearExternalWrite, hostId, sessionId),
   sendCommand: (hostId, sessionId, command) =>
     ipcRenderer.invoke(IpcChannels.sendCommand, hostId, sessionId, command),
   sendRecord: (hostId, sessionId, record) => ipcRenderer.invoke(IpcChannels.sendRecord, hostId, sessionId, record),
@@ -31,6 +32,7 @@ const api: PiDesktopApi = {
   onSessionExit: (listener) => subscribe(IpcChannels.sessionExit, listener),
   onUiResolved: (listener) => subscribe(IpcChannels.uiResolved, listener),
   onStoredChanged: (listener) => subscribe(IpcChannels.storedChanged, listener),
+  onExternalWrite: (listener) => subscribe(IpcChannels.externalWrite, listener),
 };
 
 contextBridge.exposeInMainWorld("piDesktop", api);
