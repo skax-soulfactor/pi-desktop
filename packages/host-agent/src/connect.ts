@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
 import { createConnection, type Socket } from "node:net";
+import { spawnDaemon } from "./spawn-daemon";
 import { socketPath } from "./paths";
 
 export interface ConnectOptions {
@@ -11,7 +11,7 @@ export interface ConnectOptions {
 }
 
 /**
- * 데몬 소켓에 연결한다. 데몬이 없으면 분리(detached) 프로세스로 띄운 뒤 연결한다.
+ * 데몬 소켓에 연결한다. 데몬이 없으면 연결기와 분리된 프로세스로 띄운 뒤 연결한다 (spawn-daemon.ts).
  *
  * 데몬을 분리 실행하는 이유: 연결기는 SSH 세션이나 앱과 함께 죽지만,
  * 데몬과 그 아래의 Pi 프로세스는 계속 살아 있어야 하기 때문이다 (설계 §3.4).
@@ -25,13 +25,7 @@ export async function connectToDaemon(options: ConnectOptions = {}): Promise<Soc
 
   const script = options.agentScript ?? process.argv[1];
   if (!script) throw new Error("Host Agent 스크립트 경로를 알 수 없습니다");
-  const child = spawn(process.execPath, [script, "daemon"], {
-    detached: true,
-    stdio: "ignore",
-    env,
-    windowsHide: true,
-  });
-  child.unref();
+  await spawnDaemon(script, env);
 
   const deadline = Date.now() + (options.startTimeoutMs ?? 10_000);
   let delay = 50;
