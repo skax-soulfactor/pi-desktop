@@ -1,5 +1,5 @@
 import { appendFileSync, chmodSync, mkdirSync } from "node:fs";
-import { unlink } from "node:fs/promises";
+import { stat, unlink } from "node:fs/promises";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -168,6 +168,11 @@ export class AgentDaemon {
     peer.handle(Methods.sessionOpen, async (params): Promise<SessionOpenResult> => {
       const p = params as SessionOpenParams;
       if (!p?.cwd) throw new JsonRpcError(ErrorCodes.InvalidParams, "cwd가 필요합니다");
+      // 없는 폴더로 spawn하면 Windows는 "node.exe ENOENT"처럼 엉뚱한 오류를 내므로 미리 확인한다.
+      const cwdStat = await stat(p.cwd).catch(() => undefined);
+      if (!cwdStat?.isDirectory()) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, `작업 폴더를 찾을 수 없습니다: ${p.cwd}`);
+      }
       const pi = await locatePi({ piCliPath: p.piCliPath, env: this.env });
       const session = new AgentSession({
         cwd: p.cwd,

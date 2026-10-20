@@ -101,6 +101,15 @@ describe("Host Agent 데몬 (가짜 Pi)", () => {
     expect(attach.replayed?.toSeq).toBe(attach.session.lastSeq);
   });
 
+  it("없는 작업 폴더로 세션을 열면 InvalidParams와 경로를 알려준다", async () => {
+    const client = connect(await isolatedEnv({ PI_DESKTOP_PI_CLI: FAKE_PI }));
+    const missing = `${process.cwd()}/no-such-dir-for-test`;
+    await expect(client.request(Methods.sessionOpen, { cwd: missing })).rejects.toMatchObject({
+      code: -32602,
+      message: expect.stringContaining("no-such-dir-for-test"),
+    });
+  });
+
   it("없는 세션에 명령하면 SessionNotFound", async () => {
     const client = connect(await isolatedEnv({ PI_DESKTOP_PI_CLI: FAKE_PI }));
     await expect(

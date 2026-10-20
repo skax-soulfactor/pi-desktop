@@ -57,7 +57,16 @@ export class AgentSession {
     });
     this.process.start();
 
-    const state = await this.process.send({ type: "get_state" });
+    let state: Awaited<ReturnType<PiProcess["send"]>>;
+    try {
+      state = await this.process.send({ type: "get_state" });
+    } catch (error) {
+      // 시작 중에 죽었다면 stderr에 원인이 있으므로 함께 알린다 (예: 잘못된 인자, 모델 없음).
+      const detail = this.exitInfo?.stderrTail.trim();
+      throw new Error(
+        detail ? `Pi가 시작 중 종료되었습니다:\n${detail.split("\n").slice(-10).join("\n")}` : String(error),
+      );
+    }
     const data = state.data as Record<string, unknown> | undefined;
     if (state.success === true && typeof data?.sessionFile === "string") {
       this.sessionFile = data.sessionFile;
