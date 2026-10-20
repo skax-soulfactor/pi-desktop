@@ -2,6 +2,16 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { SessionSummary } from "@pi-desktop/host-protocol/messages";
 import type { ConnectionState, HostDescriptor } from "../shared/api";
 import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState } from "./chat-state";
+import {
+  applyUiEvent,
+  dialogResponse,
+  dismissToast,
+  initialExtensionUiState,
+  prunePending,
+  resolveDialog,
+  type DialogRequest,
+  type ExtensionUiState,
+} from "./extension-ui-state";
 
 type Action =
   | { type: "event"; seq: number; event: unknown }
@@ -19,6 +29,28 @@ function reducer(state: ChatState, action: Action): ChatState {
       return action.state;
     case "reset":
       return initialChatState;
+  }
+}
+
+type UiAction =
+  | { type: "event"; seq: number; at: number; event: unknown; replay: boolean }
+  | { type: "resolve"; id: string }
+  | { type: "prune"; ids: string[] }
+  | { type: "dismiss"; key: string }
+  | { type: "reset" };
+
+function uiReducer(state: ExtensionUiState, action: UiAction): ExtensionUiState {
+  switch (action.type) {
+    case "event":
+      return applyUiEvent(state, action.seq, action.at, action.event, Date.now(), action.replay);
+    case "resolve":
+      return resolveDialog(state, action.id);
+    case "prune":
+      return prunePending(state, action.ids);
+    case "dismiss":
+      return dismissToast(state, action.key);
+    case "reset":
+      return initialExtensionUiState;
   }
 }
 
@@ -79,6 +111,7 @@ export function useSession() {
   const [session, setSession] = useState<SessionSummary | undefined>();
   const [lost, setLost] = useState<LostSession | undefined>();
   const [chat, dispatch] = useReducer(reducer, initialChatState);
+  const [ui, dispatchUi] = useReducer(uiReducer, initialExtensionUiState);
 
   // 이벤트 콜백 안에서 최신 값을 보기 위한 ref
   const hostRef = useRef(hostId);
@@ -117,15 +150,20 @@ export function useSession() {
 
   const attach = useCallback(
     async (target: SessionSummary, fromSeq: number) => {
-      // 데몬은 attach 응답보다 재생 이벤트를 먼저 보낸다. 이벤트가 걸러지지 않도록 대상 세션을 먼저 지정한다.
+      // attach 이후의 실시간 이벤트가 걸러지지 않도록 대상 세션을 먼저 지정한다.
       sessionRef.current = target;
       setSession(target);
       setLost(undefined);
       const result = await api().attachSession(hostRef.current, target.sessionId, fromSeq);
-      // 재생 이벤트는 결과에 함께 온다 (IPC 알림과 응답의 도착 순서가 보장되지 않기 때문).
-      for (const n of result.events) dispatch({ type: "event", seq: n.seq, event: n.event });
+      // 재생 이벤트는 결과에 함께 온다. 먼저 모두 적용한 뒤 대기 목록으로 다이얼로그를 거른다
+      // (순서가 바뀌면 이미 답한 다이얼로그가 다시 뜬다).
+      for (const n of result.events) {
+        dispatch({ type: "event", seq: n.seq, event: n.event });
+        dispatchUi({ type: "event", seq: n.seq, at: n.at, event: n.event, replay: true });
+      }
       const replayedTo = result.events.at(-1)?.seq;
       if (replayedTo !== undefined) lastSeqRef.current = Math.max(lastSeqRef.current, replayedTo);
+      dispatchUi({ type: "prune", ids: result.pendingUi ?? [] });
       setSession(result.session);
       writeStorage(lastSessionKey(hostRef.current), remember(result.session));
       if (result.session.state === "exited") {
@@ -142,6 +180,7 @@ export function useSession() {
   const switchTo = useCallback(
     async (target: SessionSummary, options: { snapshot?: boolean } = {}) => {
       dispatch({ type: "reset" });
+      dispatchUi({ type: "reset" });
       lastSeqRef.current = 0;
       await attach(target, 0);
       if (options.snapshot) await restoreSnapshot(target);
@@ -178,6 +217,17 @@ export function useSession() {
     }
   }, []);
 
+  /** 확장 다이얼로그에 답한다. 화면에서는 바로 닫고, 데몬이 다른 창에도 처리됨을 알린다. */
+  const respondDialog = useCallback(
+    async (dialog: DialogRequest, answer: { value?: string; confirmed?: boolean; cancelled?: boolean }) => {
+      const current = sessionRef.current;
+      if (!current) return;
+      dispatchUi({ type: "resolve", id: dialog.id });
+      await api().sendRecord(hostRef.current, current.sessionId, dialogResponse(dialog, answer));
+    },
+    [],
+  );
+
   /** 호스트 전환: 보던 세션을 놓고 새 호스트에 연결한다. */
   const selectHost = useCallback((next: string) => {
     if (next === hostRef.current) return;
@@ -189,6 +239,7 @@ export function useSession() {
     setSessions([]);
     setLost(undefined);
     dispatch({ type: "reset" });
+    dispatchUi({ type: "reset" });
   }, []);
 
   useEffect(() => {
@@ -233,7 +284,9 @@ export function useSession() {
     const isCurrent = (id: string, sessionId: string) =>
       id === hostRef.current && sessionId === sessionRef.current?.sessionId;
     const offEvent = api().onSessionEvent((id, n) => {
-      if (isCurrent(id, n.sessionId)) dispatch({ type: "event", seq: n.seq, event: n.event });
+      if (!isCurrent(id, n.sessionId)) return;
+      dispatch({ type: "event", seq: n.seq, event: n.event });
+      dispatchUi({ type: "event", seq: n.seq, at: n.at, event: n.event, replay: false });
     });
     const offExit = api().onSessionExit((id, n) => {
       if (!isCurrent(id, n.sessionId)) return;
@@ -247,9 +300,14 @@ export function useSession() {
       if (current) setLost({ ...remember(current), reason: "exited" });
       void refreshSessions();
     });
+    // 다른 창에서 답했거나 제한 시간이 지나 처리된 다이얼로그를 닫는다.
+    const offResolved = api().onUiResolved((id, n) => {
+      if (isCurrent(id, n.sessionId)) dispatchUi({ type: "resolve", id: n.id });
+    });
     return () => {
       offEvent();
       offExit();
+      offResolved();
     };
   }, [refreshSessions]);
 
@@ -267,6 +325,9 @@ export function useSession() {
     openSession,
     reopenLost,
     switchTo,
+    ui,
+    respondDialog,
+    dismissToast: (key: string) => dispatchUi({ type: "dismiss", key }),
     send,
     refreshSessions,
   };

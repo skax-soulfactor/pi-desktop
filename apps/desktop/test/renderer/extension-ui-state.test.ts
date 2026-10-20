@@ -111,3 +111,17 @@ describe("dialogResponse", () => {
     expect(dialogResponse(dialog("input"), { cancelled: true })).toEqual({ type: "extension_ui_response", id: "d", cancelled: true });
   });
 });
+
+describe("applyUiEvent — 재생 구분", () => {
+  it("재생 중에 들어온 notify·set_editor_text는 방금 받았더라도 무시하고, 상태는 반영한다", () => {
+    let state = initialExtensionUiState;
+    state = applyUiEvent(state, 1, NOW, ui("n", "notify", { message: "옛 알림" }), NOW, true);
+    state = applyUiEvent(state, 2, NOW, ui("e", "set_editor_text", { text: "옛 글" }), NOW, true);
+    state = applyUiEvent(state, 3, NOW, ui("s", "setStatus", { statusKey: "k", statusText: "v" }), NOW, true);
+    state = applyUiEvent(state, 4, NOW, ui("d", "confirm", { title: "대기 중" }), NOW, true);
+    expect(state.toasts).toEqual([]);
+    expect(state.editorText).toBeUndefined();
+    expect(state.statuses).toEqual({ k: "v" });
+    expect(state.dialogs.map((d) => d.id)).toEqual(["d"]);
+  });
+});

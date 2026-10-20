@@ -1,12 +1,29 @@
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { ChatView } from "./ChatView";
 import { useSession } from "./use-session";
+import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
 import { SessionBar } from "./SessionBar";
 import { useSessionInfo } from "./use-session-info";
 
 export function App() {
-  const { hosts, host, hostId, selectHost, connection, sessions, session, lost, chat, openSession, reopenLost, switchTo, send } =
-    useSession();
+  const {
+    hosts,
+    host,
+    hostId,
+    selectHost,
+    connection,
+    sessions,
+    session,
+    lost,
+    chat,
+    ui,
+    openSession,
+    reopenLost,
+    switchTo,
+    send,
+    respondDialog,
+    dismissToast,
+  } = useSession();
   const isLocal = host?.kind !== "wsl";
   const [cwd, setCwd] = useState("");
   const [draft, setDraft] = useState("");
@@ -15,6 +32,30 @@ export function App() {
 
   const connected = connection.status === "connected";
   const sessionInfo = useSessionInfo(hostId, session, connected && !lost);
+
+  // 확장이 setTitle로 바꾼 제목을 창 제목에 반영한다.
+  useEffect(() => {
+    document.title = ui.title ? `${ui.title} — Pi Desktop` : "Pi Desktop";
+  }, [ui.title]);
+
+  // 확장이 set_editor_text로 넣어 달라고 한 글을 입력창에 채운다.
+  // 요청(seq)마다 한 번만 적용해, 사용자가 이어서 고친 내용을 다시 덮어쓰지 않는다.
+  const editorText = ui.editorText;
+  useEffect(() => {
+    if (editorText) setDraft(editorText.text);
+  }, [editorText?.seq]);
+
+  /**
+   * 다이얼로그 응답처럼 다른 작업을 막지 않아야 하는 동작용. 실패만 배너로 보여준다.
+   * (확장 명령을 보낸 prompt는 다이얼로그에 답할 때까지 끝나지 않아 busy 상태이므로 guard를 쓰면 안 된다)
+   */
+  async function guardQuiet(task: () => Promise<void>) {
+    try {
+      await task();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function guard(task: () => Promise<void>) {
     setBusy(true);
@@ -163,6 +204,7 @@ export function App() {
 
       <ChatView items={chat.items} running={chat.running} />
 
+      <Widgets ui={ui} placement="aboveEditor" />
       <footer className="composer">
         <textarea
           placeholder={session ? "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈)" : "먼저 세션을 여세요"}
@@ -192,6 +234,15 @@ export function App() {
           )}
         </div>
       </footer>
+      <Widgets ui={ui} placement="belowEditor" />
+      <StatusLine ui={ui} />
+      {ui.dialogs[0] && (
+        <ExtensionDialog
+          dialog={ui.dialogs[0]}
+          onAnswer={(answer) => void guardQuiet(() => respondDialog(ui.dialogs[0]!, answer))}
+        />
+      )}
+      <Toasts toasts={ui.toasts} onDismiss={dismissToast} />
     </div>
   );
 }

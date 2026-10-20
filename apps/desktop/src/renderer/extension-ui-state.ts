@@ -8,7 +8,7 @@
  *
  * 저널 재생으로 오래된 요청이 다시 들어온다. 그래서
  * - 다이얼로그는 데몬이 알려 준 대기 목록(pendingUi)에 있는 것만 남기고 (prunePending)
- * - 토스트·입력창 바꾸기처럼 "지금 일어난 일"은 받은 시각이 오래되었으면 무시한다.
+ * - 토스트·입력창 바꾸기처럼 "지금 일어난 일"은 재생 중에 들어왔거나 받은 시각이 오래되었으면 무시한다.
  */
 
 export type DialogMethod = "select" | "confirm" | "input" | "editor";
@@ -71,6 +71,8 @@ export function applyUiEvent(
   at: number,
   raw: unknown,
   now: number = Date.now(),
+  /** attach로 저널을 재생하는 중에 들어온 이벤트인지. 재생된 알림은 "지금 일어난 일"이 아니다 */
+  replay = false,
 ): ExtensionUiState {
   if (seq <= state.lastSeq) return state;
   const next: ExtensionUiState = { ...state, lastSeq: seq };
@@ -79,7 +81,7 @@ export function applyUiEvent(
   if (event.type !== "extension_ui_request" || typeof event.id !== "string" || typeof event.method !== "string") {
     return next;
   }
-  const fresh = now - at < FRESH_MS;
+  const fresh = !replay && now - at < FRESH_MS;
 
   if (DIALOGS.has(event.method)) {
     const timeout = typeof event.timeout === "number" ? event.timeout : undefined;
