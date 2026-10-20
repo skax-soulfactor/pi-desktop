@@ -38,7 +38,9 @@ npm run dev:mock -w @pi-desktop/desktop
 
 - 저장소의 Pi devDependency(1.3.0)와 OpenAI 호환 mock LLM(포트 18911)을 씁니다.
 - Pi 설정과 데몬 홈은 저장소의 `.dev/` 아래로 격리되어 실제 `~/.pi`, `~/.pi-desktop`과 섞이지 않습니다.
-- 프롬프트 예: `안녕` → 그대로 echo, `read:package.json` → read 툴 호출 후 내용 응답
+- 프롬프트 예: `안녕` → 그대로 echo, `read:package.json` → read 툴 호출 후 내용 응답, `bash:<명령>` → bash 툴 호출
+- `-- --demo-ext`를 붙이면 Pi에 들어 있는 rpc-demo 확장을 함께 불러옵니다. 확장 UI(다이얼로그·알림·위젯·상태)를 확인할 때 씁니다.
+  - `/rpc-input`, `/rpc-editor`, `/rpc-prefill` 명령, `bash:rm -rf ./x`(위험 명령 확인 다이얼로그)
 
 ### 설치된 Pi로 실행
 
