@@ -28,6 +28,8 @@ export const Notifications = {
   sessionEvent: "session.event",
   /** 세션의 Pi 프로세스가 끝났다 */
   sessionExit: "session.exit",
+  /** 확장 다이얼로그가 처리되었다 */
+  sessionUiResolved: "session.uiResolved",
 } as const;
 
 export interface HostInfo {
@@ -88,6 +90,8 @@ export interface SessionSummary {
   piVersion: string;
   startedAt: number;
   exitCode?: number | null;
+  /** 답을 기다리는 확장 다이얼로그 수 (세션 목록에서 "입력 필요" 표시용) */
+  pendingUi: number;
 }
 
 export interface SessionOpenResult {
@@ -109,6 +113,8 @@ export interface SessionAttachResult {
   truncated: boolean;
   /** 이 응답 직전에 재생(알림으로 전송)한 이벤트 범위. 재생할 것이 없으면 null */
   replayed: { fromSeq: number; toSeq: number } | null;
+  /** 아직 아무도 답하지 않은 확장 다이얼로그(select·confirm·input·editor)의 요청 id */
+  pendingUi: string[];
 }
 
 export interface SessionRef {
@@ -134,6 +140,13 @@ export interface SessionEventNotification {
   event: unknown;
 }
 
+/** 확장 다이얼로그가 처리되었다 (어느 앱이 답했거나 Pi가 제한 시간으로 자동 처리함) */
+export interface SessionUiResolvedNotification {
+  sessionId: string;
+  /** extension_ui_request의 id */
+  id: string;
+}
+
 export interface SessionExitNotification {
   sessionId: string;
   exitCode: number | null;
@@ -151,3 +164,6 @@ export interface DaemonStatus {
   /** 세션·클라이언트가 모두 없을 때 스스로 종료하기까지의 대기 시간 (ms) */
   idleShutdownMs: number;
 }
+
+/** 답을 보내야 하는 확장 UI 메서드 (rpc-extension-ui.md). 나머지(notify, setStatus 등)는 알림만 한다. */
+export const DIALOG_METHODS: readonly string[] = ["select", "confirm", "input", "editor"];
