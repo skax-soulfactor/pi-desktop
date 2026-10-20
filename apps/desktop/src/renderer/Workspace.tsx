@@ -1,7 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
-import { formatRelative } from "./format";
+import { baseName, formatRelative } from "./format";
 import { tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
 import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
@@ -10,7 +10,29 @@ import { Sidebar } from "./Sidebar";
 import { TreePanel } from "./TreePanel";
 import { useSessionInfo } from "./use-session-info";
 
-export function App() {
+/** 탭 표시와 백그라운드 알림에 쓰는 워크스페이스 상태 */
+export interface WorkspaceStatus {
+  title: string;
+  hostId: string;
+  /** 호스트 이름 (예: 로컬, WSL: Ubuntu) */
+  hostLabel: string;
+  running: boolean;
+  /** 확장 다이얼로그, 끼어들기 경고, 열기 선택처럼 사용자의 답을 기다림 */
+  needsInput: boolean;
+  disconnected: boolean;
+}
+
+interface WorkspaceProps {
+  tabId: string;
+  /** 지금 보이는 탭인지. 숨긴 탭도 연결과 상태는 유지한다 */
+  active: boolean;
+  onStatus: (tabId: string, status: WorkspaceStatus) => void;
+}
+
+/**
+ * 워크스페이스 하나 = 탭 하나 (설계 §3.3). 호스트와 세션을 탭마다 따로 가진다.
+ */
+export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
   const {
     hosts,
     host,
@@ -37,7 +59,7 @@ export function App() {
     continueFollowedAsFork,
     ignoreExternalWrite,
     dismissToast,
-  } = useSession();
+  } = useSession(tabId);
   const isLocal = host?.kind !== "wsl";
   const [cwd, setCwd] = useState("");
   const [draft, setDraft] = useState("");
@@ -52,10 +74,19 @@ export function App() {
   // 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 썼다 (TUI 등). 같은 파일에 함께 쓰면 기록이 꼬이므로 입력을 잠근다.
   const externalWrite = session?.externalWriteAt !== undefined && !lost;
 
-  // 확장이 setTitle로 바꾼 제목을 창 제목에 반영한다.
+  // 확장이 setTitle로 바꾼 제목을 창 제목에 반영한다 (보이는 탭만).
   useEffect(() => {
-    document.title = ui.title ? `${ui.title} — Pi Desktop` : "Pi Desktop";
-  }, [ui.title]);
+    if (active) document.title = ui.title ? `${ui.title} — Pi Desktop` : "Pi Desktop";
+  }, [ui.title, active]);
+
+  // 탭 표시와 백그라운드 알림을 위해 상태를 알린다.
+  const statusTitle = ui.title ?? follow?.title ?? (session ? baseName(session.cwd) : follow ? baseName(follow.cwd) : "새 탭");
+  const needsInput = ui.dialogs.length > 0 || externalWrite || Boolean(pendingOpen);
+  const disconnected = connection.status === "disconnected";
+  const hostLabel = host?.label ?? hostId;
+  useEffect(() => {
+    onStatus(tabId, { title: statusTitle, hostId, hostLabel, running: chat.running, needsInput, disconnected });
+  }, [onStatus, tabId, statusTitle, hostId, hostLabel, chat.running, needsInput, disconnected]);
 
   // 확장이 set_editor_text로 넣어 달라고 한 글을 입력창에 채운다.
   // 요청(seq)마다 한 번만 적용해, 사용자가 이어서 고친 내용을 다시 덮어쓰지 않는다.
@@ -136,7 +167,7 @@ export function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app" hidden={!active}>
       <header className="topbar">
         <div className="brand">Pi Desktop</div>
         <select
@@ -344,7 +375,8 @@ export function App() {
           />
         )}
       </div>
-      {ui.dialogs[0] && (
+      {/* 다이얼로그와 토스트는 보이는 탭에서만 띄운다. 숨긴 탭의 요청은 남아 있다가 탭을 열면 뜬다. */}
+      {active && ui.dialogs[0] && (
         <ExtensionDialog
           dialog={ui.dialogs[0]}
           onAnswer={(answer) => void guardQuiet(() => respondDialog(ui.dialogs[0]!, answer))}
@@ -374,7 +406,7 @@ export function App() {
           창에서는 읽기 전용으로 계속 따라 보여줍니다.
         </ChoiceDialog>
       )}
-      <Toasts toasts={ui.toasts} onDismiss={dismissToast} />
+      {active && <Toasts toasts={ui.toasts} onDismiss={dismissToast} />}
     </div>
   );
 }

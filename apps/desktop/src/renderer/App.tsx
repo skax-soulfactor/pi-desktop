@@ -1,0 +1,158 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  addTab,
+  attentionFor,
+  closeTab,
+  cycleTab,
+  loadTabs,
+  saveTabs,
+  type Attention,
+  type TabsState,
+} from "./tabs-state";
+import { forgetTab, MAIN_TAB, setTabHost } from "./use-session";
+import { Workspace, type WorkspaceStatus } from "./Workspace";
+
+/**
+ * 워크스페이스 탭 (설계 §3.3). 탭마다 호스트와 세션을 따로 가지고, 숨긴 탭도 연결과 상태를 유지한다.
+ * 숨긴 탭에서 작업이 끝나거나 입력이 필요해지면 탭에 표시하고 OS 알림을 띄운다.
+ */
+export function App() {
+  const [tabs, setTabs] = useState<TabsState>(() => loadTabs(MAIN_TAB));
+  const [statuses, setStatuses] = useState<Record<string, WorkspaceStatus>>({});
+  const [attention, setAttention] = useState<Record<string, Attention | undefined>>({});
+  const activeRef = useRef(tabs.active);
+  activeRef.current = tabs.active;
+  const statusesRef = useRef(statuses);
+  statusesRef.current = statuses;
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+
+  useEffect(() => saveTabs(tabs), [tabs]);
+
+  // 탭을 열면 그 탭의 알림 표시를 지운다.
+  useEffect(() => {
+    setAttention((prev) => (prev[tabs.active] ? { ...prev, [tabs.active]: undefined } : prev));
+  }, [tabs.active]);
+
+  const activate = useCallback((id: string) => setTabs((prev) => ({ ...prev, active: id })), []);
+
+  const onStatus = useCallback((id: string, status: WorkspaceStatus) => {
+    const before = statusesRef.current[id];
+    setStatuses((prev) => ({ ...prev, [id]: status }));
+    if (id === activeRef.current) return;
+    const kind = attentionFor(before, status);
+    if (!kind) return;
+    setAttention((prev) => ({ ...prev, [id]: kind }));
+    notify(status.title, kind, () => activate(id));
+  }, [activate]);
+
+  const newTab = useCallback(() => {
+    const id = `t${Date.now().toString(36)}`;
+    // 지금 보던 탭과 같은 호스트로 시작한다.
+    const host = statusesRef.current[activeRef.current]?.hostId;
+    if (host) setTabHost(id, host);
+    setTabs((prev) => addTab(prev, id));
+  }, []);
+
+  const close = useCallback((id: string) => {
+    setTabs((prev) => {
+      const next = closeTab(prev, id);
+      if (next !== prev) forgetTab(id);
+      return next;
+    });
+    setStatuses((prev) => {
+      const { [id]: _closed, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
+  // 단축키: Ctrl+T 새 탭, Ctrl+W 탭 닫기, Ctrl+Tab·Ctrl+Shift+Tab 탭 이동, Ctrl+1~9 탭 고르기
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key === "t") newTab();
+      else if (key === "w") close(activeRef.current);
+      else if (key === "tab") setTabs((prev) => cycleTab(prev, e.shiftKey ? -1 : 1));
+      else if (/^[1-9]$/.test(key)) {
+        const target = tabsRef.current.ids[Number(key) - 1];
+        if (target) activate(target);
+        else return;
+      } else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [newTab, close, activate]);
+
+  return (
+    <div className="shell">
+      <nav className="tabbar" role="tablist" aria-label="워크스페이스">
+        {tabs.ids.map((id, index) => {
+          const status = statuses[id];
+          const mark = attention[id];
+          return (
+            <div
+              key={id}
+              role="tab"
+              aria-selected={id === tabs.active}
+              tabIndex={0}
+              className={`tab${id === tabs.active ? " active" : ""}`}
+              title={status ? `${status.title} · ${status.hostLabel} (Ctrl+${index + 1})` : undefined}
+              onClick={() => activate(id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") activate(id);
+              }}
+              onAuxClick={(e) => {
+                // 가운데 버튼으로 닫기
+                if (e.button === 1) close(id);
+              }}
+            >
+              <span className={`tab-dot${status?.running ? " running" : ""}${status?.disconnected ? " offline" : ""}`} />
+              <span className="tab-title">{status?.title ?? "새 탭"}</span>
+              {status && status.hostId !== "local" && <span className="tab-host">{status.hostLabel}</span>}
+              {mark && <span className={`tab-mark ${mark}`}>{mark === "input" ? "입력 필요" : "완료"}</span>}
+              {tabs.ids.length > 1 && (
+                <button
+                  type="button"
+                  className="tab-close"
+                  aria-label="탭 닫기"
+                  title="탭 닫기 (Ctrl+W). 이 탭의 Pi 세션은 계속 돌고, 사이드바의 실행 중에서 다시 열 수 있습니다"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    close(id);
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          );
+        })}
+        <button type="button" className="tab-new" onClick={newTab} title="새 탭 (Ctrl+T)" aria-label="새 탭">
+          +
+        </button>
+      </nav>
+      <div className="workspaces">
+        {tabs.ids.map((id) => (
+          <Workspace key={id} tabId={id} active={id === tabs.active} onStatus={onStatus} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** 숨긴 탭의 소식을 OS 알림으로 띄운다. 누르면 그 탭을 연다. 알림 권한이 없으면 탭 표시만 남는다. */
+function notify(title: string, kind: Attention, onClick: () => void): void {
+  try {
+    if (typeof Notification === "undefined" || Notification.permission === "denied") return;
+    const body = kind === "input" ? "답을 기다리고 있습니다." : "작업이 끝났습니다.";
+    const notification = new Notification(`Pi Desktop — ${title}`, { body, silent: kind === "done" });
+    notification.onclick = () => {
+      window.focus();
+      onClick();
+    };
+  } catch {
+    // 알림을 띄울 수 없는 환경이면 무시
+  }
+}

@@ -86,8 +86,35 @@ export interface LostSession extends RememberedSession {
 }
 
 // localStorage는 개인 환경 설정만 담는다. 실패해도(사생활 보호 모드 등) 동작에는 지장이 없다.
-const HOST_STORAGE_KEY = "pi-desktop.hostId";
-const lastSessionKey = (hostId: string) => `pi-desktop.lastSession.${hostId}`;
+/**
+ * 저장 키는 탭(워크스페이스)마다 따로 둔다. 첫 탭("main")은 탭 기능 이전의 키를 그대로 써서,
+ * 업데이트 뒤에도 보던 호스트와 세션이 그대로 열리게 한다.
+ */
+const hostKey = (tabId: string) => (tabId === MAIN_TAB ? "pi-desktop.hostId" : `pi-desktop.tab.${tabId}.hostId`);
+const lastSessionKeyOf = (tabId: string, hostId: string) =>
+  tabId === MAIN_TAB ? `pi-desktop.lastSession.${hostId}` : `pi-desktop.tab.${tabId}.lastSession.${hostId}`;
+
+/** 첫 탭의 id */
+export const MAIN_TAB = "main";
+
+/** 새 탭이 처음 연결할 호스트를 정해 둔다 (지금 보던 탭과 같은 호스트로 시작하게). */
+export function setTabHost(tabId: string, hostId: string): void {
+  writeStorage(hostKey(tabId), hostId);
+}
+
+/** 탭을 닫을 때 그 탭의 저장값을 지운다. */
+export function forgetTab(tabId: string): void {
+  if (tabId === MAIN_TAB) return;
+  try {
+    const prefix = `pi-desktop.tab.${tabId}.`;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix)) localStorage.removeItem(key);
+    }
+  } catch {
+    // 무시
+  }
+}
 
 function readStorage<T>(key: string): T | undefined {
   try {
@@ -120,7 +147,9 @@ function remember(session: SessionSummary): RememberedSession {
  * - 데몬이 재시작되어 세션이 사라졌거나 Pi가 종료되면 "다시 열기"를 제안하고,
  *   같은 Pi 세션 파일로 열어 대화를 이어 간다 (설계 §3.4).
  */
-export function useSession() {
+export function useSession(tabId: string = MAIN_TAB) {
+  const HOST_STORAGE_KEY = hostKey(tabId);
+  const lastSessionKey = (host: string) => lastSessionKeyOf(tabId, host);
   const [hosts, setHosts] = useState<HostDescriptor[]>([]);
   const [hostId, setHostId] = useState<string>(() => readStorage<string>(HOST_STORAGE_KEY) ?? "local");
   const [connection, setConnection] = useState<ConnectionState>({ status: "idle" });
@@ -443,8 +472,9 @@ export function useSession() {
       }
       // 앱을 새로 열었거나 호스트를 바꿨을 때: 지난번에 보던 세션이 살아 있으면 그것, 아니면 가장 최근 세션.
       const remembered = readStorage<RememberedSession>(lastSessionKey(hostRef.current));
-      const target =
-        list.find((s) => s.sessionId === remembered?.sessionId) ?? [...list].sort((a, b) => b.startedAt - a.startedAt)[0];
+      // 새로 만든 탭은 빈 화면으로 시작하고, 가장 최근 세션에 자동으로 붙는 것은 첫 탭만 한다.
+      const latest = tabId === MAIN_TAB ? [...list].sort((a, b) => b.startedAt - a.startedAt)[0] : undefined;
+      const target = list.find((s) => s.sessionId === remembered?.sessionId) ?? latest;
       if (target) await switchTo(target);
       else if (remembered) setLost({ ...remembered, reason: "missing" });
     };
