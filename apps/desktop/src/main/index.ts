@@ -82,6 +82,7 @@ function registerIpc(manager: HostManager): void {
     // 개발용 덮어쓰기 값은 Windows 경로라서 로컬 호스트에만 적용한다.
     const overrides = hostId === LOCAL_HOST_ID ? devSessionOverrides() : {};
     const params: SessionOpenParams = { ...overrides, cwd: request.cwd };
+    if (request.sessionFile) params.sessionFile = request.sessionFile;
     const result = await conn(hostId).request<SessionOpenResult>(Methods.sessionOpen, params);
     return result.session;
   });
