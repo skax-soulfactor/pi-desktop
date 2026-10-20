@@ -18,6 +18,8 @@ export const Methods = {
   sessionDetach: "session.detach",
   sessionSend: "session.send",
   sessionClose: "session.close",
+  /** 다른 프로그램이 쓴 것으로 감지된 표시를 지운다 (사용자가 "무시하고 계속"을 고름) */
+  sessionClearExternalWrite: "session.clearExternalWrite",
   sessionHistory: "session.history",
   storedInspect: "stored.inspect",
   storedRead: "stored.read",
@@ -35,6 +37,8 @@ export const Notifications = {
   sessionExit: "session.exit",
   /** 확장 다이얼로그가 처리되었다 */
   sessionUiResolved: "session.uiResolved",
+  /** 이 데몬의 Pi가 쓰는 세션 파일에 다른 프로그램(TUI 등)이 쓴 것을 감지했다 */
+  sessionExternalWrite: "session.externalWrite",
   /** 감시 중인 저장 세션 파일이 바뀌었다 (다른 프로그램이 쓰는 중) */
   storedChanged: "stored.changed",
 } as const;
@@ -104,6 +108,11 @@ export interface SessionSummary {
   exitCode?: number | null;
   /** 답을 기다리는 확장 다이얼로그 수 (세션 목록에서 "입력 필요" 표시용) */
   pendingUi: number;
+  /**
+   * 다른 프로그램이 이 세션 파일에 쓴 것을 감지한 시각 (ms). 감지되지 않았으면 없음.
+   * 같은 파일에 두 프로그램이 함께 쓰면 기록이 꼬이므로 앱은 입력을 잠그고 선택을 묻는다 (설계 §5.4)
+   */
+  externalWriteAt?: number;
 }
 
 export interface SessionOpenResult {
@@ -242,4 +251,13 @@ export interface StoredChangedNotification {
   path: string;
   size: number;
   modified: number;
+}
+
+/** session.externalWrite 알림 */
+export interface SessionExternalWriteNotification {
+  sessionId: string;
+  /** 감지한 시각 (ms) */
+  at: number;
+  /** 바뀐 세션 파일 */
+  path: string;
 }

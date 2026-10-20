@@ -19,6 +19,7 @@ import {
   type SessionAttachResult,
   type SessionEventNotification,
   type SessionExitNotification,
+  type SessionExternalWriteNotification,
   type SessionUiResolvedNotification,
   type SessionOpenParams,
   type SessionOpenResult,
@@ -201,6 +202,8 @@ export class AgentDaemon {
         piArgs: p.piArgs,
         env: { ...this.env, ...pi.env, ...p.env },
         journalCapacity: this.options.journalCapacity ?? (Number(this.env.PI_DESKTOP_JOURNAL_CAPACITY) || undefined),
+        files: this.files,
+        externalWriteGraceMs: Number(this.env.PI_DESKTOP_EXTERNAL_WRITE_GRACE_MS) || undefined,
       });
       this.sessions.set(session.id, session);
       this.wireSession(session);
@@ -308,6 +311,11 @@ export class AgentDaemon {
       return null;
     });
 
+    peer.handle(Methods.sessionClearExternalWrite, (params) => {
+      this.requireSession((params as SessionRef)?.sessionId).clearExternalWrite();
+      return null;
+    });
+
     peer.handle(Methods.daemonStatus, () => this.status());
 
     peer.handle(Methods.daemonShutdown, () => {
@@ -323,6 +331,13 @@ export class AgentDaemon {
       const notification: SessionEventNotification = { sessionId: session.id, ...entry };
       for (const client of this.clients) {
         if (client.attached.has(session.id)) client.peer.notify(Notifications.sessionEvent, notification);
+      }
+    });
+    session.onExternalWrite((path, at) => {
+      this.log(`다른 프로그램이 세션 파일에 씀 ${session.id} ${path}`);
+      const notification: SessionExternalWriteNotification = { sessionId: session.id, at, path };
+      for (const client of this.clients) {
+        if (client.attached.has(session.id)) client.peer.notify(Notifications.sessionExternalWrite, notification);
       }
     });
     session.onDialogResolved((id) => {

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { stat } from "node:fs/promises";
 import type { PiLocation, PiResponse, SessionSummary } from "@pi-desktop/host-protocol";
+import { ExternalWriteDetector, type WatchFn } from "./external-write";
 import { EventJournal, type JournalEntry } from "./journal";
 import { PendingDialogs } from "./pending-dialogs";
 import { PiProcess, type PiExit } from "./pi-process";
@@ -17,6 +19,10 @@ export interface AgentSessionOptions {
   piArgs?: string[];
   env?: NodeJS.ProcessEnv;
   journalCapacity?: number;
+  /** 세션 파일 감시 (다른 프로그램이 쓰는지 감지용) */
+  files: WatchFn;
+  /** 우리 Pi가 이 시간 동안 조용한데 파일이 바뀌면 다른 프로그램이 쓴 것으로 본다 (ms) */
+  externalWriteGraceMs?: number;
 }
 
 /**
@@ -38,6 +44,9 @@ export class AgentSession {
   readonly dialogs = new PendingDialogs((id) => {
     for (const listener of this.dialogListeners) listener(id);
   });
+  private readonly externalWriteListeners = new Set<(path: string, at: number) => void>();
+  /** 다른 프로그램(TUI 등)이 이 세션 파일에 쓰는지 감지 (설계 §5.4) */
+  private readonly externalWrite: ExternalWriteDetector;
 
   constructor(private readonly options: AgentSessionOptions) {
     this.journal = new EventJournal(options.journalCapacity);
@@ -52,6 +61,13 @@ export class AgentSession {
       env: options.env,
     });
     this.sessionFile = options.sessionFile;
+    this.externalWrite = new ExternalWriteDetector(
+      options.files,
+      (path, at) => {
+        for (const listener of this.externalWriteListeners) listener(path, at);
+      },
+      options.externalWriteGraceMs,
+    );
   }
 
   /**
@@ -60,6 +76,7 @@ export class AgentSession {
    */
   async start(): Promise<void> {
     this.process.onRecord((record) => {
+      this.externalWrite.activity();
       this.dialogs.observe(record);
       const entry = this.journal.append(record);
       for (const listener of this.entryListeners) listener(entry);
@@ -67,6 +84,7 @@ export class AgentSession {
     this.process.onExit((exit) => {
       this.exitInfo = exit;
       this.dialogs.clear();
+      this.externalWrite.dispose();
       for (const listener of this.exitListeners) listener(exit);
     });
     this.process.start();
@@ -87,6 +105,7 @@ export class AgentSession {
     } else if (state.success !== true) {
       throw new Error(`Pi 초기화 실패: ${String(state.error ?? "get_state 실패")}`);
     }
+    await this.trackSessionFile(this.sessionFile);
   }
 
   /**
@@ -95,7 +114,10 @@ export class AgentSession {
    * 그래야 나중에 Pi가 종료되었을 때 "다시 열기"가 지금 보던 파일로 열린다.
    */
   async send(command: Record<string, unknown>): Promise<PiResponse> {
+    // 명령 처리(모델 변경 등)로 Pi가 파일에 쓸 수 있으므로 보내기 전후를 활동으로 친다.
+    this.externalWrite.activity();
     const response = await this.process.send(command);
+    this.externalWrite.activity();
     if (response.success === true && SESSION_SWITCHING_COMMANDS.has(String(command.type))) {
       await this.refreshSessionFile();
     }
@@ -106,16 +128,37 @@ export class AgentSession {
     try {
       const state = await this.process.send({ type: "get_state" });
       const file = (state.data as { sessionFile?: unknown } | undefined)?.sessionFile;
-      if (typeof file === "string") this.sessionFile = file;
+      if (typeof file === "string") {
+        this.sessionFile = file;
+        await this.trackSessionFile(file);
+      }
     } catch {
       // 다음 기회에 다시 읽는다. 명령 자체의 응답은 그대로 돌려준다.
     }
   }
 
+  /** 다른 프로그램의 끼어들기 감시 대상을 이 파일로 옮긴다. 지금 크기 뒤로 덧붙는 부분만 본다. */
+  private async trackSessionFile(file: string | undefined): Promise<void> {
+    const size = file ? ((await stat(file).catch(() => undefined))?.size ?? 0) : 0;
+    this.externalWrite.track(file, size);
+  }
+
   /** 응답이 없는 레코드를 Pi에 보낸다. 확장 다이얼로그 응답이면 대기 목록에서 뺀다. */
   sendRaw(record: Record<string, unknown>): void {
+    this.externalWrite.activity();
     this.process.sendRaw(record);
     if (record.type === "extension_ui_response" && typeof record.id === "string") this.dialogs.resolve(record.id);
+  }
+
+  /** 다른 프로그램이 이 세션 파일에 쓴 것을 감지했을 때 */
+  onExternalWrite(listener: (path: string, at: number) => void): () => void {
+    this.externalWriteListeners.add(listener);
+    return () => this.externalWriteListeners.delete(listener);
+  }
+
+  /** 사용자가 "무시하고 계속"을 골랐다 */
+  clearExternalWrite(): void {
+    this.externalWrite.clear();
   }
 
   /** 확장 다이얼로그가 처리될 때 (응답, 제한 시간, Pi 종료) */
@@ -158,6 +201,8 @@ export class AgentSession {
     };
     if (this.sessionFile) summary.sessionFile = this.sessionFile;
     if (this.exitInfo) summary.exitCode = this.exitInfo.exitCode;
+    const externalWriteAt = this.externalWrite.detectedAt;
+    if (externalWriteAt !== undefined) summary.externalWriteAt = externalWriteAt;
     return summary;
   }
 }
