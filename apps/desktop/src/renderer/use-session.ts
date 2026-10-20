@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { SessionSummary, StoredSession } from "@pi-desktop/host-protocol/messages";
-import type { ConnectionState, HostDescriptor } from "../shared/api";
+import type { SessionEventNotification, SessionSummary, StoredSession } from "@pi-desktop/host-protocol/messages";
+import type { AttachResult, ConnectionState, HostDescriptor } from "../shared/api";
 import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState } from "./chat-state";
 import {
   applyUiEvent,
@@ -86,8 +86,35 @@ export interface LostSession extends RememberedSession {
 }
 
 // localStorage는 개인 환경 설정만 담는다. 실패해도(사생활 보호 모드 등) 동작에는 지장이 없다.
-const HOST_STORAGE_KEY = "pi-desktop.hostId";
-const lastSessionKey = (hostId: string) => `pi-desktop.lastSession.${hostId}`;
+/**
+ * 저장 키는 탭(워크스페이스)마다 따로 둔다. 첫 탭("main")은 탭 기능 이전의 키를 그대로 써서,
+ * 업데이트 뒤에도 보던 호스트와 세션이 그대로 열리게 한다.
+ */
+const hostKey = (tabId: string) => (tabId === MAIN_TAB ? "pi-desktop.hostId" : `pi-desktop.tab.${tabId}.hostId`);
+const lastSessionKeyOf = (tabId: string, hostId: string) =>
+  tabId === MAIN_TAB ? `pi-desktop.lastSession.${hostId}` : `pi-desktop.tab.${tabId}.lastSession.${hostId}`;
+
+/** 첫 탭의 id */
+export const MAIN_TAB = "main";
+
+/** 새 탭이 처음 연결할 호스트를 정해 둔다 (지금 보던 탭과 같은 호스트로 시작하게). */
+export function setTabHost(tabId: string, hostId: string): void {
+  writeStorage(hostKey(tabId), hostId);
+}
+
+/** 탭을 닫을 때 그 탭의 저장값을 지운다. */
+export function forgetTab(tabId: string): void {
+  if (tabId === MAIN_TAB) return;
+  try {
+    const prefix = `pi-desktop.tab.${tabId}.`;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix)) localStorage.removeItem(key);
+    }
+  } catch {
+    // 무시
+  }
+}
 
 function readStorage<T>(key: string): T | undefined {
   try {
@@ -120,7 +147,9 @@ function remember(session: SessionSummary): RememberedSession {
  * - 데몬이 재시작되어 세션이 사라졌거나 Pi가 종료되면 "다시 열기"를 제안하고,
  *   같은 Pi 세션 파일로 열어 대화를 이어 간다 (설계 §3.4).
  */
-export function useSession() {
+export function useSession(tabId: string = MAIN_TAB) {
+  const HOST_STORAGE_KEY = hostKey(tabId);
+  const lastSessionKey = (host: string) => lastSessionKeyOf(tabId, host);
   const [hosts, setHosts] = useState<HostDescriptor[]>([]);
   const [hostId, setHostId] = useState<string>(() => readStorage<string>(HOST_STORAGE_KEY) ?? "local");
   const [connection, setConnection] = useState<ConnectionState>({ status: "idle" });
@@ -130,6 +159,8 @@ export function useSession() {
   const [follow, setFollow] = useState<FollowState | undefined>();
   const [pendingOpen, setPendingOpen] = useState<StoredSession | undefined>();
   const followRef = useRef<FollowState | undefined>(undefined);
+  /** attach 진행 중이면 그 사이 알림으로 온 이벤트를 모으는 곳 */
+  const attachQueueRef = useRef<SessionEventNotification[] | undefined>(undefined);
   const [chat, dispatch] = useReducer(reducer, initialChatState);
   const [ui, dispatchUi] = useReducer(uiReducer, initialExtensionUiState);
 
@@ -174,14 +205,27 @@ export function useSession() {
       sessionRef.current = target;
       setSession(target);
       setLost(undefined);
-      const result = await api().attachSession(hostRef.current, target.sessionId, fromSeq);
+      // attach 중에 알림으로 오는 이벤트는 결과보다 먼저 도착할 수 있으므로 모아 두었다가 결과 뒤에 적용한다.
+      const queued: SessionEventNotification[] = [];
+      attachQueueRef.current = queued;
+      let result: AttachResult;
+      try {
+        result = await api().attachSession(hostRef.current, target.sessionId, fromSeq);
+      } finally {
+        if (attachQueueRef.current === queued) attachQueueRef.current = undefined;
+      }
       // 재생 이벤트는 결과에 함께 온다. 먼저 모두 적용한 뒤 대기 목록으로 다이얼로그를 거른다
       // (순서가 바뀌면 이미 답한 다이얼로그가 다시 뜬다).
       for (const n of result.events) {
         dispatch({ type: "event", seq: n.seq, event: n.event });
         dispatchUi({ type: "event", seq: n.seq, at: n.at, event: n.event, replay: true });
       }
-      const replayedTo = result.events.at(-1)?.seq;
+      // 그 사이 알림으로 온 것 중 결과에 없던 것만 실시간 이벤트로 적용된다 (리듀서가 순번으로 중복을 거름).
+      for (const n of queued) {
+        dispatch({ type: "event", seq: n.seq, event: n.event });
+        dispatchUi({ type: "event", seq: n.seq, at: n.at, event: n.event, replay: false });
+      }
+      const replayedTo = Math.max(result.events.at(-1)?.seq ?? 0, queued.at(-1)?.seq ?? 0) || undefined;
       if (replayedTo !== undefined) lastSeqRef.current = Math.max(lastSeqRef.current, replayedTo);
       dispatchUi({ type: "prune", ids: result.pendingUi ?? [] });
       setSession(result.session);
@@ -428,8 +472,9 @@ export function useSession() {
       }
       // 앱을 새로 열었거나 호스트를 바꿨을 때: 지난번에 보던 세션이 살아 있으면 그것, 아니면 가장 최근 세션.
       const remembered = readStorage<RememberedSession>(lastSessionKey(hostRef.current));
-      const target =
-        list.find((s) => s.sessionId === remembered?.sessionId) ?? [...list].sort((a, b) => b.startedAt - a.startedAt)[0];
+      // 새로 만든 탭은 빈 화면으로 시작하고, 가장 최근 세션에 자동으로 붙는 것은 첫 탭만 한다.
+      const latest = tabId === MAIN_TAB ? [...list].sort((a, b) => b.startedAt - a.startedAt)[0] : undefined;
+      const target = list.find((s) => s.sessionId === remembered?.sessionId) ?? latest;
       if (target) await switchTo(target);
       else if (remembered) setLost({ ...remembered, reason: "missing" });
     };
@@ -453,6 +498,10 @@ export function useSession() {
       id === hostRef.current && sessionId === sessionRef.current?.sessionId;
     const offEvent = api().onSessionEvent((id, n) => {
       if (!isCurrent(id, n.sessionId)) return;
+      if (attachQueueRef.current) {
+        attachQueueRef.current.push(n);
+        return;
+      }
       dispatch({ type: "event", seq: n.seq, event: n.event });
       dispatchUi({ type: "event", seq: n.seq, at: n.at, event: n.event, replay: false });
     });

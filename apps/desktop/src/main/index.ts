@@ -171,9 +171,11 @@ app.whenReady().then(() => {
     agentScript: script,
     agentVersion: agentVersion(script),
     onState: (hostId, state) => sendToRenderer(IpcChannels.connectionChanged, hostId, state),
-    // attach 중인 세션의 이벤트는 attach 결과에 담아 보낸다 (replay-collector.ts 참고).
+    // attach 중인 세션의 이벤트는 attach 결과에도 담는다. 같은 세션을 이미 보고 있는 다른 탭이 놓치지 않도록
+    // 알림으로도 항상 보내고, attach하는 쪽은 결과를 먼저 적용한 뒤 순번으로 중복을 거른다 (replay-collector.ts).
     onSessionEvent: (hostId, n) => {
-      if (!replays.capture(replayKey(hostId, n.sessionId), n)) sendToRenderer(IpcChannels.sessionEvent, hostId, n);
+      replays.capture(replayKey(hostId, n.sessionId), n);
+      sendToRenderer(IpcChannels.sessionEvent, hostId, n);
     },
     onSessionExit: (hostId, n) => sendToRenderer(IpcChannels.sessionExit, hostId, n),
     onUiResolved: (hostId, n) => sendToRenderer(IpcChannels.uiResolved, hostId, n),

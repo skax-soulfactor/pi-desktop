@@ -1,0 +1,43 @@
+import { describe, expect, it } from "vitest";
+import { addTab, attentionFor, closeTab, cycleTab } from "../../src/renderer/tabs-state";
+
+describe("탭 목록", () => {
+  it("새 탭은 지금 탭 오른쪽에 열리고 활성화된다", () => {
+    expect(addTab({ ids: ["a", "b", "c"], active: "a" }, "n")).toEqual({ ids: ["a", "n", "b", "c"], active: "n" });
+  });
+
+  it("활성 탭을 닫으면 오른쪽 탭, 맨 끝이면 왼쪽 탭을 연다", () => {
+    expect(closeTab({ ids: ["a", "b", "c"], active: "b" }, "b")).toEqual({ ids: ["a", "c"], active: "c" });
+    expect(closeTab({ ids: ["a", "b", "c"], active: "c" }, "c")).toEqual({ ids: ["a", "b"], active: "b" });
+  });
+
+  it("활성 탭이 아닌 탭을 닫으면 활성 탭은 그대로", () => {
+    expect(closeTab({ ids: ["a", "b"], active: "a" }, "b")).toEqual({ ids: ["a"], active: "a" });
+  });
+
+  it("마지막 탭이나 없는 탭은 닫지 않는다", () => {
+    const one = { ids: ["a"], active: "a" };
+    expect(closeTab(one, "a")).toBe(one);
+    const two = { ids: ["a", "b"], active: "a" };
+    expect(closeTab(two, "z")).toBe(two);
+  });
+
+  it("다음·이전 탭으로 돌고 끝에서는 반대쪽으로 넘어간다", () => {
+    expect(cycleTab({ ids: ["a", "b", "c"], active: "c" }, 1).active).toBe("a");
+    expect(cycleTab({ ids: ["a", "b", "c"], active: "a" }, -1).active).toBe("c");
+  });
+});
+
+describe("attentionFor", () => {
+  it("실행이 끝나면 done, 입력이 필요해지면 input (입력을 먼저)", () => {
+    expect(attentionFor({ running: true, needsInput: false }, { running: false, needsInput: false })).toBe("done");
+    expect(attentionFor({ running: true, needsInput: false }, { running: true, needsInput: true })).toBe("input");
+    expect(attentionFor({ running: true, needsInput: false }, { running: false, needsInput: true })).toBe("input");
+  });
+
+  it("변화가 없거나 처음 받은 상태면 알리지 않는다", () => {
+    expect(attentionFor({ running: false, needsInput: false }, { running: false, needsInput: false })).toBeUndefined();
+    expect(attentionFor(undefined, { running: false, needsInput: false })).toBeUndefined();
+    expect(attentionFor({ running: false, needsInput: true }, { running: false, needsInput: true })).toBeUndefined();
+  });
+});

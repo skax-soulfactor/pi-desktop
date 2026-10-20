@@ -86,10 +86,122 @@ textarea {
   padding: 6px 10px;
 }
 
+/* 워크스페이스 탭 */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tabbar {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 8px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  background: var(--panel-2);
+}
+
+.tab.active {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.tab-dot.running {
+  background: var(--accent);
+}
+
+.tab-dot.offline {
+  background: var(--bad);
+}
+
+.tab-host {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tab-mark {
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 8px;
+  color: #fff;
+}
+
+.tab-mark.done {
+  background: var(--ok);
+}
+
+.tab-mark.input {
+  background: var(--warn);
+}
+
+.tab-close,
+.tab-new {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.tab-close:hover,
+.tab-new:hover {
+  color: var(--text);
+}
+
+.tab-new {
+  font-size: 16px;
+  padding: 0 8px;
+}
+
+.workspaces {
+  flex: 1;
+  min-height: 0;
+}
+
 .app {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.app[hidden] {
+  display: none;
 }
 
 .topbar,
