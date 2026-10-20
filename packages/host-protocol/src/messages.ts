@@ -48,7 +48,14 @@ export interface PiLocation {
   packageDir: string;
   version: string;
   /** 어떤 경로로 찾았는지 (설정값, 환경 변수, npm 전역 등) */
-  source: "param" | "env" | "npm-global";
+  source: "param" | "env" | "managed" | "npm-global";
+  /**
+   * Pi를 실행할 node. 관리형 설치기가 자체 Node(`pi-node`)를 깔았으면 그 경로이고,
+   * 없으면 생략되어 데몬의 node를 그대로 쓴다.
+   */
+  nodePath?: string;
+  /** Pi 프로세스에 추가로 줄 환경 변수 (예: 관리형 설치의 PI_MANAGED_INSTALL_ROOT, PATH) */
+  env?: Record<string, string>;
 }
 
 export interface PiLocateParams {
