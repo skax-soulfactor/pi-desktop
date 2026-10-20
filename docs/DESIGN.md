@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.4)
+# Pi Desktop — 설계 문서 (v0.5)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -326,6 +326,11 @@ Pi는 세션 파일 잠금을 문서화하지 않았다. 그래서 **같은 세�
 - 호스트 목록에 설치된 배포판을 자동으로 표시한다.
 - 경로 변환: Windows 경로로 연 프로젝트(`C:\src\app`)를 WSL Pi로 돌리면 `/mnt/c/src/app`. 성능 경고를 보여주고 WSL 내부 경로 사용을 권장한다.
 - WSL 쪽 `~/.pi/agent`와 Windows 쪽 `~/.pi/agent`는 **별개의 설정**이다. 호스트 배지로 항상 구분해서 보여준다. 호스트 간 공유는 §5.9의 복사 기능으로만 한다.
+- (M1 구현에서 확인한 사항)
+  - `/etc/wsl.conf`에서 automount를 끈 환경에서는 WSL 안에서 Windows 드라이브가 보이지 않는다. 그래서 Agent 번들을 WSL 홈 `~/.pi-desktop/agent/host-agent-<버전>-<해시>.mjs`로 업로드해 실행한다. 경로 변환(`/mnt/c`)도 이런 환경에서는 쓸 수 없으므로, WSL 프로젝트는 WSL 내부 경로로만 연다.
+  - `wsl.exe -- <명령>`은 인자를 이어 붙여 기본 셸이 다시 해석한다. 여러 줄 스크립트와 `$` 변수가 깨지므로 항상 `wsl.exe --exec`로 호출한다.
+  - 공식 설치기로 설치한 Pi는 `.bashrc`에서만 PATH에 들어가므로, 데몬은 관리형 설치 구조(`~/.pi/agent/install/current-version`)를 직접 읽어 찾는다.
+  - systemd가 켜진 WSL(Ubuntu)에서는 연결기가 끊긴 뒤에도 데몬과 Pi가 계속 실행되는 것을 확인했다. 장시간(수십 분 이상) 유휴 상태에서의 생존 여부는 아직 확인하지 않았다.
 
 ### 5.6 원격(SSH) 특이사항
 - 인증은 OS `ssh`와 ssh-agent에 맡긴다. GUI는 비밀번호나 키를 저장하지 않는다.
@@ -409,13 +414,13 @@ pi-desktop/
 | 단계 | 범위 | 완료 기준 |
 |---|---|---|
 | **M0 스파이크** | 로컬 `host-agentd` + `connect` + `pi.rpc.open` + 스트리밍 채팅 1회 + 툴 이벤트 표시 | Electron 창에서 로컬 `pi`와 대화 가능. **처음부터 데몬 구조로 만든다** (나중에 바꾸면 비용이 큼) |
-| **M1 Chat 완성** | §4.1 전체, 세션 목록·재개·트리·fork, 확장 UI 다이얼로그, 워크스페이스 탭(여러 프로젝트), Activity 사이드바, **세션 lease와 TUI 팔로우 모드**, **이벤트 저널·재연결·GUI 재시작 후 세션 복원(로컬)** | 일상 작업에서 TUI 없이 지낼 수 있다 |
+| **M1 Chat 완성 + WSL** | **WSL 호스트(관리형 Pi 탐색, Agent 자동 배포, 호스트 선택) — 사용자 요청으로 M3에서 앞당김**, §4.1 전체, 세션 목록·재개·트리·fork, 확장 UI 다이얼로그, 워크스페이스 탭(여러 프로젝트), Activity 사이드바, **세션 lease와 TUI 팔로우 모드**, **이벤트 저널·재연결·GUI 재시작 후 세션 복원(로컬)** | 일상 작업에서 TUI 없이 지낼 수 있다 |
 | **M2 Pi Manager + Providers** | 로컬 설치·업데이트·제거·롤백, API 키 폼, OAuth용 내장 터미널, models.json | 새 PC에서 GUI만으로 Pi 설치부터 첫 대화까지 가능 |
-| **M3 WSL · SSH** | WSL/SSH transport, Agent 부트스트랩·배포, 원격 데몬 분리 실행, 원격 파일 피커, 자동 재연결, 다중 GUI writer 권한 | 원격 작업 중 GUI를 닫았다 다시 열어도 그대로 이어서 작업할 수 있다 |
+| **M3 SSH (+ WSL 보강)** | SSH transport, Agent 부트스트랩·배포, WSL 내부 폴더 탐색, 원격 데몬 분리 실행, 원격 파일 피커, 자동 재연결, 다중 GUI writer 권한 | 원격 작업 중 GUI를 닫았다 다시 열어도 그대로 이어서 작업할 수 있다 |
 | **M4 리소스 관리 + Marketplace** | AGENTS.md 계층, 프롬프트·스킬·확장 CRUD, bridge reload, 설정 폼, npm·GitHub 카탈로그 검색·설치·제거·업데이트, 호스트 간 복사(§5.9) | 클릭으로 커뮤니티 리소스를 찾아 설치하고 즉시 쓸 수 있다 |
 | **M5 개발자 도구 + 다듬기** | SDK Playground, Event Inspector, Extension Dev Mode, 호스트 비교 화면, 인스톨러·자동 업데이트 | 배포 |
 
-> M3(WSL/SSH)를 M4보다 앞에 둔 이유: Host Agent 구조가 원격에서 실제로 버티는지 일찍 검증해야, 그 위에 올라가는 리소스 관리·Marketplace를 다시 만들 일이 없다.
+> M3(원격)를 M4보다 앞에 둔 이유: Host Agent 구조가 원격에서 실제로 버티는지 일찍 검증해야, 그 위에 올라가는 리소스 관리·Marketplace를 다시 만들 일이 없다.
 
 ## 9. 리스크
 
@@ -427,7 +432,7 @@ pi-desktop/
 | 원격 호스트에 Node 없음 또는 버전 낮음 | 부트스트랩 단계에서 감지하고 설치 마법사로 연결 |
 | node-pty 네이티브 빌드 (원격) | pty 기능을 선택 사항으로 두고 `script`/python 대체 경로 사용 |
 | 데몬과 GUI의 버전 불일치 | 프로토콜 버전 협상, 세션이 없을 때만 데몬 교체 (§3.4) |
-| WSL 배포판 자동 종료로 데몬이 죽음 | M3 스파이크에서 검증, `systemd` 또는 keep-alive로 대응 |
+| WSL 배포판 자동 종료로 데몬이 죽음 | systemd 켜진 Ubuntu에서 연결 끊김 후 생존 확인(M1). 장시간 유휴와 systemd 없는 배포판은 미확인 → 필요하면 keep-alive |
 | 저널 디스크 사용량 | `agent_settled` 이후 정리, 세션당 크기 상한 |
 | 커뮤니티 확장의 악성 코드 | 설치 전 경고, 소스·의존성 요약, 프로젝트 trust 연동. 코드 실행 자체를 막지는 못한다는 점을 명시 |
 | Windows 셸 (Git Bash 필요) | Pi Manager 전제 조건 점검에서 안내 |
