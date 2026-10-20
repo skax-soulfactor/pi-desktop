@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatCost, formatPercent, formatTokens, modelKey, parseModelKey } from "../../src/renderer/format";
+import {
+  baseName,
+  formatCost,
+  formatPercent,
+  formatRelative,
+  formatTokens,
+  modelKey,
+  parseModelKey,
+} from "../../src/renderer/format";
 
 describe("formatTokens", () => {
   it("크기에 따라 k, M 단위로 줄인다", () => {
@@ -49,5 +57,24 @@ describe("formatPercent", () => {
     expect(formatPercent(4)).toBe("4%");
     expect(formatPercent(30.6)).toBe("31%");
     expect(formatPercent(null)).toBe("–");
+  });
+});
+
+describe("formatRelative", () => {
+  const now = new Date(2026, 9, 20, 12, 0, 0).getTime();
+  it("지난 시간에 따라 방금·분·시간·일·날짜로 표시한다", () => {
+    expect(formatRelative(now - 30_000, now)).toBe("방금");
+    expect(formatRelative(now - 5 * 60_000, now)).toBe("5분 전");
+    expect(formatRelative(now - 3 * 3_600_000, now)).toBe("3시간 전");
+    expect(formatRelative(now - 2 * 86_400_000, now)).toBe("2일 전");
+    expect(formatRelative(new Date(2026, 0, 5).getTime(), now)).toBe("2026-01-05");
+  });
+});
+
+describe("baseName", () => {
+  it("Windows와 POSIX 경로 모두에서 마지막 폴더 이름을 준다", () => {
+    expect(baseName("C:\\Users\\me\\project\\")).toBe("project");
+    expect(baseName("/home/me/app")).toBe("app");
+    expect(baseName("/")).toBe("/");
   });
 });

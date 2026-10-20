@@ -35,3 +35,23 @@ export function formatPercent(value: number | null | undefined): string {
   if (value > 0 && value < 10) return `${value.toFixed(1).replace(/\.0$/, "")}%`;
   return `${Math.round(value)}%`;
 }
+
+/** 지난 시각을 짧게 표시한다: "방금", "5분 전", "3시간 전", "2일 전", 그보다 오래되면 날짜 */
+export function formatRelative(time: number, now: number = Date.now()): string {
+  const seconds = Math.max(0, Math.round((now - time) / 1000));
+  if (seconds < 60) return "방금";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}분 전`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}일 전`;
+  const date = new Date(time);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** 경로의 마지막 폴더 이름. Windows(\)와 POSIX(/) 구분자를 모두 처리한다. */
+export function baseName(path: string): string {
+  const parts = path.split(/[\\/]+/).filter(Boolean);
+  return parts.at(-1) ?? path;
+}
