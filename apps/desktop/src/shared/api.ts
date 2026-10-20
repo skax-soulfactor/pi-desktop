@@ -31,6 +31,8 @@ export interface HostDescriptor {
 
 export interface OpenSessionRequest {
   cwd: string;
+  /** 이어서 열 Pi 세션 파일. 없으면 새 세션 */
+  sessionFile?: string;
 }
 
 export interface PiDesktopApi {

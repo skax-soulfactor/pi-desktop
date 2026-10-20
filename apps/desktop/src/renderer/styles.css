@@ -303,3 +303,14 @@ textarea {
 .host-select {
   max-width: 220px;
 }
+
+.banner.warn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+}
+
+.banner.warn span {
+  flex: 1;
+}

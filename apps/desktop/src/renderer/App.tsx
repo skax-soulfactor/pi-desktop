@@ -3,7 +3,7 @@ import { ChatView } from "./ChatView";
 import { useSession } from "./use-session";
 
 export function App() {
-  const { hosts, host, hostId, selectHost, connection, sessions, session, chat, openSession, switchTo, send } =
+  const { hosts, host, hostId, selectHost, connection, sessions, session, lost, chat, openSession, reopenLost, switchTo, send } =
     useSession();
   const isLocal = host?.kind !== "wsl";
   const [cwd, setCwd] = useState("");
@@ -130,6 +130,21 @@ export function App() {
           {connection.reason}
         </div>
       )}
+      {lost && connected && (
+        <div className="banner warn">
+          <span>
+            {lost.reason === "missing"
+              ? "Host Agent가 재시작되어 이 세션의 Pi 프로세스가 없습니다."
+              : "이 세션의 Pi 프로세스가 종료되었습니다."}
+            {lost.sessionFile
+              ? " 같은 세션 파일로 다시 열면 대화를 이어 갈 수 있습니다."
+              : " 세션 파일이 없어 새 세션으로 열립니다."}
+          </span>
+          <button type="button" className="primary" disabled={busy} onClick={() => void guard(reopenLost)}>
+            다시 열기
+          </button>
+        </div>
+      )}
       {error && <div className="banner error">{error}</div>}
 
       <ChatView items={chat.items} running={chat.running} />
@@ -140,7 +155,7 @@ export function App() {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
-          disabled={!session || !connected}
+          disabled={!session || !connected || Boolean(lost)}
           rows={3}
         />
         <div className="actions">
