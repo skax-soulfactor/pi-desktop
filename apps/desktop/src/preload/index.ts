@@ -14,6 +14,10 @@ const api: PiDesktopApi = {
   locatePi: (hostId) => ipcRenderer.invoke(IpcChannels.locatePi, hostId),
   listSessions: (hostId) => ipcRenderer.invoke(IpcChannels.listSessions, hostId),
   listHistory: (hostId, cwd) => ipcRenderer.invoke(IpcChannels.listHistory, hostId, cwd),
+  inspectStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.inspectStored, hostId, path),
+  readStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.readStored, hostId, path),
+  watchStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.watchStored, hostId, path),
+  unwatchStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.unwatchStored, hostId, path),
   openSession: (hostId, request) => ipcRenderer.invoke(IpcChannels.openSession, hostId, request),
   attachSession: (hostId, sessionId, lastSeq) =>
     ipcRenderer.invoke(IpcChannels.attachSession, hostId, sessionId, lastSeq),
@@ -26,6 +30,7 @@ const api: PiDesktopApi = {
   onSessionEvent: (listener) => subscribe(IpcChannels.sessionEvent, listener),
   onSessionExit: (listener) => subscribe(IpcChannels.sessionExit, listener),
   onUiResolved: (listener) => subscribe(IpcChannels.uiResolved, listener),
+  onStoredChanged: (listener) => subscribe(IpcChannels.storedChanged, listener),
 };
 
 contextBridge.exposeInMainWorld("piDesktop", api);
