@@ -1,6 +1,8 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
+import { Composer } from "./Composer";
+import type { ParsedInput, PiCommand } from "./composer-input";
 import { baseName, formatRelative } from "./format";
 import { tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
@@ -62,7 +64,8 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
   } = useSession(tabId);
   const isLocal = host?.kind !== "wsl";
   const [cwd, setCwd] = useState("");
-  const [draft, setDraft] = useState("");
+  const [draft, setDraftState] = useState("");
+  const [commands, setCommands] = useState<PiCommand[] | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [treeOpen, setTreeOpen] = useState(false);
@@ -73,6 +76,39 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
   const sessionInfo = useSessionInfo(hostId, session, connected && !lost);
   // 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 썼다 (TUI 등). 같은 파일에 함께 쓰면 기록이 꼬이므로 입력을 잠근다.
   const externalWrite = session?.externalWriteAt !== undefined && !lost;
+
+  // 입력 중인 초안을 세션 파일별로 저장해 두었다가 그 세션을 다시 열면 되살린다.
+  const draftKey = session ? `pi-desktop.draft.${hostId}.${session.sessionFile ?? session.sessionId}` : undefined;
+  const draftKeyRef = useRef(draftKey);
+  draftKeyRef.current = draftKey;
+  /** 세션을 바꾸면서 넣을 글 (분기 직후 원래 질문). 새 세션의 저장된 초안보다 우선한다 */
+  const pendingDraft = useRef<string | undefined>(undefined);
+  const setDraft = useCallback((text: string) => {
+    setDraftState(text);
+    saveDraft(draftKeyRef.current, text);
+  }, []);
+  useEffect(() => {
+    const text = pendingDraft.current ?? loadDraft(draftKey);
+    pendingDraft.current = undefined;
+    setDraftState(text);
+    saveDraft(draftKey, text);
+  }, [draftKey]);
+
+  // `/` 자동완성용 명령 목록은 세션마다 다르므로(프로젝트 프롬프트·스킬) 세션이 바뀌면 다시 읽는다.
+  const sessionId = session?.sessionId;
+  useEffect(() => setCommands(undefined), [sessionId]);
+  const loadCommands = useCallback(() => {
+    if (!sessionId) return;
+    setCommands([]);
+    void window.piDesktop
+      .sendCommand(hostId, sessionId, { type: "get_commands" })
+      .then((response) => {
+        const list = (response.data as { commands?: PiCommand[] } | undefined)?.commands;
+        setCommands(Array.isArray(list) ? list : []);
+      })
+      // 실패하면 빈 목록으로 두어 계속 다시 요청하지 않는다. 세션이 바뀌면 다시 읽는다.
+      .catch(() => setCommands([]));
+  }, [hostId, sessionId]);
 
   // 확장이 setTitle로 바꾼 제목을 창 제목에 반영한다 (보이는 탭만).
   useEffect(() => {
@@ -145,25 +181,26 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
   function forkAt(entryId: string) {
     void guard(async () => {
       const data = await branchSession({ type: "fork", entryId });
-      if (typeof data?.text === "string") setDraft(data.text);
+      if (typeof data?.text === "string") {
+        pendingDraft.current = data.text;
+        setDraft(data.text);
+      }
     });
   }
 
   /** 실행 중이면 Pi 규칙대로 steer/followUp 중 하나를 지정해야 한다. */
-  function submit(behavior?: "steer" | "followUp") {
-    const message = draft.trim();
-    if (!message || !session) return;
+  function submit(input: Exclude<ParsedInput, { kind: "empty" }>, behavior?: "steer" | "followUp") {
+    if (!session) return;
     setDraft("");
+    if (input.kind === "bash") {
+      // 셸 명령은 끝나야 응답이 오므로 다른 조작을 막지 않는다. 진행은 셸 카드로 보인다.
+      void guardQuiet(() => send({ type: "bash", command: input.command, excludeFromContext: input.excludeFromContext }));
+      return;
+    }
+    const { message } = input;
     void guard(() =>
       send(behavior ? { type: "prompt", message, streamingBehavior: behavior } : { type: "prompt", message }),
     );
-  }
-
-  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      submit(chat.running ? "followUp" : undefined);
-    }
   }
 
   return (
@@ -329,38 +366,28 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
         />
       )}
 
-      <ChatView items={chat.items} running={chat.running} />
+      <ChatView
+        items={chat.items}
+        running={chat.running}
+        onAbortBash={() => void guardQuiet(() => send({ type: "abort_bash" }))}
+      />
 
       <Widgets ui={ui} placement="aboveEditor" />
-      <footer className="composer">
-        <textarea
-          placeholder={session ? "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈)" : "먼저 세션을 여세요"}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={onKeyDown}
-          disabled={!session || !connected || Boolean(lost) || Boolean(follow) || Boolean(externalWrite)}
-          rows={3}
-        />
-        <div className="actions">
-          {chat.running ? (
-            <>
-              <button type="button" disabled={!draft.trim()} onClick={() => submit("steer")} title="현재 턴이 끝나면 바로 끼워 넣기">
-                Steer
-              </button>
-              <button type="button" disabled={!draft.trim()} onClick={() => submit("followUp")} title="작업이 모두 끝난 뒤 보내기">
-                Follow-up
-              </button>
-              <button type="button" className="danger" onClick={() => void guard(() => send({ type: "abort" }))}>
-                중단
-              </button>
-            </>
-          ) : (
-            <button type="button" className="primary" disabled={!session || !draft.trim()} onClick={() => submit()}>
-              보내기
-            </button>
-          )}
-        </div>
-      </footer>
+      <Composer
+        value={draft}
+        onChange={setDraft}
+        disabled={!session || !connected || Boolean(lost) || Boolean(follow) || Boolean(externalWrite)}
+        placeholder={
+          session
+            ? "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈, ↑ 이전 입력, / 명령, !셸 명령, !!컨텍스트 제외)"
+            : "먼저 세션을 여세요"
+        }
+        running={chat.running}
+        commands={commands}
+        onNeedCommands={loadCommands}
+        onSubmit={submit}
+        onAbort={() => void guard(() => send({ type: "abort" }))}
+      />
       <Widgets ui={ui} placement="belowEditor" />
       <StatusLine ui={ui} />
         </div>
@@ -409,6 +436,25 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
       {active && <Toasts toasts={ui.toasts} onDismiss={dismissToast} />}
     </div>
   );
+}
+
+function loadDraft(key: string | undefined): string {
+  if (!key) return "";
+  try {
+    return localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function saveDraft(key: string | undefined, text: string): void {
+  if (!key) return;
+  try {
+    if (text) localStorage.setItem(key, text);
+    else localStorage.removeItem(key);
+  } catch {
+    // 저장하지 못해도 입력은 계속된다.
+  }
 }
 
 function ConnectionBadge({ connection }: { connection: ReturnType<typeof useSession>["connection"] }) {

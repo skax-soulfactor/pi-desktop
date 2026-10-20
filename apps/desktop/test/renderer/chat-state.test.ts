@@ -162,3 +162,47 @@ describe("applyEvent — 컴팩션·재시도 안내", () => {
     ]);
   });
 });
+
+describe("applyEvent — ! 셸 명령", () => {
+  const start = (id: string, command: string, excludeFromContext = false) => ({
+    type: "pi_desktop_bash_start",
+    id,
+    command,
+    excludeFromContext,
+  });
+  const chunk = (id: string, delta: string) => ({ type: "bash_execution_update", id, delta });
+
+  it("시작 → 출력 조각 → 끝으로 카드를 만들고 출력을 이어 붙인다", () => {
+    const state = run([
+      start("d-1", "ls"),
+      chunk("d-1", "a.txt\n"),
+      chunk("d-1", "b.txt\n"),
+      { type: "pi_desktop_bash_end", id: "d-1", exitCode: 0, cancelled: false, truncated: false },
+    ]);
+    expect(state.items).toMatchObject([
+      { kind: "tool", toolName: "!bash", args: { command: "ls" }, status: "done", output: "a.txt\nb.txt\n", exitCode: 0 },
+    ]);
+  });
+
+  it("컨텍스트 제외(!!)는 이름으로 구분하고, 0이 아닌 종료 코드·중단·오류는 실패로 표시한다", () => {
+    const state = run([
+      start("d-1", "false", true),
+      { type: "pi_desktop_bash_end", id: "d-1", exitCode: 1, cancelled: false, truncated: false },
+      start("d-2", "sleep 9"),
+      chunk("d-2", "x\n"),
+      { type: "pi_desktop_bash_end", id: "d-2", exitCode: null, cancelled: true, truncated: false },
+      start("d-3", "ls"),
+      { type: "pi_desktop_bash_end", id: "d-3", error: "Pi 프로세스가 종료되었습니다" },
+    ]);
+    expect(state.items).toMatchObject([
+      { toolName: "!!bash", status: "error", exitCode: 1 },
+      { toolName: "!bash", status: "error", output: "x\n[중단됨]" },
+      { toolName: "!bash", status: "error", output: "[오류] Pi 프로세스가 종료되었습니다" },
+    ]);
+  });
+
+  it("다른 명령의 출력 조각은 섞이지 않는다", () => {
+    const state = run([start("d-1", "a"), start("d-2", "b"), chunk("d-2", "B"), chunk("d-1", "A")]);
+    expect(state.items.map((i) => (i.kind === "tool" ? i.output : ""))).toEqual(["A", "B"]);
+  });
+});

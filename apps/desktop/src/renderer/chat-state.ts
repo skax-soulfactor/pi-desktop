@@ -1,3 +1,4 @@
+import { DaemonEvents } from "@pi-desktop/host-protocol/messages";
 import { formatTokens } from "./format";
 
 /**
@@ -7,6 +8,7 @@ import { formatTokens } from "./format";
  * - `message_update`는 델타만 담는다. 블록별로 이어 붙이고 `*_end`, `message_end`가 오면 확정본으로 교체한다.
  * - 실행 완료 판정은 `agent_end`가 아니라 `agent_settled`다.
  * - 모르는 이벤트는 무시한다 (Event Inspector에서 raw로 볼 예정).
+ * - `!` 셸 명령은 데몬이 남긴 시작·끝 이벤트와 Pi의 출력 조각으로 툴 카드를 만든다 (DaemonEvents).
  *
  * 저널 재생으로 같은 이벤트가 다시 올 수 있으므로 seq가 이미 처리한 값 이하면 버린다.
  */
@@ -35,6 +37,8 @@ export type ChatItem =
       status: "running" | "done" | "error";
       output: string;
       durationMs?: number;
+      /** `!` 셸 명령의 종료 코드 */
+      exitCode?: number;
     }
   | { kind: "notice"; key: string; level: "info" | "error"; text: string };
 
@@ -124,6 +128,43 @@ export function applyEvent(state: ChatState, seq: number, raw: unknown): ChatSta
         return updated;
       });
 
+    case DaemonEvents.bashStart:
+      return {
+        ...next,
+        items: [
+          ...next.items,
+          {
+            kind: "tool",
+            key: `b${seq}`,
+            toolCallId: bashKey(event.id),
+            toolName: event.excludeFromContext === true ? "!!bash" : "!bash",
+            args: { command: event.command },
+            status: "running",
+            output: "",
+          },
+        ],
+      };
+
+    case "bash_execution_update":
+      return updateTool(next, bashKey(event.id), (item) => ({
+        ...item,
+        output: keepTail(item.output + String(event.delta ?? "")),
+      }));
+
+    case DaemonEvents.bashEnd:
+      return updateTool(next, bashKey(event.id), (item) => {
+        const failed = typeof event.error === "string" || event.cancelled === true || event.exitCode !== 0;
+        const updated = { ...item, status: failed ? ("error" as const) : ("done" as const) };
+        if (typeof event.exitCode === "number") updated.exitCode = event.exitCode;
+        const notes = [
+          event.cancelled === true ? "[중단됨]" : "",
+          typeof event.error === "string" ? `[오류] ${event.error}` : "",
+          event.truncated === true && typeof event.fullOutputPath === "string" ? `[전체 출력] ${event.fullOutputPath}` : "",
+        ].filter(Boolean);
+        if (notes.length > 0) updated.output = [item.output.replace(/\n$/, ""), ...notes].filter(Boolean).join("\n");
+        return updated;
+      });
+
     case "compaction_start":
       return withNotice(next, `c${seq}`, "info", `컨텍스트를 요약(컴팩션)하는 중… (${COMPACTION_REASONS[String(event.reason)] ?? "요청"})`);
 
@@ -158,6 +199,17 @@ export function applyEvent(state: ChatState, seq: number, raw: unknown): ChatSta
     default:
       return next;
   }
+}
+
+/** 셸 명령 카드의 toolCallId. Pi 툴 호출 id와 겹치지 않게 접두사를 붙인다. */
+function bashKey(id: unknown): string {
+  return `bash:${String(id)}`;
+}
+
+/** 셸 출력이 아주 길면 화면에는 뒷부분만 남긴다 (전체는 Pi가 세션에 저장). */
+const BASH_OUTPUT_LIMIT = 200_000;
+function keepTail(text: string): string {
+  return text.length > BASH_OUTPUT_LIMIT ? `…${text.slice(-BASH_OUTPUT_LIMIT)}` : text;
 }
 
 const COMPACTION_REASONS: Record<string, string> = {
@@ -235,10 +287,11 @@ export function snapshotState(messages: unknown[], lastSeq: number, running: boo
           kind: "tool",
           key,
           toolCallId: key,
-          toolName: "!bash",
+          toolName: message.excludeFromContext === true ? "!!bash" : "!bash",
           args: { command: message.command },
           status: message.exitCode === 0 ? "done" : "error",
           output: String(message.output ?? ""),
+          ...(typeof message.exitCode === "number" ? { exitCode: message.exitCode } : {}),
         });
         break;
       case "compactionSummary":

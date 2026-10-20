@@ -3,7 +3,16 @@ import type { AssistantBlock, ChatItem } from "./chat-state";
 import { Markdown } from "./markdown/Markdown";
 
 /** 대화 목록. 새 내용이 오면 사용자가 위로 스크롤해 둔 경우가 아니면 맨 아래로 따라간다. */
-export function ChatView({ items, running }: { items: ChatItem[]; running: boolean }) {
+export function ChatView({
+  items,
+  running,
+  onAbortBash,
+}: {
+  items: ChatItem[];
+  running: boolean;
+  /** 실행 중인 `!` 셸 명령을 멈춘다 */
+  onAbortBash?: () => void;
+}) {
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
 
@@ -23,14 +32,14 @@ export function ChatView({ items, running }: { items: ChatItem[]; running: boole
     >
       {items.length === 0 && <p className="empty">세션을 열고 메시지를 보내 보세요.</p>}
       {items.map((item) => (
-        <Item key={item.key} item={item} />
+        <Item key={item.key} item={item} onAbortBash={onAbortBash} />
       ))}
       {running && <div className="working">Pi가 작업 중…</div>}
     </div>
   );
 }
 
-function Item({ item }: { item: ChatItem }) {
+function Item({ item, onAbortBash }: { item: ChatItem; onAbortBash: (() => void) | undefined }) {
   switch (item.kind) {
     case "user":
       return <div className="msg user">{item.text}</div>;
@@ -45,7 +54,7 @@ function Item({ item }: { item: ChatItem }) {
         </div>
       );
     case "tool":
-      return <ToolCard item={item} />;
+      return isShell(item) ? <ShellCard item={item} onAbort={onAbortBash} /> : <ToolCard item={item} />;
     case "notice":
       return <div className={`notice ${item.level}`}>{item.text}</div>;
   }
@@ -83,6 +92,36 @@ function ToolCard({ item }: { item: Extract<ChatItem, { kind: "tool" }> }) {
           {item.output && <pre className="tool-output">{item.output}</pre>}
         </div>
       )}
+    </div>
+  );
+}
+
+function isShell(item: Extract<ChatItem, { kind: "tool" }>): boolean {
+  return item.toolName === "!bash" || item.toolName === "!!bash";
+}
+
+/**
+ * 사용자가 입력창에서 실행한 `!` 셸 명령. 터미널처럼 명령과 출력을 바로 보여준다.
+ * `!!`(컨텍스트 제외)는 결과가 모델에 전달되지 않는다는 표시를 붙인다.
+ */
+function ShellCard({ item, onAbort }: { item: Extract<ChatItem, { kind: "tool" }>; onAbort: (() => void) | undefined }) {
+  const args = item.args as { command?: unknown } | undefined;
+  const excluded = item.toolName === "!!bash";
+  return (
+    <div className={`tool shell ${item.status}`}>
+      <div className="shell-head">
+        <code className="shell-command">$ {String(args?.command ?? "")}</code>
+        {excluded && <span className="muted" title="이 출력은 모델에 전달되지 않습니다">컨텍스트 제외</span>}
+        <span className="tool-status">
+          {item.status === "running" ? "실행 중" : item.exitCode !== undefined ? `종료 코드 ${item.exitCode}` : item.status === "error" ? "실패" : "완료"}
+        </span>
+        {item.status === "running" && onAbort && (
+          <button type="button" className="danger small" onClick={onAbort}>
+            멈춤
+          </button>
+        )}
+      </div>
+      {item.output && <pre className="shell-output">{item.output}</pre>}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
-import type { PiLocation, PiResponse, SessionSummary } from "@pi-desktop/host-protocol";
+import { DaemonEvents, type PiLocation, type PiResponse, type SessionSummary } from "@pi-desktop/host-protocol";
 import { ExternalWriteDetector, type WatchFn } from "./external-write";
 import { EventJournal, type JournalEntry } from "./journal";
 import { PendingDialogs } from "./pending-dialogs";
@@ -78,8 +78,7 @@ export class AgentSession {
     this.process.onRecord((record) => {
       this.externalWrite.activity();
       this.dialogs.observe(record);
-      const entry = this.journal.append(record);
-      for (const listener of this.entryListeners) listener(entry);
+      this.record(record);
     });
     this.process.onExit((exit) => {
       this.exitInfo = exit;
@@ -116,12 +115,58 @@ export class AgentSession {
   async send(command: Record<string, unknown>): Promise<PiResponse> {
     // 명령 처리(모델 변경 등)로 Pi가 파일에 쓸 수 있으므로 보내기 전후를 활동으로 친다.
     this.externalWrite.activity();
-    const response = await this.process.send(command);
+    const response = command.type === "bash" ? await this.sendBash(command) : await this.process.send(command);
     this.externalWrite.activity();
     if (response.success === true && SESSION_SWITCHING_COMMANDS.has(String(command.type))) {
       await this.refreshSessionFile();
     }
     return response;
+  }
+
+  /**
+   * `!` 셸 명령. 끝나야 응답이 오므로 시간 제한 없이 기다린다.
+   * Pi에는 시작·끝 이벤트가 없어서 데몬이 저널에 남긴다 (DaemonEvents 참고).
+   */
+  private async sendBash(command: Record<string, unknown>): Promise<PiResponse> {
+    let id: string | undefined;
+    const end = (fields: Record<string, unknown>) => {
+      if (id) this.record({ type: DaemonEvents.bashEnd, id, ...fields });
+    };
+    try {
+      const response = await this.process.send(command, {
+        timeoutMs: null,
+        onWrite: (sent) => {
+          id = sent;
+          this.record({
+            type: DaemonEvents.bashStart,
+            id,
+            command: String(command.command ?? ""),
+            excludeFromContext: command.excludeFromContext === true,
+          });
+        },
+      });
+      const data = (response.data ?? {}) as Record<string, unknown>;
+      if (response.success === true) {
+        end({
+          exitCode: data.exitCode,
+          cancelled: data.cancelled === true,
+          truncated: data.truncated === true,
+          ...(typeof data.fullOutputPath === "string" ? { fullOutputPath: data.fullOutputPath } : {}),
+        });
+      } else {
+        end({ error: String(response.error ?? "bash 실패") });
+      }
+      return response;
+    } catch (error) {
+      end({ error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  }
+
+  /** 저널에 남기고 붙어 있는 앱들에 알린다. */
+  private record(event: unknown): void {
+    const entry = this.journal.append(event);
+    for (const listener of this.entryListeners) listener(entry);
   }
 
   private async refreshSessionFile(): Promise<void> {

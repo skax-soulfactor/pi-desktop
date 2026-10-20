@@ -29,6 +29,20 @@ export const Methods = {
   daemonShutdown: "daemon.shutdown",
 } as const;
 
+/**
+ * 데몬이 Pi 이벤트 사이에 끼워 저널에 남기는 이벤트 (Pi에는 없는 것).
+ *
+ * Pi는 RPC `bash`(`!` 셸 명령)를 실행할 때 출력 조각(`bash_execution_update`)만 보내고 시작·끝 이벤트가 없다.
+ * 그러면 명령을 보낸 화면 말고는(다른 탭, 다시 연결한 앱) 무슨 명령인지 알 수 없어서 데몬이 대신 남긴다.
+ * `id`는 같은 명령의 `bash_execution_update.id`와 같다.
+ */
+export const DaemonEvents = {
+  /** `{ type, id, command, excludeFromContext }` */
+  bashStart: "pi_desktop_bash_start",
+  /** `{ type, id, exitCode, cancelled, truncated, fullOutputPath?, error? }` */
+  bashEnd: "pi_desktop_bash_end",
+} as const;
+
 /** 데몬 → 앱 알림 */
 export const Notifications = {
   /** 세션에서 Pi 이벤트가 나왔다 (저널 순번 포함) */

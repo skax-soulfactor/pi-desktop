@@ -36,7 +36,7 @@ export class PiProcess {
   private exited: PiExit | undefined;
   private readonly pending = new Map<
     string,
-    { resolve: (r: PiResponse) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
+    { resolve: (r: PiResponse) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> | undefined }
   >();
   private readonly recordListeners = new Set<(record: unknown) => void>();
   private readonly exitListeners = new Set<(exit: PiExit) => void>();
@@ -68,19 +68,30 @@ export class PiProcess {
     child.on("exit", (code, signal) => this.finish(code, signal));
   }
 
-  /** Pi RPC 명령을 보내고 응답을 기다린다. */
-  send(command: Record<string, unknown>): Promise<PiResponse> {
+  /**
+   * Pi RPC 명령을 보내고 응답을 기다린다.
+   * - `timeoutMs: null`이면 제한 없이 기다린다 (셸 명령처럼 끝나야 응답이 오는 명령)
+   * - `onWrite`는 붙인 id로 명령을 쓰기 직전에 불린다. 이 id로 오는 이벤트보다 먼저 처리할 일이 있을 때 쓴다.
+   */
+  send(
+    command: Record<string, unknown>,
+    options: { timeoutMs?: number | null; onWrite?: (id: string) => void } = {},
+  ): Promise<PiResponse> {
     if (this.exited || !this.child) {
       return Promise.reject(new Error("Pi 프로세스가 실행 중이 아닙니다"));
     }
     const id = `d-${this.nextId++}`;
-    const timeoutMs = this.options.responseTimeoutMs ?? 60_000;
+    const timeoutMs = options.timeoutMs === undefined ? (this.options.responseTimeoutMs ?? 60_000) : options.timeoutMs;
     return new Promise<PiResponse>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Pi 응답 시간 초과: ${String(command.type)}`));
-      }, timeoutMs);
+      const timer =
+        timeoutMs === null
+          ? undefined
+          : setTimeout(() => {
+              this.pending.delete(id);
+              reject(new Error(`Pi 응답 시간 초과: ${String(command.type)}`));
+            }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
+      options.onWrite?.(id);
       this.write({ ...command, id });
     });
   }

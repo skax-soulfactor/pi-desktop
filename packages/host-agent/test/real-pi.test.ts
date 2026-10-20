@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Methods, type SessionOpenResult } from "@pi-desktop/host-protocol";
+import { DaemonEvents, Methods, type SessionOpenResult } from "@pi-desktop/host-protocol";
 import { isolatedEnv, joinedText, TestClient } from "./helpers/agent-client";
 import { MOCK_MODEL_ARGS, PI_CLI, setupRealPi, type RealPiFixture } from "./helpers/real-pi";
 
@@ -74,5 +74,34 @@ describe("실제 Pi 계약 테스트", () => {
     expect(end).toMatchObject({ toolName: "read", isError: false });
     expect(JSON.stringify(end?.result)).toContain("안녕 Pi");
     expect(joinedText(mineNotifications)).toContain("파일 내용: 안녕 Pi");
+  });
+
+  it("! 셸 명령(bash)은 데몬이 시작·끝 이벤트를 저널에 남기고, 출력 조각과 id가 같다", async () => {
+    const { session } = await client.request<SessionOpenResult>(Methods.sessionOpen, {
+      cwd: projectDir,
+      piArgs: MOCK_MODEL_ARGS,
+      env: piEnv,
+    });
+    await client.request(Methods.sessionAttach, { sessionId: session.sessionId, lastSeq: 0 });
+    const response = await client.request<Record<string, unknown>>(Methods.sessionSend, {
+      sessionId: session.sessionId,
+      command: { type: "bash", command: "echo hello-bash", excludeFromContext: true },
+    });
+    expect(response).toMatchObject({ command: "bash", success: true, data: { exitCode: 0 } });
+
+    const isMine = (n: { sessionId: string }) => n.sessionId === session.sessionId;
+    await client.waitForEvent((e, n) => isMine(n) && e.type === DaemonEvents.bashEnd);
+    const mine = client.events.filter(isMine).map((n) => n.event as Record<string, unknown>);
+    const start = mine.find((e) => e.type === DaemonEvents.bashStart);
+    const updates = mine.filter((e) => e.type === "bash_execution_update");
+    const end = mine.find((e) => e.type === DaemonEvents.bashEnd);
+
+    expect(start).toMatchObject({ command: "echo hello-bash", excludeFromContext: true });
+    expect(end).toMatchObject({ id: start?.id, exitCode: 0, cancelled: false });
+    expect(updates.every((u) => u.id === start?.id)).toBe(true);
+    expect(updates.map((u) => u.delta).join("")).toContain("hello-bash");
+    // 시작 → 출력 → 끝 순서
+    expect(mine.indexOf(start!)).toBeLessThan(mine.indexOf(updates[0]!));
+    expect(mine.indexOf(updates.at(-1)!)).toBeLessThan(mine.indexOf(end!));
   });
 });
