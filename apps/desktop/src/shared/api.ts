@@ -124,6 +124,73 @@ export interface MarketDetail {
   installScripts: string[];
 }
 
+/** GitHub 저장소 (Marketplace GitHub 카탈로그) */
+export interface GithubRepoRef {
+  owner: string;
+  repo: string;
+  /** 브랜치·태그. 없으면 기본 브랜치 */
+  ref?: string;
+}
+
+export interface GithubFile {
+  /** 스킬 폴더 기준 경로 (프롬프트는 저장소 기준) */
+  path: string;
+  /** git blob SHA (나중에 업데이트·로컬 수정 확인에 쓴다) */
+  sha: string;
+  size: number;
+}
+
+export interface GithubSkill {
+  /** 폴더 이름. 가져올 때 기본 이름 */
+  name: string;
+  /** 저장소 안의 스킬 폴더 */
+  dir: string;
+  files: GithubFile[];
+  size: number;
+}
+
+export interface GithubPrompt {
+  name: string;
+  path: string;
+  sha: string;
+  size: number;
+}
+
+/** 커밋에 고정해 훑은 저장소의 스킬·프롬프트 */
+export interface GithubCatalog extends GithubRepoRef {
+  /** 훑은 커밋 */
+  sha: string;
+  skills: GithubSkill[];
+  prompts: GithubPrompt[];
+  /** 저장소가 너무 커서 GitHub가 트리를 잘라 보냈다 */
+  truncated: boolean;
+}
+
+export interface GithubImportRequest {
+  hostId: string;
+  /** 프로젝트 범위의 기준 폴더 */
+  cwd: string;
+  scope: "user" | "project";
+  /** 가져와 쓸 이름 */
+  name: string;
+  repo: GithubRepoRef & { sha: string };
+  item: { kind: "skill"; dir: string; files: GithubFile[] } | { kind: "prompt"; path: string; sha: string; size: number };
+}
+
+/** 가져온 스킬·프롬프트의 출처 기록 (앱 userData의 imports.json) */
+export interface ImportRecord {
+  hostId: string;
+  kind: "skill" | "prompt";
+  name: string;
+  scope: "user" | "project";
+  /** 가져온 곳 (호스트 기준): 스킬 폴더 또는 프롬프트 파일 */
+  target: string;
+  source: { owner: string; repo: string; sha: string; path: string };
+  /** 가져온 파일과 git blob SHA (업데이트·로컬 수정 확인용) */
+  files: Record<string, string>;
+  importedAt: number;
+}
+
 /** 재생 이벤트를 함께 담은 attach 결과 */
 export interface AttachResult extends SessionAttachResult {
   events: SessionEventNotification[];
@@ -231,6 +298,14 @@ export interface PiDesktopApi {
   /** npm에서 Pi 패키지를 찾는다 (이 PC가 조회) */
   marketSearch(query: string, from: number): Promise<MarketSearchResult>;
   marketDetail(name: string): Promise<MarketDetail>;
+  /** GitHub 저장소를 커밋에 고정해 훑는다 (owner/repo[@ref] 또는 주소) */
+  githubBrowse(spec: string): Promise<GithubCatalog>;
+  /** 훑은 커밋의 파일 하나 (미리보기) */
+  githubText(repo: GithubRepoRef & { sha: string }, path: string): Promise<string>;
+  /** 저장소의 스킬 폴더나 프롬프트 하나를 그 호스트의 범위에 가져오고 출처를 기록한다 */
+  githubImport(request: GithubImportRequest): Promise<ImportRecord>;
+  /** 이 호스트로 가져온 기록 */
+  listImports(hostId: string): Promise<ImportRecord[]>;
   /** 작업 폴더의 프로젝트 신뢰 상태 */
   getTrust(hostId: string, cwd: string): Promise<ProjectTrustInfo>;
   /** 프로젝트 신뢰 결정을 Pi의 trust.json에 저장한다 (null이면 지운다) */
@@ -283,6 +358,10 @@ export const IpcChannels = {
   listResources: "pi:list-resources",
   marketSearch: "pi:market-search",
   marketDetail: "pi:market-detail",
+  githubBrowse: "pi:github-browse",
+  githubText: "pi:github-text",
+  githubImport: "pi:github-import",
+  listImports: "pi:list-imports",
   getTrust: "pi:get-trust",
   setTrust: "pi:set-trust",
   readResource: "pi:read-resource",
