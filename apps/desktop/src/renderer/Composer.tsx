@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
+  atQuery,
+  fileMention,
   filterCommands,
   parseInput,
   pushHistory,
+  replaceRange,
   shouldNavigateHistory,
   slashQuery,
   stepHistory,
@@ -25,6 +28,8 @@ interface ComposerProps {
   commands: PiCommand[] | undefined;
   /** `/`를 쳤는데 목록이 없으면 불린다 */
   onNeedCommands: () => void;
+  /** `@` 파일 피커: 작업 폴더에서 파일을 찾는다. 없으면 파일 피커를 쓰지 않는다 */
+  onSearchFiles?: (query: string) => Promise<string[]>;
   /** 실행 중이면 behavior로 steer·followUp을 고른다 (prompt만 해당) */
   onSubmit: (input: Exclude<ParsedInput, { kind: "empty" }>, behavior?: "steer" | "followUp") => void;
   onAbort: () => void;
@@ -36,28 +41,104 @@ interface ComposerProps {
  * - `!명령`·`!!명령`은 셸 명령 (`!!`는 결과를 컨텍스트에 넣지 않음)
  * - ↑·↓로 이전에 보낸 입력 불러오기 (모든 탭·세션 공통)
  * - `/`로 시작하면 Pi 명령(프롬프트 템플릿, 스킬, 확장 명령) 자동완성
+ * - `@`를 치면 작업 폴더의 파일 자동완성. 고르면 `@경로`를 넣는다 (Pi TUI와 같이 경로만 넣고, 모델이 필요하면 읽는다)
  */
+
+/** 자동완성 목록 한 줄 */
+interface Suggestion {
+  key: string;
+  label: string;
+  kind: string;
+  detail?: string;
+  apply: () => void;
+}
 export function Composer(props: ComposerProps) {
-  const { value, onChange, disabled, placeholder, running, commands, onNeedCommands, onSubmit, onAbort } = props;
+  const { value, onChange, disabled, placeholder, running, commands, onNeedCommands, onSearchFiles, onSubmit, onAbort } = props;
   const textarea = useRef<HTMLTextAreaElement>(null);
   // 히스토리를 보는 중이면 그 위치와, 보기 전에 쓰던 초안
   const browsing = useRef<{ index: number; draft: string; history: string[] } | undefined>(undefined);
   const [selected, setSelected] = useState(0);
   const [dismissed, setDismissed] = useState(false);
+  // 커서 위치 (`@` 파일 피커는 커서 바로 앞의 낱말을 본다)
+  const [caret, setCaret] = useState(0);
+  // `@` 검색 결과와 그 검색어. 새 결과가 올 때까지는 직전 결과를 보여준다 (글자마다 깜박이지 않게)
+  const [files, setFiles] = useState<{ query: string; paths: string[] } | undefined>();
 
   const query = disabled ? undefined : slashQuery(value);
-  const suggestions = query !== undefined && !dismissed && commands ? filterCommands(commands, query) : [];
-  const showSuggestions = suggestions.length > 0;
+  const at = disabled || query !== undefined || !onSearchFiles ? undefined : atQuery(value, caret);
+  const mode = query !== undefined ? "slash" : at ? "file" : undefined;
+  const trigger = mode === "slash" ? `/${query}` : at ? `@${at.start}:${at.query}` : undefined;
 
   useEffect(() => {
     if (query !== undefined && !commands) onNeedCommands();
   }, [query !== undefined, commands, onNeedCommands]);
 
-  // 검색어가 바뀌면 첫 항목을 고르고, `/`를 지우면 닫힘 상태를 푼다.
-  useEffect(() => setSelected(0), [query]);
+  // `@` 검색어가 바뀌면 잠시 기다렸다가 찾는다 (글자마다 요청하지 않게).
+  const atText = at?.query;
   useEffect(() => {
-    if (query === undefined) setDismissed(false);
-  }, [query]);
+    if (atText === undefined || !onSearchFiles) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      onSearchFiles(atText)
+        .then((paths) => {
+          if (!cancelled) setFiles({ query: atText, paths });
+        })
+        .catch(() => {
+          if (!cancelled) setFiles({ query: atText, paths: [] });
+        });
+    }, 120);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [atText, onSearchFiles]);
+
+  // `@` 낱말을 벗어나면 결과를 비운다 (다음 `@`에서 옛 결과가 보이지 않게).
+  useEffect(() => {
+    if (atText === undefined) setFiles(undefined);
+  }, [atText === undefined]);
+
+  // 검색어가 바뀌면 첫 항목을 고르고, 자동완성 대상이 사라지면 닫힘 상태를 푼다.
+  useEffect(() => setSelected(0), [trigger]);
+  useEffect(() => {
+    if (trigger === undefined) setDismissed(false);
+  }, [trigger === undefined]);
+
+  function setTextAndCaret(text: string, nextCaret: number) {
+    onChange(text);
+    setCaret(nextCaret);
+    // 바뀐 값이 그려진 뒤 커서를 옮긴다.
+    requestAnimationFrame(() => {
+      const el = textarea.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(nextCaret, nextCaret);
+    });
+  }
+
+  let suggestions: Suggestion[] = [];
+  if (!dismissed && mode === "slash" && commands) {
+    suggestions = filterCommands(commands, query!).map((command) => ({
+      key: command.name,
+      label: `/${command.name}`,
+      kind: SOURCE_LABELS[command.source] ?? command.source,
+      ...(command.description ? { detail: command.description } : {}),
+      apply: () => setTextAndCaret(`/${command.name} `, command.name.length + 2),
+    }));
+  } else if (!dismissed && mode === "file" && at && files) {
+    suggestions = files.paths.map((path) => ({
+      key: path,
+      label: path,
+      kind: path.endsWith("/") ? "폴더" : "파일",
+      apply: () => {
+        const next = replaceRange(value, at.start, caret, fileMention(path));
+        setTextAndCaret(next.text, next.caret);
+      },
+    }));
+  }
+  const showSuggestions = suggestions.length > 0;
+  // 첫 검색은 파일 목록을 만드느라 오래 걸릴 수 있어 기다리는 동안 안내를 보여준다.
+  const searchingFiles = !dismissed && mode === "file" && files === undefined;
 
   const parsed = parseInput(value);
 
@@ -66,11 +147,6 @@ export function Composer(props: ComposerProps) {
     writeHistory(pushHistory(readHistory(), value));
     browsing.current = undefined;
     onSubmit(parsed, parsed.kind === "prompt" ? behavior : undefined);
-  }
-
-  function complete(command: PiCommand) {
-    onChange(`/${command.name} `);
-    textarea.current?.focus();
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -84,7 +160,7 @@ export function Composer(props: ComposerProps) {
       }
       if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
         e.preventDefault();
-        complete(suggestions[selected] ?? suggestions[0]!);
+        (suggestions[selected] ?? suggestions[0]!).apply();
         return;
       }
       if (e.key === "Escape") {
@@ -116,24 +192,29 @@ export function Composer(props: ComposerProps) {
   return (
     <footer className="composer">
       {showSuggestions && (
-        <ul className="suggestions" role="listbox" aria-label="Pi 명령">
-          {suggestions.map((command, i) => (
+        <ul className="suggestions" role="listbox" aria-label={mode === "file" ? "파일" : "Pi 명령"}>
+          {suggestions.map((item, i) => (
             <li
-              key={command.name}
+              key={item.key}
               role="option"
               aria-selected={i === selected}
               className={i === selected ? "selected" : undefined}
               onMouseDown={(e) => {
                 // 입력창 포커스를 잃지 않도록 mousedown에서 처리한다.
                 e.preventDefault();
-                complete(command);
+                item.apply();
               }}
             >
-              <span className="suggestion-name">/{command.name}</span>
-              <span className="suggestion-source">{SOURCE_LABELS[command.source] ?? command.source}</span>
-              {command.description && <span className="suggestion-desc">{command.description}</span>}
+              <span className="suggestion-name">{item.label}</span>
+              <span className="suggestion-source">{item.kind}</span>
+              {item.detail && <span className="suggestion-desc">{item.detail}</span>}
             </li>
           ))}
+        </ul>
+      )}
+      {searchingFiles && (
+        <ul className="suggestions" aria-live="polite">
+          <li className="suggestion-loading">파일 찾는 중…</li>
         </ul>
       )}
       <textarea
@@ -142,8 +223,10 @@ export function Composer(props: ComposerProps) {
         value={value}
         onChange={(e) => {
           browsing.current = undefined;
+          setCaret(e.target.selectionStart);
           onChange(e.target.value);
         }}
+        onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onKeyDown={onKeyDown}
         disabled={disabled}
         rows={3}

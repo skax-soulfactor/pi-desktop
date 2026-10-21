@@ -1487,3 +1487,8 @@ button.toggled {
   padding: 8px;
   color: var(--muted);
 }
+
+.suggestions .suggestion-loading {
+  color: var(--muted);
+  cursor: default;
+}
