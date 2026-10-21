@@ -26,6 +26,13 @@ export const Methods = {
   authSetApiKey: "auth.setApiKey",
   /** auth.json에서 자격 증명 삭제 */
   authRemove: "auth.remove",
+  /** models.json의 사용자 정의 프로바이더 (apiKey 값은 가린다) */
+  modelsRead: "models.read",
+  /** 사용자 정의 프로바이더 저장 (폼 밖의 필드는 남긴다) */
+  modelsSaveProvider: "models.saveProvider",
+  modelsRemoveProvider: "models.removeProvider",
+  /** OpenAI 호환 엔드포인트의 /models를 이 호스트에서 불러 연결 시험 */
+  modelsProbe: "models.probe",
   sessionOpen: "session.open",
   sessionList: "session.list",
   sessionAttach: "session.attach",
@@ -201,6 +208,71 @@ export interface AuthCheckResult {
   provider: string;
   status: "ready" | "not_ready" | "invalid" | "unknown";
   reason?: string;
+}
+
+/** models.json 폼의 모델 하나 */
+export interface CustomModelForm {
+  id: string;
+  name?: string;
+  reasoning?: boolean;
+  /** 이미지 입력을 받는다 (input에 "image") */
+  image?: boolean;
+  contextWindow?: number;
+  maxTokens?: number;
+}
+
+/** models.json 폼의 프로바이더 하나 */
+export interface CustomProviderForm {
+  id: string;
+  name?: string;
+  baseUrl: string;
+  /** 예: openai-completions, anthropic-messages */
+  api: string;
+  /** 없으면(undefined) 기존 값 유지, 빈 문자열이면 지움. 값, $환경변수, !명령 */
+  apiKey?: string;
+  models: CustomModelForm[];
+}
+
+/** 앱에 보여주는 사용자 정의 프로바이더. apiKey가 그대로 키 값이면 가린다 */
+export interface CustomProviderView {
+  id: string;
+  name?: string;
+  baseUrl?: string;
+  api?: string;
+  apiKey: { kind: "none" | "literal" | "env" | "command"; value?: string };
+  models: CustomModelForm[];
+  /** 폼이 다루지 않아 그대로 남기는 필드 이름 (compat, headers 등) */
+  extraFields: string[];
+}
+
+export interface ModelsFileView {
+  path: string;
+  exists: boolean;
+  providers: CustomProviderView[];
+  /** 파일이 깨져 읽지 못했으면 이유 (이때는 저장하지 않는다) */
+  error?: string;
+}
+
+export interface ModelsSaveParams {
+  provider: CustomProviderForm;
+  /** ID를 바꿀 때 원래 ID */
+  previousId?: string;
+}
+
+export interface ModelsProbeParams {
+  baseUrl: string;
+  /** 시험에 쓸 키. 없고 providerId가 있으면 저장된 키를 쓴다 */
+  apiKey?: string;
+  providerId?: string;
+}
+
+export interface ModelsProbeResult {
+  ok: boolean;
+  url: string;
+  status?: number;
+  /** 엔드포인트가 알려 준 모델 ID */
+  models: string[];
+  error?: string;
 }
 
 export interface PiLocateParams {
