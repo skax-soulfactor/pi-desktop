@@ -24,6 +24,8 @@ import {
   type ResourceImportResult,
   type ImportedInspectResult,
   type ImportedTargetParams,
+  type ResourceExportParams,
+  type ResourceExportResult,
   type ResourceFile,
   type ResourcePathParams,
   type ResourceWriteParams,
@@ -81,6 +83,7 @@ import { projectTrust, setProjectTrust, trustArgs, type TrustSdk } from "./trust
 import { createResourceFile, readResourceFile, writeResourceFile } from "./resource-files";
 import { importResource } from "./resource-import";
 import { inspectImported, moveToBackup, readImported } from "./import-manage";
+import { exportResource } from "./resource-export";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
@@ -542,6 +545,12 @@ export class AgentDaemon {
       if (p.kind !== "skill" && p.kind !== "prompt") throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 skill·prompt여야 합니다");
       return p;
     };
+
+    peer.handle(Methods.resourcesExport, (params): Promise<ResourceExportResult> => {
+      const p = requireStrings(params, ["kind", "path"]) as unknown as ResourceExportParams;
+      if (p.kind !== "skill" && p.kind !== "prompt") throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 skill·prompt여야 합니다");
+      return exportResource(p.kind, p.path).catch(asInvalid);
+    });
 
     peer.handle(Methods.resourcesInspectImported, (params): Promise<ImportedInspectResult> => {
       const p = importedTarget(params);

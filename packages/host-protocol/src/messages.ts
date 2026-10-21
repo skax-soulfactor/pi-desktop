@@ -68,6 +68,8 @@ export const Methods = {
   resourcesCreate: "resources.create",
   /** 받은 스킬 폴더·프롬프트 파일을 사용자·프로젝트 범위에 쓴다 (개별 가져오기) */
   resourcesImport: "resources.import",
+  /** 다른 호스트로 복사할 스킬 폴더·프롬프트 파일을 읽는다 */
+  resourcesExport: "resources.export",
   /** 가져온 스킬 폴더·프롬프트 파일의 git blob SHA (로컬 수정 감지) */
   resourcesInspectImported: "resources.inspectImported",
   /** 가져온 스킬·프롬프트 안의 텍스트 파일 하나 (차이 보기) */
@@ -589,6 +591,17 @@ export interface ResourceImportResult {
   files: number;
   /** replace로 바꾸었으면 이전 내용을 옮겨 둔 곳 */
   backup?: string;
+}
+
+export interface ResourceExportParams {
+  kind: "skill" | "prompt";
+  /** 리소스 목록이 알려 준 파일 경로 (스킬은 SKILL.md, 프롬프트는 .md) */
+  path: string;
+}
+
+export interface ResourceExportResult {
+  /** 스킬 폴더 기준 경로(프롬프트는 파일 이름)와 내용 */
+  files: Array<{ path: string; size: number; contentBase64: string }>;
 }
 
 /** 가져온 항목 (스킬 폴더 또는 프롬프트 파일) */
