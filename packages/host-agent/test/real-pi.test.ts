@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DaemonEvents, Methods, type SessionOpenResult } from "@pi-desktop/host-protocol";
+import { DaemonEvents, Methods, type SessionOpenResult, type SessionSummary } from "@pi-desktop/host-protocol";
 import { isolatedEnv, joinedText, TestClient } from "./helpers/agent-client";
 import { MOCK_MODEL_ARGS, PI_CLI, setupRealPi, type RealPiFixture } from "./helpers/real-pi";
 
@@ -43,6 +43,18 @@ describe("실제 Pi 계약 테스트", () => {
 
     await client.waitForEvent((e) => e.type === "agent_settled");
     expect(joinedText(client.events)).toBe("echo: hello pi");
+
+    // 활동 패널용 요약: 끝났으면 busy가 아니고, 제목은 첫 질문
+    const listed = (await client.request<SessionSummary[]>(Methods.sessionList)).find((s) => s.sessionId === session.sessionId);
+    expect(listed).toMatchObject({ busy: false, title: "hello pi" });
+
+    // 이름을 붙이면 제목이 이름으로 바뀐다
+    await client.request(Methods.sessionSend, {
+      sessionId: session.sessionId,
+      command: { type: "set_session_name", name: "인사 세션" },
+    });
+    const renamed = (await client.request<SessionSummary[]>(Methods.sessionList)).find((s) => s.sessionId === session.sessionId);
+    expect(renamed?.title).toBe("인사 세션");
 
     const types = client.events.map((n) => (n.event as { type: string }).type);
     for (const expected of ["agent_start", "message_start", "message_update", "message_end", "agent_end"]) {
