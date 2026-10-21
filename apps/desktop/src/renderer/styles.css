@@ -87,7 +87,7 @@ textarea {
 }
 
 /* 워크스페이스 탭 */
-.shell {
+.app-shell {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -313,7 +313,62 @@ textarea {
 }
 
 .error-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--bad);
+}
+
+/* 대기 중인 Steer·Follow-up (입력창 바로 위) */
+.queue-panel {
+  margin: 0 16px;
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+}
+
+.queue-panel ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue-panel li {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.queue-kind {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 8px;
+  color: #fff;
+}
+
+.queue-kind.steer {
+  background: var(--accent);
+}
+
+.queue-kind.follow {
+  background: var(--muted);
+}
+
+.queue-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tool {
@@ -1259,4 +1314,8 @@ button.toggled {
 
 .modal-options button.primary {
   color: #fff;
+}
+
+.notice .resend {
+  margin-left: 10px;
 }

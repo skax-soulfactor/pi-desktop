@@ -86,7 +86,7 @@ export function App() {
   }, [newTab, close, activate]);
 
   return (
-    <div className="shell">
+    <div className="app-shell">
       <nav className="tabbar" role="tablist" aria-label="워크스페이스">
         {tabs.ids.map((id, index) => {
           const status = statuses[id];

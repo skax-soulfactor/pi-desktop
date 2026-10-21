@@ -9,6 +9,7 @@ import type { AddressInfo } from "node:net";
  * - 사용자 메시지에 "read:<경로>"가 있으면 → read 툴 호출
  * - 사용자 메시지에 "bash:<명령>"이 있으면 → bash 툴 호출 (확장의 위험 명령 확인 테스트용)
  * - 사용자 메시지가 "tool:<툴 이름> <JSON 인자>"이면 → 그 툴을 그 인자로 호출 (edit·write 등 툴 카드 확인용)
+ * - 사용자 메시지가 "fail:<HTTP 상태>"면 → 그 상태의 오류 응답 (자동 재시도 확인용)
  * - 그 밖에는 → "echo: <사용자 메시지>" 텍스트를 단어 단위로 스트리밍
  */
 export interface MockLlm {
@@ -34,6 +35,14 @@ export async function startMockLlm(port = 0): Promise<MockLlm> {
     requests.push(body);
     const messages = (body.messages as ChatMessage[] | undefined) ?? [];
     const last = messages.at(-1);
+
+    // "fail:<HTTP 상태>"면 그 상태의 오류로 응답한다 (자동 재시도 확인용, 예: fail:529)
+    const failStatus = last?.role === "user" ? /^fail:(\d{3})/.exec(textOf(last.content).trim())?.[1] : undefined;
+    if (failStatus) {
+      res.writeHead(Number(failStatus), { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: { message: `mock ${failStatus} overloaded`, type: "overloaded_error" } }));
+      return;
+    }
 
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
     const send = (delta: Record<string, unknown>, finish: string | null = null) =>

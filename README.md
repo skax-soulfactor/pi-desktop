@@ -38,7 +38,7 @@ npm run dev:mock -w @pi-desktop/desktop
 
 - 저장소의 Pi devDependency(1.3.0)와 OpenAI 호환 mock LLM(포트 18911)을 씁니다.
 - Pi 설정과 데몬 홈은 저장소의 `.dev/` 아래로 격리되어 실제 `~/.pi`, `~/.pi-desktop`과 섞이지 않습니다.
-- 프롬프트 예: `안녕` → 그대로 echo, `read:package.json` → read 툴 호출 후 내용 응답, `bash:<명령>` → bash 툴 호출, `tool:<툴 이름> <JSON 인자>` → 그 툴 호출 (예: `tool:edit {"path":"a.txt","edits":[{"oldText":"a","newText":"b"}]}`). 개발 실행에서는 grep·find·ls 툴도 켜져 있습니다.
+- 프롬프트 예: `안녕` → 그대로 echo, `read:package.json` → read 툴 호출 후 내용 응답, `bash:<명령>` → bash 툴 호출, `tool:<툴 이름> <JSON 인자>` → 그 툴 호출 (예: `tool:edit {"path":"a.txt","edits":[{"oldText":"a","newText":"b"}]}`). `fail:529` → 그 HTTP 상태의 오류 응답 (자동 재시도 확인용). 개발 실행에서는 grep·find·ls 툴도 켜져 있습니다.
 - `-- --demo-ext`를 붙이면 Pi에 들어 있는 rpc-demo 확장을 함께 불러옵니다. 확장 UI(다이얼로그·알림·위젯·상태)를 확인할 때 씁니다.
   - `/rpc-input`, `/rpc-editor`, `/rpc-prefill` 명령, `bash:rm -rf ./x`(위험 명령 확인 다이얼로그)
 
@@ -87,6 +87,8 @@ npm test
 - `↑`·`↓`: 이전에 보낸 입력 불러오기. 쓰던 초안은 세션별로 저장되어 앱을 다시 열어도 남습니다.
 - `/`: 프롬프트 템플릿, 스킬, 확장 명령 자동완성 (`Tab`·`Enter`로 채우기, `Esc`로 닫기)
 - `!명령`: 셸 명령을 실행하고 결과를 다음 질문의 컨텍스트에 넣습니다. `!!명령`은 컨텍스트에 넣지 않습니다. 실행 중인 명령은 카드의 "멈춤"으로 멈춥니다.
+- Pi가 일하는 중에 보낸 Steer·Follow-up은 입력창 위에 "대기 중"으로 보입니다. "비우고 입력창으로"를 누르거나 "중단"하면 대기 중인 글이 입력창으로 돌아옵니다.
+- 응답 오류로 자동 재시도 중이면 배너에서 "재시도 취소"를 누를 수 있습니다. 결국 실패하면 "다시 보내기"로 질문을 입력창에 다시 채웁니다.
 
 ## 터미널 pi(TUI)와 함께 쓰기
 

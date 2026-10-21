@@ -1,12 +1,25 @@
 import { useEffect, useRef } from "react";
 import type { AssistantBlock, ChatItem } from "./chat-state";
 import { Markdown } from "./markdown/Markdown";
+import { resendCandidate } from "./run-status";
 import { ToolCard, type ToolCardActions } from "./ToolCards";
 
 /** 대화 목록. 새 내용이 오면 사용자가 위로 스크롤해 둔 경우가 아니면 맨 아래로 따라간다. */
-export function ChatView({ items, running, actions }: { items: ChatItem[]; running: boolean; actions: ToolCardActions }) {
+export function ChatView({
+  items,
+  running,
+  actions,
+  onResend,
+}: {
+  items: ChatItem[];
+  running: boolean;
+  actions: ToolCardActions;
+  /** 오류로 끝난 마지막 응답의 질문을 입력창에 다시 채운다 */
+  onResend?: (text: string) => void;
+}) {
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+  const resend = running ? undefined : resendCandidate(items);
 
   useEffect(() => {
     const el = scroller.current;
@@ -24,14 +37,27 @@ export function ChatView({ items, running, actions }: { items: ChatItem[]; runni
     >
       {items.length === 0 && <p className="empty">세션을 열고 메시지를 보내 보세요.</p>}
       {items.map((item) => (
-        <Item key={item.key} item={item} actions={actions} />
+        <Item
+          key={item.key}
+          item={item}
+          actions={actions}
+          onResend={resend && onResend && item.key === resend.anchorKey ? () => onResend(resend.text) : undefined}
+        />
       ))}
       {running && <div className="working">Pi가 작업 중…</div>}
     </div>
   );
 }
 
-function Item({ item, actions }: { item: ChatItem; actions: ToolCardActions }) {
+function Item({
+  item,
+  actions,
+  onResend,
+}: {
+  item: ChatItem;
+  actions: ToolCardActions;
+  onResend: (() => void) | undefined;
+}) {
   switch (item.kind) {
     case "user":
       return <div className="msg user">{item.text}</div>;
@@ -41,15 +67,33 @@ function Item({ item, actions }: { item: ChatItem; actions: ToolCardActions }) {
           {item.blocks.map((block, i) => (
             <Block key={i} block={block} />
           ))}
-          {item.stopReason === "error" && <div className="error-line">오류: {item.errorMessage ?? "알 수 없음"}</div>}
+          {item.stopReason === "error" && (
+            <div className="error-line">
+              <span>오류: {item.errorMessage ?? "알 수 없음"}</span>
+              {onResend && <ResendButton onClick={onResend} />}
+            </div>
+          )}
           {item.stopReason === "aborted" && <div className="muted">중단됨</div>}
         </div>
       );
     case "tool":
       return <ToolCard item={item} actions={actions} />;
     case "notice":
-      return <div className={`notice ${item.level}`}>{item.text}</div>;
+      return (
+        <div className={`notice ${item.level}`}>
+          {item.text}
+          {onResend && <ResendButton onClick={onResend} />}
+        </div>
+      );
   }
+}
+
+function ResendButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="small resend" onClick={onClick} title="이 질문을 입력창에 다시 채웁니다. 고쳐서 보낼 수 있습니다">
+      다시 보내기
+    </button>
+  );
 }
 
 function Block({ block }: { block: AssistantBlock }) {
