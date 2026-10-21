@@ -20,6 +20,10 @@ import {
   type PiLatestParams,
   type PiLocateParams,
   type PiStatus,
+  type AuthCheckResult,
+  type AuthProviderParams,
+  type AuthSetApiKeyParams,
+  type ProviderInfo,
   type PiUpdateParams,
   type PiUpdateResult,
   type SessionAttachParams,
@@ -42,6 +46,7 @@ import {
 import { runDir, socketPath } from "./paths";
 import { locatePi } from "./pi-locator";
 import { latestPiVersion, piStatus } from "./pi-status";
+import { agentDirOf, checkAuth, isProviderId, listProviders, removeCredential, setApiKey } from "./auth-store";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
@@ -221,6 +226,30 @@ export class AgentDaemon {
       } finally {
         this.updating = false;
       }
+    });
+
+    peer.handle(Methods.authProviders, async (): Promise<ProviderInfo[]> => {
+      const pi = await locatePi({ env: this.env }).catch(() => undefined);
+      return listProviders(pi, agentDirOf(this.env));
+    });
+
+    peer.handle(Methods.authCheck, async (params): Promise<AuthCheckResult> => {
+      const provider = requireProvider(params);
+      return checkAuth(await locatePi({ env: this.env }), provider, this.env);
+    });
+
+    peer.handle(Methods.authSetApiKey, async (params) => {
+      const provider = requireProvider(params);
+      const key = (params as Partial<AuthSetApiKeyParams>).key;
+      if (typeof key !== "string" || !key.trim() || /[\r\n]/.test(key)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "키가 비었거나 줄바꿈이 있습니다");
+      }
+      await setApiKey(agentDirOf(this.env), provider, key.trim());
+      return null;
+    });
+
+    peer.handle(Methods.authRemove, async (params) => {
+      return { removed: await removeCredential(agentDirOf(this.env), requireProvider(params)) };
     });
 
     peer.handle(Methods.sessionOpen, async (params): Promise<SessionOpenResult> => {
@@ -464,6 +493,12 @@ function isAlive(path: string): Promise<boolean> {
     });
     socket.once("error", () => resolve(false));
   });
+}
+
+function requireProvider(params: unknown): string {
+  const provider = (params as Partial<AuthProviderParams> | undefined)?.provider;
+  if (!isProviderId(provider)) throw new JsonRpcError(ErrorCodes.InvalidParams, "올바른 프로바이더 ID가 필요합니다");
+  return provider;
 }
 
 function requirePath(params: unknown): StoredPathParams {

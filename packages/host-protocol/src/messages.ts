@@ -18,6 +18,14 @@ export const Methods = {
   piLatest: "pi.latest",
   /** Pi 업데이트 실행 (pi update). 출력은 pi.updateOutput 알림으로 흐른다 */
   piUpdate: "pi.update",
+  /** 프로바이더 목록과 저장된 자격 증명의 종류 (키 값은 보내지 않는다) */
+  authProviders: "auth.providers",
+  /** pi auth check로 한 프로바이더의 인증 상태 확인 */
+  authCheck: "auth.check",
+  /** auth.json에 API 키 저장 */
+  authSetApiKey: "auth.setApiKey",
+  /** auth.json에서 자격 증명 삭제 */
+  authRemove: "auth.remove",
   sessionOpen: "session.open",
   sessionList: "session.list",
   sessionAttach: "session.attach",
@@ -162,6 +170,37 @@ export interface PiUpdateResult {
 export interface PiUpdateOutputNotification {
   taskId: string;
   chunk: string;
+}
+
+/** 프로바이더 하나 (설계 §4.7). 자격 증명 값은 담지 않는다 */
+export interface ProviderInfo {
+  id: string;
+  name: string;
+  /** API 키 인증을 지원 */
+  apiKey: boolean;
+  /** OAuth 로그인을 지원 (Pi TUI의 /login 필요) */
+  oauth: boolean;
+  /** 내장 프로바이더가 아니라 models.json이나 auth.json에만 있음 */
+  custom: boolean;
+  /** auth.json에 저장된 자격 증명의 종류. 없으면 없음 */
+  stored?: "api_key" | "oauth" | "other";
+}
+
+export interface AuthProviderParams {
+  provider: string;
+}
+
+export interface AuthSetApiKeyParams {
+  provider: string;
+  /** API 키, 또는 "!명령" (시크릿 매니저에서 읽기) */
+  key: string;
+}
+
+/** pi auth check 결과. ready: 쓸 수 있음, not_ready: 자격 증명 없음, invalid: 자격 증명이 잘못됨 */
+export interface AuthCheckResult {
+  provider: string;
+  status: "ready" | "not_ready" | "invalid" | "unknown";
+  reason?: string;
 }
 
 export interface PiLocateParams {

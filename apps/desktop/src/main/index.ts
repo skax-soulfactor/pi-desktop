@@ -4,7 +4,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   Methods,
+  type AuthCheckResult,
   type FsSearchResult,
+  type ProviderInfo,
   type PiLatest,
   type PiStatus,
   type PiUpdateResult,
@@ -177,6 +179,19 @@ function registerIpc(manager: HostManager): void {
   ipcMain.handle(IpcChannels.piUpdate, (_event, hostId: string, target: PiUpdateTarget, taskId: string, force: boolean) =>
     // 업데이트는 몇 분 걸릴 수 있어 응답 시간 제한을 두지 않는다 (데몬이 15분에서 멈춘다).
     conn(hostId).request<PiUpdateResult>(Methods.piUpdate, { target, taskId, force }, 0),
+  );
+  ipcMain.handle(IpcChannels.authProviders, (_event, hostId: string) =>
+    conn(hostId).request<ProviderInfo[]>(Methods.authProviders),
+  );
+  ipcMain.handle(IpcChannels.authCheck, (_event, hostId: string, provider: string) =>
+    conn(hostId).request<AuthCheckResult>(Methods.authCheck, { provider }),
+  );
+  // 키는 데몬으로만 넘기고 로그에 남기지 않는다.
+  ipcMain.handle(IpcChannels.authSetApiKey, async (_event, hostId: string, provider: string, key: string) => {
+    await conn(hostId).request(Methods.authSetApiKey, { provider, key });
+  });
+  ipcMain.handle(IpcChannels.authRemove, (_event, hostId: string, provider: string) =>
+    conn(hostId).request<{ removed: boolean }>(Methods.authRemove, { provider }),
   );
   ipcMain.handle(IpcChannels.searchFiles, (_event, hostId: string, cwd: string, query: string) =>
     conn(hostId).request<FsSearchResult>(Methods.fsSearch, { cwd, query, limit: 30 }),

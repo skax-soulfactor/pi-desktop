@@ -3,6 +3,7 @@ import type { PiLatest, PiStatus } from "@pi-desktop/host-protocol/messages";
 import type { HostDescriptor } from "../shared/api";
 import { statusChecks } from "./pi-manager-view";
 import { PiUpdatePanel } from "./PiUpdatePanel";
+import { ProvidersPanel } from "./ProvidersPanel";
 
 /** 한 호스트의 Pi 상태와 최신 버전. 최신 버전은 데몬이 1시간 캐시한다 */
 export function usePiStatus(hostId: string, enabled: boolean) {
@@ -34,7 +35,7 @@ export function usePiStatus(hostId: string, enabled: boolean) {
 }
 
 /**
- * Pi 관리 창 (설계 §4.9). 상태 점검표와 업데이트. 설치·제거는 다음 단계에서 붙인다.
+ * Pi 관리 창 (설계 §4.9, §4.7). 상태 점검표와 업데이트, 프로바이더 인증. 설치·제거는 다음 단계에서 붙인다.
  */
 export function PiManager({
   hosts,
@@ -51,6 +52,7 @@ export function PiManager({
   const [hostId, setHostId] = useState(initialHostId);
   const { status, latest, error, reload } = usePiStatus(hostId, true);
   const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<"status" | "providers">("status");
   const checks = status ? statusChecks(status, latest) : [];
 
   useEffect(() => {
@@ -73,9 +75,18 @@ export function PiManager({
               </option>
             ))}
           </select>
+          <div className="segmented" role="tablist">
+            <button type="button" className={tab === "status" ? "on" : ""} onClick={() => setTab("status")}>
+              상태
+            </button>
+            <button type="button" className={tab === "providers" ? "on" : ""} onClick={() => setTab("providers")}>
+              프로바이더
+            </button>
+          </div>
           <div className="spacer" />
           <button
             type="button"
+            hidden={tab !== "status"}
             disabled={refreshing}
             onClick={async () => {
               setRefreshing(true);
@@ -90,9 +101,10 @@ export function PiManager({
             닫기
           </button>
         </header>
-        {error && <div className="banner error">{error}</div>}
-        {!status && !error && <p className="muted">상태를 읽는 중…</p>}
-        {status && (
+        {tab === "providers" && <ProvidersPanel hostId={hostId} onChanged={() => void reload()} />}
+        {tab === "status" && error && <div className="banner error">{error}</div>}
+        {tab === "status" && !status && !error && <p className="muted">상태를 읽는 중…</p>}
+        {tab === "status" && status && (
           <table className="pi-checks">
             <tbody>
               {checks.map((check) => (
@@ -110,7 +122,7 @@ export function PiManager({
             </tbody>
           </table>
         )}
-        {status && (
+        {tab === "status" && status && (
           <PiUpdatePanel
             hostId={hostId}
             status={status}
@@ -121,7 +133,7 @@ export function PiManager({
             }}
           />
         )}
-        <p className="pi-manager-note muted">설치·제거는 다음 단계에서 추가됩니다.</p>
+        {tab === "status" && <p className="pi-manager-note muted">설치·제거는 다음 단계에서 추가됩니다.</p>}
       </div>
     </div>
   );

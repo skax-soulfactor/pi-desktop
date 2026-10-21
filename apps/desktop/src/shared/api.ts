@@ -5,7 +5,9 @@
  * preload가 이 인터페이스만 `window.piDesktop`으로 노출한다 (설계 §5.8).
  */
 import type {
+  AuthCheckResult,
   FsSearchResult,
+  ProviderInfo,
   PiLatest,
   PiStatus,
   PiUpdateOutputNotification,
@@ -98,6 +100,14 @@ export interface PiDesktopApi {
    * Pi 업데이트 (pi update). 끝날 때까지 기다린다. 진행 출력은 onPiUpdateOutput으로 taskId와 함께 온다.
    */
   piUpdate(hostId: string, target: PiUpdateTarget, taskId: string, force?: boolean): Promise<PiUpdateResult>;
+  /** 프로바이더 목록과 저장된 자격 증명의 종류 (키 값은 오지 않는다) */
+  authProviders(hostId: string): Promise<ProviderInfo[]>;
+  /** pi auth check로 인증 상태 확인 */
+  authCheck(hostId: string, provider: string): Promise<AuthCheckResult>;
+  /** auth.json에 API 키 저장 */
+  authSetApiKey(hostId: string, provider: string, key: string): Promise<void>;
+  /** auth.json에서 자격 증명 삭제 */
+  authRemove(hostId: string, provider: string): Promise<{ removed: boolean }>;
   /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커). 경로는 작업 폴더 기준, 구분자 "/" */
   searchFiles(hostId: string, cwd: string, query: string): Promise<FsSearchResult>;
 
@@ -136,6 +146,10 @@ export const IpcChannels = {
   piStatus: "pi:pi-status",
   piLatest: "pi:pi-latest",
   piUpdate: "pi:pi-update",
+  authProviders: "pi:auth-providers",
+  authCheck: "pi:auth-check",
+  authSetApiKey: "pi:auth-set-api-key",
+  authRemove: "pi:auth-remove",
   piUpdateOutput: "pi:pi-update-output",
   connectionChanged: "pi:connection-changed",
   sessionEvent: "pi:session-event",
