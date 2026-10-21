@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.27)
+# Pi Desktop — 설계 문서 (v0.28)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -432,6 +432,26 @@ Pi는 세션 파일 잠금을 문서화하지 않았다. 그래서 **같은 세�
 - 이미지 붙여넣기는 원격 임시 폴더로 업로드한 뒤 경로를 전달한다.
 - 네트워크가 끊기거나 GUI를 닫아도 Pi 프로세스는 원격 데몬 아래에서 계속 실행된다. 다시 연결하면 저널로 이어 붙인다(§3.4).
 - SSH 연결이 끊긴 것을 빨리 알아채도록 `ServerAliveInterval`을 설정하고, 지수 백오프로 자동 재연결한다.
+- **구현 메모: SSH 호스트 (M3, v0.28)**
+  - 호스트 등록: 호스트 선택 목록의 "SSH 호스트 관리…"에서 이름·접속 대상(`user@host` 또는 `~/.ssh/config`의 Host 이름)·포트만 받는다. 앱 userData의 `ssh-hosts.json`에 저장하고, 인증 정보는 담지 않는다. 호스트 id는 `ssh:<이름>`이다.
+  - 실행: OS의 `ssh`를 쓴다. Windows는 Git 등 다른 ssh보다 `System32OpenSSHssh.exe`를 먼저 쓴다. 공통 옵션은 다음과 같다.
+    - `BatchMode=yes`: 비밀번호를 묻지 않고, 키 인증이 안 되면 실패한다.
+    - `StrictHostKeyChecking=accept-new`: 처음 보는 호스트 키는 받고, 바뀐 키는 거부한다.
+    - `ServerAliveInterval=15`, `ConnectTimeout=10`
+  - 원격 명령은 로그인 셸 종류와 상관없도록 `sh -c …`로 감싼다.
+  - Agent 배포는 WSL과 같은 절차를 공통 모듈(remote-agent.ts)로 쓴다: node 확인 → 홈의 `~/.pi-desktop/agent/`에 해시 이름으로 업로드 → `exec node <agent> connect`.
+  - 오류 안내: 키 인증 실패에는 키 등록 방법을, 호스트 키 변경과 접속 실패에는 확인할 것을 덧붙인다. Node가 없으면 Termux용 명령(`pkg install nodejs-lts`)도 안내한다.
+  - 내장 터미널은 `ssh -t`로 붙인다. 셸은 서버의 로그인 셸이고, pi는 데몬이 찾은 node·cli.js로 실행한다. 그래서 Pi 관리 창의 설치·OAuth 로그인도 SSH 호스트에서 된다.
+  - Android(Termux, Node가 `android`로 알림)에서는 공식 설치기가 돌지 않으므로 Pi 설치 안내를 npm 전역 설치로 바꾼다.
+  - 확인한 환경: Termux sshd(포트 8022)가 켜진 Android 15 휴대폰(aarch64, Node 24.18 LTS)
+    - Agent 자동 배포, 폴더 탐색, 터미널로 Pi 설치(npm 전역)
+    - 세션 열기와 `!` 셸 명령
+    - 앱을 닫았다 다시 열면 휴대폰의 데몬·Pi가 살아 있고, 세션과 출력이 그대로 이어짐
+  - 아직 하지 않은 것
+    - `~/.ssh/config` 호스트 자동 가져오기
+    - 비밀번호·암호 걸린 키 입력 (ssh-agent에 올린 키는 됨)
+    - 휴대폰에서 LLM으로 실제 대화(자격 증명 없음)
+    - Android가 백그라운드의 Termux를 멈추는 경우의 대응(Termux wake lock)
 
 ### 5.7 ConfigService — 안전한 파일 편집
 - 모든 쓰기는 Host Agent의 원자적 쓰기를 쓴다. JSON은 jsonc-parser로 부분 수정해서 원본 포맷과 주석을 보존한다. 저장 전 스키마 검증, `.bak` 1개 유지.

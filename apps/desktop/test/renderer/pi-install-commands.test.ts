@@ -8,6 +8,12 @@ import {
 } from "../../src/renderer/pi-install-commands";
 
 describe("installSteps", () => {
+  it("Android(Termux): 공식 설치기 대신 npm 전역 설치", () => {
+    expect(installSteps("android", true).map((s) => s.command)).toEqual([
+      "npm install -g --ignore-scripts @earendil-works/pi-coding-agent",
+    ]);
+  });
+
   it("Windows: npm.cmd로 전역 설치, Node가 부족하면 winget 단계를 먼저", () => {
     expect(installSteps("win32", true).map((s) => s.command)).toEqual([
       "npm.cmd install -g --ignore-scripts @earendil-works/pi-coding-agent",

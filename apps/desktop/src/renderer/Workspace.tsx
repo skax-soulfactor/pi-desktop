@@ -17,6 +17,7 @@ import { tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
 import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
 import { FolderBrowser } from "./FolderBrowser";
+import { SshHostsDialog } from "./SshHostsDialog";
 import { restoreQueueToDraft } from "./run-status";
 import { QueuePanel, RetryBanner } from "./RunStatus";
 import { SessionBar } from "./SessionBar";
@@ -50,12 +51,16 @@ interface WorkspaceProps {
 /**
  * 워크스페이스 하나 = 탭 하나 (설계 §3.3). 호스트와 세션을 탭마다 따로 가진다.
  */
+/** 호스트 선택 목록에서 SSH 호스트 관리 창을 여는 항목 */
+const SSH_MANAGE = "__ssh-manage__";
+
 export function Workspace({ tabId, active, onStatus, appCommands }: WorkspaceProps) {
   const {
     hosts,
     host,
     hostId,
     selectHost,
+    reloadHosts,
     connection,
     sessions,
     session,
@@ -78,7 +83,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     ignoreExternalWrite,
     dismissToast,
   } = useSession(tabId);
-  const isLocal = host?.kind !== "wsl";
+  const isLocal = host?.kind === "local";
   const [cwd, setCwd] = useState("");
   const [draft, setDraftState] = useState("");
   const [commands, setCommands] = useState<PiCommand[] | undefined>();
@@ -92,6 +97,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [piManagerOpen, setPiManagerOpen] = useState(false);
   const [folderBrowserOpen, setFolderBrowserOpen] = useState(false);
   const [agentReplaceAsk, setAgentReplaceAsk] = useState(false);
+  const [sshHostsOpen, setSshHostsOpen] = useState(false);
   /** 아래 도크의 내장 터미널들 (설계 §4.12) */
   const [dockTerminals, setDockTerminals] = useState<DockTerminal[]>([]);
   const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
@@ -482,17 +488,23 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           className="host-select"
           aria-label="호스트"
           value={hostId}
+          onFocus={reloadHosts}
           onChange={(e) => {
+            if (e.target.value === SSH_MANAGE) {
+              setSshHostsOpen(true);
+              return;
+            }
             setCwd("");
             selectHost(e.target.value);
           }}
         >
-          {hosts.length === 0 && <option value={hostId}>{hostId}</option>}
+          {!hosts.some((h) => h.id === hostId) && <option value={hostId}>{hostId}</option>}
           {hosts.map((h) => (
             <option key={h.id} value={h.id}>
               {h.label}
             </option>
           ))}
+          <option value={SSH_MANAGE}>SSH 호스트 관리…</option>
         </select>
         <ConnectionBadge connection={connection} />
         {connection.status === "connected" && connection.agentUpdate && (
@@ -542,7 +554,13 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       <section className="toolbar">
         <input
           className="cwd"
-          placeholder={isLocal ? "작업 폴더 경로" : "WSL 안의 작업 폴더 경로 (예: /home/me/project)"}
+          placeholder={
+            isLocal
+              ? "작업 폴더 경로"
+              : host?.kind === "ssh"
+                ? "서버의 작업 폴더 경로 (예: /home/me/project)"
+                : "WSL 안의 작업 폴더 경로 (예: /home/me/project)"
+          }
           value={cwd}
           onChange={(e) => setCwd(e.target.value)}
           disabled={!connected || busy}
@@ -800,6 +818,14 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         </ChoiceDialog>
       )}
       {active && <Toasts toasts={ui.toasts} onDismiss={dismissToast} />}
+      {active && sshHostsOpen && (
+        <SshHostsDialog
+          onClose={(changed) => {
+            setSshHostsOpen(false);
+            if (changed) reloadHosts();
+          }}
+        />
+      )}
       {active && folderBrowserOpen && (
         <FolderBrowser
           hostId={hostId}

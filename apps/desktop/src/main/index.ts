@@ -29,11 +29,13 @@ import {
   type StoredReadResult,
   type StoredSession,
 } from "@pi-desktop/host-protocol";
-import { IpcChannels, type AttachResult, type OpenSessionRequest, type TerminalOpenRequest } from "../shared/api";
+import { IpcChannels, type AttachResult, type OpenSessionRequest, type SshHostConfig, type TerminalOpenRequest } from "../shared/api";
 import { TerminalService } from "./terminal";
 import { terminalCommand } from "./terminal-command";
 import { devSessionOverrides } from "./dev-overrides";
 import { HostManager, LOCAL_HOST_ID, WSL_PREFIX } from "./host-manager";
+import { SSH_PREFIX, sshExecutable } from "./ssh";
+import { SshHostStore } from "./ssh-hosts";
 import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
 
@@ -102,7 +104,7 @@ function createWindow(): void {
 
 const terminals = new TerminalService({ data: IpcChannels.terminalData, exit: IpcChannels.terminalExit });
 
-function registerIpc(manager: HostManager): void {
+function registerIpc(manager: HostManager, sshHosts: SshHostStore): void {
   const conn = (hostId: string) => manager.get(hostId);
 
   // 내장 터미널: pi는 데몬이 찾은 Pi와 그 실행 node로 띄운다.
@@ -115,6 +117,7 @@ function registerIpc(manager: HostManager): void {
         kind: request.kind,
         ...(request.cwd ? { cwd: request.cwd } : {}),
         ...(request.args ? { args: request.args } : {}),
+        ...(sshTarget(request.hostId) ? { ssh: sshTarget(request.hostId)! } : {}),
       },
       runtime,
     );
@@ -125,6 +128,20 @@ function registerIpc(manager: HostManager): void {
   ipcMain.on(IpcChannels.terminalClose, (_event, id: string) => terminals.close(id));
 
   ipcMain.handle(IpcChannels.listHosts, () => manager.listHosts());
+  const sshTarget = (hostId: string) => {
+    const host = hostId.startsWith(SSH_PREFIX) ? sshHosts.get(hostId.slice(SSH_PREFIX.length)) : undefined;
+    return host ? { executable: sshExecutable(), host } : undefined;
+  };
+  ipcMain.handle(IpcChannels.listSshHosts, () => sshHosts.list());
+  ipcMain.handle(IpcChannels.saveSshHost, (_event, host: SshHostConfig, previousName: string | undefined) => {
+    sshHosts.save(host, previousName);
+    // 고친 호스트는 다음에 쓸 때 새 설정으로 다시 연결한다.
+    if (previousName !== undefined) manager.forget(`${SSH_PREFIX}${previousName}`);
+  });
+  ipcMain.handle(IpcChannels.removeSshHost, (_event, name: string) => {
+    sshHosts.remove(name);
+    manager.forget(`${SSH_PREFIX}${name}`);
+  });
   ipcMain.handle(IpcChannels.connectHost, (_event, hostId: string) => conn(hostId).current);
   ipcMain.handle(IpcChannels.replaceAgent, (_event, hostId: string) => conn(hostId).replaceAgent());
   ipcMain.handle(IpcChannels.locatePi, (_event, hostId: string) =>
@@ -266,9 +283,11 @@ function registerIpc(manager: HostManager): void {
 
 app.whenReady().then(() => {
   const script = agentScriptPath();
+  const sshHosts = new SshHostStore(join(app.getPath("userData"), "ssh-hosts.json"));
   hosts = new HostManager({
     agentScript: script,
     agentVersion: agentVersion(script),
+    sshHosts,
     onState: (hostId, state) => sendToRenderer(IpcChannels.connectionChanged, hostId, state),
     // attach 중인 세션의 이벤트는 attach 결과에도 담는다. 같은 세션을 이미 보고 있는 다른 탭이 놓치지 않도록
     // 알림으로도 항상 보내고, attach하는 쪽은 결과를 먼저 적용한 뒤 순번으로 중복을 거른다 (replay-collector.ts).
@@ -282,7 +301,7 @@ app.whenReady().then(() => {
     onExternalWrite: (hostId, n) => sendToRenderer(IpcChannels.externalWrite, hostId, n),
     onPiUpdateOutput: (hostId, n) => sendToRenderer(IpcChannels.piUpdateOutput, hostId, n),
   });
-  registerIpc(hosts);
+  registerIpc(hosts, sshHosts);
   createWindow();
 
   app.on("activate", () => {

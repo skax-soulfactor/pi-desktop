@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentFileName, nodeMajor, parseDistroList, parseProbe, probeScript, shQuote } from "../../src/main/wsl";
+import { agentFileName, nodeMajor, parseProbe, probeScript, shQuote } from "../../src/main/remote-agent";
+import { parseDistroList } from "../../src/main/wsl";
 
 describe("parseDistroList", () => {
   it("wsl.exe의 UTF-16LE 출력(BOM, CRLF 포함)에서 배포판 이름을 뽑는다", () => {

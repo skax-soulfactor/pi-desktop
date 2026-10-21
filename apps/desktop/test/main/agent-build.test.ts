@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { agentBuildId, checkAgent } from "../../src/main/agent-build";
-import { agentFileName } from "../../src/main/wsl";
+import { agentFileName } from "../../src/main/remote-agent";
 
 describe("agentBuildId", () => {
   it("번들 SHA-256의 앞 12자리이고, WSL에 올리는 파일 이름에도 같은 값이 들어간다", () => {
