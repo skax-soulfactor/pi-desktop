@@ -43,12 +43,15 @@ export function PiManager({
   initialHostId,
   onClose,
   onChanged,
+  onOAuthLogin,
 }: {
   hosts: HostDescriptor[];
   initialHostId: string;
   onClose: () => void;
   /** 업데이트 등으로 상태가 바뀌었을 수 있다 (상단 바 표시를 다시 읽게) */
   onChanged?: () => void;
+  /** 이 호스트의 pi를 내장 터미널에 열고 /login을 실행한다 */
+  onOAuthLogin?: (hostId: string, provider: string) => void;
 }) {
   const [hostId, setHostId] = useState(initialHostId);
   const { status, latest, error, reload } = usePiStatus(hostId, true);
@@ -105,7 +108,13 @@ export function PiManager({
             닫기
           </button>
         </header>
-        {tab === "providers" && <ProvidersPanel hostId={hostId} onChanged={() => void reload()} />}
+        {tab === "providers" && (
+          <ProvidersPanel
+            hostId={hostId}
+            onChanged={() => void reload()}
+            {...(onOAuthLogin ? { onOAuthLogin: (provider: string) => onOAuthLogin(hostId, provider) } : {})}
+          />
+        )}
         {tab === "models" && <ModelsPanel hostId={hostId} onChanged={() => void reload()} />}
         {tab === "status" && error && <div className="banner error">{error}</div>}
         {tab === "status" && !status && !error && <p className="muted">상태를 읽는 중…</p>}

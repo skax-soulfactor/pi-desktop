@@ -4,6 +4,8 @@ import type { PendingQueue } from "./chat-state";
 import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
 import { PiManager, usePiStatus } from "./PiManager";
+import { TerminalDock, type DockTerminal } from "./TerminalDock";
+import type { TerminalSpec } from "./TerminalView";
 import { updateState } from "./pi-manager-view";
 import { CommandPalette } from "./CommandPalette";
 import type { PaletteCommand } from "./palette";
@@ -87,6 +89,21 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [treeOpen, setTreeOpen] = useState(false);
   const [piManagerOpen, setPiManagerOpen] = useState(false);
+  /** 아래 도크의 내장 터미널들 (설계 §4.12) */
+  const [dockTerminals, setDockTerminals] = useState<DockTerminal[]>([]);
+  const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
+  const openTerminal = (spec: TerminalSpec, title: string) => {
+    const key = crypto.randomUUID();
+    setDockTerminals((prev) => [...prev, { key, spec, title }]);
+    setActiveTerminal(key);
+  };
+  const closeTerminal = (key: string) => {
+    setDockTerminals((prev) => {
+      const next = prev.filter((t) => t.key !== key);
+      setActiveTerminal((current) => (current === key ? next.at(-1)?.key : current));
+      return next;
+    });
+  };
   /** 명령 팔레트가 열려 있으면 그때 읽은 최근 기록 */
   const [palette, setPalette] = useState<{ history: StoredSession[] } | undefined>();
   const root = useRef<HTMLDivElement>(null);
@@ -305,6 +322,24 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         run: () => void guard(() => openStored(h)),
       });
     }
+    list.push(
+      {
+        id: "terminal-pi",
+        group: "터미널",
+        title: "터미널: pi 열기 (이 폴더)",
+        keywords: "terminal tui pi 터미널",
+        disabled: !connected,
+        run: () => openTerminal({ hostId, kind: "pi", ...(session ? { cwd: session.cwd } : {}) }, "pi"),
+      },
+      {
+        id: "terminal-shell",
+        group: "터미널",
+        title: "터미널: 셸 열기",
+        keywords: "terminal shell powershell bash 터미널",
+        disabled: !connected,
+        run: () => openTerminal({ hostId, kind: "shell", ...(session ? { cwd: session.cwd } : {}) }, "셸"),
+      },
+    );
     list.push({
       id: "pi-manager",
       group: "Pi",
@@ -679,6 +714,13 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       />
       <Widgets ui={ui} placement="belowEditor" />
       <StatusLine ui={ui} />
+      <TerminalDock
+        terminals={dockTerminals}
+        active={activeTerminal}
+        onActivate={setActiveTerminal}
+        onClose={closeTerminal}
+        onUpdate={(key, fields) => setDockTerminals((prev) => prev.map((t) => (t.key === key ? { ...t, ...fields } : t)))}
+      />
         </div>
         {session && treeOpen && (
           <TreePanel
@@ -729,6 +771,10 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           initialHostId={hostId}
           onClose={() => setPiManagerOpen(false)}
           onChanged={() => void piState.reload(true)}
+          onOAuthLogin={(targetHost, provider) => {
+            setPiManagerOpen(false);
+            openTerminal({ hostId: targetHost, kind: "pi", initialInput: `/login ${provider}\r` }, `pi 로그인 (${provider})`);
+          }}
         />
       )}
       {active && palette && (

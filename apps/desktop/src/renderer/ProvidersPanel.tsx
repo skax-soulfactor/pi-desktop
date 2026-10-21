@@ -6,7 +6,16 @@ import { checkLabel, keyProblem, STORED_LABELS, visibleProviders } from "./provi
  * Pi 관리 창의 프로바이더 탭 (설계 §4.7). 인증 상태 확인, API 키 등록·삭제.
  * 키는 입력받아 데몬으로 보내기만 하고, 저장된 키를 다시 받아 보여주지 않는다.
  */
-export function ProvidersPanel({ hostId, onChanged }: { hostId: string; onChanged: () => void }) {
+export function ProvidersPanel({
+  hostId,
+  onChanged,
+  onOAuthLogin,
+}: {
+  hostId: string;
+  onChanged: () => void;
+  /** 내장 터미널에서 pi를 열고 /login <provider>를 실행한다 */
+  onOAuthLogin?: (provider: string) => void;
+}) {
   const [providers, setProviders] = useState<ProviderInfo[] | undefined>();
   const [checks, setChecks] = useState<Record<string, AuthCheckResult | "checking">>({});
   const [query, setQuery] = useState("");
@@ -125,6 +134,17 @@ export function ProvidersPanel({ hostId, onChanged }: { hostId: string; onChange
                     {p.stored === "api_key" ? "키 바꾸기" : "API 키 입력"}
                   </button>
                 )}
+                {p.oauth && onOAuthLogin && (
+                  <button
+                    type="button"
+                    className="small"
+                    disabled={busy}
+                    onClick={() => onOAuthLogin(p.id)}
+                    title="내장 터미널에서 pi를 열고 /login을 실행합니다. 끝나면 이 창을 다시 열어 확인하세요"
+                  >
+                    OAuth 로그인
+                  </button>
+                )}
                 {p.stored && (
                   <button type="button" className="small danger" disabled={busy} onClick={() => setRemoving(p.id)}>
                     삭제
@@ -132,7 +152,7 @@ export function ProvidersPanel({ hostId, onChanged }: { hostId: string; onChange
                 )}
               </div>
               {!p.apiKey && p.oauth && !p.stored && (
-                <div className="provider-note">OAuth 로그인만 됩니다. 터미널에서 pi를 열고 /login {p.id}를 실행하세요.</div>
+                <div className="provider-note">OAuth 로그인만 됩니다. "OAuth 로그인"을 누르면 내장 터미널에서 진행합니다.</div>
               )}
               {editing === p.id && (
                 <form
