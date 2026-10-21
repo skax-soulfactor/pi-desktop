@@ -4,6 +4,7 @@ import { errorText } from "./folder-browser";
 import { formatRelative } from "./format";
 import { formatCount, installArgs, kindLabel, npmNameOfSource, type PackageScope } from "./market-view";
 import { Markdown } from "./markdown/Markdown";
+import { GithubImport } from "./GithubImport";
 
 interface Props {
   hostId: string;
@@ -29,6 +30,8 @@ export function MarketplacePanel({ hostId, hostLabel, cwd, onRunPi, onClose }: P
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [detail, setDetail] = useState<MarketDetail | undefined>();
+  /** npm 패키지 / GitHub 저장소의 개별 스킬·프롬프트 */
+  const [source, setSource] = useState<"npm" | "github">("npm");
   const [installed, setInstalled] = useState<Map<string, string>>(new Map());
 
   async function search(text: string, from = 0) {
@@ -100,8 +103,20 @@ export function MarketplacePanel({ hostId, hostLabel, cwd, onRunPi, onClose }: P
             닫기
           </button>
         </header>
+        {!detail && (
+          <div className="segmented market-tabs">
+            <button type="button" className={source === "npm" ? "on" : ""} onClick={() => setSource("npm")}>
+              npm 패키지
+            </button>
+            <button type="button" className={source === "github" ? "on" : ""} onClick={() => setSource("github")}>
+              GitHub 스킬·프롬프트
+            </button>
+          </div>
+        )}
         {error && <div className="banner error">{error}</div>}
-        {detail ? (
+        {source === "github" && !detail ? (
+          <GithubImport hostId={hostId} {...(cwd ? { cwd } : {})} />
+        ) : detail ? (
           <PackageDetail
             detail={detail}
             installedScope={installed.get(detail.name)}

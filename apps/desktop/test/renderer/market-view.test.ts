@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { formatCount, installArgs, isPinned, npmNameOfSource, removeArgs, updateArgs } from "../../src/renderer/market-view";
+import {
+  formatCount,
+  importName,
+  installArgs,
+  isPinned,
+  npmNameOfSource,
+  removeArgs,
+  scriptFiles,
+  splitFrontmatter,
+  updateArgs,
+} from "../../src/renderer/market-view";
 
 describe("installArgs", () => {
   it("버전이 없으면 최신을 따라가고, 있으면 고정하며, 프로젝트면 -l", () => {
@@ -39,5 +49,27 @@ describe("formatCount", () => {
     expect(formatCount(1565803)).toBe("1.6M");
     expect(formatCount(12345)).toBe("12K");
     expect(formatCount(42)).toBe("42");
+  });
+});
+
+describe("importName·scriptFiles", () => {
+  it("이름을 Pi 규칙에 맞게 다듬는다", () => {
+    expect(importName("Brave_Search")).toBe("brave-search");
+    expect(importName("--a  b--")).toBe("a-b");
+    expect(importName("x".repeat(70))).toHaveLength(64);
+  });
+
+  it("실행 스크립트만 고른다", () => {
+    expect(scriptFiles([{ path: "SKILL.md" }, { path: "scripts/fill.py" }, { path: "run.sh" }, { path: "ref/a.txt" }])).toEqual([
+      "scripts/fill.py",
+      "run.sh",
+    ]);
+  });
+});
+
+describe("splitFrontmatter", () => {
+  it("앞머리를 떼어 내고, 없으면 그대로", () => {
+    expect(splitFrontmatter("---\nname: pdf\ndescription: x\n---\n# 본문\n")).toEqual({ meta: "name: pdf\ndescription: x", body: "# 본문\n" });
+    expect(splitFrontmatter("# 본문")).toEqual({ body: "# 본문" });
   });
 });

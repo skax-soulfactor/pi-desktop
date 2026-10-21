@@ -11,6 +11,7 @@ import {
   type ModelsProbeResult,
   type FsListDirResult,
   type ResourcesView,
+  type ResourceImportResult,
   type ProjectTrustInfo,
   type ResourceFile,
   type ResourceKind,
@@ -34,7 +35,16 @@ import {
   type StoredReadResult,
   type StoredSession,
 } from "@pi-desktop/host-protocol";
-import { IpcChannels, type AttachResult, type OpenSessionRequest, type SshHostConfig, type TerminalOpenRequest } from "../shared/api";
+import {
+  IpcChannels,
+  type AttachResult,
+  type GithubImportRequest,
+  type GithubRepoRef,
+  type ImportRecord,
+  type OpenSessionRequest,
+  type SshHostConfig,
+  type TerminalOpenRequest,
+} from "../shared/api";
 import { TerminalService } from "./terminal";
 import { terminalCommand } from "./terminal-command";
 import { devSessionOverrides } from "./dev-overrides";
@@ -42,6 +52,8 @@ import { HostManager, LOCAL_HOST_ID, WSL_PREFIX } from "./host-manager";
 import { SSH_PREFIX, sshExecutable } from "./ssh";
 import { SshHostStore } from "./ssh-hosts";
 import { packageDetail, searchPackages } from "./marketplace";
+import { browseRepo, downloadFiles, fetchText } from "./github-catalog";
+import { ImportStore } from "./imports";
 import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
 
@@ -110,7 +122,7 @@ function createWindow(): void {
 
 const terminals = new TerminalService({ data: IpcChannels.terminalData, exit: IpcChannels.terminalExit });
 
-function registerIpc(manager: HostManager, sshHosts: SshHostStore): void {
+function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: ImportStore): void {
   const conn = (hostId: string) => manager.get(hostId);
 
   // 내장 터미널: pi는 데몬이 찾은 Pi와 그 실행 node로 띄운다.
@@ -289,6 +301,34 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore): void {
   );
   ipcMain.handle(IpcChannels.marketSearch, (_event, query: string, from: number) => searchPackages(String(query ?? ""), Number(from) || 0));
   ipcMain.handle(IpcChannels.marketDetail, (_event, name: string) => packageDetail(String(name)));
+  ipcMain.handle(IpcChannels.githubBrowse, (_event, spec: string) => browseRepo(String(spec)));
+  ipcMain.handle(IpcChannels.githubText, (_event, repo: GithubRepoRef & { sha: string }, path: string) => fetchText(repo, String(path)));
+  ipcMain.handle(IpcChannels.listImports, (_event, hostId: string) => imports.list(hostId));
+  // 이 PC가 GitHub에서 받아 그 호스트의 데몬에 쓰게 하고, 쓴 뒤에 출처를 기록한다.
+  ipcMain.handle(IpcChannels.githubImport, async (_event, request: GithubImportRequest): Promise<ImportRecord> => {
+    const { item, repo } = request;
+    const files =
+      item.kind === "skill"
+        ? await downloadFiles(repo, item.dir, item.files)
+        : await downloadFiles(repo, ".", [{ path: item.path, sha: item.sha, size: item.size }]);
+    const written = await conn(request.hostId).request<ResourceImportResult>(
+      Methods.resourcesImport,
+      { cwd: request.cwd, kind: item.kind, scope: request.scope, name: request.name, files },
+      120_000,
+    );
+    const record: ImportRecord = {
+      hostId: request.hostId,
+      kind: item.kind,
+      name: request.name,
+      scope: request.scope,
+      target: written.target,
+      source: { owner: repo.owner, repo: repo.repo, sha: repo.sha, path: item.kind === "skill" ? item.dir : item.path },
+      files: Object.fromEntries(item.kind === "skill" ? item.files.map((f) => [f.path, f.sha]) : [[item.path, item.sha]]),
+      importedAt: Date.now(),
+    };
+    imports.add(record);
+    return record;
+  });
   ipcMain.handle(IpcChannels.getTrust, (_event, hostId: string, cwd: string) =>
     conn(hostId).request<ProjectTrustInfo>(Methods.trustGet, { cwd }),
   );
@@ -337,7 +377,7 @@ app.whenReady().then(() => {
     onWriterChanged: (hostId, n) => sendToRenderer(IpcChannels.writerChanged, hostId, n),
     onPiUpdateOutput: (hostId, n) => sendToRenderer(IpcChannels.piUpdateOutput, hostId, n),
   });
-  registerIpc(hosts, sshHosts);
+  registerIpc(hosts, sshHosts, new ImportStore(join(app.getPath("userData"), "imports.json")));
   createWindow();
 
   app.on("activate", () => {

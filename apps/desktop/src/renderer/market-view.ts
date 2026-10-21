@@ -54,3 +54,27 @@ const KIND_LABELS: Record<string, string> = { extensions: "확장", skills: "스
 export function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? kind;
 }
+
+/** 가져올 때 쓸 기본 이름: Pi 이름 규칙(소문자·숫자·하이픈, 64자)에 맞게 다듬는다 */
+export function importName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64)
+    .replace(/-+$/, "");
+}
+
+const SCRIPT_EXT = /\.(sh|bash|zsh|py|js|mjs|cjs|ts|ps1|bat|cmd|rb|pl)$/i;
+
+/** 스킬에 든 실행 스크립트. 스킬은 모델이 이것들을 실행하도록 지시할 수 있어 가져오기 전에 알린다 */
+export function scriptFiles(files: ReadonlyArray<{ path: string }>): string[] {
+  return files.map((f) => f.path).filter((p) => SCRIPT_EXT.test(p));
+}
+
+/** 마크다운 앞머리(--- YAML ---)를 떼어 따로 보이게 한다. 없으면 meta는 undefined */
+export function splitFrontmatter(text: string): { meta?: string; body: string } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+  return match ? { meta: match[1]!, body: text.slice(match[0].length) } : { body: text };
+}
