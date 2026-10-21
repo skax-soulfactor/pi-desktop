@@ -18,8 +18,22 @@ export class ImportStore {
     return this.records.filter((r) => hostId === undefined || r.hostId === hostId).map((r) => ({ ...r }));
   }
 
+  get(hostId: string, target: string): ImportRecord | undefined {
+    const record = this.records.find((r) => r.hostId === hostId && r.target === target);
+    return record ? { ...record } : undefined;
+  }
+
   add(record: ImportRecord): void {
     this.records = [...this.records.filter((r) => !(r.hostId === record.hostId && r.target === record.target)), record];
+    this.write();
+  }
+
+  remove(hostId: string, target: string): void {
+    this.records = this.records.filter((r) => !(r.hostId === hostId && r.target === target));
+    this.write();
+  }
+
+  private write(): void {
     mkdirSync(dirname(this.file), { recursive: true });
     const tmp = `${this.file}.tmp`;
     writeFileSync(tmp, `${JSON.stringify({ imports: this.records }, null, 2)}\n`);
