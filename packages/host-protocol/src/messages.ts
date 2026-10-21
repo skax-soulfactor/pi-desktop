@@ -37,6 +37,10 @@ export const Methods = {
   /** 사용자 정의 프로바이더 저장 (폼 밖의 필드는 남긴다) */
   modelsSaveProvider: "models.saveProvider",
   modelsRemoveProvider: "models.removeProvider",
+  /** 다른 호스트로 옮길 프로바이더 (비밀일 수 있는 값은 뺀다) */
+  modelsExportProvider: "models.exportProvider",
+  /** 다른 호스트에서 받은 프로바이더를 쓴다 */
+  modelsImportProvider: "models.importProvider",
   /** OpenAI 호환 엔드포인트의 /models를 이 호스트에서 불러 연결 시험 */
   modelsProbe: "models.probe",
   sessionOpen: "session.open",
@@ -288,6 +292,20 @@ export interface ModelsFileView {
   providers: CustomProviderView[];
   /** 파일이 깨져 읽지 못했으면 이유 (이때는 저장하지 않는다) */
   error?: string;
+}
+
+/** 다른 호스트로 옮길 models.json 프로바이더 (그대로 키 값인 apiKey·헤더는 뺀 것) */
+export interface ModelsExportResult {
+  provider: Record<string, unknown>;
+  /** 비밀일 수 있어 뺀 필드 (apiKey, headers.<이름>) */
+  dropped: string[];
+}
+
+export interface ModelsImportParams {
+  id: string;
+  provider: Record<string, unknown>;
+  /** 이미 있으면 바꾼다. 받은 쪽에 없는 apiKey·헤더는 대상의 것을 남긴다 */
+  replace?: boolean;
 }
 
 export interface ModelsSaveParams {

@@ -52,3 +52,21 @@ export function joinHostPath(dir: string, name: string, platform: string | undef
   const sep = platform === "win32" ? "\\" : "/";
   return dir.endsWith("/") || dir.endsWith("\\") ? `${dir}${name}` : `${dir}${sep}${name}`;
 }
+
+/** 대상 호스트 기준으로 해석되는 로컬 주소인지 (localhost·127.x·0.0.0.0·[::1]) */
+export function isLocalEndpoint(baseUrl: string | undefined): boolean {
+  if (!baseUrl) return false;
+  try {
+    const host = new URL(baseUrl).hostname.replace(/^\[|\]$/g, "");
+    return host === "localhost" || host === "0.0.0.0" || host === "::1" || /^127\./.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/** 복사할 때 뺀 비밀 필드를 사람이 읽을 문구로 */
+export function droppedText(dropped: readonly string[]): string | undefined {
+  if (dropped.length === 0) return undefined;
+  const names = dropped.map((d) => (d === "apiKey" ? "API 키" : d.startsWith("headers.") ? `헤더 ${d.slice(8)}` : d));
+  return `비밀일 수 있어 옮기지 않습니다: ${names.join(", ")}. 대상 호스트에서 다시 넣으세요 (Pi 관리 → 모델 또는 프로바이더).`;
+}

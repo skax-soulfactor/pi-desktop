@@ -14,6 +14,7 @@ import {
   type ResourceImportResult,
   type ImportedInspectResult,
   type ResourceExportResult,
+  type ModelsExportResult,
   type ResourceImportParams,
   type ProjectTrustInfo,
   type ResourceFile,
@@ -309,6 +310,15 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   ipcMain.handle(IpcChannels.marketDetail, (_event, name: string) => packageDetail(String(name)));
   ipcMain.handle(IpcChannels.githubBrowse, (_event, spec: string) => browseRepo(String(spec)));
   ipcMain.handle(IpcChannels.githubText, (_event, repo: GithubRepoRef & { sha: string }, path: string) => fetchText(repo, String(path)));
+  ipcMain.handle(IpcChannels.modelsExport, (_event, hostId: string, id: string) =>
+    conn(hostId).request<ModelsExportResult>(Methods.modelsExportProvider, { id }),
+  );
+  ipcMain.handle(
+    IpcChannels.modelsImport,
+    async (_event, hostId: string, id: string, provider: Record<string, unknown>, replace: boolean) => {
+      await conn(hostId).request(Methods.modelsImportProvider, { id, provider, ...(replace ? { replace: true } : {}) });
+    },
+  );
   ipcMain.handle(IpcChannels.exportResource, (_event, hostId: string, kind: "skill" | "prompt", path: string) =>
     conn(hostId).request<ResourceExportResult>(Methods.resourcesExport, { kind, path }, 120_000),
   );

@@ -120,7 +120,7 @@ export function PiManager({
             {...(onOAuthLogin ? { onOAuthLogin: (provider: string) => onOAuthLogin(hostId, provider) } : {})}
           />
         )}
-        {tab === "models" && <ModelsPanel hostId={hostId} onChanged={() => void reload()} />}
+        {tab === "models" && <ModelsPanel hostId={hostId} hosts={hosts} onChanged={() => void reload()} />}
         {tab === "status" && error && <div className="banner error">{error}</div>}
         {tab === "status" && !status && !error && <p className="muted">상태를 읽는 중…</p>}
         {tab === "status" && status && (
