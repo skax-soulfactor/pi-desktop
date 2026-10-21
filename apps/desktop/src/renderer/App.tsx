@@ -10,6 +10,7 @@ import {
   type TabsState,
 } from "./tabs-state";
 import { tabShowing, type ActivityEntry } from "./activity-view";
+import type { PaletteCommand } from "./palette";
 import { ActivityButton, useActivity } from "./ActivityPanel";
 import { forgetTab, MAIN_TAB, setTabHost, setTabSession } from "./use-session";
 import { Workspace, type WorkspaceStatus } from "./Workspace";
@@ -94,6 +95,34 @@ export function App() {
     [activate],
   );
 
+  // 명령 팔레트의 탭 명령
+  const appCommands = useMemo((): PaletteCommand[] => {
+    const list: PaletteCommand[] = [
+      { id: "tab-new", group: "탭", title: "새 탭", hint: "Ctrl+T", keywords: "new tab", run: newTab },
+      {
+        id: "tab-close",
+        group: "탭",
+        title: "탭 닫기",
+        hint: "Ctrl+W",
+        keywords: "close tab",
+        disabled: tabs.ids.length <= 1,
+        run: () => close(tabs.active),
+      },
+    ];
+    tabs.ids.forEach((id, index) => {
+      if (id === tabs.active) return;
+      const status = statuses[id];
+      list.push({
+        id: `tab-${id}`,
+        group: "탭",
+        title: `탭으로: ${status?.title ?? "새 탭"}`,
+        hint: index < 9 ? `Ctrl+${index + 1}` : (status?.hostLabel ?? ""),
+        run: () => activate(id),
+      });
+    });
+    return list;
+  }, [tabs, statuses, newTab, close, activate]);
+
   // 단축키: Ctrl+T 새 탭, Ctrl+W 탭 닫기, Ctrl+Tab·Ctrl+Shift+Tab 탭 이동, Ctrl+1~9 탭 고르기
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -165,7 +194,7 @@ export function App() {
       </nav>
       <div className="workspaces">
         {tabs.ids.map((id) => (
-          <Workspace key={id} tabId={id} active={id === tabs.active} onStatus={onStatus} />
+          <Workspace key={id} tabId={id} active={id === tabs.active} onStatus={onStatus} appCommands={appCommands} />
         ))}
       </div>
     </div>
