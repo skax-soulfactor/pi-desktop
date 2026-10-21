@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.31)
+# Pi Desktop — 설계 문서 (v0.32)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -282,7 +282,7 @@ v0.1과 같다. 목록마다 출처 배지(user / project / package 이름)를 �
   - Ctrl+S로 저장한다. 거부되면 "다시 열기"로 바뀐 내용을 본다.
   - 저장하지 않고 나가려 하면 확인을 받는다.
   - 탭 위의 "새 …" 칸으로 만든다.
-- 반영 시점: Pi RPC에는 다시 불러오기 명령이 없고, 확장 명령의 `ctx.reload()`로만 할 수 있다. 그래서 지금은 "새로 여는 세션부터 반영"이라고 안내한다. 실행 중인 세션에 바로 반영하는 것은 §5.3의 bridge 확장으로 다음 단계에서 한다.
+- 반영 시점: Pi RPC에는 다시 불러오기 명령이 없고, 확장 명령의 `ctx.reload()`로만 할 수 있다. 처음에는 "새로 여는 세션부터 반영"이라고만 안내했다. v0.32부터는 저장한 뒤 "지금 세션에 반영"으로 §5.3 bridge 확장의 `/desktop:reload`를 보낸다.
 
 ### 4.6 Marketplace (신규) — 커뮤니티 리소스 검색·설치·제거
 
@@ -420,6 +420,16 @@ RPC 프로세스를 띄울 때 `-e <bridge>`로 주입한다. 사용자 settings
 - `/desktop:reload` → `ctx.reload()`: 리소스를 편집한 뒤 프로세스 재시작 없이 반영
 - `/desktop:resources` → 현재 로드된 확장·스킬·프롬프트·툴 목록을 JSON으로 반환
 - `/desktop:lease` → 세션 소유권 하트비트(§5.4)
+
+**구현 메모 (M4, v0.32)**: `/desktop:reload`만 만들었다.
+- 확장 파일: 데몬이 다른 모듈을 import하지 않는 TypeScript 한 파일을 앱 홈의 `bridge/pi-desktop-bridge-<해시>.ts`에 한 번 쓴다. 세션을 열 때 `-e`로 넣으며, 그 호스트의 Pi가 jiti로 불러온다. `PI_DESKTOP_NO_BRIDGE=1`이면 넣지 않는다.
+- 명령 동작: 작업 중이면 알림만 하고 반영하지 않는다. 아니면 `ctx.reload()`를 부른다. reload 뒤에는 예전 런타임의 ctx를 쓰면 안 되므로 바로 끝낸다.
+- RPC에서 `{type:"prompt", message:"/desktop:reload"}`를 보내면 확장 명령으로 처리된다(`disposition: "handled"`). LLM은 부르지 않고 대화에도 남지 않는다. 실제 Pi 계약 테스트로 확인한다.
+- 앱의 안전장치: 보내기 전에 `get_commands`에 `desktop:reload`가 있는지 확인한다. 앱 업데이트 전에 연 세션에는 bridge가 없어서, 그대로 보내면 LLM에 질문으로 가기 때문이다.
+- 확인하다 알게 된 것: **RPC 모드는 프로젝트 신뢰를 묻지 못한다**(security.md "Project trust without an interactive prompt").
+  - 저장된 신뢰(`~/.pi/agent/trust.json`)도 `--approve`도 없으면 프로젝트 `.pi/`의 프롬프트·스킬·확장·설정을 건너뛴다. 기본값 `defaultProjectTrust: "ask"`일 때다. AGENTS.md는 신뢰와 상관없이 불러온다.
+  - 그래서 앱에서 처음 연 프로젝트는 `.pi/` 리소스가 빠진다. 리소스 창은 신뢰 여부를 따지지 않고 보여 주므로, 실제와 다르게 보일 수 있다.
+  - 명령줄 확장은 `project_trust` 이벤트를 받을 수 있다. 다음 단계에서 bridge가 이 이벤트를 받아 앱 대화상자로 신뢰 여부를 묻고, 리소스 창에 신뢰 상태를 보여 준다.
 
 ### 5.4 TUI와 병행 사용 (신규)
 
