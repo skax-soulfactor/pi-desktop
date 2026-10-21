@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.21)
+# Pi Desktop — 설계 문서 (v0.22)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -283,7 +283,12 @@ v0.1과 같다. 목록마다 출처 배지(user / project / package 이름)를 �
 - 상태는 `pi auth check --json`으로 확인한다. 저장된 것만 자동으로 확인하고, 나머지는 버튼으로 확인한다.
 - API 키는 데몬이 auth.json에 원자적으로 쓴다(POSIX 600). 같은 항목의 `env`는 남긴다.
 - 목록에는 자격 증명의 종류만 담고 키 값은 돌려주지 않는다.
-- OAuth 로그인(내장 터미널)과 models.json 폼은 후속 작업이다.
+- models.json 폼(v0.22)
+  - 사용자 정의 프로바이더의 name·baseUrl·api·apiKey와 모델의 id·name·reasoning·이미지 입력·contextWindow·maxTokens만 다룬다. 나머지(compat, headers, modelOverrides, cost 등)는 그대로 둔다.
+  - apiKey가 그대로 키 값이면 가리고, 바꾸지 않으면 유지한다.
+  - 쓰기 전에 `models.json.bak`으로 백업하고, 깨진 파일은 덮어쓰지 않는다.
+  - "연결 테스트"는 데몬이 그 호스트에서 `{baseUrl}/models`를 불러 모델 ID를 가져온다(WSL의 localhost가 맞게).
+- OAuth 로그인(내장 터미널)은 후속 작업이다.
 
 ### 4.8 Settings
 v0.1과 같다. 스키마 기반 폼, User/Project 탭, diff 미리보기 후 저장, 원본 JSON 편집 모드.
