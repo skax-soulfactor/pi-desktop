@@ -68,6 +68,12 @@ export const Methods = {
   resourcesCreate: "resources.create",
   /** 받은 스킬 폴더·프롬프트 파일을 사용자·프로젝트 범위에 쓴다 (개별 가져오기) */
   resourcesImport: "resources.import",
+  /** 가져온 스킬 폴더·프롬프트 파일의 git blob SHA (로컬 수정 감지) */
+  resourcesInspectImported: "resources.inspectImported",
+  /** 가져온 스킬·프롬프트 안의 텍스트 파일 하나 (차이 보기) */
+  resourcesReadImported: "resources.readImported",
+  /** 가져온 스킬·프롬프트를 백업 폴더로 옮겨 없앤다 */
+  resourcesRemoveImported: "resources.removeImported",
   /** 한 폴더의 하위 폴더 목록 (폴더 탐색 창) */
   fsListDir: "fs.listDir",
   daemonStatus: "daemon.status",
@@ -573,12 +579,28 @@ export interface ResourceImportParams {
   name: string;
   /** 스킬 폴더 기준 상대 경로와 내용. 프롬프트는 파일 하나 */
   files: Array<{ path: string; contentBase64: string }>;
+  /** 이미 있으면 백업한 뒤 바꾼다 (가져온 항목 업데이트). 없으면 이미 있을 때 거부한다 */
+  replace?: boolean;
 }
 
 export interface ResourceImportResult {
   /** 쓴 곳: 스킬 폴더 또는 프롬프트 파일 */
   target: string;
   files: number;
+  /** replace로 바꾸었으면 이전 내용을 옮겨 둔 곳 */
+  backup?: string;
+}
+
+/** 가져온 항목 (스킬 폴더 또는 프롬프트 파일) */
+export interface ImportedTargetParams {
+  target: string;
+  kind: "skill" | "prompt";
+}
+
+export interface ImportedInspectResult {
+  exists: boolean;
+  /** 스킬 폴더 기준 경로(프롬프트는 파일 이름) → git blob SHA */
+  files: Record<string, string>;
 }
 
 export interface ResourceCreateParams {
