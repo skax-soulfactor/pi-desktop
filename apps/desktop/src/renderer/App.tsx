@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addTab,
   attentionFor,
@@ -9,7 +9,9 @@ import {
   type Attention,
   type TabsState,
 } from "./tabs-state";
-import { forgetTab, MAIN_TAB, setTabHost } from "./use-session";
+import { tabShowing, type ActivityEntry } from "./activity-view";
+import { ActivityButton, useActivity } from "./ActivityPanel";
+import { forgetTab, MAIN_TAB, setTabHost, setTabSession } from "./use-session";
 import { Workspace, type WorkspaceStatus } from "./Workspace";
 
 /**
@@ -65,6 +67,32 @@ export function App() {
       return rest;
     });
   }, []);
+
+  // 활동 패널: 탭들이 연결해 쓰는 호스트의 세션을 모은다.
+  const activityHosts = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const status of Object.values(statuses)) {
+      if (status && !status.disconnected) map.set(status.hostId, status.hostLabel);
+    }
+    return [...map].map(([hostId, hostLabel]) => ({ hostId, hostLabel }));
+  }, [statuses]);
+  const activity = useActivity(activityHosts);
+
+  /** 활동 패널에서 고른 세션: 보는 탭이 있으면 그 탭으로, 없으면 그 호스트·세션으로 새 탭을 연다 */
+  const openActivity = useCallback(
+    (entry: ActivityEntry) => {
+      const shown = tabShowing(statusesRef.current, entry.hostId, entry.session.sessionId);
+      if (shown) {
+        activate(shown);
+        return;
+      }
+      const id = `t${Date.now().toString(36)}`;
+      setTabHost(id, entry.hostId);
+      setTabSession(id, entry.hostId, entry.session);
+      setTabs((prev) => addTab(prev, id));
+    },
+    [activate],
+  );
 
   // 단축키: Ctrl+T 새 탭, Ctrl+W 탭 닫기, Ctrl+Tab·Ctrl+Shift+Tab 탭 이동, Ctrl+1~9 탭 고르기
   useEffect(() => {
@@ -132,6 +160,8 @@ export function App() {
         <button type="button" className="tab-new" onClick={newTab} title="새 탭 (Ctrl+T)" aria-label="새 탭">
           +
         </button>
+        <div className="tabbar-spacer" />
+        <ActivityButton entries={activity} onOpen={openActivity} />
       </nav>
       <div className="workspaces">
         {tabs.ids.map((id) => (

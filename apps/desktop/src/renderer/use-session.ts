@@ -102,6 +102,11 @@ export function setTabHost(tabId: string, hostId: string): void {
   writeStorage(hostKey(tabId), hostId);
 }
 
+/** 새 탭이 처음 연결하면 이 세션을 보여주게 정해 둔다 (활동 패널에서 연 세션). */
+export function setTabSession(tabId: string, hostId: string, session: SessionSummary): void {
+  writeStorage(lastSessionKeyOf(tabId, hostId), remember(session));
+}
+
 /** 탭을 닫을 때 그 탭의 저장값을 지운다. */
 export function forgetTab(tabId: string): void {
   if (tabId === MAIN_TAB) return;

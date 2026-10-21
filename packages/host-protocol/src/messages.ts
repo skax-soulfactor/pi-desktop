@@ -124,6 +124,10 @@ export interface SessionSummary {
   exitCode?: number | null;
   /** 답을 기다리는 확장 다이얼로그 수 (세션 목록에서 "입력 필요" 표시용) */
   pendingUi: number;
+  /** Pi가 일하는 중 (agent_start ~ agent_settled). 활동 패널 표시용 */
+  busy: boolean;
+  /** 세션 이름, 없으면 이 프로세스가 받은 첫 질문. 아직 없으면 없음 */
+  title?: string;
   /**
    * 다른 프로그램이 이 세션 파일에 쓴 것을 감지한 시각 (ms). 감지되지 않았으면 없음.
    * 같은 파일에 두 프로그램이 함께 쓰면 기록이 꼬이므로 앱은 입력을 잠그고 선택을 묻는다 (설계 §5.4)

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { DaemonEvents, type PiLocation, type PiResponse, type SessionSummary } from "@pi-desktop/host-protocol";
 import { ExternalWriteDetector, type WatchFn } from "./external-write";
+import { ActivityTracker } from "./activity";
 import { EventJournal, type JournalEntry } from "./journal";
 import { PendingDialogs } from "./pending-dialogs";
 import { PiProcess, type PiExit } from "./pi-process";
@@ -45,6 +46,8 @@ export class AgentSession {
     for (const listener of this.dialogListeners) listener(id);
   });
   private readonly externalWriteListeners = new Set<(path: string, at: number) => void>();
+  /** 활동 패널용: 일하는 중인지, 제목 */
+  private readonly activity = new ActivityTracker();
   /** 다른 프로그램(TUI 등)이 이 세션 파일에 쓰는지 감지 (설계 §5.4) */
   private readonly externalWrite: ExternalWriteDetector;
 
@@ -78,6 +81,7 @@ export class AgentSession {
     this.process.onRecord((record) => {
       this.externalWrite.activity();
       this.dialogs.observe(record);
+      this.activity.observe(record);
       this.record(record);
     });
     this.process.onExit((exit) => {
@@ -99,6 +103,7 @@ export class AgentSession {
       );
     }
     const data = state.data as Record<string, unknown> | undefined;
+    if (state.success === true) this.activity.setName(data?.sessionName);
     if (state.success === true && typeof data?.sessionFile === "string") {
       this.sessionFile = data.sessionFile;
     } else if (state.success !== true) {
@@ -118,8 +123,10 @@ export class AgentSession {
     const response = command.type === "bash" ? await this.sendBash(command) : await this.process.send(command);
     this.externalWrite.activity();
     if (response.success === true && SESSION_SWITCHING_COMMANDS.has(String(command.type))) {
+      this.activity.resetForNewSession();
       await this.refreshSessionFile();
     }
+    if (response.success === true && command.type === "set_session_name") this.activity.setName(command.name);
     return response;
   }
 
@@ -172,7 +179,10 @@ export class AgentSession {
   private async refreshSessionFile(): Promise<void> {
     try {
       const state = await this.process.send({ type: "get_state" });
-      const file = (state.data as { sessionFile?: unknown } | undefined)?.sessionFile;
+      const data = state.data as { sessionFile?: unknown; sessionName?: unknown } | undefined;
+      // 옮겨 간 세션(switch_session 등)에 이미 이름이 있으면 그것을 제목으로 쓴다.
+      this.activity.setName(data?.sessionName);
+      const file = data?.sessionFile;
       if (typeof file === "string") {
         this.sessionFile = file;
         await this.trackSessionFile(file);
@@ -243,7 +253,10 @@ export class AgentSession {
       piVersion: this.options.pi.version,
       startedAt: this.startedAt,
       pendingUi: this.dialogs.size,
+      busy: this.activity.busy && !this.exitInfo,
     };
+    const title = this.activity.title;
+    if (title) summary.title = title;
     if (this.sessionFile) summary.sessionFile = this.sessionFile;
     if (this.exitInfo) summary.exitCode = this.exitInfo.exitCode;
     const externalWriteAt = this.externalWrite.detectedAt;
