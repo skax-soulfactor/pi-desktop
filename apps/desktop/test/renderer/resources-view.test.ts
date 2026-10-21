@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ResourcesView } from "@pi-desktop/host-protocol/messages";
-import { diagnosticsByPath, formatSize, shortPath, sourceLabel, tabCount } from "../../src/renderer/resources-view";
+import { creatableKind, diagnosticsByPath, formatSize, isEditable, shortPath, sourceLabel, tabCount } from "../../src/renderer/resources-view";
 
 const view: ResourcesView = {
   cwd: "/home/me/proj",
@@ -70,5 +70,20 @@ describe("formatSize", () => {
   it("1KB 미만은 바이트, 이상은 KB", () => {
     expect(formatSize(512)).toBe("512 B");
     expect(formatSize(2048)).toBe("2.0 KB");
+  });
+});
+
+describe("creatableKind·isEditable", () => {
+  it("컨텍스트·프롬프트·스킬 탭에서만 만들 수 있다", () => {
+    expect(creatableKind("context")).toBe("agents");
+    expect(creatableKind("prompts")).toBe("prompt");
+    expect(creatableKind("skills")).toBe("skill");
+    expect(creatableKind("extensions")).toBeUndefined();
+  });
+
+  it("패키지에 든 것과 마크다운이 아닌 파일은 고치지 않는다", () => {
+    expect(isEditable({ path: "/a/prompts/x.md" })).toBe(true);
+    expect(isEditable({ path: "/a/prompts/x.md", fromPackage: true })).toBe(false);
+    expect(isEditable({ path: "/a/extensions/x.ts" })).toBe(false);
   });
 });
