@@ -49,10 +49,17 @@ export function visibleDirs(dirs: readonly string[], filter: string, showHidden:
   return dirs.filter((name) => (showHidden || !name.startsWith(".")) && (!q || name.toLowerCase().includes(q)));
 }
 
-/** IPC 오류에서 Electron이 붙이는 접두사("Error invoking remote method '…': JsonRpcError: ")를 떼고 데몬의 문구만 남긴다 */
+/**
+ * IPC 오류에서 Electron이 붙이는 접두사("Error invoking remote method '…': JsonRpcError: ")를 떼고 데몬의 문구만 남긴다.
+ * 데몬이 모르는 메서드면, 세션이 돌고 있어 예전 데몬을 그대로 쓰는 경우라 바꾸는 방법을 덧붙인다 (설계 §3.4).
+ */
 export function errorText(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/^Error invoking remote method '[^']*': /, "").replace(/^(?:JsonRpc)?Error: /, "");
+  const text = message.replace(/^Error invoking remote method '[^']*': /, "").replace(/^(?:JsonRpc)?Error: /, "");
+  return text.startsWith("알 수 없는 메서드")
+    ? `${text}
+떠 있는 Host Agent가 이 앱보다 예전 것입니다. 상단의 "Agent 업데이트 대기"를 눌러 바꾸세요.`
+    : text;
 }
 
 /** 보일 폴더가 없을 때의 안내 */
