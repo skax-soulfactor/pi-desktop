@@ -1695,3 +1695,12 @@ button.toggled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.auto-compact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}

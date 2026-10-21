@@ -459,6 +459,7 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
           onModel={(provider, id) => void guard(() => sessionInfo.setModel(provider, id))}
           onThinking={(level) => void guard(() => sessionInfo.setThinkingLevel(level))}
           onCompact={() => void guard(sessionInfo.compact)}
+          onAutoCompaction={(enabled) => void guard(() => sessionInfo.setAutoCompaction(enabled))}
           treeOpen={treeOpen}
           onToggleTree={() => setTreeOpen((open) => !open)}
         />

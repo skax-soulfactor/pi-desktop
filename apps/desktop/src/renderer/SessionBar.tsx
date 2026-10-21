@@ -19,12 +19,14 @@ interface Props {
   onModel: (provider: string, id: string) => void;
   onThinking: (level: string) => void;
   onCompact: () => void;
+  onAutoCompaction: (enabled: boolean) => void;
   treeOpen: boolean;
   onToggleTree: () => void;
 }
 
 /** 모델·thinking 수준·컨텍스트 사용량·비용·Compact (설계 §4.1 상단 바) */
-export function SessionBar({ info, running, disabled, onModel, onThinking, onCompact, treeOpen, onToggleTree }: Props) {
+export function SessionBar(props: Props) {
+  const { info, running, disabled, onModel, onThinking, onCompact, onAutoCompaction, treeOpen, onToggleTree } = props;
   const usage = info.stats?.contextUsage;
   const percent = usage?.percent ?? null;
   const level = percent === null ? "unknown" : percent >= 85 ? "high" : percent >= 60 ? "mid" : "low";
@@ -103,6 +105,15 @@ export function SessionBar({ info, running, disabled, onModel, onThinking, onCom
       >
         Compact
       </button>
+      <label className="auto-compact" title="컨텍스트가 거의 차면 Pi가 자동으로 대화를 요약합니다">
+        <input
+          type="checkbox"
+          checked={info.autoCompaction ?? false}
+          disabled={disabled || info.autoCompaction === undefined}
+          onChange={(e) => onAutoCompaction(e.target.checked)}
+        />
+        자동
+      </label>
     </section>
   );
 }

@@ -26,6 +26,8 @@ export interface SessionInfo {
   thinkingLevel?: string;
   /** 사용자가 붙인 세션 이름 (get_state.sessionName) */
   sessionName?: string;
+  /** 컨텍스트가 거의 차면 자동으로 요약하는지 (get_state.autoCompactionEnabled) */
+  autoCompaction?: boolean;
   thinkingLevels: string[];
   models: ModelInfo[];
   stats?: SessionStats;
@@ -75,6 +77,7 @@ export function useSessionInfo(hostId: string, session: SessionSummary | undefin
         if (typeof state?.thinkingLevel === "string") next.thinkingLevel = state.thinkingLevel;
         if (typeof state?.sessionName === "string" && state.sessionName) next.sessionName = state.sessionName;
         else delete next.sessionName;
+        if (typeof state?.autoCompactionEnabled === "boolean") next.autoCompaction = state.autoCompactionEnabled;
         if (stats) next.stats = stats as SessionStats;
         return next;
       });
@@ -123,6 +126,14 @@ export function useSessionInfo(hostId: string, session: SessionSummary | undefin
     await refresh();
   }, [command, refresh]);
 
+  const setAutoCompaction = useCallback(
+    async (enabled: boolean) => {
+      await command({ type: "set_auto_compaction", enabled });
+      await refresh();
+    },
+    [command, refresh],
+  );
+
   /** 세션 이름을 바꾼다. Pi가 세션 파일에 session_info로 남겨 기록과 TUI /resume에도 보인다 */
   const rename = useCallback(
     async (name: string) => {
@@ -165,5 +176,5 @@ export function useSessionInfo(hostId: string, session: SessionSummary | undefin
     };
   }, [refresh]);
 
-  return { info, refresh, loadModels, setModel, setThinkingLevel, compact, rename, exportHtml };
+  return { info, refresh, loadModels, setModel, setThinkingLevel, compact, setAutoCompaction, rename, exportHtml };
 }
