@@ -20,6 +20,7 @@ import {
   type PiLatestParams,
   type PiLocateParams,
   type PiStatus,
+  type PiVersions,
   type AuthCheckResult,
   type AuthProviderParams,
   type AuthSetApiKeyParams,
@@ -49,7 +50,7 @@ import {
 } from "@pi-desktop/host-protocol";
 import { runDir, socketPath } from "./paths";
 import { locatePi } from "./pi-locator";
-import { latestPiVersion, piStatus } from "./pi-status";
+import { latestPiVersion, piStatus, piVersions } from "./pi-status";
 import { agentDirOf, checkAuth, isProviderId, listProviders, removeCredential, setApiKey } from "./auth-store";
 import { probeEndpoint, readModelsFile, removeProvider, saveProvider, storedApiKey } from "./models-store";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
@@ -209,6 +210,8 @@ export class AgentDaemon {
     peer.handle(Methods.piLatest, (params): Promise<PiLatest> =>
       latestPiVersion((params as PiLatestParams | undefined)?.force === true),
     );
+
+    peer.handle(Methods.piVersions, (): Promise<PiVersions> => piVersions());
 
     peer.handle(Methods.piUpdate, async (params): Promise<PiUpdateResult> => {
       const p = (params ?? {}) as Partial<PiUpdateParams>;
