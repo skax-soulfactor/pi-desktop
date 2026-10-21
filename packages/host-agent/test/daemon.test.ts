@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -9,7 +11,7 @@ import {
   type SessionOpenResult,
   type SessionSummary,
 } from "@pi-desktop/host-protocol";
-import { isolatedEnv, joinedText, TestClient } from "./helpers/agent-client";
+import { AGENT_SCRIPT, isolatedEnv, joinedText, TestClient } from "./helpers/agent-client";
 
 const FAKE_PI = fileURLToPath(new URL("./fixtures/fake-pi.mjs", import.meta.url));
 
@@ -34,6 +36,9 @@ describe("Host Agent 데몬 (가짜 Pi)", () => {
     const info = await client.request<HostInfo>(Methods.hostInfo);
     expect(info.protocolVersion).toBe(1);
     expect(info.platform).toBe(process.platform);
+    // 앱이 예전 데몬을 가리는 빌드 식별자: 실행 중인 번들 파일 해시의 앞 12자리
+    const build = createHash("sha256").update(readFileSync(AGENT_SCRIPT)).digest("hex").slice(0, 12);
+    expect(info.agentBuild).toBe(build);
   });
 
   it("세션을 열고 프롬프트의 스트리밍 이벤트를 순번대로 받는다", async () => {

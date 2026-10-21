@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { agentBuildId } from "./agent-build";
 import type { LaunchSpec } from "./host-connection";
 
 /**
@@ -83,8 +83,7 @@ export function nodeMajor(version: string): number {
 
 /** 번들 내용으로 원격 파일 이름을 정한다. */
 export function agentFileName(version: string, bundle: Buffer): string {
-  const hash = createHash("sha256").update(bundle).digest("hex").slice(0, 12);
-  return `host-agent-${version}-${hash}.mjs`;
+  return `host-agent-${version}-${agentBuildId(bundle)}.mjs`;
 }
 
 /**
@@ -143,6 +142,7 @@ export interface WslPrepareOptions {
  */
 export async function prepareWsl(options: WslPrepareOptions): Promise<LaunchSpec> {
   const bundle = await readFile(options.agentScript);
+  const agentBuild = agentBuildId(bundle);
   const fileName = agentFileName(options.agentVersion, bundle);
   const probe = parseProbe(await runInWsl(options.distro, probeScript(fileName)));
 
@@ -168,5 +168,6 @@ export async function prepareWsl(options: WslPrepareOptions): Promise<LaunchSpec
   return {
     command: WSL_EXE,
     args: ["-d", options.distro, "--cd", "~", "--exec", "sh", "-c", `exec ${shQuote(probe.node)} ${shQuote(remotePath)} connect`],
+    agentBuild,
   };
 }

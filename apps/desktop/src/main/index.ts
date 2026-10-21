@@ -126,6 +126,7 @@ function registerIpc(manager: HostManager): void {
 
   ipcMain.handle(IpcChannels.listHosts, () => manager.listHosts());
   ipcMain.handle(IpcChannels.connectHost, (_event, hostId: string) => conn(hostId).current);
+  ipcMain.handle(IpcChannels.replaceAgent, (_event, hostId: string) => conn(hostId).replaceAgent());
   ipcMain.handle(IpcChannels.locatePi, (_event, hostId: string) =>
     conn(hostId).request<PiLocation>(Methods.piLocate, hostId === LOCAL_HOST_ID ? { piCliPath: process.env.PI_DESKTOP_PI_CLI } : {}),
   );

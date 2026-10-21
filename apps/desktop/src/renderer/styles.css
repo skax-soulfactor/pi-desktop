@@ -256,6 +256,14 @@ textarea {
   border-color: var(--bad);
 }
 
+/* 예전 Host Agent를 쓰는 중 (누르면 바꾸기를 묻는다) */
+button.badge.warn {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: none;
+  cursor: pointer;
+}
+
 .cwd {
   flex: 1;
   min-width: 0;

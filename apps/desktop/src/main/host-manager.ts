@@ -7,6 +7,8 @@ import type {
   StoredChangedNotification,
 } from "@pi-desktop/host-protocol";
 import type { ConnectionState, HostDescriptor } from "../shared/api";
+import { readFile } from "node:fs/promises";
+import { agentBuildId } from "./agent-build";
 import { HostConnection } from "./host-connection";
 import { resolveNodeRuntime } from "./node-runtime";
 import { listWslDistros, prepareWsl } from "./wsl";
@@ -76,7 +78,9 @@ export class HostManager {
     if (hostId === LOCAL_HOST_ID) {
       return async () => {
         const runtime = await resolveNodeRuntime();
-        return { command: runtime.command, args: [this.options.agentScript, "connect"], env: runtime.env };
+        // 연결할 때마다 번들을 해시한다. 개발 중 다시 빌드하면 예전 데몬을 바꾸도록.
+        const agentBuild = agentBuildId(await readFile(this.options.agentScript));
+        return { command: runtime.command, args: [this.options.agentScript, "connect"], env: runtime.env, agentBuild };
       };
     }
     if (hostId.startsWith(WSL_PREFIX)) {
