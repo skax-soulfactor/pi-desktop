@@ -13,6 +13,8 @@ import {
   type ResourcesView,
   type ResourceImportResult,
   type ImportedInspectResult,
+  type ResourceExportResult,
+  type ResourceImportParams,
   type ProjectTrustInfo,
   type ResourceFile,
   type ResourceKind,
@@ -307,6 +309,12 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   ipcMain.handle(IpcChannels.marketDetail, (_event, name: string) => packageDetail(String(name)));
   ipcMain.handle(IpcChannels.githubBrowse, (_event, spec: string) => browseRepo(String(spec)));
   ipcMain.handle(IpcChannels.githubText, (_event, repo: GithubRepoRef & { sha: string }, path: string) => fetchText(repo, String(path)));
+  ipcMain.handle(IpcChannels.exportResource, (_event, hostId: string, kind: "skill" | "prompt", path: string) =>
+    conn(hostId).request<ResourceExportResult>(Methods.resourcesExport, { kind, path }, 120_000),
+  );
+  ipcMain.handle(IpcChannels.importResourceFiles, (_event, hostId: string, params: ResourceImportParams) =>
+    conn(hostId).request<ResourceImportResult>(Methods.resourcesImport, params, 120_000),
+  );
   ipcMain.handle(IpcChannels.listImports, (_event, hostId: string) => imports.list(hostId));
   // 이 PC가 GitHub에서 받아 그 호스트의 데몬에 쓰게 하고, 쓴 뒤에 출처를 기록한다.
   /** 이 PC가 GitHub에서 받아 그 호스트 데몬에 쓰고 출처를 기록한다. replace면 이전 것을 백업하고 바꾼다 */
