@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.34)
+# Pi Desktop — 설계 문서 (v0.35)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -328,6 +328,21 @@ v0.1과 같다. 목록마다 출처 배지(user / project / package 이름)를 �
 - 리소스 창 패키지 탭: 업데이트·제거(한 번 더 확인)와 "Marketplace에서 패키지 찾기"
 - 활동 로그는 아직 없다. 터미널 출력이 기록 역할을 한다.
 - 확인: 격리된 개발 환경에서 스킬만 든 패키지를 설치하고 제거했다(설정의 `packages` 반영, 리소스 창에 패키지 스킬 표시).
+
+**구현 메모: GitHub 개별 가져오기 (M4, v0.35)** — 가져오기와 출처 기록까지. 업데이트 확인·로컬 수정 감지·제거, 사용자가 저장소 목록을 저장하는 기능은 다음 단계다.
+- 카탈로그 조회(main)
+  - 저장소(`owner/repo[@ref]` 또는 주소)를 `GET /repos/o/r/commits/<ref|HEAD>`로 커밋 SHA에 고정하고, `git/trees/<sha>?recursive=1`로 한 번에 훑는다. API 호출은 저장소당 두 번이다.
+  - 인증 없이는 시간당 60회 한도라, 넘으면 그렇게 알린다. 파일 내용은 한도에 들지 않는 `raw.githubusercontent.com/<o>/<r>/<sha>/<경로>`에서 받는다.
+  - `SKILL.md`가 든 폴더를 스킬로 본다. 중첩된 스킬은 각자의 것으로 나눈다. 스킬 폴더 밖의 `prompts/*.md`는 프롬프트로 본다.
+- 가져오기
+  - 이 PC가 파일을 받은 뒤(200개, 10MB 한도) 그 호스트 데몬의 `resources.import`로 쓴다. 쓴 뒤에 출처를 userData의 `imports.json`에 남긴다: 호스트·쓴 곳·저장소·커밋 SHA·저장소 안 경로·파일별 git blob SHA.
+  - 데몬은 스킬을 `skills/<이름>/`에 폴더째, 프롬프트를 `prompts/<이름>.md`로 쓴다. 이미 있으면 거부한다(이름 충돌은 다른 이름으로 가져오게 한다).
+  - 파일 경로는 스킬 폴더 안으로만 쓴다. 임시 폴더에 다 쓴 뒤 이름을 바꿔, 실패해도 반쯤 쓴 스킬이 남지 않는다.
+- 화면
+  - Marketplace에 npm / GitHub 탭을 둔다. 예시 저장소(`anthropics/skills`, `badlogic/pi-skills`)를 바로 열 수 있다.
+  - 스킬 상세에서는 SKILL.md 앞머리를 따로 보이고, 실행 스크립트(.sh·.py·.js 등)를 경고와 함께 나열한다. 스킬은 모델이 그 스크립트를 실행하게 할 수 있기 때문이다.
+  - 가져온 항목은 "가져옴"으로 표시한다.
+- 확인: `anthropics/skills`(스킬 20개)와 `badlogic/pi-skills`(8개)를 실제로 훑었다. `brand-guidelines`를 격리된 개발 환경에 가져와 파일 2개가 쓰이고 리소스 목록에 나타났다. 출처 기록, "가져옴" 표시, 같은 이름 재가져오기 거부도 확인했다.
 
 ### 4.7 Providers & Models
 - 프로바이더별 상태는 `pi auth check --provider X --json`으로 확인한다(ready / not_ready / invalid). **키 값은 렌더러로 보내지 않는다.**
