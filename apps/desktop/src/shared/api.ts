@@ -327,8 +327,8 @@ export interface PiDesktopApi {
   githubImport(request: GithubImportRequest): Promise<ImportRecord>;
   /** 이 호스트로 가져온 기록 */
   listImports(hostId: string): Promise<ImportRecord[]>;
-  /** 다른 호스트로 복사할 스킬 폴더·프롬프트를 원본 호스트에서 읽는다 (설계 §5.9) */
-  exportResource(hostId: string, kind: "skill" | "prompt", path: string): Promise<ResourceExportResult>;
+  /** 다른 호스트로 복사할 스킬 폴더·프롬프트·확장을 원본 호스트에서 읽는다 (설계 §5.9) */
+  exportResource(hostId: string, kind: "skill" | "prompt" | "extension", path: string): Promise<ResourceExportResult>;
   /** 다른 호스트로 옮길 models.json 프로바이더 (그대로 키 값인 apiKey·헤더는 뺀다) */
   modelsExport(hostId: string, id: string): Promise<ModelsExportResult>;
   /** 받은 프로바이더를 그 호스트의 models.json에 쓴다. replace면 이미 있는 것을 바꾼다 (대상 키는 남김) */

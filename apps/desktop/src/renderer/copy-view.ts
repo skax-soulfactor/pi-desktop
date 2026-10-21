@@ -70,3 +70,49 @@ export function droppedText(dropped: readonly string[]): string | undefined {
   const names = dropped.map((d) => (d === "apiKey" ? "API 키" : d.startsWith("headers.") ? `헤더 ${d.slice(8)}` : d));
   return `비밀일 수 있어 옮기지 않습니다: ${names.join(", ")}. 대상 호스트에서 다시 넣으세요 (Pi 관리 → 모델 또는 프로바이더).`;
 }
+
+const CODE_FILES = /\.(ts|js|mts|cts|mjs|cjs)$/i;
+
+/** Windows에서만 도는 코드의 흔적 */
+const WINDOWS_HINTS: Array<[RegExp, string]> = [
+  [/\bpowershell(\.exe)?\b|\bpwsh\b/i, "PowerShell"],
+  [/\bcmd(\.exe)?["'`]?\s*,?\s*\[?\s*["'`]?\/c\b/i, "cmd /c"],
+  [/["'`][A-Za-z]:\\\\/, "드라이브 경로(C:\\)"],
+  [/\.exe["'`]/i, ".exe 실행"],
+];
+
+/** 유닉스 계열에서만 도는 코드의 흔적 */
+const POSIX_HINTS: Array<[RegExp, string]> = [
+  [/["'`]\/(bin|usr|etc|tmp|home|opt|dev)\//, "유닉스 경로(/usr/ 등)"],
+  [/\b(ba)?sh["'`]?\s*,?\s*\[?\s*["'`]?-c\b/, "sh -c"],
+  [/\b(chmod|xdg-open)\b/, "chmod·xdg-open"],
+];
+
+/** base64 내용을 UTF-8 글로 */
+function decodeText(contentBase64: string): string {
+  const binary = atob(contentBase64);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * 확장 코드에서 대상 OS에서 돌지 않을 것 같은 흔적을 찾는다 (설계 §5.9 "OS 의존 코드 정적 감지").
+ * 정규식으로만 보므로 확실하지 않다. process.platform으로 나눠 쓰는 파일이면 그렇다고 덧붙인다.
+ */
+export function extensionWarnings(
+  files: ReadonlyArray<{ path: string; contentBase64: string }>,
+  targetPlatform: string | undefined,
+): string[] {
+  if (!targetPlatform) return [];
+  const hints = targetPlatform === "win32" ? POSIX_HINTS : WINDOWS_HINTS;
+  const warnings: string[] = [];
+  for (const file of files) {
+    if (!CODE_FILES.test(file.path)) continue;
+    const text = decodeText(file.contentBase64);
+    const found = hints.filter(([re]) => re.test(text)).map(([, label]) => label);
+    if (found.length === 0) continue;
+    const branched = /process\.platform|os\.platform\(\)/.test(text) ? " (OS별로 나눠 쓰는 코드가 있어 괜찮을 수도 있습니다)" : "";
+    warnings.push(`대상은 ${targetPlatform}입니다. ${file.path}에 ${found.join(", ")}이(가) 있어 돌지 않을 수 있습니다${branched}.`);
+  }
+  return warnings;
+}

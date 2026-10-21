@@ -3,6 +3,7 @@ import {
   baseNameOf,
   copyWarnings,
   droppedText,
+  extensionWarnings,
   isAlreadyExists,
   isLocalEndpoint,
   isLocalPathSource,
@@ -66,5 +67,32 @@ describe("isLocalEndpoint·droppedText", () => {
   it("뺀 비밀 필드를 알린다", () => {
     expect(droppedText([])).toBeUndefined();
     expect(droppedText(["apiKey", "headers.Authorization"])).toContain("API 키, 헤더 Authorization");
+  });
+});
+
+describe("extensionWarnings", () => {
+  const file = (path: string, text: string) => ({
+    path,
+    contentBase64: btoa(String.fromCharCode(...new TextEncoder().encode(text))),
+  });
+
+  it("대상 OS에서 돌지 않을 흔적을 파일별로 알린다", () => {
+    const files = [
+      file("index.ts", 'spawn("powershell", ["-Command", "ls"]);'),
+      file("posix.ts", 'execSync("chmod +x run.sh"); spawn("/usr/bin/env", ["node"]);'),
+      file("README.md", "powershell 설명"),
+    ];
+    expect(extensionWarnings(files, "linux")).toEqual([expect.stringContaining("index.ts에 PowerShell")]);
+    const win = extensionWarnings(files, "win32");
+    expect(win).toHaveLength(1);
+    expect(win[0]).toContain("posix.ts에 유닉스 경로(/usr/ 등), chmod·xdg-open");
+  });
+
+  it("OS를 모르면 경고하지 않고, OS별 분기가 있으면 덧붙인다", () => {
+    const files = [file("a.js", 'const sh = process.platform === "win32" ? "cmd.exe" : "/bin/sh"; spawn(sh, ["/c", "x"]); const p = "C:\\\\tools";')];
+    expect(extensionWarnings(files, undefined)).toEqual([]);
+    expect(extensionWarnings(files, "linux")[0]).toContain("드라이브 경로(C:\\)");
+    expect(extensionWarnings(files, "linux")[0]).toContain("나눠 쓰는 코드");
+    expect(extensionWarnings([file("한글.ts", "// 한글만")], "linux")).toEqual([]);
   });
 });

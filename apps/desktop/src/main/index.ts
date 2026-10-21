@@ -326,7 +326,7 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   ipcMain.handle(IpcChannels.settingsMerge, async (_event, hostId: string, values: Record<string, unknown>) => {
     await conn(hostId).request(Methods.settingsMerge, { values });
   });
-  ipcMain.handle(IpcChannels.exportResource, (_event, hostId: string, kind: "skill" | "prompt", path: string) =>
+  ipcMain.handle(IpcChannels.exportResource, (_event, hostId: string, kind: "skill" | "prompt" | "extension", path: string) =>
     conn(hostId).request<ResourceExportResult>(Methods.resourcesExport, { kind, path }, 120_000),
   );
   ipcMain.handle(IpcChannels.importResourceFiles, (_event, hostId: string, params: ResourceImportParams) =>
