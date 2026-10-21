@@ -6,6 +6,8 @@
  */
 import type {
   FsSearchResult,
+  PiLatest,
+  PiStatus,
   HostInfo,
   PiLocation,
   PiResponse,
@@ -85,6 +87,10 @@ export interface PiDesktopApi {
    * 이 PC에서 열 수 없는 호스트면 false.
    */
   revealFile(hostId: string, cwd: string, path: string): Promise<boolean>;
+  /** Pi Manager: 이 호스트의 Pi 설치·Node·데이터 상태 (읽기 전용) */
+  piStatus(hostId: string): Promise<PiStatus>;
+  /** Pi 최신 버전 (데몬이 1시간 캐시, force면 다시 묻는다) */
+  piLatest(hostId: string, force?: boolean): Promise<PiLatest>;
   /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커). 경로는 작업 폴더 기준, 구분자 "/" */
   searchFiles(hostId: string, cwd: string, query: string): Promise<FsSearchResult>;
 
@@ -119,6 +125,8 @@ export const IpcChannels = {
   pickDirectory: "pi:pick-directory",
   revealFile: "pi:reveal-file",
   searchFiles: "pi:search-files",
+  piStatus: "pi:pi-status",
+  piLatest: "pi:pi-latest",
   connectionChanged: "pi:connection-changed",
   sessionEvent: "pi:session-event",
   sessionExit: "pi:session-exit",
