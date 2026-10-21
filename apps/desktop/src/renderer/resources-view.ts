@@ -89,3 +89,14 @@ export function creatableKind(tab: ResourceTab): "prompt" | "skill" | "agents" |
 export function isEditable(item: { path: string; fromPackage?: boolean }): boolean {
   return !item.fromPackage && /\.md$/i.test(item.path);
 }
+
+/** Pi Desktop bridge 확장의 다시 불러오기 명령 (데몬 bridge.ts와 같은 이름) */
+export const RELOAD_COMMAND = "desktop:reload";
+
+/**
+ * 세션에 bridge가 들어 있는지. 앱 업데이트 전에 연 세션에는 없다.
+ * 없는 세션에 "/desktop:reload"를 보내면 Pi가 일반 질문으로 LLM에 보내므로, 보내기 전에 꼭 확인한다.
+ */
+export function hasReloadCommand(commands: ReadonlyArray<{ name: string }>): boolean {
+  return commands.some((c) => c.name === RELOAD_COMMAND);
+}
