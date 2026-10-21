@@ -10,6 +10,7 @@ import type {
   CustomProviderForm,
   ModelsFileView,
   ModelsProbeResult,
+  FsListDirResult,
   FsSearchResult,
   ProviderInfo,
   PiLatest,
@@ -149,6 +150,8 @@ export interface PiDesktopApi {
   onTerminalExit(listener: (id: string, exitCode: number) => void): () => void;
   /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커). 경로는 작업 폴더 기준, 구분자 "/" */
   searchFiles(hostId: string, cwd: string, query: string): Promise<FsSearchResult>;
+  /** 호스트의 한 폴더에 있는 하위 폴더 목록 (폴더 탐색 창). path가 없으면 홈 */
+  listDir(hostId: string, path?: string): Promise<FsListDirResult>;
 
   onConnection(listener: (hostId: string, state: ConnectionState) => void): () => void;
   onSessionEvent(listener: (hostId: string, notification: SessionEventNotification) => void): () => void;
@@ -182,6 +185,7 @@ export const IpcChannels = {
   pickDirectory: "pi:pick-directory",
   revealFile: "pi:reveal-file",
   searchFiles: "pi:search-files",
+  listDir: "pi:list-dir",
   piStatus: "pi:pi-status",
   piLatest: "pi:pi-latest",
   piVersions: "pi:pi-versions",

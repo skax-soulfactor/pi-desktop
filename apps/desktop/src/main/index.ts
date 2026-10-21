@@ -9,6 +9,7 @@ import {
   type CustomProviderForm,
   type ModelsFileView,
   type ModelsProbeResult,
+  type FsListDirResult,
   type FsSearchResult,
   type ProviderInfo,
   type PiLatest,
@@ -250,6 +251,9 @@ function registerIpc(manager: HostManager): void {
   ipcMain.handle(IpcChannels.piVersions, (_event, hostId: string) => conn(hostId).request<PiVersions>(Methods.piVersions));
   ipcMain.handle(IpcChannels.searchFiles, (_event, hostId: string, cwd: string, query: string) =>
     conn(hostId).request<FsSearchResult>(Methods.fsSearch, { cwd, query, limit: 30 }),
+  );
+  ipcMain.handle(IpcChannels.listDir, (_event, hostId: string, path: string | undefined) =>
+    conn(hostId).request<FsListDirResult>(Methods.fsListDir, path ? { path } : {}),
   );
   ipcMain.handle(IpcChannels.revealFile, (_event, hostId: string, cwd: string, path: string) => {
     const target = hostPathForExplorer(hostId, cwd, path, WSL_PREFIX);

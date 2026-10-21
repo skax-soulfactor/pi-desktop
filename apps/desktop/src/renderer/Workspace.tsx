@@ -16,6 +16,7 @@ import { baseName, formatRelative } from "./format";
 import { tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
 import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
+import { FolderBrowser } from "./FolderBrowser";
 import { restoreQueueToDraft } from "./run-status";
 import { QueuePanel, RetryBanner } from "./RunStatus";
 import { SessionBar } from "./SessionBar";
@@ -89,6 +90,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [treeOpen, setTreeOpen] = useState(false);
   const [piManagerOpen, setPiManagerOpen] = useState(false);
+  const [folderBrowserOpen, setFolderBrowserOpen] = useState(false);
   /** 아래 도크의 내장 터미널들 (설계 §4.12) */
   const [dockTerminals, setDockTerminals] = useState<DockTerminal[]>([]);
   const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
@@ -534,21 +536,21 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           onChange={(e) => setCwd(e.target.value)}
           disabled={!connected || busy}
         />
-        {/* 폴더 선택 대화상자는 Windows 파일 시스템만 보여주므로 로컬 호스트에서만 쓴다. WSL 탐색은 M1 후반. */}
-        {isLocal && (
-          <button
-            type="button"
-            disabled={!connected || busy}
-            onClick={() =>
-              void guard(async () => {
-                const picked = await window.piDesktop.pickDirectory();
-                if (picked) setCwd(picked);
-              })
-            }
-          >
-            폴더 선택
-          </button>
-        )}
+        {/* Windows 폴더 선택 대화상자는 Windows 파일 시스템만 보여준다. WSL 같은 다른 호스트는 데몬으로 훑는 탐색 창을 쓴다. */}
+        <button
+          type="button"
+          disabled={!connected || busy}
+          onClick={() =>
+            isLocal
+              ? void guard(async () => {
+                  const picked = await window.piDesktop.pickDirectory();
+                  if (picked) setCwd(picked);
+                })
+              : setFolderBrowserOpen(true)
+          }
+        >
+          폴더 선택
+        </button>
         <button
           type="button"
           className="primary"
@@ -766,6 +768,18 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         </ChoiceDialog>
       )}
       {active && <Toasts toasts={ui.toasts} onDismiss={dismissToast} />}
+      {active && folderBrowserOpen && (
+        <FolderBrowser
+          hostId={hostId}
+          hostLabel={hostLabel}
+          initialPath={cwd}
+          onPick={(path) => {
+            setCwd(path);
+            setFolderBrowserOpen(false);
+          }}
+          onClose={() => setFolderBrowserOpen(false)}
+        />
+      )}
       {active && piManagerOpen && (
         <PiManager
           hosts={hosts}
