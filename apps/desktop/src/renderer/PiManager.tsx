@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { PiLatest, PiStatus } from "@pi-desktop/host-protocol/messages";
 import type { HostDescriptor } from "../shared/api";
 import { statusChecks } from "./pi-manager-view";
+import { PiDataPanel } from "./PiDataPanel";
 import { PiInstallPanel } from "./PiInstallPanel";
 import { PiUpdatePanel } from "./PiUpdatePanel";
 import { ModelsPanel } from "./ModelsPanel";
@@ -158,6 +159,7 @@ export function PiManager({
             onRunInTerminal={(command, title) => onRunInTerminal(hostId, command, title)}
           />
         )}
+        {tab === "status" && status && <PiDataPanel hostId={hostId} status={status} onChanged={() => void reload(true)} />}
       </div>
     </div>
   );

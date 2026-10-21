@@ -2193,3 +2193,10 @@ button.toggled {
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+.delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
