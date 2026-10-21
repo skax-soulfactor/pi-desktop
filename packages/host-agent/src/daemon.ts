@@ -68,6 +68,7 @@ import { backupAgentDir, deleteAgentDir } from "./agent-data";
 import { agentDirOf, checkAuth, isProviderId, listProviders, removeCredential, setApiKey } from "./auth-store";
 import { probeEndpoint, readModelsFile, removeProvider, saveProvider, storedApiKey } from "./models-store";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
+import { ensureBridge } from "./bridge";
 import { listDirectories } from "./dir-list";
 import { listResources, type ResourceSdk } from "./resources";
 import { createResourceFile, readResourceFile, writeResourceFile } from "./resource-files";
@@ -354,6 +355,8 @@ export class AgentDaemon {
         throw new JsonRpcError(ErrorCodes.InvalidParams, `작업 폴더를 찾을 수 없습니다: ${p.cwd}`);
       }
       const pi = await locatePi({ piCliPath: p.piCliPath, env: this.env });
+      // 리소스 다시 불러오기용 bridge 확장을 넣는다 (설계 §5.3). 문제를 조사할 때는 PI_DESKTOP_NO_BRIDGE=1로 끈다.
+      const bridge = this.env.PI_DESKTOP_NO_BRIDGE ? undefined : await ensureBridge(join(agentHome(this.env), "bridge"));
       const session = new AgentSession({
         cwd: p.cwd,
         pi,
@@ -361,7 +364,7 @@ export class AgentDaemon {
         nodePath: pi.nodePath ?? process.execPath,
         sessionFile: p.sessionFile,
         forkFrom: p.forkFrom,
-        piArgs: p.piArgs,
+        piArgs: [...(p.piArgs ?? []), ...(bridge ? ["-e", bridge] : [])],
         env: { ...this.env, ...pi.env, ...p.env },
         journalCapacity: this.options.journalCapacity ?? (Number(this.env.PI_DESKTOP_JOURNAL_CAPACITY) || undefined),
         files: this.files,
