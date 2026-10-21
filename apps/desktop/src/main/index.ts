@@ -199,6 +199,9 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore): void {
   ipcMain.handle(IpcChannels.closeSession, (_event, hostId: string, sessionId: string) =>
     conn(hostId).request(Methods.sessionClose, { sessionId }),
   );
+  ipcMain.handle(IpcChannels.claimWriter, async (_event, hostId: string, sessionId: string) => {
+    await conn(hostId).request(Methods.sessionClaimWriter, { sessionId });
+  });
   ipcMain.handle(IpcChannels.clearExternalWrite, async (_event, hostId: string, sessionId: string) => {
     await conn(hostId).request(Methods.sessionClearExternalWrite, { sessionId });
   });
@@ -299,6 +302,7 @@ app.whenReady().then(() => {
     onUiResolved: (hostId, n) => sendToRenderer(IpcChannels.uiResolved, hostId, n),
     onStoredChanged: (hostId, n) => sendToRenderer(IpcChannels.storedChanged, hostId, n),
     onExternalWrite: (hostId, n) => sendToRenderer(IpcChannels.externalWrite, hostId, n),
+    onWriterChanged: (hostId, n) => sendToRenderer(IpcChannels.writerChanged, hostId, n),
     onPiUpdateOutput: (hostId, n) => sendToRenderer(IpcChannels.piUpdateOutput, hostId, n),
   });
   registerIpc(hosts, sshHosts);

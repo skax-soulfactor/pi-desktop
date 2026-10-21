@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { SessionEventNotification, SessionSummary, StoredSession } from "@pi-desktop/host-protocol/messages";
+import type { SessionEventNotification, SessionSummary, StoredSession, WriterState } from "@pi-desktop/host-protocol/messages";
 import type { AttachResult, ConnectionState, HostDescriptor } from "../shared/api";
 import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState } from "./chat-state";
 import {
@@ -163,6 +163,8 @@ export function useSession(tabId: string = MAIN_TAB) {
   const [lost, setLost] = useState<LostSession | undefined>();
   const [follow, setFollow] = useState<FollowState | undefined>();
   const [pendingOpen, setPendingOpen] = useState<StoredSession | undefined>();
+  /** 보고 있는 세션의 입력 권한 (설계 §3.4). other면 다른 앱이 입력 중이라 읽기 전용 */
+  const [writer, setWriter] = useState<WriterState>("you");
   const followRef = useRef<FollowState | undefined>(undefined);
   /** attach 진행 중이면 그 사이 알림으로 온 이벤트를 모으는 곳 */
   const attachQueueRef = useRef<SessionEventNotification[] | undefined>(undefined);
@@ -234,6 +236,7 @@ export function useSession(tabId: string = MAIN_TAB) {
       if (replayedTo !== undefined) lastSeqRef.current = Math.max(lastSeqRef.current, replayedTo);
       dispatchUi({ type: "prune", ids: result.pendingUi ?? [] });
       setSession(result.session);
+      setWriter(result.writer ?? "you");
       writeStorage(lastSessionKey(hostRef.current), remember(result.session));
       if (result.session.state === "exited") {
         // Pi 프로세스가 없어 명령을 보낼 수 없다. 저널에 남은 기록만 보여주고 다시 열기를 제안한다.
@@ -363,6 +366,14 @@ export function useSession(tabId: string = MAIN_TAB) {
     },
     [refreshSessions, switchTo, startFollow, stopFollow],
   );
+
+  /** 다른 앱이 가지고 있던 입력 권한을 가져온다. 그 앱은 읽기 전용이 된다. */
+  const claimWriter = useCallback(async () => {
+    const current = sessionRef.current;
+    if (!current) return;
+    await api().claimWriter(hostRef.current, current.sessionId);
+    setWriter("you");
+  }, []);
 
   /** 다른 프로그램의 끼어들기를 무시하고 이 파일에 계속 쓴다 (기록이 섞일 수 있음을 사용자가 감수). */
   const ignoreExternalWrite = useCallback(async () => {
@@ -536,6 +547,10 @@ export function useSession(tabId: string = MAIN_TAB) {
       if (!isCurrent(id, n.sessionId)) return;
       setSession((prev) => (prev && prev.sessionId === n.sessionId ? { ...prev, externalWriteAt: n.at } : prev));
     });
+    // 다른 앱이 제어를 가져갔거나, 가지고 있던 앱이 끊겼다.
+    const offWriter = api().onWriterChanged((id, n) => {
+      if (isCurrent(id, n.sessionId)) setWriter(n.writer);
+    });
     // 팔로우 중인 파일이 바뀌면 잠시 모았다가 다시 읽는다 (상대가 여러 줄을 연달아 쓰므로).
     let followTimer: ReturnType<typeof setTimeout> | undefined;
     const offStored = api().onStoredChanged((id, n) => {
@@ -550,6 +565,7 @@ export function useSession(tabId: string = MAIN_TAB) {
       offResolved();
       offStored();
       offExternal();
+      offWriter();
       if (followTimer) clearTimeout(followTimer);
     };
   }, [refreshSessions, reloadFollow, reportError]);
@@ -580,6 +596,8 @@ export function useSession(tabId: string = MAIN_TAB) {
     handOffToTui,
     continueFollowedAsFork,
     ignoreExternalWrite,
+    writer,
+    claimWriter,
     dismissToast: (key: string) => dispatchUi({ type: "dismiss", key }),
     send,
     refreshSessions,
