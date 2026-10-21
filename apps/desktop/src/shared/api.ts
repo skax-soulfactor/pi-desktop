@@ -84,6 +84,46 @@ export interface SshHostConfig {
   port?: number;
 }
 
+/** Marketplace 검색 결과의 패키지 하나 (npm pi-package) */
+export interface MarketPackage {
+  name: string;
+  version: string;
+  description?: string;
+  /** 마지막 게시 시각 (ms) */
+  updated?: number;
+  publisher?: string;
+  monthlyDownloads?: number;
+  repository?: string;
+}
+
+export interface MarketSearchResult {
+  total: number;
+  packages: MarketPackage[];
+}
+
+/** Marketplace 상세 (npm 패키지 문서에서 읽은 것) */
+export interface MarketDetail {
+  name: string;
+  latest: string;
+  description?: string;
+  license?: string;
+  repository?: string;
+  readme: string;
+  /** 최근 안정 버전부터 */
+  versions: string[];
+  updated?: number;
+  /** declared: package.json의 pi 매니페스트, conventional: 관례 폴더로 찾음(미리 알 수 없음) */
+  manifest: "declared" | "conventional";
+  /** 매니페스트에 적힌 리소스 종류 */
+  kinds: Array<"extensions" | "skills" | "prompts" | "themes">;
+  /** 확장(임의 코드)을 실행할 수 있다. 매니페스트가 없으면 알 수 없어 true */
+  mayRunCode: boolean;
+  /** 함께 설치되는 의존성 이름 */
+  dependencies: string[];
+  /** npm이 설치할 때 실행하는 스크립트 (preinstall·install·postinstall) */
+  installScripts: string[];
+}
+
 /** 재생 이벤트를 함께 담은 attach 결과 */
 export interface AttachResult extends SessionAttachResult {
   events: SessionEventNotification[];
@@ -188,6 +228,9 @@ export interface PiDesktopApi {
   listDir(hostId: string, path?: string): Promise<FsListDirResult>;
   /** 작업 폴더에서 Pi가 불러오는 리소스 (읽기 전용) */
   listResources(hostId: string, cwd: string): Promise<ResourcesView>;
+  /** npm에서 Pi 패키지를 찾는다 (이 PC가 조회) */
+  marketSearch(query: string, from: number): Promise<MarketSearchResult>;
+  marketDetail(name: string): Promise<MarketDetail>;
   /** 작업 폴더의 프로젝트 신뢰 상태 */
   getTrust(hostId: string, cwd: string): Promise<ProjectTrustInfo>;
   /** 프로젝트 신뢰 결정을 Pi의 trust.json에 저장한다 (null이면 지운다) */
@@ -238,6 +281,8 @@ export const IpcChannels = {
   searchFiles: "pi:search-files",
   listDir: "pi:list-dir",
   listResources: "pi:list-resources",
+  marketSearch: "pi:market-search",
+  marketDetail: "pi:market-detail",
   getTrust: "pi:get-trust",
   setTrust: "pi:set-trust",
   readResource: "pi:read-resource",
