@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.29)
+# Pi Desktop — 설계 문서 (v0.30)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -260,6 +260,17 @@ GUI ──ssh──▶ host-agent connect ──unix socket──▶ host-agentd
 
 ### 4.3 Prompt Templates · 4.4 Skills · 4.5 Extensions
 v0.1과 같다. 목록마다 출처 배지(user / project / package 이름)를 달고, 생성 마법사, 활성/비활성 토글, 로드 진단을 제공한다. Extension Dev Mode는 저장할 때마다 자동 reload한다.
+
+**구현 메모: 리소스 창 (M4 첫 단계, v0.30)** — 읽기 전용이다. 편집·생성·토글은 다음 단계에서 한다.
+- 데몬의 `resources.list({cwd})`가 그 호스트에 설치된 Pi의 SDK로 Pi와 똑같이 찾는다.
+  - 프롬프트·스킬·AGENTS.md·SYSTEM.md·APPEND_SYSTEM.md: `DefaultResourceLoader`를 `noExtensions`로 돌린다.
+  - 확장·테마: 확장은 불러오는 순간 코드가 실행된다. 그래서 `DefaultPackageManager.resolve`의 경로 해석으로 목록만 얻고, 설치되지 않은 패키지는 설치하지 않고 건너뛴다. 확장 코드가 실행되지 않음을 테스트로 확인한다.
+  - 설정에서 꺼 둔 프롬프트·스킬은 로더가 돌려주지 않으므로 경로 해석 결과에서 "꺼짐"으로 채운다.
+  - 이름 충돌 같은 진단은 그 파일 항목에 표시한다.
+- 앱: 상단의 "리소스" 버튼과 명령 팔레트 "리소스 보기"로 연다. 기준은 보고 있는 세션의 폴더, 없으면 입력창의 폴더다.
+  - 탭: 컨텍스트(불러오는 순서) / 프롬프트 / 스킬 / 확장 / 패키지
+  - 출처 배지(사용자·프로젝트·패키지 소스), 짧은 경로(`~agent/…`, `./…`, `../AGENTS.md`), 로컬·WSL이면 "위치 열기"
+- "알 수 없는 메서드" 오류에는 상단의 "Agent 업데이트 대기"를 눌러 바꾸라는 안내를 덧붙인다. 세션이 돌고 있으면 예전 데몬을 유지하므로(§3.4) 생기는 일이며, 개발 중 실제로 만났다.
 
 ### 4.6 Marketplace (신규) — 커뮤니티 리소스 검색·설치·제거
 
