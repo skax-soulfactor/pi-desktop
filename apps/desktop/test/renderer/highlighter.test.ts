@@ -17,7 +17,8 @@ describe("normalizeLanguage", () => {
 });
 
 describe("highlight", () => {
-  it("밝은/어두운 테마 색을 CSS 변수로 함께 담은 HTML을 만든다", async () => {
+  // 첫 호출이 Shiki의 문법·테마를 불러온다. 전체 테스트를 병렬로 돌리면 기본 5초를 넘길 때가 있어 넉넉히 둔다.
+  it("밝은/어두운 테마 색을 CSS 변수로 함께 담은 HTML을 만든다", { timeout: 30_000 }, async () => {
     const html = await highlight('const a = "<b>";', "ts");
     expect(html).toContain('class="shiki');
     expect(html).toContain("--shiki-dark");

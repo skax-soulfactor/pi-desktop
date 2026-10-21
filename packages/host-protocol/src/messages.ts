@@ -18,6 +18,10 @@ export const Methods = {
   piLatest: "pi.latest",
   /** npm 레지스트리에 배포된 Pi 버전 목록 (1시간 캐시) */
   piVersions: "pi.versions",
+  /** Pi 데이터 폴더(~/.pi/agent)를 tar.gz로 백업 */
+  dataBackup: "data.backup",
+  /** Pi 데이터 폴더 삭제 (Pi를 제거한 뒤에만, 되돌릴 수 없음) */
+  dataDelete: "data.delete",
   /** Pi 업데이트 실행 (pi update). 출력은 pi.updateOutput 알림으로 흐른다 */
   piUpdate: "pi.update",
   /** 프로바이더 목록과 저장된 자격 증명의 종류 (키 값은 보내지 않는다) */
@@ -281,6 +285,17 @@ export interface ModelsProbeResult {
 export interface PiVersions {
   versions: string[];
   error?: string;
+}
+
+export interface DataBackupResult {
+  /** 만든 백업 파일 (호스트 기준 경로) */
+  path: string;
+  bytes: number;
+}
+
+export interface DataDeleteParams {
+  /** 앱이 pi.status로 받은 데이터 폴더 경로. 데몬의 실제 경로와 같아야 지운다 */
+  confirm: string;
 }
 
 export interface PiLocateParams {

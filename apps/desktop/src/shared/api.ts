@@ -6,6 +6,7 @@
  */
 import type {
   AuthCheckResult,
+  DataBackupResult,
   CustomProviderForm,
   ModelsFileView,
   ModelsProbeResult,
@@ -109,6 +110,10 @@ export interface PiDesktopApi {
   revealFile(hostId: string, cwd: string, path: string): Promise<boolean>;
   /** Pi Manager: 이 호스트의 Pi 설치·Node·데이터 상태 (읽기 전용) */
   piStatus(hostId: string): Promise<PiStatus>;
+  /** Pi 데이터 폴더(~/.pi/agent)를 tar.gz로 백업 */
+  dataBackup(hostId: string): Promise<DataBackupResult>;
+  /** Pi 데이터 폴더 삭제. confirm은 pi.status로 받은 데이터 폴더 경로 (Pi를 제거한 뒤에만 된다) */
+  dataDelete(hostId: string, confirm: string): Promise<void>;
   /** 배포된 Pi 버전 목록 (데몬이 1시간 캐시) */
   piVersions(hostId: string): Promise<PiVersions>;
   /** Pi 최신 버전 (데몬이 1시간 캐시, force면 다시 묻는다) */
@@ -180,6 +185,8 @@ export const IpcChannels = {
   piStatus: "pi:pi-status",
   piLatest: "pi:pi-latest",
   piVersions: "pi:pi-versions",
+  dataBackup: "pi:data-backup",
+  dataDelete: "pi:data-delete",
   piUpdate: "pi:pi-update",
   authProviders: "pi:auth-providers",
   authCheck: "pi:auth-check",

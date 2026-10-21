@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   Methods,
   type AuthCheckResult,
+  type DataBackupResult,
   type CustomProviderForm,
   type ModelsFileView,
   type ModelsProbeResult,
@@ -239,6 +240,13 @@ function registerIpc(manager: HostManager): void {
         ...(providerId ? { providerId } : {}),
       }),
   );
+  // 백업은 데이터 크기에 따라 오래 걸릴 수 있어 시간 제한을 두지 않는다 (데몬의 tar가 10분에서 멈춘다).
+  ipcMain.handle(IpcChannels.dataBackup, (_event, hostId: string) =>
+    conn(hostId).request<DataBackupResult>(Methods.dataBackup, undefined, 0),
+  );
+  ipcMain.handle(IpcChannels.dataDelete, async (_event, hostId: string, confirm: string) => {
+    await conn(hostId).request(Methods.dataDelete, { confirm }, 0);
+  });
   ipcMain.handle(IpcChannels.piVersions, (_event, hostId: string) => conn(hostId).request<PiVersions>(Methods.piVersions));
   ipcMain.handle(IpcChannels.searchFiles, (_event, hostId: string, cwd: string, query: string) =>
     conn(hostId).request<FsSearchResult>(Methods.fsSearch, { cwd, query, limit: 30 }),

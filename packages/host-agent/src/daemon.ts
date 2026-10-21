@@ -2,7 +2,7 @@ import { appendFileSync, chmodSync, mkdirSync } from "node:fs";
 import { stat, unlink } from "node:fs/promises";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import {
   createJsonlReader,
   encodeJsonl,
@@ -21,6 +21,8 @@ import {
   type PiLocateParams,
   type PiStatus,
   type PiVersions,
+  type DataBackupResult,
+  type DataDeleteParams,
   type AuthCheckResult,
   type AuthProviderParams,
   type AuthSetApiKeyParams,
@@ -48,9 +50,10 @@ import {
   type StoredReadResult,
   type StoredSession,
 } from "@pi-desktop/host-protocol";
-import { runDir, socketPath } from "./paths";
+import { agentHome, runDir, socketPath } from "./paths";
 import { locatePi } from "./pi-locator";
 import { latestPiVersion, piStatus, piVersions } from "./pi-status";
+import { backupAgentDir, deleteAgentDir } from "./agent-data";
 import { agentDirOf, checkAuth, isProviderId, listProviders, removeCredential, setApiKey } from "./auth-store";
 import { probeEndpoint, readModelsFile, removeProvider, saveProvider, storedApiKey } from "./models-store";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
@@ -212,6 +215,25 @@ export class AgentDaemon {
     );
 
     peer.handle(Methods.piVersions, (): Promise<PiVersions> => piVersions());
+
+    peer.handle(Methods.dataBackup, (): Promise<DataBackupResult> =>
+      backupAgentDir(agentDirOf(this.env), join(agentHome(this.env), "backups")),
+    );
+
+    peer.handle(Methods.dataDelete, async (params) => {
+      const confirm = (params as Partial<DataDeleteParams> | undefined)?.confirm;
+      if (typeof confirm !== "string") throw new JsonRpcError(ErrorCodes.InvalidParams, "confirm이 필요합니다");
+      if ([...this.sessions.values()].some((s) => s.isRunning)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "실행 중인 세션이 있습니다. 모두 닫은 뒤 지우세요");
+      }
+      const agentDir = agentDirOf(this.env);
+      const pi = await locatePi({ env: this.env }).catch(() => undefined);
+      if (pi && isInside(pi.packageDir, agentDir)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "Pi가 이 데이터 폴더 안에 설치되어 있습니다. 먼저 Pi를 제거하세요");
+      }
+      await deleteAgentDir(agentDir, confirm);
+      return null;
+    });
 
     peer.handle(Methods.piUpdate, async (params): Promise<PiUpdateResult> => {
       const p = (params ?? {}) as Partial<PiUpdateParams>;
@@ -537,6 +559,16 @@ function isAlive(path: string): Promise<boolean> {
     });
     socket.once("error", () => resolve(false));
   });
+}
+
+/** child가 parent 안에 있는지 (경로 문자열 기준, 대소문자는 Windows만 무시) */
+function isInside(child: string, parent: string): boolean {
+  const norm = (p: string) => {
+    const r = resolve(p);
+    return process.platform === "win32" ? r.toLowerCase() : r;
+  };
+  const [c, p] = [norm(child), norm(parent)];
+  return c === p || c.startsWith(p.endsWith(sep) ? p : p + sep);
 }
 
 function requireId(params: unknown): string {
