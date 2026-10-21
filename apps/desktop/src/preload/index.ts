@@ -11,6 +11,7 @@ function subscribe<T>(channel: string, listener: (hostId: string, payload: T) =>
 const api: PiDesktopApi = {
   listHosts: () => ipcRenderer.invoke(IpcChannels.listHosts),
   connectHost: (hostId) => ipcRenderer.invoke(IpcChannels.connectHost, hostId),
+  replaceAgent: (hostId) => ipcRenderer.invoke(IpcChannels.replaceAgent, hostId),
   locatePi: (hostId) => ipcRenderer.invoke(IpcChannels.locatePi, hostId),
   listSessions: (hostId) => ipcRenderer.invoke(IpcChannels.listSessions, hostId),
   listHistory: (hostId, cwd) => ipcRenderer.invoke(IpcChannels.listHistory, hostId, cwd),

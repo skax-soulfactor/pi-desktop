@@ -91,6 +91,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [treeOpen, setTreeOpen] = useState(false);
   const [piManagerOpen, setPiManagerOpen] = useState(false);
   const [folderBrowserOpen, setFolderBrowserOpen] = useState(false);
+  const [agentReplaceAsk, setAgentReplaceAsk] = useState(false);
   /** 아래 도크의 내장 터미널들 (설계 §4.12) */
   const [dockTerminals, setDockTerminals] = useState<DockTerminal[]>([]);
   const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
@@ -494,6 +495,16 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           ))}
         </select>
         <ConnectionBadge connection={connection} />
+        {connection.status === "connected" && connection.agentUpdate && (
+          <button
+            type="button"
+            className="badge warn"
+            onClick={() => setAgentReplaceAsk(true)}
+            title="떠 있는 Host Agent가 이 앱보다 예전 것입니다. 실행 중인 세션이 모두 끝나면 자동으로 바꿉니다."
+          >
+            Agent 업데이트 대기
+          </button>
+        )}
         {connected && (
           <button
             type="button"
@@ -755,6 +766,27 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         >
           이 세션 파일은 {formatRelative(pendingOpen.modified)} 수정되었고, 이 앱이 쓰고 있는 파일이 아닙니다. 터미널의 Pi(TUI)
           등에서 열려 있다면 같은 파일에 함께 쓸 때 기록이 꼬일 수 있습니다.
+        </ChoiceDialog>
+      )}
+      {agentReplaceAsk && connection.status === "connected" && connection.agentUpdate && (
+        <ChoiceDialog
+          title="Host Agent 업데이트 대기"
+          onCancel={() => setAgentReplaceAsk(false)}
+          choices={[
+            { label: "세션이 끝나면 바꾸기", kind: "primary", onSelect: () => setAgentReplaceAsk(false) },
+            {
+              label: "지금 바꾸기",
+              kind: "danger",
+              onSelect: () => {
+                setAgentReplaceAsk(false);
+                void guard(() => window.piDesktop.replaceAgent(hostId));
+              },
+            },
+          ]}
+        >
+          {hostLabel}에 떠 있는 Host Agent가 이 앱보다 예전 것입니다. 실행 중인 Pi 세션이 {connection.agentUpdate.liveSessions}개
+          있어 바꾸지 않았습니다. 세션이 모두 끝나면 앱이 알아서 바꿉니다. 지금 바꾸면 실행 중인 세션이 끝나며, 대화는 세션
+          파일에 남아 "다시 열기"로 이어 갈 수 있습니다. 진행 중인 응답은 이어지지 않습니다.
         </ChoiceDialog>
       )}
       {handoffAsk && session && (

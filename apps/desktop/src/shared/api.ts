@@ -37,7 +37,15 @@ import type {
 export type ConnectionState =
   | { status: "idle" }
   | { status: "connecting" }
-  | { status: "connected"; host: HostInfo }
+  | {
+      status: "connected";
+      host: HostInfo;
+      /**
+       * 떠 있는 데몬이 앱의 번들보다 예전 것인데 Pi 세션이 돌고 있어 바꾸지 못했다 (설계 §3.4).
+       * 세션이 모두 끝나면 앱이 알아서 바꾼다. liveSessions는 그때 실행 중이던 세션 수
+       */
+      agentUpdate?: { liveSessions: number };
+    }
   | { status: "disconnected"; reason: string };
 
 /** Pi가 도는 곳 하나. 로컬 PC 또는 WSL 배포판 (SSH는 M3). */
@@ -78,6 +86,8 @@ export interface PiDesktopApi {
   listHosts(): Promise<HostDescriptor[]>;
   /** 호스트 연결을 시작하고 현재 상태를 돌려준다 (이미 연결 중이면 그대로) */
   connectHost(hostId: string): Promise<ConnectionState>;
+  /** 예전 데몬을 지금 끄고 새 번들로 다시 띄운다. 실행 중인 Pi 세션도 끝난다 */
+  replaceAgent(hostId: string): Promise<void>;
   locatePi(hostId: string): Promise<PiLocation>;
   listSessions(hostId: string): Promise<SessionSummary[]>;
   /** Pi가 디스크에 저장한 세션 기록. cwd를 주면 그 폴더의 세션만 */
@@ -169,6 +179,7 @@ export interface PiDesktopApi {
 export const IpcChannels = {
   listHosts: "pi:list-hosts",
   connectHost: "pi:connect-host",
+  replaceAgent: "pi:replace-agent",
   locatePi: "pi:locate",
   listSessions: "pi:list-sessions",
   openSession: "pi:open-session",

@@ -5,6 +5,7 @@ import {
   JsonRpcPeer,
   Methods,
   Notifications,
+  type DaemonStatus,
   type HostInfo,
   type SessionEventNotification,
   type SessionExitNotification,
@@ -14,6 +15,7 @@ import {
   type PiUpdateOutputNotification,
 } from "@pi-desktop/host-protocol";
 import type { ConnectionState } from "../shared/api";
+import { checkAgent } from "./agent-build";
 
 /** 연결기(`host-agent connect`)를 띄우는 명령. 호스트 종류(로컬·WSL·SSH)마다 다르다. */
 export interface LaunchSpec {
@@ -21,6 +23,8 @@ export interface LaunchSpec {
   args: string[];
   /** 앱 프로세스 환경에 덧붙일 변수 */
   env?: Record<string, string>;
+  /** 연결기가 실행할 번들의 빌드 식별자 (agent-build.ts). 떠 있는 데몬과 비교한다 */
+  agentBuild?: string;
 }
 
 export interface HostConnectionOptions {
@@ -40,6 +44,8 @@ export interface HostConnectionOptions {
 
 const RECONNECT_MIN_MS = 500;
 const RECONNECT_MAX_MS = 10_000;
+/** 예전 데몬을 쓰는 동안 세션이 모두 끝났는지 다시 보는 간격 */
+const STALE_CHECK_MS = 30_000;
 
 /**
  * 호스트 하나의 Host Agent 연결 (설계 §3.2).
@@ -57,6 +63,11 @@ export class HostConnection {
   private disposed = false;
   private started = false;
   private readyWaiters: Array<() => void> = [];
+  /** 예전 데몬을 끄는 중. 연결기가 끝나도 오류로 알리지 않고 바로 다시 붙는다 */
+  private replacing = false;
+  /** 교체를 시도한 번들의 빌드 식별자 (되풀이 방지) */
+  private replaceTriedFor: string | undefined;
+  private staleTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly options: HostConnectionOptions) {}
 
@@ -85,7 +96,19 @@ export class HostConnection {
   dispose(): void {
     this.disposed = true;
     if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.stopStaleCheck();
     this.child?.kill();
+  }
+
+  /**
+   * 예전 데몬을 지금 끄고 새 번들로 다시 띄운다 ("업데이트 대기"에서 사용자가 고른 경우).
+   * 실행 중인 Pi 세션도 함께 끝난다. 앱은 다시 붙은 뒤 "다시 열기"로 세션 파일에서 이어 간다.
+   */
+  async replaceAgent(): Promise<void> {
+    const peer = this.peer;
+    if (this.state.status !== "connected" || !peer) throw new Error("연결되어 있지 않습니다");
+    this.replacing = true;
+    await peer.request(Methods.daemonShutdown).catch(() => {});
   }
 
   private async connect(): Promise<void> {
@@ -131,21 +154,79 @@ export class HostConnection {
     child.on("exit", (code) => {
       peer.close("Host Agent 연결이 끊겼습니다");
       if (this.child === child) this.child = undefined;
+      this.stopStaleCheck();
       if (this.disposed) return;
+      if (this.replacing) {
+        // 예전 데몬을 일부러 껐다. 연결기가 새 번들로 데몬을 띄우도록 곧바로 다시 붙는다.
+        this.replacing = false;
+        this.retryDelay = RECONNECT_MIN_MS;
+        this.setState({ status: "connecting" });
+        this.scheduleReconnect();
+        return;
+      }
       this.setState({ status: "disconnected", reason: lastLines(stderr) || `연결기 종료 (code ${code})` });
       this.scheduleReconnect();
     });
 
     peer
       .request<HostInfo>(Methods.hostInfo, undefined, 60_000)
-      .then((host) => {
+      .then(async (host) => {
+        const agentUpdate = await this.checkAgent(peer, spec.agentBuild, host);
+        if (agentUpdate === "replacing") return;
         this.retryDelay = RECONNECT_MIN_MS;
-        this.setState({ status: "connected", host });
+        this.setState({ status: "connected", host, ...(agentUpdate ? { agentUpdate } : {}) });
+        if (agentUpdate) this.startStaleCheck(peer, spec.agentBuild);
         const waiters = this.readyWaiters;
         this.readyWaiters = [];
         for (const resolve of waiters) resolve();
       })
       .catch(() => child.kill());
+  }
+
+  /**
+   * 떠 있는 데몬이 앱의 번들과 같은지 본다 (설계 §3.4).
+   * 예전 데몬이면 실행 중인 세션이 없을 때 끄고("replacing", 연결기 종료 뒤 다시 붙으면서 새 번들로 뜬다),
+   * 세션이 있으면 그대로 쓰면서 업데이트 대기를 알린다.
+   */
+  private async checkAgent(
+    peer: JsonRpcPeer,
+    expected: string | undefined,
+    host: HostInfo,
+  ): Promise<"replacing" | { liveSessions: number } | undefined> {
+    if (!expected || host.agentBuild === expected) return undefined;
+    const status = await peer.request<DaemonStatus>(Methods.daemonStatus);
+    const liveSessions = status.sessions.filter((s) => s.state === "running").length;
+    const check = checkAgent(expected, host.agentBuild, liveSessions, this.replaceTriedFor === expected);
+    if (check === "replace") {
+      this.replaceTriedFor = expected;
+      this.replacing = true;
+      await peer.request(Methods.daemonShutdown).catch(() => {});
+      return "replacing";
+    }
+    return check === "stale" ? { liveSessions } : undefined;
+  }
+
+  /** 업데이트 대기 중: 세션이 모두 끝나면 예전 데몬을 바꾼다. */
+  private startStaleCheck(peer: JsonRpcPeer, expected: string | undefined): void {
+    this.stopStaleCheck();
+    this.staleTimer = setInterval(() => {
+      void peer
+        .request<DaemonStatus>(Methods.daemonStatus)
+        .then((status) => {
+          if (this.peer !== peer || status.sessions.some((s) => s.state === "running")) return;
+          // 이미 한 번 바꿨는데도 같은 데몬이 떠 있으면(교체 실패) 되풀이하지 않는다.
+          if (this.replaceTriedFor === expected) return;
+          this.replaceTriedFor = expected;
+          this.replacing = true;
+          return peer.request(Methods.daemonShutdown);
+        })
+        .catch(() => {});
+    }, STALE_CHECK_MS);
+  }
+
+  private stopStaleCheck(): void {
+    if (this.staleTimer) clearInterval(this.staleTimer);
+    this.staleTimer = undefined;
   }
 
   private scheduleReconnect(): void {
