@@ -61,6 +61,6 @@ describe("terminalCommand", () => {
 
   it("Pi를 못 찾았거나 모르는 호스트면 오류", () => {
     expect(() => terminalCommand({ hostId: "local", kind: "pi" }, undefined)).toThrow("Pi를 찾지 못했습니다");
-    expect(() => terminalCommand({ hostId: "ssh:box", kind: "shell" }, undefined)).toThrow("아직 지원하지 않습니다");
+    expect(() => terminalCommand({ hostId: "docker:box", kind: "shell" }, undefined)).toThrow("아직 지원하지 않습니다");
   });
 });

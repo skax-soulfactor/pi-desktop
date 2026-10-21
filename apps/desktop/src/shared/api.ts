@@ -61,11 +61,21 @@ export interface TerminalOpenRequest {
 }
 
 export interface HostDescriptor {
-  /** "local" 또는 "wsl:<배포판 이름>" */
+  /** "local", "wsl:<배포판 이름>" 또는 "ssh:<이름>" */
   id: string;
-  kind: "local" | "wsl";
+  kind: "local" | "wsl" | "ssh";
   /** 화면 표시용 이름 */
   label: string;
+}
+
+/** 사용자가 등록한 SSH 호스트 (설계 §5.6). 인증 정보는 담지 않는다: 키와 ssh-agent에 맡긴다 */
+export interface SshHostConfig {
+  /** 화면에 보일 이름. 호스트 id("ssh:<이름>")에도 쓰여 겹칠 수 없다 */
+  name: string;
+  /** ssh에 넘기는 대상: user@host 또는 ~/.ssh/config의 Host 이름 */
+  target: string;
+  /** 비우면 ssh 기본값(22 또는 ~/.ssh/config) */
+  port?: number;
 }
 
 /** 재생 이벤트를 함께 담은 attach 결과 */
@@ -84,6 +94,10 @@ export interface OpenSessionRequest {
 export interface PiDesktopApi {
   /** 이 PC에서 쓸 수 있는 호스트 목록 */
   listHosts(): Promise<HostDescriptor[]>;
+  listSshHosts(): Promise<SshHostConfig[]>;
+  /** SSH 호스트를 추가하거나 고친다. previousName은 고치기 전 이름 */
+  saveSshHost(host: SshHostConfig, previousName?: string): Promise<void>;
+  removeSshHost(name: string): Promise<void>;
   /** 호스트 연결을 시작하고 현재 상태를 돌려준다 (이미 연결 중이면 그대로) */
   connectHost(hostId: string): Promise<ConnectionState>;
   /** 예전 데몬을 지금 끄고 새 번들로 다시 띄운다. 실행 중인 Pi 세션도 끝난다 */
@@ -179,6 +193,9 @@ export interface PiDesktopApi {
 export const IpcChannels = {
   listHosts: "pi:list-hosts",
   connectHost: "pi:connect-host",
+  listSshHosts: "pi:list-ssh-hosts",
+  saveSshHost: "pi:save-ssh-host",
+  removeSshHost: "pi:remove-ssh-host",
   replaceAgent: "pi:replace-agent",
   locatePi: "pi:locate",
   listSessions: "pi:list-sessions",

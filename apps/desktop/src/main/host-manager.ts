@@ -11,6 +11,8 @@ import { readFile } from "node:fs/promises";
 import { agentBuildId } from "./agent-build";
 import { HostConnection } from "./host-connection";
 import { resolveNodeRuntime } from "./node-runtime";
+import { prepareSsh, SSH_PREFIX } from "./ssh";
+import type { SshHostStore } from "./ssh-hosts";
 import { listWslDistros, prepareWsl } from "./wsl";
 
 export const LOCAL_HOST_ID = "local";
@@ -20,6 +22,8 @@ export interface HostManagerOptions {
   /** 번들된 Host Agent 경로 */
   agentScript: string;
   agentVersion: string;
+  /** 사용자가 등록한 SSH 호스트 */
+  sshHosts: SshHostStore;
   onState: (hostId: string, state: ConnectionState) => void;
   onSessionEvent: (hostId: string, notification: SessionEventNotification) => void;
   onSessionExit: (hostId: string, notification: SessionExitNotification) => void;
@@ -30,7 +34,7 @@ export interface HostManagerOptions {
 }
 
 /**
- * 호스트(로컬, WSL 배포판들)마다 Host Agent 연결을 하나씩 관리한다 (설계 §3.1 HostManager).
+ * 호스트(로컬, WSL 배포판들, SSH 호스트들)마다 Host Agent 연결을 하나씩 관리한다 (설계 §3.1 HostManager).
  * 연결은 처음 쓰일 때 만든다. WSL은 띄우는 데 시간이 들어 고르지 않은 배포판까지 미리 깨우지 않는다.
  */
 export class HostManager {
@@ -41,7 +45,11 @@ export class HostManager {
   async listHosts(): Promise<HostDescriptor[]> {
     const local: HostDescriptor = { id: LOCAL_HOST_ID, kind: "local", label: localLabel() };
     const distros = await listWslDistros();
-    return [local, ...distros.map((d): HostDescriptor => ({ id: `${WSL_PREFIX}${d}`, kind: "wsl", label: `WSL: ${d}` }))];
+    return [
+      local,
+      ...distros.map((d): HostDescriptor => ({ id: `${WSL_PREFIX}${d}`, kind: "wsl", label: `WSL: ${d}` })),
+      ...this.options.sshHosts.list().map((h): HostDescriptor => ({ id: `${SSH_PREFIX}${h.name}`, kind: "ssh", label: `SSH: ${h.name}` })),
+    ];
   }
 
   /** 호스트 연결을 돌려준다. 없으면 만들고 연결을 시작한다. */
@@ -69,6 +77,12 @@ export class HostManager {
     return this.connections.get(hostId)?.current ?? { status: "idle" };
   }
 
+  /** 호스트 설정이 바뀌거나 지워졌을 때: 연결기를 끝내고 잊는다. 다음에 쓰면 새 설정으로 다시 연결한다 */
+  forget(hostId: string): void {
+    this.connections.get(hostId)?.dispose();
+    this.connections.delete(hostId);
+  }
+
   /** 앱 종료 시: 연결기만 정리한다. 각 호스트의 데몬과 Pi 세션은 계속 돈다 (설계 §3.4). */
   dispose(): void {
     for (const connection of this.connections.values()) connection.dispose();
@@ -86,6 +100,15 @@ export class HostManager {
     if (hostId.startsWith(WSL_PREFIX)) {
       const distro = hostId.slice(WSL_PREFIX.length);
       return () => prepareWsl({ distro, agentScript: this.options.agentScript, agentVersion: this.options.agentVersion });
+    }
+    if (hostId.startsWith(SSH_PREFIX)) {
+      const name = hostId.slice(SSH_PREFIX.length);
+      // 연결할 때마다 설정을 다시 읽는다 (고친 뒤 다시 붙을 때 새 설정을 쓰도록).
+      return () => {
+        const host = this.options.sshHosts.get(name);
+        if (!host) return Promise.reject(new Error(`등록되지 않은 SSH 호스트입니다: ${name}`));
+        return prepareSsh({ host, agentScript: this.options.agentScript, agentVersion: this.options.agentVersion });
+      };
     }
     throw new Error(`알 수 없는 호스트: ${hostId}`);
   }
