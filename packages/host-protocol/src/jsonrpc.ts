@@ -60,6 +60,8 @@ export const ErrorCodes = {
   SessionNotFound: -32010,
   /** Pi 실행 파일을 찾지 못함 */
   PiNotFound: -32011,
+  /** 다른 앱이 이 세션의 입력 권한(writer)을 가지고 있음 (설계 §3.4) */
+  NotWriter: -32012,
 } as const;
 
 /** 원격에서 돌아온 JSON-RPC 오류를 감싼 예외. */

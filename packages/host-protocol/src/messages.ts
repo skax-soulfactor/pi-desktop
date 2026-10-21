@@ -47,6 +47,8 @@ export const Methods = {
   sessionClose: "session.close",
   /** 다른 프로그램이 쓴 것으로 감지된 표시를 지운다 (사용자가 "무시하고 계속"을 고름) */
   sessionClearExternalWrite: "session.clearExternalWrite",
+  /** 이 세션의 입력 권한(writer)을 가져온다. 가지고 있던 앱은 읽기 전용이 된다 (설계 §3.4) */
+  sessionClaimWriter: "session.claimWriter",
   sessionHistory: "session.history",
   storedInspect: "stored.inspect",
   storedRead: "stored.read",
@@ -84,6 +86,8 @@ export const Notifications = {
   sessionUiResolved: "session.uiResolved",
   /** 이 데몬의 Pi가 쓰는 세션 파일에 다른 프로그램(TUI 등)이 쓴 것을 감지했다 */
   sessionExternalWrite: "session.externalWrite",
+  /** 세션의 입력 권한(writer)이 바뀌었다. 붙어 있는 앱마다 자기 기준 값을 받는다 */
+  sessionWriterChanged: "session.writerChanged",
   /** pi.update 진행 출력 (요청한 앱에만 보낸다) */
   piUpdateOutput: "pi.updateOutput",
   /** 감시 중인 저장 세션 파일이 바뀌었다 (다른 프로그램이 쓰는 중) */
@@ -363,8 +367,23 @@ export interface SessionAttachParams {
   lastSeq: number;
 }
 
+/**
+ * 이 앱(데몬 연결) 기준의 입력 권한 (설계 §3.4 "여러 GUI가 같은 세션에 붙을 때").
+ * - you: 이 앱이 입력할 수 있다
+ * - other: 다른 앱이 가지고 있다. 이 앱은 읽기 전용이고, session.claimWriter로 가져올 수 있다
+ * - none: 아무도 없다 (가지고 있던 앱이 끊김). 먼저 입력하는 앱이 가져간다
+ */
+export type WriterState = "you" | "other" | "none";
+
+export interface SessionWriterChangedNotification {
+  sessionId: string;
+  writer: WriterState;
+}
+
 export interface SessionAttachResult {
   session: SessionSummary;
+  /** 붙은 뒤 이 앱의 입력 권한. 아무도 없었으면 이 앱이 가져간다 */
+  writer: WriterState;
   /**
    * 저널 앞부분이 잘려서 `lastSeq` 바로 다음부터 재생할 수 없었으면 true.
    * 이때 앱은 `get_messages` 같은 Pi 명령으로 현재 상태를 다시 받아야 한다.

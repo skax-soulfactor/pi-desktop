@@ -40,6 +40,8 @@ import {
   type SessionEventNotification,
   type SessionExitNotification,
   type SessionExternalWriteNotification,
+  type SessionWriterChangedNotification,
+  type WriterState,
   type SessionUiResolvedNotification,
   type SessionOpenParams,
   type SessionOpenResult,
@@ -104,6 +106,8 @@ export class AgentDaemon {
   private readonly startedAt = Date.now();
   private readonly clients = new Set<Client>();
   private readonly sessions = new Map<string, AgentSession>();
+  /** 세션별 입력 권한(writer)을 가진 연결 id (설계 §3.4). 없으면 아무도 없다 */
+  private readonly writers = new Map<string, number>();
   private readonly files = new FileWatcher();
   /** 입력창 @ 파일 피커용 파일 목록 캐시 */
   private readonly fileIndex = new FileIndex();
@@ -191,6 +195,10 @@ export class AgentDaemon {
       for (const off of client.watches.values()) off();
       client.watches.clear();
       this.clients.delete(client);
+      // 끊긴 앱의 입력 권한은 비운다. 남은 앱 중 먼저 입력하는 쪽이 가져간다.
+      for (const [sessionId, writer] of [...this.writers]) {
+        if (writer === client.id) this.setWriter(sessionId, undefined);
+      }
       this.scheduleIdleCheck();
     });
 
@@ -351,11 +359,13 @@ export class AgentDaemon {
         externalWriteGraceMs: Number(this.env.PI_DESKTOP_EXTERNAL_WRITE_GRACE_MS) || undefined,
       });
       this.sessions.set(session.id, session);
+      this.writers.set(session.id, client.id); // 연 앱이 입력 권한을 가진다
       this.wireSession(session);
       try {
         await session.start();
       } catch (error) {
         this.sessions.delete(session.id);
+        this.writers.delete(session.id);
         await session.stop().catch(() => {});
         throw error;
       }
@@ -418,6 +428,8 @@ export class AgentDaemon {
         peer.notify(Notifications.sessionEvent, notification);
       }
       client.attached.add(session.id);
+      // 아무도 입력 권한이 없으면 붙은 앱이 가져간다 (다른 앱들에도 알린다).
+      if (!this.writers.has(session.id)) this.setWriter(session.id, client.id);
       const first = entries[0];
       const last = entries[entries.length - 1];
       return {
@@ -425,6 +437,7 @@ export class AgentDaemon {
         truncated,
         replayed: first && last ? { fromSeq: first.seq, toSeq: last.seq } : null,
         pendingUi: session.dialogs.ids(),
+        writer: this.writerState(client, session.id),
       };
     });
 
@@ -439,6 +452,7 @@ export class AgentDaemon {
       if (!p.command || typeof p.command !== "object") {
         throw new JsonRpcError(ErrorCodes.InvalidParams, "command가 필요합니다");
       }
+      if (!isReadOnlyCommand(p.command)) this.requireWriter(client, session.id);
       if (p.noResponse) {
         session.sendRaw(p.command);
         return null;
@@ -448,12 +462,21 @@ export class AgentDaemon {
 
     peer.handle(Methods.sessionClose, async (params) => {
       const session = this.requireSession((params as SessionRef)?.sessionId);
+      // 닫으면 Pi가 끝나 다른 앱의 작업도 끝나므로 입력 권한이 있어야 한다.
+      this.requireWriter(client, session.id);
       this.sessions.delete(session.id);
+      this.writers.delete(session.id);
       await session.stop();
       for (const c of this.clients) c.attached.delete(session.id);
       this.log(`세션 닫음 ${session.id}`);
       this.scheduleIdleCheck();
       return null;
+    });
+
+    peer.handle(Methods.sessionClaimWriter, (params) => {
+      const session = this.requireSession((params as SessionRef)?.sessionId);
+      this.setWriter(session.id, client.id);
+      return { writer: "you" satisfies WriterState };
     });
 
     peer.handle(Methods.sessionClearExternalWrite, (params) => {
@@ -482,6 +505,31 @@ export class AgentDaemon {
       setImmediate(() => void this.shutdown("클라이언트 요청"));
       return null;
     });
+  }
+
+  /** 이 연결 기준의 입력 권한 */
+  private writerState(client: Client, sessionId: string): WriterState {
+    const writer = this.writers.get(sessionId);
+    return writer === undefined ? "none" : writer === client.id ? "you" : "other";
+  }
+
+  /** 입력 권한을 바꾸고, 그 세션에 붙어 있는 연결마다 자기 기준 값을 알린다. */
+  private setWriter(sessionId: string, clientId: number | undefined): void {
+    if (clientId === undefined) this.writers.delete(sessionId);
+    else this.writers.set(sessionId, clientId);
+    for (const c of this.clients) {
+      if (!c.attached.has(sessionId)) continue;
+      const notification: SessionWriterChangedNotification = { sessionId, writer: this.writerState(c, sessionId) };
+      c.peer.notify(Notifications.sessionWriterChanged, notification);
+    }
+  }
+
+  /** 세션을 바꾸는 요청 전에: 권한이 없으면 거부하고, 아무도 없으면 이 연결이 가져간다. */
+  private requireWriter(client: Client, sessionId: string): void {
+    const writer = this.writers.get(sessionId);
+    if (writer === client.id) return;
+    if (writer === undefined) return this.setWriter(sessionId, client.id);
+    throw new JsonRpcError(ErrorCodes.NotWriter, "다른 앱이 이 세션의 입력 권한을 가지고 있습니다. 제어를 가져온 뒤 입력하세요");
   }
 
   /** 세션 이벤트를 붙어 있는 클라이언트들에게 전달한다. */
@@ -573,6 +621,15 @@ function isAlive(path: string): Promise<boolean> {
     });
     socket.once("error", () => resolve(false));
   });
+}
+
+/**
+ * 세션을 바꾸지 않는 Pi 명령: 읽기 전용 앱도 보낼 수 있다.
+ * get_* 조회와, 세션 파일을 읽어 HTML로 내보내는 export_html.
+ */
+export function isReadOnlyCommand(command: Record<string, unknown>): boolean {
+  const type = typeof command.type === "string" ? command.type : "";
+  return type.startsWith("get_") || type === "export_html";
 }
 
 /** child가 parent 안에 있는지 (경로 문자열 기준, 대소문자는 Windows만 무시) */
