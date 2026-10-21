@@ -55,3 +55,13 @@ export function baseName(path: string): string {
   const parts = path.split(/[\\/]+/).filter(Boolean);
   return parts.at(-1) ?? path;
 }
+
+/**
+ * 세션을 HTML로 내보낼 위치: 세션 파일 옆에 확장자만 바꾼다.
+ * Pi 기본값은 작업 폴더(사용자 저장소)라서 피하고, Pi는 없는 폴더를 만들지 않으므로 이미 있는 세션 폴더를 쓴다.
+ * 세션 파일이 없으면 undefined (Pi 기본 위치).
+ */
+export function htmlExportPath(sessionFile: string | undefined): string | undefined {
+  if (!sessionFile) return undefined;
+  return /\.jsonl$/i.test(sessionFile) ? sessionFile.replace(/\.jsonl$/i, ".html") : `${sessionFile}.html`;
+}

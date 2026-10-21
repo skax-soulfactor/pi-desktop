@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionSummary } from "@pi-desktop/host-protocol/messages";
+import { htmlExportPath } from "./format";
 
 /** Pi Model 객체 중 화면에 쓰는 부분 (rpc-commands.md "Model object") */
 export interface ModelInfo {
@@ -21,6 +22,8 @@ export interface SessionStats {
 export interface SessionInfo {
   model?: ModelInfo;
   thinkingLevel?: string;
+  /** 사용자가 붙인 세션 이름 (get_state.sessionName) */
+  sessionName?: string;
   thinkingLevels: string[];
   models: ModelInfo[];
   stats?: SessionStats;
@@ -68,6 +71,8 @@ export function useSessionInfo(hostId: string, session: SessionSummary | undefin
         };
         if (state?.model) next.model = state.model as ModelInfo;
         if (typeof state?.thinkingLevel === "string") next.thinkingLevel = state.thinkingLevel;
+        if (typeof state?.sessionName === "string" && state.sessionName) next.sessionName = state.sessionName;
+        else delete next.sessionName;
         if (stats) next.stats = stats as SessionStats;
         return next;
       });
@@ -116,6 +121,22 @@ export function useSessionInfo(hostId: string, session: SessionSummary | undefin
     await refresh();
   }, [command, refresh]);
 
+  /** 세션 이름을 바꾼다. Pi가 세션 파일에 session_info로 남겨 기록과 TUI /resume에도 보인다 */
+  const rename = useCallback(
+    async (name: string) => {
+      await command({ type: "set_session_name", name });
+      await refresh();
+    },
+    [command, refresh],
+  );
+
+  /** 세션을 HTML로 내보낸다 (세션 파일 옆, htmlExportPath). 만든 파일의 호스트 기준 경로를 돌려준다 */
+  const exportHtml = useCallback(async (sessionFile: string | undefined): Promise<string | undefined> => {
+    const outputPath = htmlExportPath(sessionFile);
+    const data = await command(outputPath ? { type: "export_html", outputPath } : { type: "export_html" });
+    return typeof data?.path === "string" ? data.path : undefined;
+  }, [command]);
+
   // 세션이 바뀌면 처음부터 다시 읽는다.
   const sessionId = session?.sessionId;
   useEffect(() => {
@@ -142,5 +163,5 @@ export function useSessionInfo(hostId: string, session: SessionSummary | undefin
     };
   }, [refresh]);
 
-  return { info, refresh, loadModels, setModel, setThinkingLevel, compact };
+  return { info, refresh, loadModels, setModel, setThinkingLevel, compact, rename, exportHtml };
 }
