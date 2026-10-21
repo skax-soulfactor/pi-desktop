@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   Methods,
+  type FsSearchResult,
   type PiLocation,
   type PiResponse,
   type SessionAttachResult,
@@ -165,6 +166,9 @@ function registerIpc(manager: HostManager): void {
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
   });
+  ipcMain.handle(IpcChannels.searchFiles, (_event, hostId: string, cwd: string, query: string) =>
+    conn(hostId).request<FsSearchResult>(Methods.fsSearch, { cwd, query, limit: 30 }),
+  );
   ipcMain.handle(IpcChannels.revealFile, (_event, hostId: string, cwd: string, path: string) => {
     const target = hostPathForExplorer(hostId, cwd, path, WSL_PREFIX);
     if (!target) return false;

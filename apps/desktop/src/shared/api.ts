@@ -5,6 +5,7 @@
  * preload가 이 인터페이스만 `window.piDesktop`으로 노출한다 (설계 §5.8).
  */
 import type {
+  FsSearchResult,
   HostInfo,
   PiLocation,
   PiResponse,
@@ -84,6 +85,8 @@ export interface PiDesktopApi {
    * 이 PC에서 열 수 없는 호스트면 false.
    */
   revealFile(hostId: string, cwd: string, path: string): Promise<boolean>;
+  /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커). 경로는 작업 폴더 기준, 구분자 "/" */
+  searchFiles(hostId: string, cwd: string, query: string): Promise<FsSearchResult>;
 
   onConnection(listener: (hostId: string, state: ConnectionState) => void): () => void;
   onSessionEvent(listener: (hostId: string, notification: SessionEventNotification) => void): () => void;
@@ -115,6 +118,7 @@ export const IpcChannels = {
   sendRecord: "pi:send-record",
   pickDirectory: "pi:pick-directory",
   revealFile: "pi:reveal-file",
+  searchFiles: "pi:search-files",
   connectionChanged: "pi:connection-changed",
   sessionEvent: "pi:session-event",
   sessionExit: "pi:session-exit",
