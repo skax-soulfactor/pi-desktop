@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.12)
+# Pi Desktop — 설계 문서 (v0.13)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -228,6 +228,7 @@ GUI ──ssh──▶ host-agent connect ──unix socket──▶ host-agentd
     - 대기 큐(v0.12): `queue_update`로 받은 Steer·Follow-up을 입력창 위에 보여준다. "비우고 입력창으로"와 "중단"은 `clear_queue`로 꺼낸 글을 입력창에 되돌린다. Pi는 `abort`만 하면 큐를 이어서 처리하므로, 중단은 큐를 먼저 꺼낸 뒤 abort한다.
 - **상단 바**: 모델 선택(`get_available_models`, 프로바이더별 그룹·검색), thinking level, 컨텍스트 사용량 게이지(`get_session_stats`), 비용, Compact 버튼, 자동 컴팩션 토글
 - **세션 사이드바**: 워크스페이스별 세션 목록과 검색, 이름 변경, HTML export, **트리 뷰(`get_tree`)에서 노드를 골라 fork/clone**
+  - **구현 메모 (M1, v0.13)**: 검색은 실행 중·기록 목록을 이름·첫 메시지·폴더·파일 경로로 거른다. 이름 변경은 보고 있는 실행 중 세션만 된다(`set_session_name`에 Pi 프로세스가 필요). 기록에서 고른 세션은 열어서 바꾼다. HTML export는 세션 파일 옆에 만든다. Pi 기본 위치는 작업 폴더(사용자 저장소)이고, Pi는 없는 폴더를 만들지 않기 때문이다. 만든 파일은 로컬·WSL이면 탐색기에서 보여준다.
 - **확장 UI**: select/confirm/input/editor는 모달로, timeout이 있으면 카운트다운을 보여준다. notify는 토스트, setStatus는 상태바, setWidget은 우측 패널, setTitle은 탭 제목으로.
 - **재시도·오류**: 자동 재시도 진행 표시와 `abort_retry`, 오류 메시지 카드에 "다시 시도" 버튼
   - **구현 메모 (M1, v0.12)**: Pi는 재시도할 때마다 내용 없는 오류 응답을 남기므로, 재시도가 시작되면 그 응답은 화면에서 빼고 재시도 안내로 대신한다. "다시 시도"는 Pi에 해당 RPC가 없어서 **"다시 보내기"**(마지막 질문을 입력창에 채우기)로 구현했다. 바로 보내면 같은 질문이 기록에 겹쳐 쌓이기 때문이다.
