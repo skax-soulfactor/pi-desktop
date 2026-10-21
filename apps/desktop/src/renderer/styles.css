@@ -2622,3 +2622,17 @@ button.toggled {
   color: var(--warn);
   border-color: var(--warn);
 }
+
+.host-compare-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.host-compare-actions button + button {
+  margin-left: 4px;
+}
+
+.host-compare-table td:first-child,
+.host-compare-table td:nth-child(3) {
+  white-space: nowrap;
+}

@@ -4,6 +4,7 @@ import type { HostDescriptor } from "../shared/api";
 import { statusChecks } from "./pi-manager-view";
 import { PiDataPanel } from "./PiDataPanel";
 import { SettingsCopyPanel } from "./SettingsCopyPanel";
+import { HostComparePanel } from "./HostComparePanel";
 import { PiInstallPanel } from "./PiInstallPanel";
 import { PiUpdatePanel } from "./PiUpdatePanel";
 import { ModelsPanel } from "./ModelsPanel";
@@ -62,7 +63,7 @@ export function PiManager({
   const [hostId, setHostId] = useState(initialHostId);
   const { status, latest, error, reload } = usePiStatus(hostId, true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState<"status" | "providers" | "models" | "settings">("status");
+  const [tab, setTab] = useState<"status" | "providers" | "models" | "settings" | "compare">("status");
   const checks = status ? statusChecks(status, latest) : [];
 
   useEffect(() => {
@@ -98,6 +99,9 @@ export function PiManager({
             <button type="button" className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
               설정
             </button>
+            <button type="button" className={tab === "compare" ? "on" : ""} onClick={() => setTab("compare")}>
+              비교
+            </button>
           </div>
           <div className="spacer" />
           <button
@@ -126,6 +130,7 @@ export function PiManager({
         )}
         {tab === "models" && <ModelsPanel hostId={hostId} hosts={hosts} onChanged={() => void reload()} />}
         {tab === "settings" && <SettingsCopyPanel hostId={hostId} hosts={hosts} />}
+        {tab === "compare" && <HostComparePanel hostId={hostId} hosts={hosts} />}
         {tab === "status" && error && <div className="banner error">{error}</div>}
         {tab === "status" && !status && !error && <p className="muted">상태를 읽는 중…</p>}
         {tab === "status" && status && (
