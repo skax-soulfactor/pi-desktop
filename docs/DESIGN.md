@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.13)
+# Pi Desktop — 설계 문서 (v0.14)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -227,6 +227,7 @@ GUI ──ssh──▶ host-agent connect ──unix socket──▶ host-agentd
     - `@` 파일 피커, 이미지 첨부는 후속 작업이다.
     - 대기 큐(v0.12): `queue_update`로 받은 Steer·Follow-up을 입력창 위에 보여준다. "비우고 입력창으로"와 "중단"은 `clear_queue`로 꺼낸 글을 입력창에 되돌린다. Pi는 `abort`만 하면 큐를 이어서 처리하므로, 중단은 큐를 먼저 꺼낸 뒤 abort한다.
 - **상단 바**: 모델 선택(`get_available_models`, 프로바이더별 그룹·검색), thinking level, 컨텍스트 사용량 게이지(`get_session_stats`), 비용, Compact 버튼, 자동 컴팩션 토글
+  - **구현 메모 (M1, v0.14)**: 모델 선택은 검색창이 있는 선택기다. 최근 사용 5개(모든 탭 공통)를 맨 위에 두고 프로바이더별로 묶는다. 키보드(↑·↓·Enter·Esc)로 고를 수 있다. 목록에 없는 현재 모델(확장이 바꾼 모델)도 보인다. 자동 컴팩션 토글은 아직 없다.
 - **세션 사이드바**: 워크스페이스별 세션 목록과 검색, 이름 변경, HTML export, **트리 뷰(`get_tree`)에서 노드를 골라 fork/clone**
   - **구현 메모 (M1, v0.13)**: 검색은 실행 중·기록 목록을 이름·첫 메시지·폴더·파일 경로로 거른다. 이름 변경은 보고 있는 실행 중 세션만 된다(`set_session_name`에 Pi 프로세스가 필요). 기록에서 고른 세션은 열어서 바꾼다. HTML export는 세션 파일 옆에 만든다. Pi 기본 위치는 작업 폴더(사용자 저장소)이고, Pi는 없는 폴더를 만들지 않기 때문이다. 만든 파일은 로컬·WSL이면 탐색기에서 보여준다.
 - **확장 UI**: select/confirm/input/editor는 모달로, timeout이 있으면 카운트다운을 보여준다. notify는 토스트, setStatus는 상태바, setWidget은 우측 패널, setTitle은 탭 제목으로.
