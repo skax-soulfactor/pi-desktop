@@ -3,6 +3,7 @@
  *
  * 명령은 앱이 몰래 실행하지 않는다. 사용자에게 그대로 보여주고, 확인하면 내장 터미널(셸)에 입력해 눈앞에서 돈다.
  * - Windows: npm 전역 설치. PowerShell 실행 정책에 npm.ps1이 막힐 수 있어 npm.cmd를 쓴다. --ignore-scripts.
+ * - Android(Termux, SSH로 연결): 공식 설치기가 받는 Node·Pi 묶음은 Android에서 돌지 않으므로 npm 전역 설치.
  * - macOS·Linux·WSL: 공식 설치기(https://pi.dev/install.sh). 먼저 내려받아 내용을 보여주고, 그다음 실행한다.
  *   설치기는 대화형 메뉴로 설치·업데이트·제거를 모두 다루므로, 관리형 설치의 제거도 설치기로 한다.
  * - 특정 버전은 npm 전역 설치만 된다 (설치기에는 버전 옵션이 없다).
@@ -25,6 +26,11 @@ export interface InstallStep {
 
 export function isWindows(platform: string): boolean {
   return platform === "win32";
+}
+
+/** Node가 알려 주는 Android(Termux) */
+export function isAndroid(platform: string): boolean {
+  return platform === "android";
 }
 
 /** npm 버전 형식 (예: 1.3.0, 1.2.0-beta.1). 이것만 명령에 넣는다 */
@@ -55,6 +61,17 @@ export function installSteps(platform: string, nodeOk: boolean): InstallStep[] {
       note: "npm 전역에 Pi를 설치합니다.",
     });
     return steps;
+  }
+  if (isAndroid(platform)) {
+    // Host Agent가 붙었으면 Node는 이미 있다 (Agent가 Node로 돈다).
+    return [
+      {
+        id: "install",
+        label: "Pi 설치 (npm 전역)",
+        command: `npm install -g --ignore-scripts ${PI_PACKAGE}`,
+        note: "Termux의 npm 전역에 Pi를 설치합니다.",
+      },
+    ];
   }
   return [
     {
