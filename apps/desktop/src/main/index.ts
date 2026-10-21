@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 import {
   Methods,
   type AuthCheckResult,
+  type CustomProviderForm,
+  type ModelsFileView,
+  type ModelsProbeResult,
   type FsSearchResult,
   type ProviderInfo,
   type PiLatest,
@@ -192,6 +195,25 @@ function registerIpc(manager: HostManager): void {
   });
   ipcMain.handle(IpcChannels.authRemove, (_event, hostId: string, provider: string) =>
     conn(hostId).request<{ removed: boolean }>(Methods.authRemove, { provider }),
+  );
+  ipcMain.handle(IpcChannels.modelsRead, (_event, hostId: string) => conn(hostId).request<ModelsFileView>(Methods.modelsRead));
+  ipcMain.handle(
+    IpcChannels.modelsSaveProvider,
+    async (_event, hostId: string, provider: CustomProviderForm, previousId: string | undefined) => {
+      await conn(hostId).request(Methods.modelsSaveProvider, previousId ? { provider, previousId } : { provider });
+    },
+  );
+  ipcMain.handle(IpcChannels.modelsRemoveProvider, (_event, hostId: string, id: string) =>
+    conn(hostId).request<{ removed: boolean }>(Methods.modelsRemoveProvider, { id }),
+  );
+  ipcMain.handle(
+    IpcChannels.modelsProbe,
+    (_event, hostId: string, baseUrl: string, apiKey: string | undefined, providerId: string | undefined) =>
+      conn(hostId).request<ModelsProbeResult>(Methods.modelsProbe, {
+        baseUrl,
+        ...(apiKey !== undefined ? { apiKey } : {}),
+        ...(providerId ? { providerId } : {}),
+      }),
   );
   ipcMain.handle(IpcChannels.searchFiles, (_event, hostId: string, cwd: string, query: string) =>
     conn(hostId).request<FsSearchResult>(Methods.fsSearch, { cwd, query, limit: 30 }),

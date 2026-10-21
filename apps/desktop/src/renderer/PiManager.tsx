@@ -3,6 +3,7 @@ import type { PiLatest, PiStatus } from "@pi-desktop/host-protocol/messages";
 import type { HostDescriptor } from "../shared/api";
 import { statusChecks } from "./pi-manager-view";
 import { PiUpdatePanel } from "./PiUpdatePanel";
+import { ModelsPanel } from "./ModelsPanel";
 import { ProvidersPanel } from "./ProvidersPanel";
 
 /** 한 호스트의 Pi 상태와 최신 버전. 최신 버전은 데몬이 1시간 캐시한다 */
@@ -52,7 +53,7 @@ export function PiManager({
   const [hostId, setHostId] = useState(initialHostId);
   const { status, latest, error, reload } = usePiStatus(hostId, true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState<"status" | "providers">("status");
+  const [tab, setTab] = useState<"status" | "providers" | "models">("status");
   const checks = status ? statusChecks(status, latest) : [];
 
   useEffect(() => {
@@ -82,6 +83,9 @@ export function PiManager({
             <button type="button" className={tab === "providers" ? "on" : ""} onClick={() => setTab("providers")}>
               프로바이더
             </button>
+            <button type="button" className={tab === "models" ? "on" : ""} onClick={() => setTab("models")}>
+              모델
+            </button>
           </div>
           <div className="spacer" />
           <button
@@ -102,6 +106,7 @@ export function PiManager({
           </button>
         </header>
         {tab === "providers" && <ProvidersPanel hostId={hostId} onChanged={() => void reload()} />}
+        {tab === "models" && <ModelsPanel hostId={hostId} onChanged={() => void reload()} />}
         {tab === "status" && error && <div className="banner error">{error}</div>}
         {tab === "status" && !status && !error && <p className="muted">상태를 읽는 중…</p>}
         {tab === "status" && status && (

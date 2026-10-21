@@ -27,6 +27,12 @@ interface ChatMessage {
 export async function startMockLlm(port = 0): Promise<MockLlm> {
   const requests: Array<Record<string, unknown>> = [];
   const server: Server = createServer(async (req, res) => {
+    // OpenAI 호환 모델 목록 (models.json 편집의 "엔드포인트에서 모델 가져오기" 확인용)
+    if (req.method === "GET" && req.url?.endsWith("/models")) {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ object: "list", data: [{ id: "mock-model" }, { id: "mock-extra" }] }));
+      return;
+    }
     if (req.method !== "POST" || !req.url?.endsWith("/chat/completions")) {
       res.writeHead(404).end();
       return;

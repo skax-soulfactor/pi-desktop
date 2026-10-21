@@ -35,6 +35,12 @@ const api: PiDesktopApi = {
   authCheck: (hostId, provider) => ipcRenderer.invoke(IpcChannels.authCheck, hostId, provider),
   authSetApiKey: (hostId, provider, key) => ipcRenderer.invoke(IpcChannels.authSetApiKey, hostId, provider, key),
   authRemove: (hostId, provider) => ipcRenderer.invoke(IpcChannels.authRemove, hostId, provider),
+  modelsRead: (hostId) => ipcRenderer.invoke(IpcChannels.modelsRead, hostId),
+  modelsSaveProvider: (hostId, provider, previousId) =>
+    ipcRenderer.invoke(IpcChannels.modelsSaveProvider, hostId, provider, previousId),
+  modelsRemoveProvider: (hostId, id) => ipcRenderer.invoke(IpcChannels.modelsRemoveProvider, hostId, id),
+  modelsProbe: (hostId, baseUrl, apiKey, providerId) =>
+    ipcRenderer.invoke(IpcChannels.modelsProbe, hostId, baseUrl, apiKey, providerId),
   piLatest: (hostId, force) => ipcRenderer.invoke(IpcChannels.piLatest, hostId, force === true),
   searchFiles: (hostId, cwd, query) => ipcRenderer.invoke(IpcChannels.searchFiles, hostId, cwd, query),
   onConnection: (listener) => subscribe(IpcChannels.connectionChanged, listener),

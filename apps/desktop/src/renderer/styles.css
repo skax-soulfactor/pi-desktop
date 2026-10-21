@@ -1995,3 +1995,101 @@ button.toggled {
 .provider .banner {
   margin-top: 6px;
 }
+
+/* models.json 편집 (설계 §4.7) */
+.models-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.custom-providers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.custom-providers > li {
+  padding: 7px 4px;
+  border-top: 1px solid var(--border);
+}
+
+.custom-provider-row,
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.custom-provider-url {
+  font: 12px ui-monospace, Consolas, monospace;
+  color: var(--muted);
+}
+
+.provider-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.form-grid label.wide {
+  grid-column: 1 / -1;
+}
+
+.form-grid input,
+.form-grid select {
+  color: var(--text);
+}
+
+.model-rows {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.model-rows th {
+  text-align: left;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--muted);
+  padding: 2px 4px;
+}
+
+.model-rows td {
+  padding: 2px 4px;
+}
+
+.model-rows td input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 60px;
+}
+
+.probe-ok {
+  font-size: 12px;
+  color: var(--ok);
+}
+
+.probe-bad {
+  font-size: 12px;
+  color: var(--bad);
+}
+
+.problem-list {
+  margin: 0;
+  padding-left: 18px;
+}

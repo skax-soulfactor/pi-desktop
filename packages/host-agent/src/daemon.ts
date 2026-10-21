@@ -24,6 +24,10 @@ import {
   type AuthProviderParams,
   type AuthSetApiKeyParams,
   type ProviderInfo,
+  type ModelsFileView,
+  type ModelsProbeParams,
+  type ModelsProbeResult,
+  type ModelsSaveParams,
   type PiUpdateParams,
   type PiUpdateResult,
   type SessionAttachParams,
@@ -47,6 +51,7 @@ import { runDir, socketPath } from "./paths";
 import { locatePi } from "./pi-locator";
 import { latestPiVersion, piStatus } from "./pi-status";
 import { agentDirOf, checkAuth, isProviderId, listProviders, removeCredential, setApiKey } from "./auth-store";
+import { probeEndpoint, readModelsFile, removeProvider, saveProvider, storedApiKey } from "./models-store";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
@@ -250,6 +255,42 @@ export class AgentDaemon {
 
     peer.handle(Methods.authRemove, async (params) => {
       return { removed: await removeCredential(agentDirOf(this.env), requireProvider(params)) };
+    });
+
+    peer.handle(Methods.modelsRead, (): Promise<ModelsFileView> => readModelsFile(agentDirOf(this.env)));
+
+    peer.handle(Methods.modelsSaveProvider, async (params) => {
+      const p = (params ?? {}) as Partial<ModelsSaveParams>;
+      const form = p.provider;
+      if (!form || !isProviderId(form.id)) throw new JsonRpcError(ErrorCodes.InvalidParams, "올바른 프로바이더 ID가 필요합니다");
+      if (typeof form.baseUrl !== "string" || !/^https?:\/\//.test(form.baseUrl.trim())) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "baseUrl은 http:// 또는 https://로 시작해야 합니다");
+      }
+      if (typeof form.api !== "string" || !form.api.trim()) throw new JsonRpcError(ErrorCodes.InvalidParams, "api가 필요합니다");
+      if (!Array.isArray(form.models)) throw new JsonRpcError(ErrorCodes.InvalidParams, "models가 필요합니다");
+      if (p.previousId !== undefined && !isProviderId(p.previousId)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "올바르지 않은 원래 ID입니다");
+      }
+      await saveProvider(agentDirOf(this.env), form, p.previousId);
+      return null;
+    });
+
+    peer.handle(Methods.modelsRemoveProvider, async (params) => ({
+      removed: await removeProvider(agentDirOf(this.env), requireId(params)),
+    }));
+
+    peer.handle(Methods.modelsProbe, async (params): Promise<ModelsProbeResult> => {
+      const p = (params ?? {}) as Partial<ModelsProbeParams>;
+      if (typeof p.baseUrl !== "string" || !/^https?:\/\//.test(p.baseUrl.trim())) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "baseUrl은 http:// 또는 https://로 시작해야 합니다");
+      }
+      const key =
+        p.apiKey !== undefined
+          ? p.apiKey
+          : isProviderId(p.providerId)
+            ? await storedApiKey(agentDirOf(this.env), p.providerId)
+            : undefined;
+      return probeEndpoint(p.baseUrl.trim(), key, this.env);
     });
 
     peer.handle(Methods.sessionOpen, async (params): Promise<SessionOpenResult> => {
@@ -493,6 +534,12 @@ function isAlive(path: string): Promise<boolean> {
     });
     socket.once("error", () => resolve(false));
   });
+}
+
+function requireId(params: unknown): string {
+  const id = (params as { id?: unknown } | undefined)?.id;
+  if (!isProviderId(id)) throw new JsonRpcError(ErrorCodes.InvalidParams, "올바른 프로바이더 ID가 필요합니다");
+  return id;
 }
 
 function requireProvider(params: unknown): string {

@@ -6,6 +6,9 @@
  */
 import type {
   AuthCheckResult,
+  CustomProviderForm,
+  ModelsFileView,
+  ModelsProbeResult,
   FsSearchResult,
   ProviderInfo,
   PiLatest,
@@ -108,6 +111,13 @@ export interface PiDesktopApi {
   authSetApiKey(hostId: string, provider: string, key: string): Promise<void>;
   /** auth.json에서 자격 증명 삭제 */
   authRemove(hostId: string, provider: string): Promise<{ removed: boolean }>;
+  /** models.json의 사용자 정의 프로바이더 (그대로 키 값은 가려져 온다) */
+  modelsRead(hostId: string): Promise<ModelsFileView>;
+  /** 사용자 정의 프로바이더 저장. previousId는 ID를 바꿀 때 원래 ID */
+  modelsSaveProvider(hostId: string, provider: CustomProviderForm, previousId?: string): Promise<void>;
+  modelsRemoveProvider(hostId: string, id: string): Promise<{ removed: boolean }>;
+  /** 엔드포인트 연결 시험. apiKey가 없고 providerId가 있으면 저장된 키를 쓴다 */
+  modelsProbe(hostId: string, baseUrl: string, apiKey?: string, providerId?: string): Promise<ModelsProbeResult>;
   /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커). 경로는 작업 폴더 기준, 구분자 "/" */
   searchFiles(hostId: string, cwd: string, query: string): Promise<FsSearchResult>;
 
@@ -150,6 +160,10 @@ export const IpcChannels = {
   authCheck: "pi:auth-check",
   authSetApiKey: "pi:auth-set-api-key",
   authRemove: "pi:auth-remove",
+  modelsRead: "pi:models-read",
+  modelsSaveProvider: "pi:models-save-provider",
+  modelsRemoveProvider: "pi:models-remove-provider",
+  modelsProbe: "pi:models-probe",
   piUpdateOutput: "pi:pi-update-output",
   connectionChanged: "pi:connection-changed",
   sessionEvent: "pi:session-event",
