@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { StoredSession } from "@pi-desktop/host-protocol/messages";
 import type { PendingQueue } from "./chat-state";
 import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
+import { CommandPalette } from "./CommandPalette";
+import type { PaletteCommand } from "./palette";
 import { Composer } from "./Composer";
 import { modelAcceptsImages, rpcImages, type ImageAttachment } from "./attachments";
 import type { ParsedInput, PiCommand } from "./composer-input";
@@ -35,12 +38,14 @@ interface WorkspaceProps {
   /** 지금 보이는 탭인지. 숨긴 탭도 연결과 상태는 유지한다 */
   active: boolean;
   onStatus: (tabId: string, status: WorkspaceStatus) => void;
+  /** 명령 팔레트에 넣을 앱 수준 명령 (탭 열기·닫기·이동) */
+  appCommands: PaletteCommand[];
 }
 
 /**
  * 워크스페이스 하나 = 탭 하나 (설계 §3.3). 호스트와 세션을 탭마다 따로 가진다.
  */
-export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
+export function Workspace({ tabId, active, onStatus, appCommands }: WorkspaceProps) {
   const {
     hosts,
     host,
@@ -79,6 +84,9 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
   /** 값이 바뀌면 사이드바가 기록을 다시 읽는다 */
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [treeOpen, setTreeOpen] = useState(false);
+  /** 명령 팔레트가 열려 있으면 그때 읽은 최근 기록 */
+  const [palette, setPalette] = useState<{ history: StoredSession[] } | undefined>();
+  const root = useRef<HTMLDivElement>(null);
   const [handoffAsk, setHandoffAsk] = useState(false);
   const [handoffCommand, setHandoffCommand] = useState<string | undefined>();
 
@@ -241,6 +249,149 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
    * 중단. Pi는 abort만 하면 큐에 남은 메시지를 이어서 처리하므로, 큐를 먼저 입력창으로 꺼낸 뒤 멈춘다
    * (Pi rpc-commands.md clear_queue 안내와 같은 순서).
    */
+  /** 명령 팔레트를 연다. 최근 기록과 Pi 명령 목록을 함께 읽는다 */
+  async function openPalette() {
+    setPalette({ history: [] });
+    if (session && !commands) loadCommands();
+    if (!connected) return;
+    const history = await window.piDesktop.listHistory(hostId, undefined).catch(() => []);
+    setPalette((prev) => (prev ? { history: history.slice(0, 15) } : prev));
+  }
+
+  // 팔레트가 닫혀 화면에서 빠진 다음에 포커스를 준다 (같은 순간에 주면 사라지는 입력칸에 밀린다).
+  const focusComposer = () =>
+    setTimeout(() => root.current?.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(), 30);
+
+  /** 지금 상태에서 쓸 수 있는 명령. 쓸 수 없는 것은 disabled로 빠진다 */
+  function paletteCommands(history: StoredSession[]): PaletteCommand[] {
+    const ready = Boolean(session) && connected && !lost;
+    const idle = ready && !chat.running;
+    const list: PaletteCommand[] = [...appCommands];
+    if (session) {
+      list.push({
+        id: "session-new-here",
+        group: "세션",
+        title: "같은 폴더에서 새 세션",
+        hint: baseName(session.cwd),
+        disabled: !connected,
+        run: () => void guard(() => openSession(session.cwd)),
+      });
+    }
+    for (const s of sessions) {
+      if (s.sessionId === session?.sessionId || s.state !== "running") continue;
+      list.push({
+        id: `session-${s.sessionId}`,
+        group: "실행 중",
+        title: s.title ?? baseName(s.cwd),
+        hint: baseName(s.cwd),
+        run: () => void guard(() => switchTo(s)),
+      });
+    }
+    // 실행 중인 세션은 위 "실행 중"에 있으므로 기록에서는 뺀다.
+    const liveFiles = new Set(sessions.filter((s) => s.state === "running").map((s) => s.sessionFile));
+    for (const h of history) {
+      if (h.path === session?.sessionFile || liveFiles.has(h.path)) continue;
+      list.push({
+        id: `history-${h.path}`,
+        group: "기록",
+        title: h.name ?? (h.firstMessage || "(빈 세션)"),
+        hint: `${formatRelative(h.modified)} · ${baseName(h.cwd)}`,
+        run: () => void guard(() => openStored(h)),
+      });
+    }
+    list.push(
+      { id: "abort", group: "실행", title: "중단", disabled: !ready || !chat.running, run: () => void guard(abortRun) },
+      {
+        id: "clear-queue",
+        group: "실행",
+        title: "대기 중인 메시지를 입력창으로",
+        disabled: !ready || chat.queue.steering.length + chat.queue.followUp.length === 0,
+        run: () => void guardQuiet(clearQueue),
+      },
+      {
+        id: "compact",
+        group: "세션",
+        title: "대화 요약 (Compact)",
+        keywords: "compaction",
+        disabled: !idle,
+        run: () => void guard(sessionInfo.compact),
+      },
+      {
+        id: "auto-compact",
+        group: "세션",
+        title: sessionInfo.info.autoCompaction ? "자동 컴팩션 끄기" : "자동 컴팩션 켜기",
+        keywords: "auto compaction 자동 요약",
+        disabled: !ready || sessionInfo.info.autoCompaction === undefined,
+        run: () => void guard(() => sessionInfo.setAutoCompaction(!sessionInfo.info.autoCompaction)),
+      },
+      {
+        id: "tree",
+        group: "세션",
+        title: treeOpen ? "트리 닫기" : "트리 열기",
+        keywords: "tree fork 분기",
+        disabled: !session,
+        run: () => setTreeOpen((v) => !v),
+      },
+      { id: "export", group: "세션", title: "HTML로 내보내기", keywords: "export html", disabled: !ready, run: () => void guard(exportHtml) },
+      {
+        id: "tui",
+        group: "세션",
+        title: "터미널 pi(TUI)에서 열기",
+        keywords: "tui handoff terminal",
+        disabled: !ready || !session?.sessionFile,
+        run: () => setHandoffAsk(true),
+      },
+    );
+    for (const level of sessionInfo.info.thinkingLevels) {
+      list.push({
+        id: `thinking-${level}`,
+        group: "Thinking",
+        title: `Thinking: ${level}`,
+        disabled: !idle || level === sessionInfo.info.thinkingLevel,
+        run: () => void guard(() => sessionInfo.setThinkingLevel(level)),
+      });
+    }
+    const current = sessionInfo.info.model;
+    for (const model of sessionInfo.info.models) {
+      list.push({
+        id: `model-${model.provider}/${model.id}`,
+        group: "모델",
+        title: model.name ?? model.id,
+        hint: model.provider,
+        keywords: model.id,
+        disabled: !idle || (current?.provider === model.provider && current.id === model.id),
+        run: () => void guard(() => sessionInfo.setModel(model.provider, model.id)),
+      });
+    }
+    for (const c of commands ?? []) {
+      list.push({
+        id: `pi-${c.name}`,
+        group: "Pi 명령",
+        title: `/${c.name}`,
+        ...(c.description ? { hint: c.description } : {}),
+        disabled: !ready,
+        run: () => {
+          setDraft(`/${c.name} `);
+          focusComposer();
+        },
+      });
+    }
+    return list;
+  }
+
+  // Ctrl+K: 명령 팔레트 (보이는 탭만)
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        void openPalette();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   async function abortRun() {
     if (chat.queue.steering.length + chat.queue.followUp.length > 0) await clearQueue();
     await send({ type: "abort" });
@@ -272,7 +423,7 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
   }
 
   return (
-    <div className="app" hidden={!active}>
+    <div className="app" hidden={!active} ref={root}>
       <header className="topbar">
         <div className="brand">Pi Desktop</div>
         <select
@@ -459,6 +610,7 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
           onModel={(provider, id) => void guard(() => sessionInfo.setModel(provider, id))}
           onThinking={(level) => void guard(() => sessionInfo.setThinkingLevel(level))}
           onCompact={() => void guard(sessionInfo.compact)}
+          onAutoCompaction={(enabled) => void guard(() => sessionInfo.setAutoCompaction(enabled))}
           treeOpen={treeOpen}
           onToggleTree={() => setTreeOpen((open) => !open)}
         />
@@ -547,6 +699,15 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
         </ChoiceDialog>
       )}
       {active && <Toasts toasts={ui.toasts} onDismiss={dismissToast} />}
+      {active && palette && (
+        <CommandPalette
+          commands={paletteCommands(palette.history)}
+          onClose={() => {
+            setPalette(undefined);
+            focusComposer();
+          }}
+        />
+      )}
     </div>
   );
 }
