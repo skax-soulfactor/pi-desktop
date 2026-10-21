@@ -2570,3 +2570,19 @@ button.toggled {
   white-space: pre-wrap;
   color: var(--muted);
 }
+
+/* 가져온 스킬·프롬프트 관리 */
+.imported-row {
+  flex-wrap: wrap;
+}
+
+.imported-actions {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.imported-diff {
+  margin-top: 6px;
+  width: 100%;
+}

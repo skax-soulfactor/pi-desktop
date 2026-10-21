@@ -118,7 +118,7 @@ function DiffCard({ item, lines, onReveal }: { item: ToolItem; lines: DiffLine[]
   );
 }
 
-function DiffView({ lines }: { lines: DiffLine[] }) {
+export function DiffView({ lines }: { lines: DiffLine[] }) {
   const [shown, setShown] = useState(DIFF_PAGE);
   const showNumbers = lines.some((l) => l.oldNo !== undefined || l.newNo !== undefined);
   return (
