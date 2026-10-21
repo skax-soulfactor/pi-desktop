@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   baseNameOf,
   copyWarnings,
+  droppedText,
   isAlreadyExists,
+  isLocalEndpoint,
   isLocalPathSource,
   joinHostPath,
   packageInstallArgs,
@@ -48,5 +50,21 @@ describe("baseNameOf·joinHostPath", () => {
     expect(baseNameOf("/home/me/.pi/agent/APPEND_SYSTEM.md")).toBe("APPEND_SYSTEM.md");
     expect(joinHostPath("/home/me/.pi/agent", "AGENTS.md", "linux")).toBe("/home/me/.pi/agent/AGENTS.md");
     expect(joinHostPath("C:\\Users\\me\\.pi\\agent", "AGENTS.md", "win32")).toBe("C:\\Users\\me\\.pi\\agent\\AGENTS.md");
+  });
+});
+
+describe("isLocalEndpoint·droppedText", () => {
+  it("대상 기준으로 해석되는 로컬 주소를 알아본다", () => {
+    for (const url of ["http://localhost:11434/v1", "http://127.0.0.1:1234", "http://0.0.0.0:8080", "http://[::1]:8000"]) {
+      expect(isLocalEndpoint(url)).toBe(true);
+    }
+    expect(isLocalEndpoint("https://api.example.com/v1")).toBe(false);
+    expect(isLocalEndpoint(undefined)).toBe(false);
+    expect(isLocalEndpoint("not a url")).toBe(false);
+  });
+
+  it("뺀 비밀 필드를 알린다", () => {
+    expect(droppedText([])).toBeUndefined();
+    expect(droppedText(["apiKey", "headers.Authorization"])).toContain("API 키, 헤더 Authorization");
   });
 });

@@ -2586,3 +2586,16 @@ button.toggled {
   margin-top: 6px;
   width: 100%;
 }
+
+/* models.json 프로바이더 다른 호스트로 복사 */
+.provider-copy {
+  margin-top: 6px;
+}
+
+.provider-copy-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}

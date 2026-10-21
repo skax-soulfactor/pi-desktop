@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import type { HostDescriptor } from "../shared/api";
+import { ProviderCopyPanel } from "./ProviderCopyPanel";
 import type { ModelsFileView, ModelsProbeResult } from "@pi-desktop/host-protocol/messages";
 import {
   addDiscovered,
@@ -26,13 +28,24 @@ const KEY_MODE_LABELS: Record<KeyMode, string> = {
  * Pi 관리 창의 "모델" 탭 (설계 §4.7): models.json의 사용자 정의 프로바이더를 폼으로 편집한다.
  * 폼이 다루지 않는 설정(compat, headers 등)은 데몬이 그대로 남긴다.
  */
-export function ModelsPanel({ hostId, onChanged }: { hostId: string; onChanged: () => void }) {
+export function ModelsPanel({
+  hostId,
+  hosts = [],
+  onChanged,
+}: {
+  hostId: string;
+  /** 다른 호스트가 있으면 프로바이더를 그쪽으로 복사할 수 있다 */
+  hosts?: HostDescriptor[];
+  onChanged: () => void;
+}) {
   const [file, setFile] = useState<ModelsFileView | undefined>();
   const [draft, setDraft] = useState<ProviderDraft | undefined>();
   const [problems, setProblems] = useState<string[]>([]);
   const [error, setError] = useState<string | undefined>();
   const [probe, setProbe] = useState<ModelsProbeResult | "probing" | undefined>();
   const [removing, setRemoving] = useState<string | undefined>();
+  /** 다른 호스트로 복사하려고 연 프로바이더 */
+  const [copying, setCopying] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -131,10 +144,24 @@ export function ModelsPanel({ hostId, onChanged }: { hostId: string; onChanged: 
                   <button type="button" className="small" disabled={busy || Boolean(file.error)} onClick={() => edit(draftFromView(p))}>
                     편집
                   </button>
+                  {hosts.length > 1 && (
+                    <button
+                      type="button"
+                      className="small"
+                      disabled={busy || Boolean(file.error)}
+                      onClick={() => setCopying(copying === p.id ? undefined : p.id)}
+                      title="다른 호스트의 models.json으로 복사합니다 (키는 옮기지 않음)"
+                    >
+                      다른 호스트로
+                    </button>
+                  )}
                   <button type="button" className="small danger" disabled={busy || Boolean(file.error)} onClick={() => setRemoving(p.id)}>
                     삭제
                   </button>
                 </div>
+                {copying === p.id && (
+                  <ProviderCopyPanel hosts={hosts} fromHostId={hostId} providerId={p.id} baseUrl={p.baseUrl} onClose={() => setCopying(undefined)} />
+                )}
                 {removing === p.id && (
                   <div className="banner warn">
                     <span>models.json에서 {p.id} 프로바이더를 지웁니다 (models.json.bak에 백업).</span>
