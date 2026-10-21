@@ -1570,3 +1570,128 @@ button.toggled {
   max-height: 160px;
   border-radius: 6px;
 }
+
+/* 활동 패널 (모든 탭·호스트의 세션) */
+.tabbar-spacer {
+  flex: 1;
+}
+
+.activity {
+  display: flex;
+  align-items: center;
+  padding-bottom: 4px;
+}
+
+.activity-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
+.activity-count {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.activity-button.needs-input .activity-count {
+  background: var(--warn);
+}
+
+/* 탭 바는 가로 스크롤 영역이라 그 안에 두면 잘리므로 화면 기준으로 띄운다 */
+.activity-panel {
+  position: fixed;
+  top: 40px;
+  right: 8px;
+  width: 460px;
+  max-width: calc(100vw - 16px);
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+  z-index: 30;
+}
+
+.activity-panel ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-empty {
+  margin: 8px;
+  color: var(--muted);
+}
+
+.activity-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "dot title state"
+    "dot meta meta";
+  column-gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+}
+
+.activity-item:hover {
+  background: var(--panel-2);
+}
+
+.activity-dot {
+  grid-area: dot;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.activity-dot.busy {
+  background: var(--accent);
+}
+
+.activity-dot.input {
+  background: var(--warn);
+}
+
+.activity-dot.idle {
+  background: var(--ok);
+}
+
+.activity-title {
+  grid-area: title;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-state {
+  grid-area: state;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.activity-item.input .activity-state {
+  color: var(--warn);
+}
+
+.activity-meta {
+  grid-area: meta;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -26,6 +26,8 @@ export interface WorkspaceStatus {
   /** 확장 다이얼로그, 끼어들기 경고, 열기 선택처럼 사용자의 답을 기다림 */
   needsInput: boolean;
   disconnected: boolean;
+  /** 보고 있는 세션 (활동 패널에서 이 탭으로 오기 위해) */
+  sessionId?: string;
 }
 
 interface WorkspaceProps {
@@ -134,13 +136,22 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
   }, [ui.title, active]);
 
   // 탭 표시와 백그라운드 알림을 위해 상태를 알린다.
-  const statusTitle = ui.title ?? sessionInfo.info.sessionName ?? follow?.title ?? (session ? baseName(session.cwd) : follow ? baseName(follow.cwd) : "새 탭");
+  const statusTitle = ui.title ?? sessionInfo.info.sessionName ?? session?.title ?? follow?.title ?? (session ? baseName(session.cwd) : follow ? baseName(follow.cwd) : "새 탭");
   const needsInput = ui.dialogs.length > 0 || externalWrite || Boolean(pendingOpen);
   const disconnected = connection.status === "disconnected";
   const hostLabel = host?.label ?? hostId;
   useEffect(() => {
-    onStatus(tabId, { title: statusTitle, hostId, hostLabel, running: chat.running, needsInput, disconnected });
-  }, [onStatus, tabId, statusTitle, hostId, hostLabel, chat.running, needsInput, disconnected]);
+    const sessionId = session?.sessionId;
+    onStatus(tabId, {
+      title: statusTitle,
+      hostId,
+      hostLabel,
+      running: chat.running,
+      needsInput,
+      disconnected,
+      ...(sessionId ? { sessionId } : {}),
+    });
+  }, [onStatus, tabId, statusTitle, hostId, hostLabel, chat.running, needsInput, disconnected, session?.sessionId]);
 
   // 확장이 set_editor_text로 넣어 달라고 한 글을 입력창에 채운다.
   // 요청(seq)마다 한 번만 적용해, 사용자가 이어서 고친 내용을 다시 덮어쓰지 않는다.
