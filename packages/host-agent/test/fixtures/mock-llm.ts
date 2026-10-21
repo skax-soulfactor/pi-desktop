@@ -8,6 +8,7 @@ import type { AddressInfo } from "node:net";
  * - 마지막 메시지가 툴 결과면 → "파일 내용: <결과>" 텍스트
  * - 사용자 메시지에 "read:<경로>"가 있으면 → read 툴 호출
  * - 사용자 메시지에 "bash:<명령>"이 있으면 → bash 툴 호출 (확장의 위험 명령 확인 테스트용)
+ * - 사용자 메시지가 "tool:<툴 이름> <JSON 인자>"이면 → 그 툴을 그 인자로 호출 (edit·write 등 툴 카드 확인용)
  * - 그 밖에는 → "echo: <사용자 메시지>" 텍스트를 단어 단위로 스트리밍
  */
 export interface MockLlm {
@@ -58,6 +59,7 @@ export async function startMockLlm(port = 0): Promise<MockLlm> {
       );
 
     const userText = textOf([...messages].reverse().find((m) => m.role === "user")?.content);
+    const anyTool = /^tool:(\S+)\s+([\s\S]+)$/.exec(userText.trim());
     const readTarget = /read:(\S+)/.exec(userText)?.[1];
     const bashCommand = /bash:(.+)$/.exec(userText)?.[1]?.trim();
     const toolCall = (name: string, args: Record<string, unknown>) => {
@@ -72,6 +74,8 @@ export async function startMockLlm(port = 0): Promise<MockLlm> {
     if (last?.role === "tool") {
       for (const word of `파일 내용: ${textOf(last.content).trim()}`.split(/(?<= )/)) send({ content: word });
       send({}, "stop");
+    } else if (anyTool) {
+      toolCall(anyTool[1]!, JSON.parse(anyTool[2]!) as Record<string, unknown>);
     } else if (readTarget) {
       toolCall("read", { path: readTarget });
     } else if (bashCommand) {

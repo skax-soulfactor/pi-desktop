@@ -79,6 +79,11 @@ export interface PiDesktopApi {
   sendRecord(hostId: string, sessionId: string, record: Record<string, unknown>): Promise<void>;
   /** 폴더 선택 대화상자 (로컬 호스트 전용) */
   pickDirectory(): Promise<string | undefined>;
+  /**
+   * 툴이 다룬 파일을 탐색기에서 보여준다 (파일을 실행하지 않도록 열지는 않고 위치만 보여준다).
+   * 이 PC에서 열 수 없는 호스트면 false.
+   */
+  revealFile(hostId: string, cwd: string, path: string): Promise<boolean>;
 
   onConnection(listener: (hostId: string, state: ConnectionState) => void): () => void;
   onSessionEvent(listener: (hostId: string, notification: SessionEventNotification) => void): () => void;
@@ -109,6 +114,7 @@ export const IpcChannels = {
   sendCommand: "pi:send-command",
   sendRecord: "pi:send-record",
   pickDirectory: "pi:pick-directory",
+  revealFile: "pi:reveal-file",
   connectionChanged: "pi:connection-changed",
   sessionEvent: "pi:session-event",
   sessionExit: "pi:session-exit",

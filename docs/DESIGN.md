@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.10)
+# Pi Desktop — 설계 문서 (v0.11)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -208,6 +208,11 @@ GUI ──ssh──▶ host-agent connect ──unix socket──▶ host-agentd
   - `bash`/`powershell`: 터미널 스타일 출력, 종료 코드, 실행 시간
   - `read`/`grep`/`find`: 파일 링크와 결과 요약
   - 알 수 없는 툴(확장·MCP): 인자와 결과를 JSON 트리로
+  - **구현 메모 (M1, v0.11)**
+    - 표시 규칙은 `tool-view.ts`에 두고 Pi 1.3.0의 실제 결과로 테스트한다. edit는 `details.patch`(표준 unified diff)를 쓰고, patch가 없으면(실행 중, 실패) 인자의 `oldText`·`newText`로 미리보기를 그린다.
+    - "파일 열기"는 실행 파일이 실행될 위험이 있어서 탐색기에서 **위치만 보여준다**(`shell.showItemInFolder`). WSL은 `\\wsl.localhost\<배포판>` 경로로 바꾼다. SSH 호스트에서는 버튼을 숨긴다.
+    - 툴 호출 id를 턴마다 다시 쓰는 모델 서버가 있어서, 같은 id의 결과는 가장 최근 카드에 붙인다.
+    - read·grep·find·ls의 결과 링크(클릭해서 파일 열기)는 후속 작업이다.
 - **입력창**
   - 멀티라인 에디터, 히스토리(↑), 초안 자동 저장
   - `/` 자동완성: `get_commands`(프롬프트 템플릿, 스킬, 확장 커맨드)와 각 설명을 표시

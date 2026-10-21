@@ -38,7 +38,7 @@ npm run dev:mock -w @pi-desktop/desktop
 
 - 저장소의 Pi devDependency(1.3.0)와 OpenAI 호환 mock LLM(포트 18911)을 씁니다.
 - Pi 설정과 데몬 홈은 저장소의 `.dev/` 아래로 격리되어 실제 `~/.pi`, `~/.pi-desktop`과 섞이지 않습니다.
-- 프롬프트 예: `안녕` → 그대로 echo, `read:package.json` → read 툴 호출 후 내용 응답, `bash:<명령>` → bash 툴 호출
+- 프롬프트 예: `안녕` → 그대로 echo, `read:package.json` → read 툴 호출 후 내용 응답, `bash:<명령>` → bash 툴 호출, `tool:<툴 이름> <JSON 인자>` → 그 툴 호출 (예: `tool:edit {"path":"a.txt","edits":[{"oldText":"a","newText":"b"}]}`). 개발 실행에서는 grep·find·ls 툴도 켜져 있습니다.
 - `-- --demo-ext`를 붙이면 Pi에 들어 있는 rpc-demo 확장을 함께 불러옵니다. 확장 UI(다이얼로그·알림·위젯·상태)를 확인할 때 씁니다.
   - `/rpc-input`, `/rpc-editor`, `/rpc-prefill` 명령, `bash:rm -rf ./x`(위험 명령 확인 다이얼로그)
 
@@ -73,6 +73,13 @@ npm test
 - 탭마다 호스트와 세션을 따로 고릅니다. 숨긴 탭의 작업도 계속 돌고, 끝나거나 입력이 필요해지면 탭에 "완료"·"입력 필요"를 표시하고 OS 알림을 띄웁니다.
 - 탭 목록은 저장되어 앱을 다시 열면 그대로 돌아옵니다. 탭을 닫아도 Pi 세션은 계속 돌고, 사이드바의 "실행 중"에서 다시 열 수 있습니다.
 - 단축키: `Ctrl+T` 새 탭, `Ctrl+W` 탭 닫기, `Ctrl+Tab`·`Ctrl+Shift+Tab` 탭 이동, `Ctrl+1~9` 탭 고르기.
+
+## 툴 카드
+
+- edit·write: 줄 번호가 붙은 diff와 추가·삭제 수. "위치 열기"로 탐색기에서 파일을 봅니다 (로컬, WSL).
+- bash·powershell: 터미널 모양 출력과 종료 코드
+- read·grep·find·ls: 대상과 결과 줄 수. 눌러서 결과를 펼칩니다.
+- 확장·MCP 툴: 인자와 부가 정보를 JSON 트리로
 
 ## 입력창
 

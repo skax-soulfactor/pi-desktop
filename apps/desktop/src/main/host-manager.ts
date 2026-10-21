@@ -11,7 +11,7 @@ import { resolveNodeRuntime } from "./node-runtime";
 import { listWslDistros, prepareWsl } from "./wsl";
 
 export const LOCAL_HOST_ID = "local";
-const WSL_PREFIX = "wsl:";
+export const WSL_PREFIX = "wsl:";
 
 export interface HostManagerOptions {
   /** 번들된 Host Agent 경로 */

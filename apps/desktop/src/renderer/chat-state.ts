@@ -37,8 +37,10 @@ export type ChatItem =
       status: "running" | "done" | "error";
       output: string;
       durationMs?: number;
-      /** `!` 셸 명령의 종료 코드 */
+      /** 셸 명령(`!` 또는 bash 툴)의 종료 코드 */
       exitCode?: number;
+      /** 툴별 부가 정보 (예: edit의 diff·patch). 툴 카드가 해석한다 */
+      details?: unknown;
     }
   | { kind: "notice"; key: string; level: "info" | "error"; text: string };
 
@@ -125,6 +127,10 @@ export function applyEvent(state: ChatState, seq: number, raw: unknown): ChatSta
           output: resultText(event.result),
         };
         if (typeof event.durationMs === "number") updated.durationMs = event.durationMs;
+        const result = event.result as AnyEvent | undefined;
+        if (result?.details !== undefined) updated.details = result.details;
+        const exitCode = (result?.structuredContent as AnyEvent | undefined)?.exit_code;
+        if (typeof exitCode === "number") updated.exitCode = exitCode;
         return updated;
       });
 
@@ -271,13 +277,14 @@ export function snapshotState(messages: unknown[], lastSeq: number, running: boo
         break;
       }
       case "toolResult": {
-        const index = items.findIndex((item) => item.kind === "tool" && item.toolCallId === String(message.toolCallId));
+        const index = items.findLastIndex((item) => item.kind === "tool" && item.toolCallId === String(message.toolCallId));
         const tool = items[index];
         if (tool?.kind === "tool") {
           items[index] = {
             ...tool,
             status: message.isError === true ? "error" : "done",
             output: contentText(message.content),
+            ...(message.details !== undefined ? { details: message.details } : {}),
           };
         }
         break;
@@ -406,7 +413,8 @@ function updateTool(
   toolCallId: string,
   update: (item: Extract<ChatItem, { kind: "tool" }>) => ChatItem,
 ): ChatState {
-  const index = state.items.findIndex((item) => item.kind === "tool" && item.toolCallId === toolCallId);
+  // 툴 호출 id를 턴마다 다시 쓰는 모델 서버도 있어서(예: 매번 call_1) 가장 최근 카드를 고친다.
+  const index = state.items.findLastIndex((item) => item.kind === "tool" && item.toolCallId === toolCallId);
   if (index === -1) return state;
   const items = [...state.items];
   items[index] = update(items[index] as Extract<ChatItem, { kind: "tool" }>);
