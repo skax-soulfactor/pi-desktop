@@ -10,6 +10,7 @@ import {
   type ModelsFileView,
   type ModelsProbeResult,
   type FsListDirResult,
+  type ResourcesView,
   type FsSearchResult,
   type ProviderInfo,
   type PiLatest,
@@ -275,6 +276,10 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore): void {
   );
   ipcMain.handle(IpcChannels.listDir, (_event, hostId: string, path: string | undefined) =>
     conn(hostId).request<FsListDirResult>(Methods.fsListDir, path ? { path } : {}),
+  );
+  // 패키지 경로 해석에 npm 조회가 끼어 느릴 수 있어 넉넉히 기다린다.
+  ipcMain.handle(IpcChannels.listResources, (_event, hostId: string, cwd: string) =>
+    conn(hostId).request<ResourcesView>(Methods.resourcesList, { cwd }, 120_000),
   );
   ipcMain.handle(IpcChannels.revealFile, (_event, hostId: string, cwd: string, path: string) => {
     const target = hostPathForExplorer(hostId, cwd, path, WSL_PREFIX);

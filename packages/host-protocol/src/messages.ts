@@ -56,6 +56,8 @@ export const Methods = {
   storedUnwatch: "stored.unwatch",
   /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커) */
   fsSearch: "fs.search",
+  /** 작업 폴더에서 Pi가 불러오는 리소스 목록 (AGENTS.md·프롬프트·스킬·확장, 읽기 전용) */
+  resourcesList: "resources.list",
   /** 한 폴더의 하위 폴더 목록 (폴더 탐색 창) */
   fsListDir: "fs.listDir",
   daemonStatus: "daemon.status",
@@ -490,6 +492,74 @@ export interface FsSearchResult {
   files: string[];
   /** 파일이 너무 많아 일부만 검색했다 */
   truncated: boolean;
+}
+
+export interface ResourcesListParams {
+  /** 작업 폴더 (호스트 기준). 프로젝트 리소스(.pi/, 상위 폴더의 AGENTS.md)를 여기서 찾는다 */
+  cwd: string;
+}
+
+/** 리소스가 어디서 왔는지 */
+export interface ResourceSource {
+  /** user: ~/.pi/agent, project: 작업 폴더의 .pi 등. Pi가 늘리면 그 값 그대로 */
+  scope: string;
+  /** auto(폴더에서 찾음), 패키지 소스(npm:… git:…), 설정에 적은 경로 등 */
+  source: string;
+  /** 설치한 패키지에 들어 있는 리소스인지 */
+  fromPackage: boolean;
+}
+
+export interface ResourceItem extends ResourceSource {
+  name: string;
+  description?: string;
+  /** 파일 경로 (호스트 기준) */
+  path: string;
+  /** 설정의 패키지 필터 등으로 꺼져 있으면 false */
+  enabled: boolean;
+  /** 프롬프트: 인자 안내 (예: <파일>) */
+  argumentHint?: string;
+  /** 스킬: 모델이 스스로 부르지 않고 /skill:이름으로만 쓴다 */
+  disableModelInvocation?: boolean;
+}
+
+export interface ContextFileInfo {
+  path: string;
+  /** user: 데이터 폴더의 AGENTS.md, project: 작업 폴더와 그 상위 폴더 */
+  scope: "user" | "project";
+  bytes: number;
+}
+
+export interface ResourceDiagnosticInfo {
+  kind: "prompt" | "skill";
+  type: "warning" | "error" | "collision";
+  message: string;
+  path?: string;
+}
+
+export interface ConfiguredPackageInfo {
+  source: string;
+  scope: "user" | "project";
+  /** 설정에서 이 패키지의 리소스 일부만 쓰도록 걸러 두었다 */
+  filtered: boolean;
+  installedPath?: string;
+}
+
+/** 작업 폴더에서 Pi가 불러오는 리소스. 확장은 코드를 실행하지 않고 경로만 찾는다 */
+export interface ResourcesView {
+  cwd: string;
+  agentDir: string;
+  /** 시스템 프롬프트에 들어가는 AGENTS.md(CLAUDE.md) 파일. 불러오는 순서대로 */
+  contextFiles: ContextFileInfo[];
+  /** 기본 시스템 프롬프트를 바꾸는 SYSTEM.md */
+  systemPrompt?: string;
+  /** 시스템 프롬프트 뒤에 붙는 APPEND_SYSTEM.md */
+  appendSystemPrompt: string[];
+  prompts: ResourceItem[];
+  skills: ResourceItem[];
+  extensions: ResourceItem[];
+  themes: ResourceItem[];
+  packages: ConfiguredPackageInfo[];
+  diagnostics: ResourceDiagnosticInfo[];
 }
 
 export interface FsListDirParams {

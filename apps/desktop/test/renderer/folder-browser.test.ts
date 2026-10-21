@@ -50,6 +50,12 @@ describe("errorText", () => {
     expect(errorText(new Error("Error invoking remote method 'pi:list-dir': Error: 연결 끊김"))).toBe("연결 끊김");
     expect(errorText("그냥 문자열")).toBe("그냥 문자열");
   });
+
+  it("데몬이 모르는 메서드면 예전 데몬을 바꾸는 방법을 덧붙인다", () => {
+    expect(errorText(new Error("Error invoking remote method 'pi:list-resources': JsonRpcError: 알 수 없는 메서드: resources.list"))).toContain(
+      "Agent 업데이트 대기",
+    );
+  });
 });
 
 describe("emptyText", () => {
