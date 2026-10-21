@@ -47,6 +47,7 @@ const api: PiDesktopApi = {
   terminalClose: (id) => ipcRenderer.send(IpcChannels.terminalClose, id),
   onTerminalData: (listener) => subscribe(IpcChannels.terminalData, listener),
   onTerminalExit: (listener) => subscribe(IpcChannels.terminalExit, listener),
+  piVersions: (hostId) => ipcRenderer.invoke(IpcChannels.piVersions, hostId),
   piLatest: (hostId, force) => ipcRenderer.invoke(IpcChannels.piLatest, hostId, force === true),
   searchFiles: (hostId, cwd, query) => ipcRenderer.invoke(IpcChannels.searchFiles, hostId, cwd, query),
   onConnection: (listener) => subscribe(IpcChannels.connectionChanged, listener),

@@ -13,6 +13,7 @@ import type {
   ProviderInfo,
   PiLatest,
   PiStatus,
+  PiVersions,
   PiUpdateOutputNotification,
   PiUpdateResult,
   PiUpdateTarget,
@@ -108,6 +109,8 @@ export interface PiDesktopApi {
   revealFile(hostId: string, cwd: string, path: string): Promise<boolean>;
   /** Pi Manager: 이 호스트의 Pi 설치·Node·데이터 상태 (읽기 전용) */
   piStatus(hostId: string): Promise<PiStatus>;
+  /** 배포된 Pi 버전 목록 (데몬이 1시간 캐시) */
+  piVersions(hostId: string): Promise<PiVersions>;
   /** Pi 최신 버전 (데몬이 1시간 캐시, force면 다시 묻는다) */
   piLatest(hostId: string, force?: boolean): Promise<PiLatest>;
   /**
@@ -176,6 +179,7 @@ export const IpcChannels = {
   searchFiles: "pi:search-files",
   piStatus: "pi:pi-status",
   piLatest: "pi:pi-latest",
+  piVersions: "pi:pi-versions",
   piUpdate: "pi:pi-update",
   authProviders: "pi:auth-providers",
   authCheck: "pi:auth-check",
