@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PendingQueue } from "./chat-state";
 import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
 import { Composer } from "./Composer";
@@ -7,6 +8,8 @@ import { baseName, formatRelative } from "./format";
 import { tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
 import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
+import { restoreQueueToDraft } from "./run-status";
+import { QueuePanel, RetryBanner } from "./RunStatus";
 import { SessionBar } from "./SessionBar";
 import { Sidebar } from "./Sidebar";
 import { TreePanel } from "./TreePanel";
@@ -188,6 +191,23 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
     });
   }
 
+  /** 대기 중인 Steer·Follow-up을 취소하고 그 글을 입력창으로 되돌린다 (TUI의 Esc). */
+  async function clearQueue() {
+    if (!session) return;
+    const response = await window.piDesktop.sendCommand(hostId, session.sessionId, { type: "clear_queue" });
+    if (response.success !== true) throw new Error(String(response.error ?? "clear_queue 실패"));
+    setDraft(restoreQueueToDraft(response.data as Partial<PendingQueue> | undefined, draft));
+  }
+
+  /**
+   * 중단. Pi는 abort만 하면 큐에 남은 메시지를 이어서 처리하므로, 큐를 먼저 입력창으로 꺼낸 뒤 멈춘다
+   * (Pi rpc-commands.md clear_queue 안내와 같은 순서).
+   */
+  async function abortRun() {
+    if (chat.queue.steering.length + chat.queue.followUp.length > 0) await clearQueue();
+    await send({ type: "abort" });
+  }
+
   /** 실행 중이면 Pi 규칙대로 steer/followUp 중 하나를 지정해야 한다. */
   function submit(input: Exclude<ParsedInput, { kind: "empty" }>, behavior?: "steer" | "followUp") {
     if (!session) return;
@@ -333,6 +353,7 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
         </div>
       )}
       {error && <div className="banner error">{error}</div>}
+      {chat.retry && <RetryBanner retry={chat.retry} onCancel={() => void guardQuiet(() => send({ type: "abort_retry" }))} />}
       {follow && (
         <div className="banner follow">
           <span>
@@ -369,6 +390,7 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
       <ChatView
         items={chat.items}
         running={chat.running}
+        onResend={(text) => setDraft(text)}
         actions={{
           onAbortBash: () => void guardQuiet(() => send({ type: "abort_bash" })),
           // 탐색기에서 볼 수 있는 호스트(로컬, WSL)만
@@ -384,6 +406,7 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
       />
 
       <Widgets ui={ui} placement="aboveEditor" />
+      <QueuePanel queue={chat.queue} onClear={() => void guardQuiet(clearQueue)} />
       <Composer
         value={draft}
         onChange={setDraft}
@@ -397,7 +420,7 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
         commands={commands}
         onNeedCommands={loadCommands}
         onSubmit={submit}
-        onAbort={() => void guard(() => send({ type: "abort" }))}
+        onAbort={() => void guard(abortRun)}
       />
       <Widgets ui={ui} placement="belowEditor" />
       <StatusLine ui={ui} />
