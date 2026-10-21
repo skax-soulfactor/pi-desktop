@@ -87,7 +87,7 @@ textarea {
 }
 
 /* 워크스페이스 탭 */
-.shell {
+.app-shell {
   display: flex;
   flex-direction: column;
   height: 100%;
