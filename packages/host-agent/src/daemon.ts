@@ -16,7 +16,10 @@ import {
   type FsSearchParams,
   type FsSearchResult,
   type HostInfo,
+  type PiLatest,
+  type PiLatestParams,
   type PiLocateParams,
+  type PiStatus,
   type SessionAttachParams,
   type SessionAttachResult,
   type SessionEventNotification,
@@ -36,6 +39,7 @@ import {
 } from "@pi-desktop/host-protocol";
 import { runDir, socketPath } from "./paths";
 import { locatePi } from "./pi-locator";
+import { latestPiVersion, piStatus } from "./pi-status";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
@@ -183,6 +187,12 @@ export class AgentDaemon {
 
     peer.handle(Methods.piLocate, (params) =>
       locatePi({ piCliPath: (params as PiLocateParams | undefined)?.piCliPath, env: this.env }),
+    );
+
+    peer.handle(Methods.piStatus, (): Promise<PiStatus> => piStatus({ env: this.env }));
+
+    peer.handle(Methods.piLatest, (params): Promise<PiLatest> =>
+      latestPiVersion((params as PiLatestParams | undefined)?.force === true),
     );
 
     peer.handle(Methods.sessionOpen, async (params): Promise<SessionOpenResult> => {

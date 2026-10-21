@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import {
   Methods,
   type FsSearchResult,
+  type PiLatest,
+  type PiStatus,
   type PiLocation,
   type PiResponse,
   type SessionAttachResult,
@@ -166,6 +168,10 @@ function registerIpc(manager: HostManager): void {
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
   });
+  ipcMain.handle(IpcChannels.piStatus, (_event, hostId: string) => conn(hostId).request<PiStatus>(Methods.piStatus));
+  ipcMain.handle(IpcChannels.piLatest, (_event, hostId: string, force: boolean) =>
+    conn(hostId).request<PiLatest>(Methods.piLatest, { force }),
+  );
   ipcMain.handle(IpcChannels.searchFiles, (_event, hostId: string, cwd: string, query: string) =>
     conn(hostId).request<FsSearchResult>(Methods.fsSearch, { cwd, query, limit: 30 }),
   );

@@ -28,6 +28,8 @@ const api: PiDesktopApi = {
   sendRecord: (hostId, sessionId, record) => ipcRenderer.invoke(IpcChannels.sendRecord, hostId, sessionId, record),
   pickDirectory: () => ipcRenderer.invoke(IpcChannels.pickDirectory),
   revealFile: (hostId, cwd, path) => ipcRenderer.invoke(IpcChannels.revealFile, hostId, cwd, path),
+  piStatus: (hostId) => ipcRenderer.invoke(IpcChannels.piStatus, hostId),
+  piLatest: (hostId, force) => ipcRenderer.invoke(IpcChannels.piLatest, hostId, force === true),
   searchFiles: (hostId, cwd, query) => ipcRenderer.invoke(IpcChannels.searchFiles, hostId, cwd, query),
   onConnection: (listener) => subscribe(IpcChannels.connectionChanged, listener),
   onSessionEvent: (listener) => subscribe(IpcChannels.sessionEvent, listener),

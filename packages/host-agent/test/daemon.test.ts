@@ -4,6 +4,7 @@ import {
   Methods,
   type FsSearchResult,
   type HostInfo,
+  type PiStatus,
   type SessionAttachResult,
   type SessionOpenResult,
   type SessionSummary,
@@ -124,5 +125,13 @@ describe("Host Agent 데몬 (가짜 Pi)", () => {
     const result = await client.request<FsSearchResult>(Methods.fsSearch, { cwd, query: "fake-pi" });
     expect(result.files[0]).toBe("fake-pi.mjs");
     await expect(client.request(Methods.fsSearch, { query: "x" })).rejects.toMatchObject({ code: -32602 });
+  });
+
+  it("pi.status가 찾은 Pi와 실행할 node, 데이터 폴더 정보를 돌려준다", async () => {
+    const client = connect(await isolatedEnv({ PI_DESKTOP_PI_CLI: FAKE_PI }));
+    const status = await client.request<PiStatus>(Methods.piStatus);
+    expect(status.pi).toMatchObject({ cliPath: FAKE_PI, source: "env" });
+    expect(status.node.version).toMatch(/^v[0-9]+/);
+    expect(status.data.sessions.count).toBeGreaterThanOrEqual(0);
   });
 });

@@ -3,6 +3,8 @@ import type { StoredSession } from "@pi-desktop/host-protocol/messages";
 import type { PendingQueue } from "./chat-state";
 import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
+import { PiManager, usePiStatus } from "./PiManager";
+import { updateState } from "./pi-manager-view";
 import { CommandPalette } from "./CommandPalette";
 import type { PaletteCommand } from "./palette";
 import { Composer } from "./Composer";
@@ -84,6 +86,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   /** 값이 바뀌면 사이드바가 기록을 다시 읽는다 */
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [treeOpen, setTreeOpen] = useState(false);
+  const [piManagerOpen, setPiManagerOpen] = useState(false);
   /** 명령 팔레트가 열려 있으면 그때 읽은 최근 기록 */
   const [palette, setPalette] = useState<{ history: StoredSession[] } | undefined>();
   const root = useRef<HTMLDivElement>(null);
@@ -92,6 +95,9 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
 
   const connected = connection.status === "connected";
   const sessionInfo = useSessionInfo(hostId, session, connected && !lost);
+  // 상단 바의 Pi 버전·업데이트 표시 (연결되면 한 번 읽는다. 최신 버전은 데몬이 캐시)
+  const piState = usePiStatus(hostId, connected);
+  const piUpdate = updateState(piState.status?.pi?.version, piState.latest);
   // 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 썼다 (TUI 등). 같은 파일에 함께 쓰면 기록이 꼬이므로 입력을 잠근다.
   const externalWrite = session?.externalWriteAt !== undefined && !lost;
 
@@ -299,6 +305,13 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         run: () => void guard(() => openStored(h)),
       });
     }
+    list.push({
+      id: "pi-manager",
+      group: "Pi",
+      title: "Pi 관리 (설치 상태·버전)",
+      keywords: "pi manager install update version 업데이트 설치",
+      run: () => setPiManagerOpen(true),
+    });
     list.push(
       { id: "abort", group: "실행", title: "중단", disabled: !ready || !chat.running, run: () => void guard(abortRun) },
       {
@@ -443,6 +456,17 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           ))}
         </select>
         <ConnectionBadge connection={connection} />
+        {connected && (
+          <button
+            type="button"
+            className={`pi-version${piUpdate === "available" ? " update" : ""}${piState.status && !piState.status.pi ? " missing" : ""}`}
+            onClick={() => setPiManagerOpen(true)}
+            title={piUpdate === "available" ? `Pi ${piState.latest?.version}로 업데이트할 수 있습니다` : "Pi 설치 상태"}
+          >
+            {piState.status?.pi ? `Pi ${piState.status.pi.version}` : piState.status ? "Pi 없음" : "Pi"}
+            {piUpdate === "available" && <span className="pi-update-dot">↑ 새 버전</span>}
+          </button>
+        )}
         <div className="spacer" />
         {session && (
           <div className="session-meta" title={session.sessionFile}>
@@ -699,6 +723,9 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         </ChoiceDialog>
       )}
       {active && <Toasts toasts={ui.toasts} onDismiss={dismissToast} />}
+      {active && piManagerOpen && (
+        <PiManager hosts={hosts} initialHostId={hostId} onClose={() => setPiManagerOpen(false)} />
+      )}
       {active && palette && (
         <CommandPalette
           commands={paletteCommands(palette.history)}

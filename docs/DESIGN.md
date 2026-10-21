@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.18)
+# Pi Desktop — 설계 문서 (v0.19)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -294,6 +294,15 @@ v0.1과 같다. 스키마 기반 폼, User/Project 탭, diff 미리보기 후 �
 | 버전 | `pi --version`, 최신 버전은 `npm view @earendil-works/pi-coding-agent version` |
 | 전제 조건 | Node ≥ 22.19, Windows는 Git Bash(또는 `shellPath`, PowerShell 툴 설정) |
 | 데이터 | `~/.pi/agent` 크기, 세션 수, 인증된 프로바이더 수 |
+
+**구현 메모 (M2 첫 단계, v0.19)**: 읽기 전용 상태 화면부터 만들었다. 데몬의 `pi.status`가 다음을 돌려준다. 바꾸는 동작은 아직 없다.
+- 찾은 Pi(경로·버전·설치 방식)
+- Pi를 실행할 node와 Pi `engines.node` 충족 여부
+- Git Bash(Windows, Pi와 같이 `settings.json`의 `shellPath` → Git for Windows 순)
+- 세션 수·크기, 설정 파일 유무
+- auth.json의 프로바이더 이름 (키 값은 보내지 않음)
+
+최신 버전은 `pi.latest`(`npm view`, 1시간 캐시)로 조회한다. 상단 바에 Pi 버전과 "↑ 새 버전"을 표시한다. PATH 탐색, Nix 설치 감지, `~/.pi/agent` 전체 크기는 아직 없다.
 
 **설치 마법사**
 
