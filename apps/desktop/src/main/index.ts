@@ -7,6 +7,8 @@ import {
   type FsSearchResult,
   type PiLatest,
   type PiStatus,
+  type PiUpdateResult,
+  type PiUpdateTarget,
   type PiLocation,
   type PiResponse,
   type SessionAttachResult,
@@ -172,6 +174,10 @@ function registerIpc(manager: HostManager): void {
   ipcMain.handle(IpcChannels.piLatest, (_event, hostId: string, force: boolean) =>
     conn(hostId).request<PiLatest>(Methods.piLatest, { force }),
   );
+  ipcMain.handle(IpcChannels.piUpdate, (_event, hostId: string, target: PiUpdateTarget, taskId: string, force: boolean) =>
+    // 업데이트는 몇 분 걸릴 수 있어 응답 시간 제한을 두지 않는다 (데몬이 15분에서 멈춘다).
+    conn(hostId).request<PiUpdateResult>(Methods.piUpdate, { target, taskId, force }, 0),
+  );
   ipcMain.handle(IpcChannels.searchFiles, (_event, hostId: string, cwd: string, query: string) =>
     conn(hostId).request<FsSearchResult>(Methods.fsSearch, { cwd, query, limit: 30 }),
   );
@@ -199,6 +205,7 @@ app.whenReady().then(() => {
     onUiResolved: (hostId, n) => sendToRenderer(IpcChannels.uiResolved, hostId, n),
     onStoredChanged: (hostId, n) => sendToRenderer(IpcChannels.storedChanged, hostId, n),
     onExternalWrite: (hostId, n) => sendToRenderer(IpcChannels.externalWrite, hostId, n),
+    onPiUpdateOutput: (hostId, n) => sendToRenderer(IpcChannels.piUpdateOutput, hostId, n),
   });
   registerIpc(hosts);
   createWindow();
