@@ -45,7 +45,13 @@ const env = {
   ...process.env,
   PI_DESKTOP_HOME: join(devDir, "pi-desktop-home"),
   PI_DESKTOP_PI_CLI: join(repo, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "bundle", "cli.js"),
-  PI_DESKTOP_PI_ARGS: ["--provider mock --model mock-model", demoExtension ? `-e ${demoExtension}` : ""].join(" ").trim(),
+  // 툴 카드를 모두 확인할 수 있게 기본(read·bash·edit·write)에 grep·find·ls도 켠다.
+  PI_DESKTOP_PI_ARGS: [
+    "--provider mock --model mock-model --tools read,bash,edit,write,grep,find,ls",
+    demoExtension ? `-e ${demoExtension}` : "",
+  ]
+    .join(" ")
+    .trim(),
   PI_CODING_AGENT_DIR: piAgentDir,
   PI_CODING_AGENT_SESSION_DIR: join(piAgentDir, "sessions"),
 };
