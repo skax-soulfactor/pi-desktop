@@ -610,11 +610,11 @@ export type ResourceKind = "prompt" | "skill" | "agents";
 
 export interface ResourceImportParams {
   cwd: string;
-  kind: "skill" | "prompt";
+  kind: "skill" | "prompt" | "extension";
   scope: "user" | "project";
   /** 가져와 쓸 이름 (소문자·숫자·하이픈) */
   name: string;
-  /** 스킬 폴더 기준 상대 경로와 내용. 프롬프트는 파일 하나 */
+  /** 스킬·확장 폴더 기준 상대 경로와 내용. 프롬프트와 파일 하나 확장은 파일 하나 */
   files: Array<{ path: string; contentBase64: string }>;
   /** 이미 있으면 백업한 뒤 바꾼다 (가져온 항목 업데이트). 없으면 이미 있을 때 거부한다 */
   replace?: boolean;
@@ -629,14 +629,18 @@ export interface ResourceImportResult {
 }
 
 export interface ResourceExportParams {
-  kind: "skill" | "prompt";
-  /** 리소스 목록이 알려 준 파일 경로 (스킬은 SKILL.md, 프롬프트는 .md) */
+  kind: "skill" | "prompt" | "extension";
+  /** 리소스 목록이 알려 준 파일 경로 (스킬은 SKILL.md, 프롬프트는 .md, 확장은 .ts·.js 또는 폴더의 index) */
   path: string;
 }
 
 export interface ResourceExportResult {
   /** 스킬 폴더 기준 경로(프롬프트는 파일 이름)와 내용 */
   files: Array<{ path: string; size: number; contentBase64: string }>;
+  /** 확장 폴더에서 옮기지 않은 폴더 (node_modules·.git) */
+  skipped?: string[];
+  /** 확장 폴더의 package.json에 dependencies가 있다. 대상에서 npm install이 필요하다 */
+  needsInstall?: boolean;
 }
 
 /** 가져온 항목 (스킬 폴더 또는 프롬프트 파일) */
