@@ -38,6 +38,17 @@ export type ConnectionState =
   | { status: "disconnected"; reason: string };
 
 /** Pi가 도는 곳 하나. 로컬 PC 또는 WSL 배포판 (SSH는 M3). */
+export interface TerminalOpenRequest {
+  hostId: string;
+  kind: "pi" | "shell";
+  /** 작업 폴더 (호스트 기준 경로) */
+  cwd?: string;
+  /** pi에 붙일 인자 (예: --session <파일>) */
+  args?: string[];
+  cols: number;
+  rows: number;
+}
+
 export interface HostDescriptor {
   /** "local" 또는 "wsl:<배포판 이름>" */
   id: string;
@@ -118,6 +129,16 @@ export interface PiDesktopApi {
   modelsRemoveProvider(hostId: string, id: string): Promise<{ removed: boolean }>;
   /** 엔드포인트 연결 시험. apiKey가 없고 providerId가 있으면 저장된 키를 쓴다 */
   modelsProbe(hostId: string, baseUrl: string, apiKey?: string, providerId?: string): Promise<ModelsProbeResult>;
+  /**
+   * 내장 터미널을 연다 (설계 §4.12). kind "pi"는 그 호스트의 Pi TUI, "shell"은 셸.
+   * 출력은 onTerminalData, 끝나면 onTerminalExit로 온다.
+   */
+  terminalOpen(request: TerminalOpenRequest): Promise<{ id: string; title: string }>;
+  terminalWrite(id: string, data: string): void;
+  terminalResize(id: string, cols: number, rows: number): void;
+  terminalClose(id: string): void;
+  onTerminalData(listener: (id: string, data: string) => void): () => void;
+  onTerminalExit(listener: (id: string, exitCode: number) => void): () => void;
   /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커). 경로는 작업 폴더 기준, 구분자 "/" */
   searchFiles(hostId: string, cwd: string, query: string): Promise<FsSearchResult>;
 
@@ -160,6 +181,12 @@ export const IpcChannels = {
   authCheck: "pi:auth-check",
   authSetApiKey: "pi:auth-set-api-key",
   authRemove: "pi:auth-remove",
+  terminalOpen: "pi:terminal-open",
+  terminalWrite: "pi:terminal-write",
+  terminalResize: "pi:terminal-resize",
+  terminalClose: "pi:terminal-close",
+  terminalData: "pi:terminal-data",
+  terminalExit: "pi:terminal-exit",
   modelsRead: "pi:models-read",
   modelsSaveProvider: "pi:models-save-provider",
   modelsRemoveProvider: "pi:models-remove-provider",
