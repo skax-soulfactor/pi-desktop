@@ -5,6 +5,7 @@ import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
 import { PiManager, usePiStatus } from "./PiManager";
 import { ResourcesPanel } from "./ResourcesPanel";
+import { MarketplacePanel } from "./MarketplacePanel";
 import { hasReloadCommand, RELOAD_COMMAND } from "./resources-view";
 import { TerminalDock, type DockTerminal } from "./TerminalDock";
 import type { TerminalSpec } from "./TerminalView";
@@ -105,6 +106,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [agentReplaceAsk, setAgentReplaceAsk] = useState(false);
   const [sshHostsOpen, setSshHostsOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
+  const [marketOpen, setMarketOpen] = useState(false);
   /** 아래 도크의 내장 터미널들 (설계 §4.12) */
   const [dockTerminals, setDockTerminals] = useState<DockTerminal[]>([]);
   const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
@@ -114,6 +116,12 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     setDockTerminals((prev) => [...prev, { key, spec, title: title ?? "터미널", fixedTitle: title !== undefined }]);
     setActiveTerminal(key);
   };
+  /**
+   * 그 호스트의 pi를 이 인자로 내장 터미널에서 실행한다 (패키지 설치·제거·업데이트).
+   * 프로젝트 범위 명령만 그 폴더에서, 사용자 범위는 홈에서 연다. 프로젝트 폴더에서 열면 Pi가 그 폴더의 신뢰를 묻기 때문이다.
+   */
+  const runPi = (args: string[], title: string, projectCwd?: string) =>
+    openTerminal({ hostId, kind: "pi", args, ...(projectCwd ? { cwd: projectCwd } : {}) }, title);
   const closeTerminal = (key: string) => {
     setDockTerminals((prev) => {
       const next = prev.filter((t) => t.key !== key);
@@ -379,6 +387,14 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         run: () => openTerminal({ hostId, kind: "shell", ...(session ? { cwd: session.cwd } : {}) }),
       },
     );
+    list.push({
+      id: "marketplace",
+      group: "Pi",
+      title: "Marketplace (Pi 패키지 찾기·설치)",
+      keywords: "marketplace packages npm install extension skill 마켓 패키지 설치 확장",
+      disabled: !connected,
+      run: () => setMarketOpen(true),
+    });
     list.push({
       id: "resources",
       group: "Pi",
@@ -900,7 +916,21 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
             ? { onReveal: (path: string) => void guardQuiet(async () => void (await window.piDesktop.revealFile(hostId, resourcesCwd, path))) }
             : {})}
           {...(session && !lost && !readOnly && connected && resourcesCwd === session.cwd ? { onReload: reloadSessionResources } : {})}
+          onRunPi={runPi}
+          onOpenMarketplace={() => {
+            setResourcesOpen(false);
+            setMarketOpen(true);
+          }}
           onClose={() => setResourcesOpen(false)}
+        />
+      )}
+      {active && marketOpen && (
+        <MarketplacePanel
+          hostId={hostId}
+          hostLabel={hostLabel}
+          {...(resourcesCwd ? { cwd: resourcesCwd } : {})}
+          onRunPi={runPi}
+          onClose={() => setMarketOpen(false)}
         />
       )}
       {active && sshHostsOpen && (

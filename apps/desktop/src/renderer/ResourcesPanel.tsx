@@ -3,6 +3,7 @@ import type { ResourceDiagnosticInfo, ResourceFile, ResourceItem, ResourcesView 
 import { errorText } from "./folder-browser";
 import { ResourceEditor } from "./ResourceEditor";
 import { projectBadge, projectResourcesSkipped, trustStatusText } from "./project-trust";
+import { isPinned, removeArgs, updateArgs } from "./market-view";
 import {
   creatableKind,
   diagnosticsByPath,
@@ -24,6 +25,10 @@ interface Props {
   onReveal?: (path: string) => void;
   /** 보고 있는 세션에 리소스를 다시 불러온다. 이 폴더의 세션을 보고 있고 입력 권한이 있을 때만 준다 */
   onReload?: () => Promise<void>;
+  /** 그 호스트의 pi를 내장 터미널에서 이 인자로 실행한다 (패키지 업데이트·제거). projectCwd가 있으면 그 폴더에서 */
+  onRunPi?: (args: string[], title: string, projectCwd?: string) => void;
+  /** Marketplace를 연다 */
+  onOpenMarketplace?: () => void;
   onClose: () => void;
 }
 
@@ -33,7 +38,7 @@ interface Props {
  * 확장은 코드를 실행하지 않고 경로만 찾은 목록이다.
  * 마크다운 리소스(AGENTS.md·프롬프트·스킬)는 열어 고치고, 새로 만들 수 있다. 패키지에 든 것은 고치지 않는다.
  */
-export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onClose }: Props) {
+export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onRunPi, onOpenMarketplace, onClose }: Props) {
   const [view, setView] = useState<ResourcesView | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
@@ -189,7 +194,20 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onC
                 onReveal={onReveal}
               />
             )}
-            {tab === "packages" && <PackageList view={view} />}
+            {tab === "packages" && (
+              <PackageList
+                view={view}
+                {...(onRunPi
+                  ? {
+                      onRun: (args: string[], title: string, projectCwd?: string) => {
+                        onRunPi(args, title, projectCwd);
+                        onClose();
+                      },
+                    }
+                  : {})}
+                {...(onOpenMarketplace ? { onOpenMarketplace } : {})}
+              />
+            )}
           </div>
         )}
       </div>
@@ -312,11 +330,33 @@ function ItemList({
   );
 }
 
-function PackageList({ view }: { view: ResourcesView }) {
+function PackageList({
+  view,
+  onRun,
+  onOpenMarketplace,
+}: {
+  view: ResourcesView;
+  onRun?: (args: string[], title: string, projectCwd?: string) => void;
+  onOpenMarketplace?: () => void;
+}) {
+  /** 제거를 한 번 더 누르라고 묻는 중인 패키지 */
+  const [confirmRemove, setConfirmRemove] = useState<string | undefined>();
+  const find = onOpenMarketplace && (
+    <button type="button" className="small" onClick={onOpenMarketplace}>
+      Marketplace에서 패키지 찾기…
+    </button>
+  );
   if (view.packages.length === 0) {
-    return <p className="muted">설정에 적힌 패키지가 없습니다. pi install로 설치한 패키지가 여기에 나옵니다.</p>;
+    return (
+      <>
+        <p className="muted">설정에 적힌 패키지가 없습니다. pi install로 설치한 패키지가 여기에 나옵니다.</p>
+        {find}
+      </>
+    );
   }
   return (
+    <>
+    {find}
     <ul className="resource-list">
       {view.packages.map((p) => (
         <li key={`${p.scope}:${p.source}`}>
@@ -333,9 +373,36 @@ function PackageList({ view }: { view: ResourcesView }) {
               </span>
             )}
           </div>
+          {onRun && (
+            <>
+              <button
+                type="button"
+                className="small"
+                disabled={isPinned(p.source)}
+                title={isPinned(p.source) ? "버전이 고정된 패키지는 pi update로 바뀌지 않습니다" : "pi update로 갱신합니다"}
+                onClick={() => onRun(updateArgs(p.source), `업데이트: ${p.source}`, p.scope === "project" ? view.cwd : undefined)}
+              >
+                업데이트
+              </button>
+              {confirmRemove === p.source ? (
+                <button
+                  type="button"
+                  className="small danger"
+                  onClick={() => onRun(removeArgs(p.source, p.scope), `제거: ${p.source}`, p.scope === "project" ? view.cwd : undefined)}
+                >
+                  정말 제거
+                </button>
+              ) : (
+                <button type="button" className="small" onClick={() => setConfirmRemove(p.source)}>
+                  제거
+                </button>
+              )}
+            </>
+          )}
         </li>
       ))}
     </ul>
+    </>
   );
 }
 
