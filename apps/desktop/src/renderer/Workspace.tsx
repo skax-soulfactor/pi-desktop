@@ -369,7 +369,18 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
       <ChatView
         items={chat.items}
         running={chat.running}
-        onAbortBash={() => void guardQuiet(() => send({ type: "abort_bash" }))}
+        actions={{
+          onAbortBash: () => void guardQuiet(() => send({ type: "abort_bash" })),
+          // 탐색기에서 볼 수 있는 호스트(로컬, WSL)만
+          ...(session && (host?.kind === "local" || host?.kind === "wsl")
+            ? {
+                onReveal: (path: string) =>
+                  void guardQuiet(async () => {
+                    await window.piDesktop.revealFile(hostId, session.cwd, path);
+                  }),
+              }
+            : {}),
+        }}
       />
 
       <Widgets ui={ui} placement="aboveEditor" />

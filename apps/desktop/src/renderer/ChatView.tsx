@@ -1,18 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { AssistantBlock, ChatItem } from "./chat-state";
 import { Markdown } from "./markdown/Markdown";
+import { ToolCard, type ToolCardActions } from "./ToolCards";
 
 /** 대화 목록. 새 내용이 오면 사용자가 위로 스크롤해 둔 경우가 아니면 맨 아래로 따라간다. */
-export function ChatView({
-  items,
-  running,
-  onAbortBash,
-}: {
-  items: ChatItem[];
-  running: boolean;
-  /** 실행 중인 `!` 셸 명령을 멈춘다 */
-  onAbortBash?: () => void;
-}) {
+export function ChatView({ items, running, actions }: { items: ChatItem[]; running: boolean; actions: ToolCardActions }) {
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
 
@@ -32,14 +24,14 @@ export function ChatView({
     >
       {items.length === 0 && <p className="empty">세션을 열고 메시지를 보내 보세요.</p>}
       {items.map((item) => (
-        <Item key={item.key} item={item} onAbortBash={onAbortBash} />
+        <Item key={item.key} item={item} actions={actions} />
       ))}
       {running && <div className="working">Pi가 작업 중…</div>}
     </div>
   );
 }
 
-function Item({ item, onAbortBash }: { item: ChatItem; onAbortBash: (() => void) | undefined }) {
+function Item({ item, actions }: { item: ChatItem; actions: ToolCardActions }) {
   switch (item.kind) {
     case "user":
       return <div className="msg user">{item.text}</div>;
@@ -54,7 +46,7 @@ function Item({ item, onAbortBash }: { item: ChatItem; onAbortBash: (() => void)
         </div>
       );
     case "tool":
-      return isShell(item) ? <ShellCard item={item} onAbort={onAbortBash} /> : <ToolCard item={item} />;
+      return <ToolCard item={item} actions={actions} />;
     case "notice":
       return <div className={`notice ${item.level}`}>{item.text}</div>;
   }
@@ -71,66 +63,4 @@ function Block({ block }: { block: AssistantBlock }) {
   }
   if (block.type === "toolCall") return null; // 툴 실행 카드에서 따로 보여준다.
   return <Markdown text={block.text} />;
-}
-
-function ToolCard({ item }: { item: Extract<ChatItem, { kind: "tool" }> }) {
-  const [open, setOpen] = useState(false);
-  const status = item.status === "running" ? "실행 중" : item.status === "error" ? "실패" : "완료";
-  return (
-    <div className={`tool ${item.status}`}>
-      <button type="button" className="tool-head" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span className="tool-name">{item.toolName}</span>
-        <span className="tool-args">{summarizeArgs(item.args)}</span>
-        <span className="tool-status">
-          {status}
-          {item.durationMs !== undefined && ` · ${item.durationMs}ms`}
-        </span>
-      </button>
-      {open && (
-        <div className="tool-body">
-          <pre className="tool-json">{JSON.stringify(item.args, null, 2)}</pre>
-          {item.output && <pre className="tool-output">{item.output}</pre>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function isShell(item: Extract<ChatItem, { kind: "tool" }>): boolean {
-  return item.toolName === "!bash" || item.toolName === "!!bash";
-}
-
-/**
- * 사용자가 입력창에서 실행한 `!` 셸 명령. 터미널처럼 명령과 출력을 바로 보여준다.
- * `!!`(컨텍스트 제외)는 결과가 모델에 전달되지 않는다는 표시를 붙인다.
- */
-function ShellCard({ item, onAbort }: { item: Extract<ChatItem, { kind: "tool" }>; onAbort: (() => void) | undefined }) {
-  const args = item.args as { command?: unknown } | undefined;
-  const excluded = item.toolName === "!!bash";
-  return (
-    <div className={`tool shell ${item.status}`}>
-      <div className="shell-head">
-        <code className="shell-command">$ {String(args?.command ?? "")}</code>
-        {excluded && <span className="muted" title="이 출력은 모델에 전달되지 않습니다">컨텍스트 제외</span>}
-        <span className="tool-status">
-          {item.status === "running" ? "실행 중" : item.exitCode !== undefined ? `종료 코드 ${item.exitCode}` : item.status === "error" ? "실패" : "완료"}
-        </span>
-        {item.status === "running" && onAbort && (
-          <button type="button" className="danger small" onClick={onAbort}>
-            멈춤
-          </button>
-        )}
-      </div>
-      {item.output && <pre className="shell-output">{item.output}</pre>}
-    </div>
-  );
-}
-
-/** 툴 인자 중 대표 값 하나를 한 줄로 보여준다 (예: bash의 command, read의 path). */
-function summarizeArgs(args: unknown): string {
-  if (typeof args !== "object" || args === null) return "";
-  const record = args as Record<string, unknown>;
-  const main = record.command ?? record.path ?? record.pattern ?? Object.values(record)[0];
-  const text = typeof main === "string" ? main : JSON.stringify(main ?? "");
-  return text.length > 80 ? `${text.slice(0, 80)}…` : text;
 }

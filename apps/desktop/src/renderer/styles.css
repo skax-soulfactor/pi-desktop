@@ -371,6 +371,150 @@ textarea {
   white-space: pre-wrap;
 }
 
+.tool-head-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+}
+
+.tool-head-row .tool-head {
+  flex: 1;
+  min-width: 0;
+}
+
+.tool-caret {
+  color: var(--muted);
+  width: 10px;
+}
+
+.tool-output {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.error-text {
+  color: var(--bad);
+}
+
+.tool-section {
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.tool-section-title {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.tool-section pre {
+  border-top: none;
+  padding: 0;
+}
+
+/* edit·write diff */
+.diff-stats {
+  display: flex;
+  gap: 6px;
+  font: 12px ui-monospace, Consolas, monospace;
+}
+
+.diff-added {
+  color: var(--ok);
+}
+
+.diff-removed {
+  color: var(--bad);
+}
+
+.diff {
+  border-top: 1px solid var(--border);
+  max-height: 420px;
+  overflow: auto;
+  font: 12px/1.5 ui-monospace, Consolas, monospace;
+}
+
+.diff table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.diff td {
+  padding: 0 8px;
+  vertical-align: top;
+}
+
+.diff-no {
+  width: 1%;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.diff-sign {
+  width: 1%;
+  user-select: none;
+}
+
+.diff-text {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff-add {
+  background: rgb(62 207 142 / 14%);
+}
+
+.diff-del {
+  background: rgb(242 85 90 / 14%);
+}
+
+.diff-hunk td {
+  color: var(--muted);
+  background: var(--panel-2);
+  padding: 2px 8px;
+}
+
+.diff-more {
+  margin: 6px 8px;
+}
+
+/* 확장·MCP 툴 인자의 JSON 트리 */
+.json-node > summary {
+  cursor: pointer;
+  list-style: revert;
+}
+
+.json-node,
+.json-leaf {
+  font: 12px/1.6 ui-monospace, Consolas, monospace;
+}
+
+.json-children {
+  padding-left: 16px;
+}
+
+.json-key {
+  color: var(--accent);
+}
+
+.json-string {
+  color: var(--ok);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.json-number,
+.json-boolean {
+  color: var(--warn);
+}
+
+.json-null {
+  color: var(--muted);
+}
+
 /* `!` 셸 명령 카드: 터미널처럼 명령과 출력을 바로 보여준다 */
 .shell-head {
   display: flex;
