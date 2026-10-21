@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
+import { formatBytes, parseDataUrl, rejectReason, toDataUrl, type ImageAttachment } from "./attachments";
 import {
   atQuery,
   fileMention,
@@ -30,8 +31,14 @@ interface ComposerProps {
   onNeedCommands: () => void;
   /** `@` 파일 피커: 작업 폴더에서 파일을 찾는다. 없으면 파일 피커를 쓰지 않는다 */
   onSearchFiles?: (query: string) => Promise<string[]>;
-  /** 실행 중이면 behavior로 steer·followUp을 고른다 (prompt만 해당) */
-  onSubmit: (input: Exclude<ParsedInput, { kind: "empty" }>, behavior?: "steer" | "followUp") => void;
+  /** 실행 중이면 behavior로 steer·followUp을 고른다. images는 질문(prompt)에만 붙는다 */
+  onSubmit: (
+    input: Exclude<ParsedInput, { kind: "empty" }>,
+    behavior: "steer" | "followUp" | undefined,
+    images: ImageAttachment[],
+  ) => void;
+  /** 지금 모델이 이미지를 받는지. 아니면 첨부에 안내를 붙인다 */
+  acceptsImages: boolean;
   onAbort: () => void;
 }
 
@@ -41,6 +48,7 @@ interface ComposerProps {
  * - `!명령`·`!!명령`은 셸 명령 (`!!`는 결과를 컨텍스트에 넣지 않음)
  * - ↑·↓로 이전에 보낸 입력 불러오기 (모든 탭·세션 공통)
  * - `/`로 시작하면 Pi 명령(프롬프트 템플릿, 스킬, 확장 명령) 자동완성
+ * - 이미지는 붙여넣기(Ctrl+V)나 끌어 놓기로 첨부한다. 질문과 함께 보내고, 셸 명령에는 붙이지 않는다
  * - `@`를 치면 작업 폴더의 파일 자동완성. 고르면 `@경로`를 넣는다 (Pi TUI와 같이 경로만 넣고, 모델이 필요하면 읽는다)
  */
 
@@ -53,7 +61,11 @@ interface Suggestion {
   apply: () => void;
 }
 export function Composer(props: ComposerProps) {
-  const { value, onChange, disabled, placeholder, running, commands, onNeedCommands, onSearchFiles, onSubmit, onAbort } = props;
+  const { value, onChange, disabled, placeholder, running, commands, onNeedCommands, onSearchFiles, onSubmit, onAbort, acceptsImages } =
+    props;
+  const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [attachError, setAttachError] = useState<string | undefined>();
+  const [dragging, setDragging] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
   // 히스토리를 보는 중이면 그 위치와, 보기 전에 쓰던 초안
   const browsing = useRef<{ index: number; draft: string; history: string[] } | undefined>(undefined);
@@ -146,7 +158,52 @@ export function Composer(props: ComposerProps) {
     if (parsed.kind === "empty") return;
     writeHistory(pushHistory(readHistory(), value));
     browsing.current = undefined;
-    onSubmit(parsed, parsed.kind === "prompt" ? behavior : undefined);
+    if (parsed.kind === "prompt") {
+      onSubmit(parsed, behavior, images);
+      setImages([]);
+    } else {
+      // 셸 명령에는 이미지를 붙일 수 없으므로 첨부는 다음 질문을 위해 남겨 둔다.
+      onSubmit(parsed, undefined, []);
+    }
+    setAttachError(undefined);
+  }
+
+  /** 붙여넣기·끌어 놓기로 받은 파일을 첨부한다. 받지 않는 파일은 이유를 보여준다 */
+  async function attach(files: File[]) {
+    const errors: string[] = [];
+    let count = images.length;
+    const added: ImageAttachment[] = [];
+    for (const file of files) {
+      const reason = rejectReason(file, count);
+      if (reason) {
+        errors.push(reason);
+        continue;
+      }
+      const parsedUrl = parseDataUrl(await readAsDataUrl(file));
+      if (!parsedUrl) {
+        errors.push(`${file.name || "이미지"}: 읽지 못했습니다`);
+        continue;
+      }
+      added.push({ id: crypto.randomUUID(), name: file.name || "붙여넣은 이미지", mimeType: parsedUrl.mimeType, data: parsedUrl.data, size: file.size });
+      count++;
+    }
+    if (added.length > 0) setImages((prev) => [...prev, ...added]);
+    setAttachError(errors.length > 0 ? errors.join("\n") : undefined);
+  }
+
+  function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = [...e.clipboardData.files];
+    if (files.length === 0) return; // 글 붙여넣기는 그대로
+    e.preventDefault();
+    void attach(files);
+  }
+
+  function onDrop(e: DragEvent<HTMLElement>) {
+    setDragging(false);
+    const files = [...e.dataTransfer.files];
+    if (files.length === 0 || disabled) return;
+    e.preventDefault();
+    void attach(files);
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -190,7 +247,18 @@ export function Composer(props: ComposerProps) {
   }
 
   return (
-    <footer className="composer">
+    <footer
+      className={`composer${dragging ? " dragging" : ""}`}
+      onDragOver={(e) => {
+        if (disabled || !e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={onDrop}
+    >
       {showSuggestions && (
         <ul className="suggestions" role="listbox" aria-label={mode === "file" ? "파일" : "Pi 명령"}>
           {suggestions.map((item, i) => (
@@ -217,6 +285,28 @@ export function Composer(props: ComposerProps) {
           <li className="suggestion-loading">파일 찾는 중…</li>
         </ul>
       )}
+      <div className="composer-input">
+        {(images.length > 0 || attachError) && (
+          <div className="attachments">
+            {images.map((image) => (
+              <figure key={image.id} className="attachment" title={`${image.name} · ${formatBytes(image.size)}`}>
+                <img src={toDataUrl(image)} alt={image.name} />
+                <button
+                  type="button"
+                  className="attachment-remove"
+                  aria-label={`${image.name} 빼기`}
+                  onClick={() => setImages((prev) => prev.filter((i) => i.id !== image.id))}
+                >
+                  ×
+                </button>
+              </figure>
+            ))}
+            {images.length > 0 && !acceptsImages && (
+              <span className="attachment-note">지금 모델은 이미지를 받지 않아, 이미지 대신 "생략됨" 안내가 전달됩니다</span>
+            )}
+            {attachError && <span className="attachment-error">{attachError}</span>}
+          </div>
+        )}
       <textarea
         ref={textarea}
         placeholder={placeholder}
@@ -228,10 +318,12 @@ export function Composer(props: ComposerProps) {
         }}
         onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onKeyDown={onKeyDown}
+        onPaste={onPaste}
         disabled={disabled}
         rows={3}
         aria-autocomplete="list"
       />
+      </div>
       <div className="actions">
         {running && parsed.kind !== "bash" ? (
           <>
@@ -261,6 +353,15 @@ export function Composer(props: ComposerProps) {
       </div>
     </footer>
   );
+}
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("파일을 읽지 못했습니다"));
+    reader.readAsDataURL(file);
+  });
 }
 
 function readHistory(): string[] {

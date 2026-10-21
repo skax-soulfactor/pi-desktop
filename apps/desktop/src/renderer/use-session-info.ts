@@ -9,6 +9,8 @@ export interface ModelInfo {
   provider: string;
   reasoning?: boolean;
   contextWindow?: number;
+  /** 받는 입력 종류 (예: ["text", "image"]) */
+  input?: string[];
 }
 
 /** get_session_stats 응답 중 화면에 쓰는 부분 */

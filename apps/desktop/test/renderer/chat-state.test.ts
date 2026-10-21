@@ -273,3 +273,21 @@ describe("applyEvent — 재시도한 실패 응답", () => {
     expect(state.items.map((i) => i.kind)).toEqual(["assistant", "notice"]);
   });
 });
+
+describe("applyEvent — 이미지가 있는 사용자 메시지", () => {
+  it("글과 이미지를 나눠 담는다", () => {
+    const state = run([
+      {
+        type: "message_start",
+        message: {
+          role: "user",
+          content: [
+            { type: "text", text: "이거 봐" },
+            { type: "image", data: "AAAA", mimeType: "image/png" },
+          ],
+        },
+      },
+    ]);
+    expect(state.items[0]).toMatchObject({ kind: "user", text: "이거 봐", images: [{ mimeType: "image/png", data: "AAAA" }] });
+  });
+});

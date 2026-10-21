@@ -60,7 +60,18 @@ function Item({
 }) {
   switch (item.kind) {
     case "user":
-      return <div className="msg user">{item.text}</div>;
+      return (
+        <div className="msg user">
+          {item.images && item.images.length > 0 && (
+            <div className="msg-images">
+              {item.images.map((image, i) => (
+                <img key={i} src={`data:${image.mimeType};base64,${image.data}`} alt={`첨부 이미지 ${i + 1}`} />
+              ))}
+            </div>
+          )}
+          {item.text}
+        </div>
+      );
     case "assistant":
       return (
         <div className={`msg assistant${item.done ? "" : " streaming"}`}>
