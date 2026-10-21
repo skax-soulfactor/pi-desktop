@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.14)
+# Pi Desktop — 설계 문서 (v0.15)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -224,7 +224,8 @@ GUI ──ssh──▶ host-agent connect ──unix socket──▶ host-agentd
     - `!명령`은 결과를 컨텍스트에 넣고, `!!명령`은 넣지 않는다(`excludeFromContext`, TUI와 같은 규칙).
     - Pi는 RPC `bash`에 출력 조각(`bash_execution_update`)만 보내고 시작·끝 이벤트가 없다. 그래서 데몬이 `pi_desktop_bash_start`·`pi_desktop_bash_end`를 저널에 남긴다(`DaemonEvents`). 다른 탭이나 다시 연결한 앱도 같은 셸 카드를 그린다.
     - `bash`는 끝나야 응답이 오므로 데몬과 앱 모두 이 명령에는 응답 시간 제한을 두지 않는다. 셸 카드의 "멈춤"은 `abort_bash`를 보낸다.
-    - `@` 파일 피커, 이미지 첨부는 후속 작업이다.
+    - 이미지 첨부는 후속 작업이다.
+    - `@` 파일 피커(v0.15): 데몬의 `fs.search`가 세션 작업 폴더에서 찾는다. git 저장소면 `git ls-files`(.gitignore 존중), 아니면 생성물 폴더를 빼고 훑는다. 목록은 10초 캐시한다. 고르면 `@경로`만 넣는다. Pi RPC는 프롬프트 속 `@경로`를 펼치지 않으므로(TUI도 경로만 넣음) 모델이 필요하면 read 툴로 읽는다.
     - 대기 큐(v0.12): `queue_update`로 받은 Steer·Follow-up을 입력창 위에 보여준다. "비우고 입력창으로"와 "중단"은 `clear_queue`로 꺼낸 글을 입력창에 되돌린다. Pi는 `abort`만 하면 큐를 이어서 처리하므로, 중단은 큐를 먼저 꺼낸 뒤 abort한다.
 - **상단 바**: 모델 선택(`get_available_models`, 프로바이더별 그룹·검색), thinking level, 컨텍스트 사용량 게이지(`get_session_stats`), 비용, Compact 버튼, 자동 컴팩션 토글
   - **구현 메모 (M1, v0.14)**: 모델 선택은 검색창이 있는 선택기다. 최근 사용 5개(모든 탭 공통)를 맨 위에 두고 프로바이더별로 묶는다. 키보드(↑·↓·Enter·Esc)로 고를 수 있다. 목록에 없는 현재 모델(확장이 바꾼 모델)도 보인다. 자동 컴팩션 토글은 아직 없다.
