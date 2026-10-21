@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ResourceDiagnosticInfo, ResourceFile, ResourceItem, ResourcesView } from "@pi-desktop/host-protocol/messages";
+import type {
+  ConfiguredPackageInfo,
+  ResourceDiagnosticInfo,
+  ResourceFile,
+  ResourceItem,
+  ResourcesView,
+} from "@pi-desktop/host-protocol/messages";
 import { errorText } from "./folder-browser";
 import { ResourceEditor } from "./ResourceEditor";
 import { projectBadge, projectResourcesSkipped, trustStatusText } from "./project-trust";
@@ -31,6 +37,10 @@ interface Props {
   onOpenMarketplace?: () => void;
   /** 스킬·프롬프트를 다른 호스트로 복사한다 (다른 호스트가 있을 때만) */
   onCopy?: (item: ResourceItem, kind: "skill" | "prompt") => void;
+  /** 사용자 범위 AGENTS.md·SYSTEM.md·APPEND_SYSTEM.md를 다른 호스트로 복사한다 */
+  onCopyContext?: (path: string) => void;
+  /** 패키지를 다른 호스트에 같은 소스로 설치한다 */
+  onCopyPackage?: (pkg: ConfiguredPackageInfo) => void;
   onClose: () => void;
 }
 
@@ -40,7 +50,19 @@ interface Props {
  * 확장은 코드를 실행하지 않고 경로만 찾은 목록이다.
  * 마크다운 리소스(AGENTS.md·프롬프트·스킬)는 열어 고치고, 새로 만들 수 있다. 패키지에 든 것은 고치지 않는다.
  */
-export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onRunPi, onOpenMarketplace, onCopy, onClose }: Props) {
+export function ResourcesPanel({
+  hostId,
+  hostLabel,
+  cwd,
+  onReveal,
+  onReload,
+  onRunPi,
+  onOpenMarketplace,
+  onCopy,
+  onCopyContext,
+  onCopyPackage,
+  onClose,
+}: Props) {
   const [view, setView] = useState<ResourcesView | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
@@ -162,7 +184,9 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onR
         )}
         {view && !editing && (
           <div className="resources-body">
-            {tab === "context" && <ContextList view={view} onReveal={onReveal} onEdit={(p) => void open(p)} />}
+            {tab === "context" && (
+              <ContextList view={view} onReveal={onReveal} onEdit={(p) => void open(p)} {...(onCopyContext ? { onCopy: onCopyContext } : {})} />
+            )}
             {tab === "prompts" && (
               <ItemList
                 view={view}
@@ -210,6 +234,7 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onR
                     }
                   : {})}
                 {...(onOpenMarketplace ? { onOpenMarketplace } : {})}
+                {...(onCopyPackage ? { onCopy: onCopyPackage } : {})}
               />
             )}
           </div>
@@ -223,10 +248,13 @@ function ContextList({
   view,
   onReveal,
   onEdit,
+  onCopy,
 }: {
   view: ResourcesView;
   onReveal: ((path: string) => void) | undefined;
   onEdit: (path: string) => void;
+  /** 사용자 범위(데이터 폴더) 파일만 다른 호스트로 복사한다 */
+  onCopy?: (path: string) => void;
 }) {
   const rows: Array<{ label: string; path: string; detail: string }> = [
     ...view.contextFiles.map((f) => ({
@@ -256,6 +284,11 @@ function ContextList({
             {isEditable({ path: r.path }) && (
               <button type="button" className="small" onClick={() => onEdit(r.path)}>
                 편집
+              </button>
+            )}
+            {onCopy && shortPath(r.path, view).startsWith("~agent/") && (
+              <button type="button" className="small" onClick={() => onCopy(r.path)} title="다른 호스트의 데이터 폴더로 복사합니다">
+                다른 호스트로
               </button>
             )}
             {onReveal && (
@@ -346,10 +379,13 @@ function PackageList({
   view,
   onRun,
   onOpenMarketplace,
+  onCopy,
 }: {
   view: ResourcesView;
   onRun?: (args: string[], title: string, projectCwd?: string) => void;
   onOpenMarketplace?: () => void;
+  /** 다른 호스트에 같은 소스로 설치 */
+  onCopy?: (pkg: ConfiguredPackageInfo) => void;
 }) {
   /** 제거를 한 번 더 누르라고 묻는 중인 패키지 */
   const [confirmRemove, setConfirmRemove] = useState<string | undefined>();
@@ -385,6 +421,11 @@ function PackageList({
               </span>
             )}
           </div>
+          {onCopy && (
+            <button type="button" className="small" onClick={() => onCopy(p)} title="다른 호스트에서 같은 소스로 pi install을 실행합니다">
+              다른 호스트에 설치
+            </button>
+          )}
           {onRun && (
             <>
               <button

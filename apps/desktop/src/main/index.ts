@@ -420,8 +420,13 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   );
   ipcMain.handle(
     IpcChannels.writeResource,
-    (_event, hostId: string, cwd: string, path: string, content: string, baseMtime: number) =>
-      conn(hostId).request<ResourceWriteResult>(Methods.resourcesWrite, { cwd, path, content, baseMtime }),
+    (_event, hostId: string, cwd: string, path: string, content: string, baseMtime: number | undefined) =>
+      conn(hostId).request<ResourceWriteResult>(Methods.resourcesWrite, {
+        cwd,
+        path,
+        content,
+        ...(typeof baseMtime === "number" ? { baseMtime } : {}),
+      }),
   );
   ipcMain.handle(
     IpcChannels.createResource,
