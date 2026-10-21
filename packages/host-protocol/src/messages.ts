@@ -12,6 +12,10 @@ export const HOST_PROTOCOL_VERSION = 1;
 export const Methods = {
   hostInfo: "host.info",
   piLocate: "pi.locate",
+  /** Pi Manager 상태 화면: 설치·Node·Git Bash·데이터 (읽기 전용) */
+  piStatus: "pi.status",
+  /** npm 레지스트리의 Pi 최신 버전 (1시간 캐시) */
+  piLatest: "pi.latest",
   sessionOpen: "session.open",
   sessionList: "session.list",
   sessionAttach: "session.attach",
@@ -85,6 +89,49 @@ export interface PiLocation {
   nodePath?: string;
   /** Pi 프로세스에 추가로 줄 환경 변수 (예: 관리형 설치의 PI_MANAGED_INSTALL_ROOT, PATH) */
   env?: Record<string, string>;
+}
+
+/** Pi Manager 상태 (설계 §4.9 "상태 감지") */
+export interface PiStatus {
+  platform: string;
+  /** 찾은 Pi. 못 찾았으면 없고 piError에 이유 */
+  pi?: PiLocation;
+  piError?: string;
+  /** Pi를 실행할 node */
+  node: {
+    path: string;
+    /** 예: "v22.19.0". 읽지 못했으면 없음 */
+    version?: string;
+    /** Pi package.json engines.node (예: ">=22.19.0") */
+    required?: string;
+    /** required를 만족하는지 */
+    ok: boolean;
+  };
+  /** Windows만: Pi bash 툴이 쓸 Git Bash */
+  gitBash?: { found: boolean; path?: string; source?: "settings" | "git" };
+  data: {
+    /** ~/.pi/agent (PI_CODING_AGENT_DIR) */
+    agentDir: string;
+    exists: boolean;
+    sessionDir: string;
+    sessions: { count: number; bytes: number; truncated: boolean };
+    /** auth.json에 자격 증명이 있는 프로바이더 이름 (값은 보내지 않는다) */
+    authProviders: string[];
+    hasModelsJson: boolean;
+    hasSettings: boolean;
+  };
+}
+
+export interface PiLatestParams {
+  /** 캐시를 무시하고 다시 묻는다 */
+  force?: boolean;
+}
+
+/** npm 레지스트리의 Pi 최신 버전. 묻지 못했으면 error */
+export interface PiLatest {
+  version?: string;
+  error?: string;
+  checkedAt: number;
 }
 
 export interface PiLocateParams {
