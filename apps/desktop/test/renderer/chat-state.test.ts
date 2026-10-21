@@ -206,3 +206,24 @@ describe("applyEvent — ! 셸 명령", () => {
     expect(state.items.map((i) => (i.kind === "tool" ? i.output : ""))).toEqual(["A", "B"]);
   });
 });
+
+describe("applyEvent — 툴 호출 id 재사용", () => {
+  it("같은 id가 다시 오면 가장 최근 카드에 결과를 붙이고, 부가 정보와 종료 코드를 남긴다", () => {
+    const start = (toolName: string) => ({ type: "tool_execution_start", toolCallId: "call_1", toolName, args: {} });
+    const state = run([
+      start("edit"),
+      { type: "tool_execution_end", toolCallId: "call_1", result: { content: [], details: { patch: "p" } }, isError: false },
+      start("bash"),
+      {
+        type: "tool_execution_end",
+        toolCallId: "call_1",
+        result: { content: [{ type: "text", text: "hi" }], structuredContent: { exit_code: 3 } },
+        isError: true,
+      },
+    ]);
+    expect(state.items).toMatchObject([
+      { toolName: "edit", status: "done", details: { patch: "p" } },
+      { toolName: "bash", status: "error", output: "hi", exitCode: 3 },
+    ]);
+  });
+});
