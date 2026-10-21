@@ -47,6 +47,8 @@ import {
   type ModelsFileView,
   type ModelsProbeParams,
   type ModelsProbeResult,
+  type ModelsExportResult,
+  type ModelsImportParams,
   type ModelsSaveParams,
   type PiUpdateParams,
   type PiUpdateResult,
@@ -74,7 +76,15 @@ import { locatePi } from "./pi-locator";
 import { latestPiVersion, piStatus, piVersions } from "./pi-status";
 import { backupAgentDir, deleteAgentDir } from "./agent-data";
 import { agentDirOf, checkAuth, isProviderId, listProviders, removeCredential, setApiKey } from "./auth-store";
-import { probeEndpoint, readModelsFile, removeProvider, saveProvider, storedApiKey } from "./models-store";
+import {
+  exportProvider,
+  importProvider,
+  probeEndpoint,
+  readModelsFile,
+  removeProvider,
+  saveProvider,
+  storedApiKey,
+} from "./models-store";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { ensureBridge } from "./bridge";
 import { listDirectories } from "./dir-list";
@@ -340,6 +350,24 @@ export class AgentDaemon {
     peer.handle(Methods.modelsRemoveProvider, async (params) => ({
       removed: await removeProvider(agentDirOf(this.env), requireId(params)),
     }));
+
+    // 다른 호스트로 옮기는 프로바이더 (설계 §5.9). 오류 문구는 사용자에게 그대로 보인다.
+    peer.handle(Methods.modelsExportProvider, (params): Promise<ModelsExportResult> =>
+      exportProvider(agentDirOf(this.env), requireId(params)).catch((e: unknown) => {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+      }),
+    );
+
+    peer.handle(Methods.modelsImportProvider, async (params) => {
+      const p = (params ?? {}) as Partial<ModelsImportParams>;
+      if (typeof p.id !== "string" || !p.provider || typeof p.provider !== "object") {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "id와 provider가 필요합니다");
+      }
+      await importProvider(agentDirOf(this.env), p.id, p.provider, p.replace === true).catch((e: unknown) => {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+      });
+      return null;
+    });
 
     peer.handle(Methods.modelsProbe, async (params): Promise<ModelsProbeResult> => {
       const p = (params ?? {}) as Partial<ModelsProbeParams>;

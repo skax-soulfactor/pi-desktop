@@ -192,3 +192,59 @@ export async function storedApiKey(agentDir: string, id: string): Promise<string
     return undefined;
   }
 }
+
+/** 비밀이 아닌 값인지: 환경 변수($NAME·${NAME})나 명령(!…) 참조. 그 밖의 문자열은 키 값일 수 있다 */
+function isReference(value: unknown): boolean {
+  const kind = apiKeyView(value).kind;
+  return kind === "env" || kind === "command";
+}
+
+/**
+ * 다른 호스트로 복사할 프로바이더 (설계 §5.9 "models.json은 프로바이더 단위로").
+ * 폼이 다루지 않는 필드(compat·headers 등)도 그대로 옮기되, 비밀일 수 있는 값은 뺀다:
+ * 그대로 키 값인 apiKey, 그대로 값인 헤더. 뺀 것의 이름을 dropped로 알린다.
+ */
+export async function exportProvider(agentDir: string, id: string): Promise<{ provider: Json; dropped: string[] }> {
+  const { data } = await readJson(modelsPath(agentDir));
+  const original = providersOf(data)[id];
+  if (!original) throw new Error(`models.json에 없는 프로바이더입니다: ${id}`);
+  const provider: Json = JSON.parse(JSON.stringify(original)) as Json;
+  const dropped: string[] = [];
+  if (provider.apiKey !== undefined && !isReference(provider.apiKey)) {
+    delete provider.apiKey;
+    dropped.push("apiKey");
+  }
+  const headers = provider.headers;
+  if (headers && typeof headers === "object" && !Array.isArray(headers)) {
+    const kept: Json = {};
+    for (const [name, value] of Object.entries(headers as Json)) {
+      if (isReference(value)) kept[name] = value;
+      else dropped.push(`headers.${name}`);
+    }
+    if (Object.keys(kept).length > 0) provider.headers = kept;
+    else delete provider.headers;
+  }
+  return { provider, dropped };
+}
+
+/**
+ * 다른 호스트에서 받은 프로바이더를 쓴다. 이미 있으면 replace일 때만 바꾸며,
+ * 이때 받은 쪽에 없는(복사할 때 뺀) apiKey·헤더는 대상의 것을 남긴다.
+ */
+export async function importProvider(agentDir: string, id: string, provider: Json, replace: boolean): Promise<void> {
+  if (!id.trim()) throw new Error("프로바이더 ID가 필요합니다");
+  if (!provider || typeof provider !== "object" || Array.isArray(provider)) throw new Error("프로바이더가 객체가 아닙니다");
+  const path = modelsPath(agentDir);
+  const { exists, data } = await readJson(path);
+  const providers = { ...providersOf(data) };
+  const existing = providers[id];
+  if (existing && !replace) throw new Error(`이미 있는 프로바이더입니다: ${id}`);
+  const next: Json = { ...provider };
+  if (existing) {
+    if (next.apiKey === undefined && existing.apiKey !== undefined) next.apiKey = existing.apiKey;
+    const theirs = existing.headers && typeof existing.headers === "object" ? (existing.headers as Json) : undefined;
+    if (theirs) next.headers = { ...theirs, ...((next.headers as Json | undefined) ?? {}) };
+  }
+  providers[id] = next;
+  await writeModels(path, { ...data, providers }, exists);
+}
