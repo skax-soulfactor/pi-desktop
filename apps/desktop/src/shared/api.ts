@@ -18,6 +18,7 @@ import type {
   ResourceWriteResult,
   ResourceExportResult,
   ModelsExportResult,
+  SettingsReadResult,
   ResourceImportParams,
   ResourceImportResult,
   FsSearchResult,
@@ -332,6 +333,10 @@ export interface PiDesktopApi {
   modelsExport(hostId: string, id: string): Promise<ModelsExportResult>;
   /** 받은 프로바이더를 그 호스트의 models.json에 쓴다. replace면 이미 있는 것을 바꾼다 (대상 키는 남김) */
   modelsImport(hostId: string, id: string, provider: Record<string, unknown>, replace: boolean): Promise<void>;
+  /** 그 호스트의 사용자 settings.json 최상위 값 */
+  settingsRead(hostId: string): Promise<SettingsReadResult>;
+  /** 그 호스트의 사용자 settings.json에서 받은 최상위 키만 바꾼다 (설계 §5.9) */
+  settingsMerge(hostId: string, values: Record<string, unknown>): Promise<void>;
   /** 받은 스킬·프롬프트 파일을 그 호스트의 범위에 쓴다 (replace면 이전 것을 백업하고 바꾼다) */
   importResourceFiles(hostId: string, params: ResourceImportParams): Promise<ResourceImportResult>;
   /** 가져온 항목들의 로컬 수정·원본 업데이트를 확인한다 (저장소마다 GitHub를 한 번씩 조회) */
@@ -401,6 +406,8 @@ export const IpcChannels = {
   exportResource: "pi:export-resource",
   modelsExport: "pi:models-export",
   modelsImport: "pi:models-import",
+  settingsRead: "pi:settings-read",
+  settingsMerge: "pi:settings-merge",
   importResourceFiles: "pi:import-resource-files",
   importStatus: "pi:import-status",
   importUpdate: "pi:import-update",

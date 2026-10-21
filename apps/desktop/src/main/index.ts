@@ -15,6 +15,7 @@ import {
   type ImportedInspectResult,
   type ResourceExportResult,
   type ModelsExportResult,
+  type SettingsReadResult,
   type ResourceImportParams,
   type ProjectTrustInfo,
   type ResourceFile,
@@ -319,6 +320,12 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       await conn(hostId).request(Methods.modelsImportProvider, { id, provider, ...(replace ? { replace: true } : {}) });
     },
   );
+  ipcMain.handle(IpcChannels.settingsRead, (_event, hostId: string) =>
+    conn(hostId).request<SettingsReadResult>(Methods.settingsRead, {}),
+  );
+  ipcMain.handle(IpcChannels.settingsMerge, async (_event, hostId: string, values: Record<string, unknown>) => {
+    await conn(hostId).request(Methods.settingsMerge, { values });
+  });
   ipcMain.handle(IpcChannels.exportResource, (_event, hostId: string, kind: "skill" | "prompt", path: string) =>
     conn(hostId).request<ResourceExportResult>(Methods.resourcesExport, { kind, path }, 120_000),
   );
