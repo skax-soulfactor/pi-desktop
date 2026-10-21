@@ -32,8 +32,28 @@ writeFileSync(
   join(piAgentDir, "models.json"),
   JSON.stringify(
     {
+      // 모델 선택기 확인용: 기본 모델 외에 추론 모델과, openrouter처럼 모델이 많은 프로바이더를 흉내 낸다.
+      // 모두 같은 mock 서버로 간다.
       providers: {
-        mock: { baseUrl: llm.baseUrl, api: "openai-completions", apiKey: "mock", models: [{ id: "mock-model" }] },
+        mock: {
+          baseUrl: llm.baseUrl,
+          api: "openai-completions",
+          apiKey: "mock",
+          models: [
+            { id: "mock-model" },
+            { id: "mock-reasoning", name: "Mock Reasoning", reasoning: true, contextWindow: 200000 },
+          ],
+        },
+        "mock-router": {
+          baseUrl: llm.baseUrl,
+          api: "openai-completions",
+          apiKey: "mock",
+          models: Array.from({ length: 30 }, (_, i) => ({
+            id: `vendor-${i % 5}/model-${i}`,
+            name: `Vendor ${i % 5} Model ${i}`,
+            contextWindow: 32000 * ((i % 4) + 1),
+          })),
+        },
       },
     },
     null,
