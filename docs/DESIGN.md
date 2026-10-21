@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.32)
+# Pi Desktop — 설계 문서 (v0.33)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -429,7 +429,25 @@ RPC 프로세스를 띄울 때 `-e <bridge>`로 주입한다. 사용자 settings
 - 확인하다 알게 된 것: **RPC 모드는 프로젝트 신뢰를 묻지 못한다**(security.md "Project trust without an interactive prompt").
   - 저장된 신뢰(`~/.pi/agent/trust.json`)도 `--approve`도 없으면 프로젝트 `.pi/`의 프롬프트·스킬·확장·설정을 건너뛴다. 기본값 `defaultProjectTrust: "ask"`일 때다. AGENTS.md는 신뢰와 상관없이 불러온다.
   - 그래서 앱에서 처음 연 프로젝트는 `.pi/` 리소스가 빠진다. 리소스 창은 신뢰 여부를 따지지 않고 보여 주므로, 실제와 다르게 보일 수 있다.
-  - 명령줄 확장은 `project_trust` 이벤트를 받을 수 있다. 다음 단계에서 bridge가 이 이벤트를 받아 앱 대화상자로 신뢰 여부를 묻고, 리소스 창에 신뢰 상태를 보여 준다.
+  - 처음에는 bridge가 `project_trust` 이벤트로 묻는 방안을 생각했다. 그러나 Pi는 확장의 답을 저장된 결정보다 먼저 쓰므로(project-trust.js), `/trust`로 저장한 결정까지 덮어쓰게 되어 택하지 않았다. 아래 v0.33 구현 메모를 본다.
+
+**구현 메모: 프로젝트 신뢰 (M4, v0.33)**
+- 데몬
+  - `trust.get({cwd})`: 그 호스트 Pi의 SDK(`hasTrustRequiringProjectResources`, `ProjectTrustStore`, `SettingsManager.getDefaultProjectTrust`)로 Pi와 같은 순서로 정한다. 필요 없음 → 저장된 결정 → 기본값 순이다. 결과는 `trusted`·`untrusted`·`ask`다.
+  - `trust.set({cwd, decision})`: Pi의 `trust.json`에 저장하거나 지운다. 터미널 pi의 `/trust`와 같은 파일이다.
+  - `session.open`의 `trust: "yes"|"no"`는 그 실행에만 `--approve`·`--no-approve`로 넘긴다.
+- 앱
+  - 세션을 여는 모든 경로(새 세션·다시 열기·기록에서 열기·분기)가 열기 전에 확인한다. `ask`면 대화상자로 묻는다.
+  - 선택지: 이번만 신뢰하지 않고 열기(첫 선택, 가장 안전) / 신뢰하고 열기(기억) / 이번만 신뢰하고 열기 / 신뢰하지 않음으로 기억하고 열기. Esc는 열지 않는다.
+  - 상태를 읽지 못하면(예전 데몬) 묻지 않고 Pi 기본 동작에 맡긴다.
+- 리소스 창
+  - 신뢰 상태 안내와 "이 폴더 신뢰"·"저장된 결정 지우기" 버튼을 둔다.
+  - 불러오지 않는 project 리소스에 배지를 단다. 저장하지 않은 폴더는 "이번만 신뢰"로 연 세션에는 불러와져 있을 수 있어서 "신뢰해야 불러옴"으로 표시한다.
+  - 신뢰를 바꿔도 이미 열린 세션은 Pi가 시작할 때 정한 그대로다.
+- 실제 Pi 계약 테스트로 확인한 것
+  - 정해진 것이 없으면 프로젝트 프롬프트를 건너뛴다.
+  - "이번만" 결정은 저장하지 않고 적용된다.
+  - 저장한 결정은 다음 실행부터 묻지 않고 쓰인다.
 
 ### 5.4 TUI와 병행 사용 (신규)
 

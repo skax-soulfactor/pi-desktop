@@ -17,6 +17,8 @@ import {
   type FsSearchResult,
   type FsListDirParams,
   type ResourcesListParams,
+  type ProjectTrustInfo,
+  type TrustSetParams,
   type ResourceCreateParams,
   type ResourceFile,
   type ResourcePathParams,
@@ -71,6 +73,7 @@ import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { ensureBridge } from "./bridge";
 import { listDirectories } from "./dir-list";
 import { listResources, type ResourceSdk } from "./resources";
+import { projectTrust, setProjectTrust, trustArgs, type TrustSdk } from "./trust";
 import { createResourceFile, readResourceFile, writeResourceFile } from "./resource-files";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
@@ -364,7 +367,7 @@ export class AgentDaemon {
         nodePath: pi.nodePath ?? process.execPath,
         sessionFile: p.sessionFile,
         forkFrom: p.forkFrom,
-        piArgs: [...(p.piArgs ?? []), ...(bridge ? ["-e", bridge] : [])],
+        piArgs: [...(p.piArgs ?? []), ...trustArgs(p.trust), ...(bridge ? ["-e", bridge] : [])],
         env: { ...this.env, ...pi.env, ...p.env },
         journalCapacity: this.options.journalCapacity ?? (Number(this.env.PI_DESKTOP_JOURNAL_CAPACITY) || undefined),
         files: this.files,
@@ -517,6 +520,21 @@ export class AgentDaemon {
     const asInvalid = (e: unknown): never => {
       throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
     };
+
+    peer.handle(Methods.trustGet, async (params): Promise<ProjectTrustInfo> => {
+      const { cwd } = requireStrings(params, ["cwd"]) as { cwd: string };
+      const sdk = (await loadPiSdk(await locatePi({ env: this.env }))) as unknown as TrustSdk;
+      return projectTrust(sdk, cwd, agentDirOf(this.env));
+    });
+
+    peer.handle(Methods.trustSet, async (params): Promise<ProjectTrustInfo> => {
+      const p = requireStrings(params, ["cwd"]) as unknown as TrustSetParams;
+      if (p.decision !== null && typeof p.decision !== "boolean") {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "decision은 true·false·null이어야 합니다");
+      }
+      const sdk = (await loadPiSdk(await locatePi({ env: this.env }))) as unknown as TrustSdk;
+      return setProjectTrust(sdk, p.cwd, agentDirOf(this.env), p.decision);
+    });
 
     peer.handle(Methods.resourcesRead, (params): Promise<ResourceFile> => {
       const p = requireStrings(params, ["cwd", "path"]) as unknown as ResourcePathParams;

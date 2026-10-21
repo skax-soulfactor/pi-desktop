@@ -58,6 +58,10 @@ export const Methods = {
   fsSearch: "fs.search",
   /** 작업 폴더에서 Pi가 불러오는 리소스 목록 (AGENTS.md·프롬프트·스킬·확장, 읽기 전용) */
   resourcesList: "resources.list",
+  /** 작업 폴더의 프로젝트 신뢰 상태 (Pi의 trust.json·defaultProjectTrust) */
+  trustGet: "trust.get",
+  /** 프로젝트 신뢰 결정을 Pi의 trust.json에 저장한다 */
+  trustSet: "trust.set",
   /** 리소스 마크다운 파일 읽기·쓰기·새로 만들기 (데이터 폴더·.pi/·AGENTS.md만) */
   resourcesRead: "resources.read",
   resourcesWrite: "resources.write",
@@ -335,6 +339,36 @@ export interface SessionOpenParams {
   piArgs?: string[];
   /** Pi 프로세스에만 추가로 줄 환경 변수 */
   env?: Record<string, string>;
+  /**
+   * 이번 실행에만 쓰는 프로젝트 신뢰 결정 (pi --approve / --no-approve).
+   * 없으면 Pi가 저장된 결정과 defaultProjectTrust로 정한다. RPC 모드는 묻지 못하므로 "ask"면 건너뛴다
+   */
+  trust?: "yes" | "no";
+}
+
+/**
+ * 작업 폴더의 프로젝트 신뢰 (Pi security.md "Project trust").
+ * .pi/의 확장·스킬·프롬프트·설정 등은 신뢰한 폴더에서만 불러온다. AGENTS.md는 신뢰와 상관없이 불러온다.
+ */
+export interface ProjectTrustInfo {
+  cwd: string;
+  /** 신뢰가 필요한 프로젝트 리소스가 있는지. 없으면 결정할 것이 없다 */
+  required: boolean;
+  /** trust.json에 저장된 결정 (이 폴더나 가장 가까운 상위 폴더). 없으면 null */
+  saved: boolean | null;
+  /** 저장된 결정이 없을 때 Pi의 기본값 */
+  defaultProjectTrust: "ask" | "always" | "never";
+  /**
+   * 앱이 지금 세션을 열면 어떻게 되는지.
+   * ask: 정해진 것이 없어 앱이 물어야 한다 (묻지 않고 열면 RPC 모드라 건너뜀)
+   */
+  effective: "trusted" | "untrusted" | "ask";
+}
+
+export interface TrustSetParams {
+  cwd: string;
+  /** true 신뢰, false 신뢰하지 않음, null 저장된 결정 지우기 */
+  decision: boolean | null;
 }
 
 export type SessionState = "running" | "exited";
@@ -587,6 +621,8 @@ export interface ConfiguredPackageInfo {
 export interface ResourcesView {
   cwd: string;
   agentDir: string;
+  /** 프로젝트 신뢰. trusted가 아니면 project 범위의 .pi/ 리소스는 세션에 불러오지 않는다 */
+  trust: ProjectTrustInfo;
   /** 시스템 프롬프트에 들어가는 AGENTS.md(CLAUDE.md) 파일. 불러오는 순서대로 */
   contextFiles: ContextFileInfo[];
   /** 기본 시스템 프롬프트를 바꾸는 SYSTEM.md */

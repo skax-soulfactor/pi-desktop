@@ -14,6 +14,7 @@ import {
 const view: ResourcesView = {
   cwd: "/home/me/proj",
   agentDir: "/home/me/.pi/agent",
+  trust: { cwd: "/home/me/proj", required: false, saved: null, defaultProjectTrust: "ask", effective: "trusted" },
   contextFiles: [{ path: "/home/me/.pi/agent/AGENTS.md", scope: "user", bytes: 10 }],
   systemPrompt: "/home/me/proj/.pi/SYSTEM.md",
   appendSystemPrompt: [],

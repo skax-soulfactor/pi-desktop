@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ResourceDiagnosticInfo, ResourceFile, ResourceItem, ResourcesView } from "@pi-desktop/host-protocol/messages";
 import { errorText } from "./folder-browser";
 import { ResourceEditor } from "./ResourceEditor";
+import { projectBadge, projectResourcesSkipped, trustStatusText } from "./project-trust";
 import {
   creatableKind,
   diagnosticsByPath,
@@ -65,6 +66,16 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onC
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, editing]);
 
+  /** 신뢰 결정을 바꾼다. 이미 열린 세션은 다시 열어야 반영된다 (Pi는 시작할 때 정한다) */
+  async function changeTrust(decision: boolean | null) {
+    try {
+      await window.piDesktop.setTrust(hostId, cwd, decision);
+      await load();
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
+
   async function open(path: string) {
     try {
       setEditing(await window.piDesktop.readResource(hostId, cwd, path));
@@ -101,6 +112,21 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onC
           ))}
         </div>
         {error && <div className="banner error">{error}</div>}
+        {view && trustStatusText(view.trust) && !editing && (
+          <div className={`banner ${projectResourcesSkipped(view.trust) ? "warn" : "info"}`}>
+            <span>{trustStatusText(view.trust)}</span>
+            {view.trust.saved !== true && (
+              <button type="button" className="small" onClick={() => void changeTrust(true)}>
+                이 폴더 신뢰
+              </button>
+            )}
+            {view.trust.saved !== null && (
+              <button type="button" className="small" onClick={() => void changeTrust(null)}>
+                저장된 결정 지우기
+              </button>
+            )}
+          </div>
+        )}
         {view && view.diagnostics.length > 0 && (
           <div className="banner warn">
             불러올 때 문제가 {view.diagnostics.length}건 있습니다 (이름 충돌 등). 해당 항목에 표시했습니다.
@@ -242,6 +268,7 @@ function ItemList({
   /** 없으면 고치지 않는 목록 (확장) */
   onEdit?: (path: string) => void;
 }) {
+  const badge = projectBadge(view.trust);
   if (items.length === 0) return <p className="muted">{empty}</p>;
   return (
     <ul className="resource-list">
@@ -255,6 +282,7 @@ function ItemList({
                 {title(item)}
                 <span className="resource-badge">{sourceLabel(item)}</span>
                 {!item.enabled && <span className="resource-badge off">꺼짐</span>}
+                {badge && item.scope === "project" && <span className="resource-badge off">{badge}</span>}
                 {extra && <span className="resource-badge">{extra}</span>}
               </span>
               {item.description && <span className="resource-desc">{item.description}</span>}

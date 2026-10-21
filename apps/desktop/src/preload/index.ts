@@ -59,6 +59,8 @@ const api: PiDesktopApi = {
   searchFiles: (hostId, cwd, query) => ipcRenderer.invoke(IpcChannels.searchFiles, hostId, cwd, query),
   listDir: (hostId, path) => ipcRenderer.invoke(IpcChannels.listDir, hostId, path),
   listResources: (hostId, cwd) => ipcRenderer.invoke(IpcChannels.listResources, hostId, cwd),
+  getTrust: (hostId, cwd) => ipcRenderer.invoke(IpcChannels.getTrust, hostId, cwd),
+  setTrust: (hostId, cwd, decision) => ipcRenderer.invoke(IpcChannels.setTrust, hostId, cwd, decision),
   readResource: (hostId, cwd, path) => ipcRenderer.invoke(IpcChannels.readResource, hostId, cwd, path),
   writeResource: (hostId, cwd, path, content, baseMtime) =>
     ipcRenderer.invoke(IpcChannels.writeResource, hostId, cwd, path, content, baseMtime),

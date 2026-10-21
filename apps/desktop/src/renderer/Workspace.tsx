@@ -85,6 +85,8 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     ignoreExternalWrite,
     writer,
     claimWriter,
+    trustAsk,
+    answerTrust,
     dismissToast,
   } = useSession(tabId);
   const isLocal = host?.kind === "local";
@@ -838,6 +840,23 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         >
           이 세션 파일은 {formatRelative(pendingOpen.modified)} 수정되었고, 이 앱이 쓰고 있는 파일이 아닙니다. 터미널의 Pi(TUI)
           등에서 열려 있다면 같은 파일에 함께 쓸 때 기록이 꼬일 수 있습니다.
+        </ChoiceDialog>
+      )}
+      {trustAsk && (
+        <ChoiceDialog
+          title="이 폴더를 신뢰할까요?"
+          onCancel={() => answerTrust(undefined)}
+          choices={[
+            { label: "이번만 신뢰하지 않고 열기", onSelect: () => answerTrust("once-no") },
+            { label: "신뢰하고 열기 (기억)", kind: "primary", onSelect: () => answerTrust("remember-yes") },
+            { label: "이번만 신뢰하고 열기", onSelect: () => answerTrust("once-yes") },
+            { label: "신뢰하지 않음으로 기억하고 열기", onSelect: () => answerTrust("remember-no") },
+          ]}
+        >
+          {trustAsk.cwd}
+          {"\n\n"}이 폴더에는 프로젝트 리소스(.pi/의 확장·스킬·프롬프트·설정 등)가 있습니다. 신뢰하면 Pi가 이것들을 불러오고
+          프로젝트 확장의 코드를 실행합니다. 신뢰하지 않아도 AGENTS.md는 불러옵니다. 기억한 결정은 터미널 pi의 /trust와
+          같은 곳(~/.pi/agent/trust.json)에 저장되며, 리소스 창에서 바꿀 수 있습니다.
         </ChoiceDialog>
       )}
       {agentReplaceAsk && connection.status === "connected" && connection.agentUpdate && (
