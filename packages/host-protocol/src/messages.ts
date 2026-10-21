@@ -93,6 +93,11 @@ export const Notifications = {
 export interface HostInfo {
   protocolVersion: number;
   agentVersion: string;
+  /**
+   * 데몬이 실행 중인 번들 파일 SHA-256의 앞 12자리. 앱이 가진 번들과 다르면 예전 데몬이다 (설계 §3.4).
+   * 번들 없이 실행했거나 이 필드를 모르는 예전 데몬이면 없다.
+   */
+  agentBuild?: string;
   /** Node의 process.platform 값 (win32, linux, darwin 등) */
   platform: string;
   arch: string;
@@ -440,6 +445,7 @@ export interface StoredSession {
 export interface DaemonStatus {
   pid: number;
   agentVersion: string;
+  agentBuild?: string;
   startedAt: number;
   clients: number;
   sessions: SessionSummary[];

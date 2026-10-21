@@ -73,6 +73,8 @@ export interface DaemonOptions {
   journalCapacity?: number;
   /** 종료할 때 호출 (기본: process.exit) */
   onShutdown?: () => void;
+  /** 실행 중인 번들의 빌드 식별자 (version.ts agentBuildOf). 앱이 예전 데몬을 가리는 데 쓴다 */
+  agentBuild?: string;
 }
 
 /** 연결된 앱 하나 */
@@ -162,6 +164,7 @@ export class AgentDaemon {
     return {
       pid: process.pid,
       agentVersion: AGENT_VERSION,
+      ...(this.options.agentBuild ? { agentBuild: this.options.agentBuild } : {}),
       startedAt: this.startedAt,
       clients: this.clients.size,
       sessions: this.sessionSummaries(),
@@ -200,6 +203,7 @@ export class AgentDaemon {
     peer.handle(Methods.hostInfo, (): HostInfo => ({
       protocolVersion: HOST_PROTOCOL_VERSION,
       agentVersion: AGENT_VERSION,
+      ...(this.options.agentBuild ? { agentBuild: this.options.agentBuild } : {}),
       platform: process.platform,
       arch: process.arch,
       nodeVersion: process.version,

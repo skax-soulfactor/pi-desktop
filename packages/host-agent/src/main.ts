@@ -7,13 +7,15 @@
  */
 import { runConnect } from "./connect";
 import { AgentDaemon } from "./daemon";
-import { AGENT_VERSION } from "./version";
+import { AGENT_VERSION, agentBuildOf } from "./version";
 
 async function main(argv: string[]): Promise<number> {
   const command = argv[0];
   switch (command) {
     case "daemon": {
-      const daemon = new AgentDaemon();
+      // 시작할 때 번들을 해시해 둔다. 실행 중에 파일이 바뀌어도 이 데몬이 읽은 번들을 가리키도록.
+      const agentBuild = agentBuildOf(process.argv[1]);
+      const daemon = new AgentDaemon(agentBuild ? { agentBuild } : {});
       const listening = await daemon.listen();
       // 이미 다른 데몬이 떠 있으면 조용히 끝낸다.
       if (!listening) return 0;
