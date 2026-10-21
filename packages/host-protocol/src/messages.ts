@@ -54,6 +54,8 @@ export const Methods = {
   storedUnwatch: "stored.unwatch",
   /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커) */
   fsSearch: "fs.search",
+  /** 한 폴더의 하위 폴더 목록 (폴더 탐색 창) */
+  fsListDir: "fs.listDir",
   daemonStatus: "daemon.status",
   daemonShutdown: "daemon.shutdown",
 } as const;
@@ -462,6 +464,24 @@ export interface FsSearchResult {
   /** 작업 폴더 기준 상대 경로. 구분자는 "/", 폴더는 끝에 "/" */
   files: string[];
   /** 파일이 너무 많아 일부만 검색했다 */
+  truncated: boolean;
+}
+
+export interface FsListDirParams {
+  /** 볼 폴더 (호스트 기준). 비었거나 "~"면 홈, 상대 경로는 홈 기준 */
+  path?: string;
+}
+
+export interface FsListDirResult {
+  /** 실제로 연 폴더의 절대 경로 */
+  path: string;
+  /** 상위 폴더. 루트면 없다 */
+  parent?: string;
+  /** 호스트의 홈 폴더 */
+  home: string;
+  /** 하위 폴더 이름 (가나다순, 숨김 폴더 포함) */
+  dirs: string[];
+  /** 너무 많아 일부만 담았다 */
   truncated: boolean;
 }
 

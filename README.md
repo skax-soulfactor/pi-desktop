@@ -4,7 +4,7 @@
 Pi를 업데이트하면 앱도 그대로 따라갑니다.
 
 - 설계: [docs/DESIGN.md](docs/DESIGN.md)
-- 현재 단계: **M1 진행 중** — 로컬·WSL의 Pi와 스트리밍 채팅, GUI를 닫아도 작업이 계속되고 다시 열면 이어 붙기
+- 현재 단계: **M3 진행 중** — M1(채팅)과 M2(Pi 관리·프로바이더)를 마치고, WSL 보강과 원격(SSH) 지원을 만드는 중
 
 ## 구조
 
@@ -53,7 +53,7 @@ npm run dev
 - **로컬 (Windows)**: `npm install -g @earendil-works/pi-coding-agent`로 설치하고 `pi`에서 `/login`을 해 두어야 합니다.
 - **WSL: <배포판>**: WSL 안에 Pi가 설치되어 있고(공식 설치기 또는 npm) 로그인되어 있으면 됩니다.
   - 앱이 Host Agent를 WSL 홈의 `~/.pi-desktop/agent/`에 자동으로 올리고, WSL 안에 데몬을 띄웁니다.
-  - 작업 폴더는 WSL 안의 경로(예: `/home/me/project`)로 입력합니다. 폴더 선택 대화상자는 로컬 전용입니다.
+  - 작업 폴더는 WSL 안의 경로(예: `/home/me/project`)로 입력하거나 "폴더 선택"으로 WSL 안의 폴더를 훑어 고릅니다. 글자를 쳐서 거르고, Enter로 들어가고, Backspace로 위로, Ctrl+Enter로 지금 폴더를 고릅니다.
   - WSL에 Node.js 22 이상이 필요합니다. Pi 공식 설치기가 깐 Node도 자동으로 찾습니다.
 
 앱은 마지막으로 고른 호스트를 기억하고, 다시 열면 그 호스트의 최근 세션에 자동으로 다시 붙습니다.
@@ -167,6 +167,5 @@ npm test
 
 - 디자인 시스템과 패키징(인스톨러)은 아직 없습니다.
 - 탭을 끌어 순서를 바꾸거나 새 창으로 떼어 내는 기능은 아직 없습니다.
-- WSL 내부 폴더 탐색 UI가 없어 경로를 직접 입력합니다.
 - 세션 트리에서는 분기(fork)와 복제(clone)만 됩니다. TUI의 `/tree`처럼 같은 세션 안에서 다른 갈래로 옮겨 가는 명령은 Pi RPC에 없습니다.
 - Windows에서 데몬은 WMI로 띄웁니다 (앱 핸들 상속 방지). 문제를 조사할 때는 `PI_DESKTOP_DAEMON_SPAWN=direct`로 예전 방식을 쓸 수 있습니다.
