@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.24)
+# Pi Desktop — 설계 문서 (v0.25)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -340,7 +340,10 @@ v0.1과 같다. 스키마 기반 폼, User/Project 탭, diff 미리보기 후 �
 - Windows는 `npm.cmd install -g --ignore-scripts`로 설치한다(PowerShell 실행 정책 때문에 npm.ps1 대신 npm.cmd). Node가 부족하면 `winget install OpenJS.NodeJS.LTS` 단계를 둔다.
 - macOS·Linux·WSL은 공식 설치기를 `~/.pi-desktop/pi-install.sh`로 내려받아 `less`로 보여준 뒤 실행한다. 설치기는 대화형 메뉴(y 다시 설치 / u 제거 / n 아무것도 안 함)로 다루므로, 관리형 설치의 제거도 설치기로 한다.
 - 특정 버전·롤백은 npm 전역 설치만 된다. 설치기에는 버전 옵션이 없다.
-- 데이터(`~/.pi/agent`)는 아직 항상 유지한다. 백업·삭제는 후속 작업이다.
+- 데이터(`~/.pi/agent`) 처리(v0.25)
+  - 백업: 언제든 `<앱 홈>/backups/pi-agent-<날짜시각>.tar.gz`로 만든다(POSIX 600, Windows는 System32 tar).
+  - 삭제: Pi를 제거한 뒤에만 된다(관리형 설치는 Pi가 데이터 폴더 안에 있다). 두 번 확인하고("삭제" 직접 입력), 기본은 백업 후 삭제다.
+  - 데몬의 안전장치: 실행 중 세션, Pi가 그 안에 설치됨, 확인 경로 불일치, 홈·루트·얕은 경로는 거부한다. 폴더 안 링크(junction 포함)의 대상은 지우지 않는다.
 
 **제거**
 - 방식별 명령: 관리형 설치는 설치기의 uninstall 동작(내장 터미널), npm은 `npm uninstall -g @earendil-works/pi-coding-agent`, Nix는 안내만.
