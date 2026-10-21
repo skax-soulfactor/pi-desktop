@@ -16,6 +16,8 @@ import {
   type FsSearchParams,
   type FsSearchResult,
   type FsListDirParams,
+  type ResourcesListParams,
+  type ResourcesView,
   type FsListDirResult,
   type HostInfo,
   type PiLatest,
@@ -62,6 +64,7 @@ import { agentDirOf, checkAuth, isProviderId, listProviders, removeCredential, s
 import { probeEndpoint, readModelsFile, removeProvider, saveProvider, storedApiKey } from "./models-store";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { listDirectories } from "./dir-list";
+import { listResources, type ResourceSdk } from "./resources";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
@@ -489,6 +492,16 @@ export class AgentDaemon {
       if (typeof p.cwd !== "string" || !p.cwd) throw new JsonRpcError(ErrorCodes.InvalidParams, "cwd가 필요합니다");
       const limit = typeof p.limit === "number" && p.limit > 0 ? Math.min(p.limit, 200) : 50;
       return this.fileIndex.search(p.cwd, typeof p.query === "string" ? p.query : "", limit);
+    });
+
+    peer.handle(Methods.resourcesList, async (params): Promise<ResourcesView> => {
+      const cwd = (params as Partial<ResourcesListParams> | undefined)?.cwd;
+      if (typeof cwd !== "string" || !cwd) throw new JsonRpcError(ErrorCodes.InvalidParams, "cwd가 필요합니다");
+      const pi = await locatePi({ env: this.env });
+      const sdk = (await loadPiSdk(pi)) as unknown as ResourceSdk;
+      return listResources(sdk, cwd, agentDirOf(this.env)).catch((e: unknown) => {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+      });
     });
 
     peer.handle(Methods.fsListDir, (params): Promise<FsListDirResult> => {
