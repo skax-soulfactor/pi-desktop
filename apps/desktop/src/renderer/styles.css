@@ -1781,3 +1781,94 @@ button.toggled {
   padding: 10px;
   color: var(--muted);
 }
+
+/* Pi 관리 (설계 §4.9) */
+.pi-version {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
+.pi-version.missing {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.pi-update-dot {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--warn);
+  color: #fff;
+}
+
+.pi-manager {
+  width: 640px;
+  max-width: calc(100vw - 32px);
+}
+
+.pi-manager-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pi-manager-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.pi-checks {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pi-checks th,
+.pi-checks td {
+  padding: 8px 6px;
+  border-top: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.pi-checks th {
+  width: 120px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.check-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.check-dot.ok {
+  background: var(--ok);
+}
+
+.check-dot.warn {
+  background: var(--warn);
+}
+
+.check-dot.bad {
+  background: var(--bad);
+}
+
+.check-detail {
+  margin-top: 2px;
+  font: 11px ui-monospace, Consolas, monospace;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.pi-manager-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+}
