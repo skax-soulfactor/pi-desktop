@@ -3,6 +3,7 @@ import type { PendingQueue } from "./chat-state";
 import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
 import { Composer } from "./Composer";
+import { modelAcceptsImages, rpcImages, type ImageAttachment } from "./attachments";
 import type { ParsedInput, PiCommand } from "./composer-input";
 import { baseName, formatRelative } from "./format";
 import { tuiCommand } from "./tui-command";
@@ -235,7 +236,11 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
   }
 
   /** 실행 중이면 Pi 규칙대로 steer/followUp 중 하나를 지정해야 한다. */
-  function submit(input: Exclude<ParsedInput, { kind: "empty" }>, behavior?: "steer" | "followUp") {
+  function submit(
+    input: Exclude<ParsedInput, { kind: "empty" }>,
+    behavior: "steer" | "followUp" | undefined,
+    attachments: ImageAttachment[],
+  ) {
     if (!session) return;
     setDraft("");
     if (input.kind === "bash") {
@@ -244,8 +249,14 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
       return;
     }
     const { message } = input;
+    const images = rpcImages(attachments);
     void guard(() =>
-      send(behavior ? { type: "prompt", message, streamingBehavior: behavior } : { type: "prompt", message }),
+      send({
+        type: "prompt",
+        message,
+        ...(behavior ? { streamingBehavior: behavior } : {}),
+        ...(images ? { images } : {}),
+      }),
     );
   }
 
@@ -468,13 +479,14 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
         disabled={!session || !connected || Boolean(lost) || Boolean(follow) || Boolean(externalWrite)}
         placeholder={
           session
-            ? "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈, ↑ 이전 입력, / 명령, @ 파일, !셸 명령, !!컨텍스트 제외)"
+            ? "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈, ↑ 이전 입력, / 명령, @ 파일, 이미지 붙여넣기, !셸 명령, !!컨텍스트 제외)"
             : "먼저 세션을 여세요"
         }
         running={chat.running}
         commands={commands}
         onNeedCommands={loadCommands}
         onSearchFiles={searchFiles}
+        acceptsImages={modelAcceptsImages(sessionInfo.info.model)}
         onSubmit={submit}
         onAbort={() => void guard(abortRun)}
       />
