@@ -523,7 +523,8 @@ export class AgentDaemon {
     peer.handle(Methods.resourcesWrite, (params): Promise<ResourceWriteResult> => {
       const p = requireStrings(params, ["cwd", "path", "content"]) as unknown as ResourceWriteParams;
       const base = typeof p.baseMtime === "number" ? p.baseMtime : undefined;
-      return writeResourceFile(p.path, p.content, base, p.cwd, agentDirOf(this.env)).catch(asInvalid);
+      const backups = join(agentHome(this.env), "resource-backups");
+      return writeResourceFile(p.path, p.content, base, p.cwd, agentDirOf(this.env), backups).catch(asInvalid);
     });
 
     peer.handle(Methods.resourcesCreate, (params): Promise<ResourceFile> => {

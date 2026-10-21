@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Methods, type ResourceFile } from "@pi-desktop/host-protocol";
 import {
+  backupPathOf,
   createResourceFile,
   readResourceFile,
   resourceNameProblem,
@@ -42,14 +43,17 @@ describe("resourcePathProblem", () => {
 });
 
 describe("읽기·쓰기", () => {
-  it("읽은 뒤 바뀌지 않았으면 저장하고 이전 내용을 .bak으로 남긴다", async () => {
-    const { agentDir, cwd } = fixture();
+  it("읽은 뒤 바뀌지 않았으면 저장하고, 이전 내용은 리소스 옆이 아닌 백업 폴더에 남긴다", async () => {
+    const { base, agentDir, cwd } = fixture();
     const path = join(agentDir, "prompts", "review.md");
+    const backups = join(base, "backups");
     const file = await readResourceFile(path, cwd, agentDir);
     expect(file.content).toBe("리뷰\n");
-    const saved = await writeResourceFile(path, "고침\n", file.mtimeMs, cwd, agentDir);
+    const saved = await writeResourceFile(path, "고침\n", file.mtimeMs, cwd, agentDir, backups);
     expect(readFileSync(path, "utf8")).toBe("고침\n");
-    expect(readFileSync(`${path}.bak`, "utf8")).toBe("리뷰\n");
+    expect(readFileSync(backupPathOf(path, backups), "utf8")).toBe("리뷰\n");
+    expect(backupPathOf(path, backups)).toMatch(/-review\.md\.bak$/);
+    expect(existsSync(`${path}.bak`)).toBe(false);
     expect(saved.mtimeMs).toBeGreaterThan(0);
   });
 

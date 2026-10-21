@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import type { ResourceFile, ResourceKind, ResourceWriteResult } from "@pi-desktop/host-protocol";
@@ -9,7 +10,8 @@ import type { ResourceFile, ResourceKind, ResourceWriteResult } from "@pi-deskto
  * - 데이터 폴더(~/.pi/agent) 안의 .md (프롬프트·스킬·AGENTS.md·SYSTEM.md 등). auth.json 같은 설정은 .md가 아니라 막힌다
  * - 작업 폴더나 그 상위 폴더의 .pi/ 안의 .md
  * - 작업 폴더나 그 상위 폴더에 바로 있는 AGENTS.md·CLAUDE.md
- * 쓰기는 임시 파일에 쓴 뒤 바꿔치기하고, 덮어쓰기 전 내용을 .bak 하나로 남긴다.
+ * 쓰기는 임시 파일에 쓴 뒤 바꿔치기하고, 덮어쓰기 전 내용을 파일마다 .bak 하나로 남긴다.
+ * 백업은 사용자 저장소를 어지럽히지 않도록 앱 홈(~/.pi-desktop/resource-backups/)에 둔다.
  * 앱이 연 뒤에 파일이 바뀌었으면(수정 시각 비교) 덮어쓰지 않는다.
  */
 
@@ -61,8 +63,15 @@ export async function readResourceFile(path: string, cwd: string, agentDir: stri
   return { path: target, content: await readFile(target, "utf8"), mtimeMs: info.mtimeMs };
 }
 
+/** 파일별 백업 위치: 경로 해시로 구분하고, 알아보기 쉽게 파일 이름을 붙인다 */
+export function backupPathOf(target: string, backupDir: string): string {
+  const hash = createHash("sha256").update(resolve(target)).digest("hex").slice(0, 12);
+  return join(backupDir, `${hash}-${basename(target)}.bak`);
+}
+
 /**
  * @param baseMtime 앱이 읽었을 때의 수정 시각. 그 뒤에 바뀌었으면 거부한다. 없으면 새 파일이어야 한다
+ * @param backupDir 덮어쓰기 전 내용을 남길 폴더. 없으면 남기지 않는다
  */
 export async function writeResourceFile(
   path: string,
@@ -70,6 +79,7 @@ export async function writeResourceFile(
   baseMtime: number | undefined,
   cwd: string,
   agentDir: string,
+  backupDir?: string,
 ): Promise<ResourceWriteResult> {
   const target = requireResourcePath(path, cwd, agentDir);
   if (Buffer.byteLength(content, "utf8") > MAX_RESOURCE_BYTES) throw new Error("내용이 너무 큽니다");
@@ -81,7 +91,10 @@ export async function writeResourceFile(
     if (Math.abs(info.mtimeMs - baseMtime) > 1) {
       throw new Error("연 뒤에 다른 곳에서 파일이 바뀌었습니다. 다시 열어 바뀐 내용을 확인한 뒤 저장하세요");
     }
-    await copyFile(target, `${target}.bak`);
+    if (backupDir) {
+      await mkdir(backupDir, { recursive: true });
+      await copyFile(target, backupPathOf(target, backupDir));
+    }
   }
   await mkdir(dirname(target), { recursive: true });
   const tmp = `${target}.pi-desktop-${process.pid}.tmp`;
