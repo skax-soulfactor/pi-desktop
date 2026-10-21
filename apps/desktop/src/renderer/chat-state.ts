@@ -19,7 +19,13 @@ export type AssistantBlock =
   | { type: "toolCall"; toolName: string; argsText: string };
 
 export type ChatItem =
-  | { kind: "user"; key: string; text: string }
+  | {
+      kind: "user";
+      key: string;
+      text: string;
+      /** 함께 보낸 이미지 (Pi ImageContent: base64와 MIME 형식) */
+      images?: Array<{ mimeType: string; data: string }>;
+    }
   | {
       kind: "assistant";
       key: string;
@@ -95,7 +101,7 @@ export function applyEvent(state: ChatState, seq: number, raw: unknown): ChatSta
     case "message_start": {
       const message = event.message as AnyEvent | undefined;
       if (message?.role === "user") {
-        return { ...next, items: [...next.items, { kind: "user", key: `u${seq}`, text: contentText(message.content) }] };
+        return { ...next, items: [...next.items, { kind: "user", key: `u${seq}`, ...userContent(message.content) }] };
       }
       if (message?.role === "assistant") {
         return { ...next, items: [...next.items, { kind: "assistant", key: `a${seq}`, blocks: [], done: false }] };
@@ -296,7 +302,7 @@ export function snapshotState(messages: unknown[], lastSeq: number, running: boo
     const key = `s${index}`;
     switch (message.role) {
       case "user":
-        items.push({ kind: "user", key, text: contentText(message.content) });
+        items.push({ kind: "user", key, ...userContent(message.content) });
         break;
       case "assistant": {
         const item: Extract<ChatItem, { kind: "assistant" }> = {
@@ -434,6 +440,17 @@ function contentText(content: unknown): string {
   return (content as AnyEvent[])
     .map((part) => (part.type === "text" ? String(part.text ?? "") : part.type === "image" ? "[이미지]" : ""))
     .join("");
+}
+
+/** 사용자 메시지 내용을 글과 이미지로 나눈다 (이미지는 썸네일로 따로 보여준다) */
+function userContent(content: unknown): { text: string; images?: Array<{ mimeType: string; data: string }> } {
+  if (!Array.isArray(content)) return { text: contentText(content) };
+  const parts = content as AnyEvent[];
+  const text = parts.map((part) => (part.type === "text" ? String(part.text ?? "") : "")).join("");
+  const images = parts
+    .filter((part) => part.type === "image" && typeof part.data === "string")
+    .map((part) => ({ mimeType: String(part.mimeType ?? "image/png"), data: String(part.data) }));
+  return images.length > 0 ? { text, images } : { text };
 }
 
 /** 툴 결과 `{ content: [{type:"text", text}] }`에서 텍스트만 뽑는다. */

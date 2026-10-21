@@ -97,3 +97,14 @@ describe("snapshotState", () => {
     expect(snapshotState([null, 3, { role: "custom", content: "x" }], 1, false).items).toEqual([]);
   });
 });
+
+describe("snapshotState — 이미지가 있는 사용자 메시지", () => {
+  it("스냅샷에서도 글과 이미지를 나눠 담는다", () => {
+    const state = snapshotState(
+      [{ role: "user", content: [{ type: "text", text: "봐" }, { type: "image", data: "BBBB", mimeType: "image/jpeg" }] }],
+      0,
+      false,
+    );
+    expect(state.items[0]).toMatchObject({ text: "봐", images: [{ mimeType: "image/jpeg", data: "BBBB" }] });
+  });
+});
