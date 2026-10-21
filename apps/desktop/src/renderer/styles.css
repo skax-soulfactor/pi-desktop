@@ -1378,3 +1378,112 @@ button.toggled {
   flex: 1;
   word-break: break-all;
 }
+
+/* 검색할 수 있는 모델 선택기 */
+.model-picker {
+  position: relative;
+}
+
+.model-picker-button {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 320px;
+}
+
+.model-picker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-picker-provider,
+.model-picker-caret {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.model-picker-popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 420px;
+  max-width: 80vw;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+  z-index: 20;
+}
+
+.model-picker-search {
+  width: calc(100% - 16px);
+  margin: 8px;
+}
+
+.model-picker-list {
+  max-height: 360px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 4px 6px;
+  list-style: none;
+}
+
+.model-picker-header {
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.model-picker-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.model-picker-item.selected {
+  background: var(--panel-2);
+}
+
+.model-picker-item.current .model-picker-item-name {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.model-picker-item-name {
+  white-space: nowrap;
+}
+
+.model-picker-item-id {
+  flex: 1;
+  min-width: 0;
+  font: 11px ui-monospace, Consolas, monospace;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-picker-item-meta {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.model-badge {
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.model-picker-empty {
+  padding: 8px;
+  color: var(--muted);
+}
