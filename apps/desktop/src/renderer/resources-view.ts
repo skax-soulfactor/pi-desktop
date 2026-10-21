@@ -1,0 +1,81 @@
+import type { ResourceDiagnosticInfo, ResourceSource, ResourcesView } from "@pi-desktop/host-protocol/messages";
+
+/**
+ * 리소스 창의 순수 함수들 (설계 §4.2~4.5, M4 첫 단계: 읽기 전용).
+ */
+
+export type ResourceTab = "context" | "prompts" | "skills" | "extensions" | "packages";
+
+export const RESOURCE_TABS: ReadonlyArray<{ id: ResourceTab; label: string }> = [
+  { id: "context", label: "컨텍스트" },
+  { id: "prompts", label: "프롬프트" },
+  { id: "skills", label: "스킬" },
+  { id: "extensions", label: "확장" },
+  { id: "packages", label: "패키지" },
+];
+
+/** 탭마다 항목 수 */
+export function tabCount(view: ResourcesView, tab: ResourceTab): number {
+  switch (tab) {
+    case "context":
+      return view.contextFiles.length + (view.systemPrompt ? 1 : 0) + view.appendSystemPrompt.length;
+    case "prompts":
+      return view.prompts.length;
+    case "skills":
+      return view.skills.length;
+    case "extensions":
+      return view.extensions.length;
+    case "packages":
+      return view.packages.length;
+  }
+}
+
+/** 출처 배지: 패키지면 그 소스, 아니면 사용자·프로젝트 */
+export function sourceLabel(source: ResourceSource): string {
+  if (source.fromPackage) return source.source;
+  if (source.scope === "user") return "사용자";
+  if (source.scope === "project") return "프로젝트";
+  if (source.scope === "temporary") return "임시";
+  return source.scope;
+}
+
+/**
+ * 긴 경로를 줄여 보여 준다: 데이터 폴더 안이면 "~agent/…", 작업 폴더 안이면 "./…",
+ * 작업 폴더의 상위 폴더에 바로 있으면 "../파일" (AGENTS.md 계층).
+ * 구분자(/, \)는 섞여 와도 같게 보고, 줄인 경로는 "/"로 보여 준다.
+ */
+export function shortPath(path: string, view: Pick<ResourcesView, "agentDir" | "cwd">): string {
+  const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+  const target = norm(path);
+  const under = (base: string) => {
+    const b = norm(base);
+    return target.startsWith(`${b}/`) ? target.slice(b.length + 1) : undefined;
+  };
+  const inAgent = under(view.agentDir);
+  if (inAgent !== undefined) return `~agent/${inAgent}`;
+  const inCwd = under(view.cwd);
+  if (inCwd !== undefined) return `./${inCwd}`;
+  const slash = target.lastIndexOf("/");
+  const dir = target.slice(0, slash);
+  const cwd = norm(view.cwd);
+  if (slash >= 0 && cwd.startsWith(`${dir}/`)) {
+    const levels = cwd.slice(dir.length + 1).split("/").length;
+    return `${"../".repeat(levels)}${target.slice(slash + 1)}`;
+  }
+  return path;
+}
+
+/** 경로별 진단 (같은 파일에 여러 개일 수 있다) */
+export function diagnosticsByPath(diagnostics: readonly ResourceDiagnosticInfo[]): Map<string, ResourceDiagnosticInfo[]> {
+  const map = new Map<string, ResourceDiagnosticInfo[]>();
+  for (const d of diagnostics) {
+    if (!d.path) continue;
+    map.set(d.path, [...(map.get(d.path) ?? []), d]);
+  }
+  return map;
+}
+
+/** 파일 크기를 짧게 */
+export function formatSize(bytes: number): string {
+  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+}

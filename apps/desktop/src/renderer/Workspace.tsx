@@ -4,6 +4,7 @@ import type { PendingQueue } from "./chat-state";
 import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
 import { PiManager, usePiStatus } from "./PiManager";
+import { ResourcesPanel } from "./ResourcesPanel";
 import { TerminalDock, type DockTerminal } from "./TerminalDock";
 import type { TerminalSpec } from "./TerminalView";
 import { updateState } from "./pi-manager-view";
@@ -100,6 +101,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [folderBrowserOpen, setFolderBrowserOpen] = useState(false);
   const [agentReplaceAsk, setAgentReplaceAsk] = useState(false);
   const [sshHostsOpen, setSshHostsOpen] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
   /** 아래 도크의 내장 터미널들 (설계 §4.12) */
   const [dockTerminals, setDockTerminals] = useState<DockTerminal[]>([]);
   const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
@@ -131,6 +133,8 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const externalWrite = session?.externalWriteAt !== undefined && !lost;
   // 다른 앱(다른 PC 등)이 이 세션의 입력 권한을 가지고 있다. 실시간으로 보기만 한다 (설계 §3.4).
   const readOnly = Boolean(session) && writer === "other" && !lost;
+  // 리소스 창은 보고 있는 세션의 폴더, 없으면 입력창의 폴더 기준으로 연다.
+  const resourcesCwd = session?.cwd ?? cwd.trim();
 
   // 입력 중인 초안을 세션 파일별로 저장해 두었다가 그 세션을 다시 열면 되살린다.
   const draftKey = session ? `pi-desktop.draft.${hostId}.${session.sessionFile ?? session.sessionId}` : undefined;
@@ -355,6 +359,14 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       },
     );
     list.push({
+      id: "resources",
+      group: "Pi",
+      title: "리소스 보기 (AGENTS.md·프롬프트·스킬·확장)",
+      keywords: "resources agents prompts skills extensions packages 리소스 프롬프트 스킬 확장 패키지",
+      disabled: !connected || !resourcesCwd,
+      run: () => setResourcesOpen(true),
+    });
+    list.push({
       id: "pi-manager",
       group: "Pi",
       title: "Pi 관리 (설치 상태·버전)",
@@ -537,6 +549,11 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           <div className="session-meta" title={session.sessionFile}>
             Pi {session.piVersion} · {session.cwd}
           </div>
+        )}
+        {connected && resourcesCwd && (
+          <button type="button" onClick={() => setResourcesOpen(true)} title="이 폴더에서 Pi가 불러오는 AGENTS.md·프롬프트·스킬·확장">
+            리소스
+          </button>
         )}
         {session && !lost && (
           <button
@@ -836,6 +853,17 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         </ChoiceDialog>
       )}
       {active && <Toasts toasts={ui.toasts} onDismiss={dismissToast} />}
+      {active && resourcesOpen && resourcesCwd && (
+        <ResourcesPanel
+          hostId={hostId}
+          hostLabel={hostLabel}
+          cwd={resourcesCwd}
+          {...(host?.kind === "local" || host?.kind === "wsl"
+            ? { onReveal: (path: string) => void guardQuiet(async () => void (await window.piDesktop.revealFile(hostId, resourcesCwd, path))) }
+            : {})}
+          onClose={() => setResourcesOpen(false)}
+        />
+      )}
       {active && sshHostsOpen && (
         <SshHostsDialog
           onClose={(changed) => {

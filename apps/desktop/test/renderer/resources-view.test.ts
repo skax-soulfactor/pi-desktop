@@ -1,0 +1,74 @@
+import { describe, expect, it } from "vitest";
+import type { ResourcesView } from "@pi-desktop/host-protocol/messages";
+import { diagnosticsByPath, formatSize, shortPath, sourceLabel, tabCount } from "../../src/renderer/resources-view";
+
+const view: ResourcesView = {
+  cwd: "/home/me/proj",
+  agentDir: "/home/me/.pi/agent",
+  contextFiles: [{ path: "/home/me/.pi/agent/AGENTS.md", scope: "user", bytes: 10 }],
+  systemPrompt: "/home/me/proj/.pi/SYSTEM.md",
+  appendSystemPrompt: [],
+  prompts: [],
+  skills: [],
+  extensions: [],
+  themes: [],
+  packages: [{ source: "npm:pi-foo", scope: "user", filtered: false }],
+  diagnostics: [],
+};
+
+describe("tabCount", () => {
+  it("컨텍스트는 AGENTS.md와 시스템 프롬프트 파일을 함께 센다", () => {
+    expect(tabCount(view, "context")).toBe(2);
+    expect(tabCount(view, "packages")).toBe(1);
+    expect(tabCount(view, "skills")).toBe(0);
+  });
+});
+
+describe("sourceLabel", () => {
+  it("패키지면 소스, 아니면 사용자·프로젝트", () => {
+    expect(sourceLabel({ scope: "user", source: "npm:pi-foo", fromPackage: true })).toBe("npm:pi-foo");
+    expect(sourceLabel({ scope: "user", source: "auto", fromPackage: false })).toBe("사용자");
+    expect(sourceLabel({ scope: "project", source: "auto", fromPackage: false })).toBe("프로젝트");
+  });
+});
+
+describe("shortPath", () => {
+  it("데이터 폴더 안은 ~agent/, 작업 폴더 안은 ./, 그 밖은 그대로", () => {
+    expect(shortPath("/home/me/.pi/agent/prompts/a.md", view)).toBe("~agent/prompts/a.md");
+    expect(shortPath("/home/me/proj/.pi/skills/x/SKILL.md", view)).toBe("./.pi/skills/x/SKILL.md");
+    expect(shortPath("/home/other/AGENTS.md", view)).toBe("/home/other/AGENTS.md");
+    // 이름이 겹치는 형제 폴더는 줄이지 않는다
+    expect(shortPath("/home/me/proj2/a.md", view)).toBe("/home/me/proj2/a.md");
+  });
+
+  it("Windows 경로도 줄이고, 구분자가 섞여 와도 같게 본다", () => {
+    const win = { cwd: "C:/work/app/sub", agentDir: "C:\\Users\\me\\.pi\\agent" };
+    expect(shortPath("C:\\Users\\me\\.pi\\agent\\AGENTS.md", win)).toBe("~agent/AGENTS.md");
+    expect(shortPath("C:\\work\\app\\sub\\AGENTS.md", win)).toBe("./AGENTS.md");
+    expect(shortPath("C:\\work\\app\\AGENTS.md", win)).toBe("../AGENTS.md");
+  });
+
+  it("상위 폴더에 바로 있는 파일은 ../로", () => {
+    expect(shortPath("/home/me/AGENTS.md", view)).toBe("../AGENTS.md");
+    expect(shortPath("/AGENTS.md", view)).toBe("../../../AGENTS.md");
+  });
+});
+
+describe("diagnosticsByPath", () => {
+  it("경로가 있는 진단만 경로별로 모은다", () => {
+    const map = diagnosticsByPath([
+      { kind: "prompt", type: "collision", message: "a", path: "/p" },
+      { kind: "prompt", type: "warning", message: "b", path: "/p" },
+      { kind: "skill", type: "error", message: "c" },
+    ]);
+    expect(map.get("/p")?.map((d) => d.message)).toEqual(["a", "b"]);
+    expect(map.size).toBe(1);
+  });
+});
+
+describe("formatSize", () => {
+  it("1KB 미만은 바이트, 이상은 KB", () => {
+    expect(formatSize(512)).toBe("512 B");
+    expect(formatSize(2048)).toBe("2.0 KB");
+  });
+});

@@ -11,6 +11,7 @@ import type {
   ModelsFileView,
   ModelsProbeResult,
   FsListDirResult,
+  ResourcesView,
   FsSearchResult,
   ProviderInfo,
   PiLatest,
@@ -179,6 +180,8 @@ export interface PiDesktopApi {
   searchFiles(hostId: string, cwd: string, query: string): Promise<FsSearchResult>;
   /** 호스트의 한 폴더에 있는 하위 폴더 목록 (폴더 탐색 창). path가 없으면 홈 */
   listDir(hostId: string, path?: string): Promise<FsListDirResult>;
+  /** 작업 폴더에서 Pi가 불러오는 리소스 (읽기 전용) */
+  listResources(hostId: string, cwd: string): Promise<ResourcesView>;
 
   onConnection(listener: (hostId: string, state: ConnectionState) => void): () => void;
   onSessionEvent(listener: (hostId: string, notification: SessionEventNotification) => void): () => void;
@@ -219,6 +222,7 @@ export const IpcChannels = {
   revealFile: "pi:reveal-file",
   searchFiles: "pi:search-files",
   listDir: "pi:list-dir",
+  listResources: "pi:list-resources",
   piStatus: "pi:pi-status",
   piLatest: "pi:pi-latest",
   piVersions: "pi:pi-versions",
