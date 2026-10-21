@@ -22,6 +22,8 @@ import {
   type ResourceCreateParams,
   type ResourceImportParams,
   type ResourceImportResult,
+  type ImportedInspectResult,
+  type ImportedTargetParams,
   type ResourceFile,
   type ResourcePathParams,
   type ResourceWriteParams,
@@ -78,6 +80,7 @@ import { listResources, type ResourceSdk } from "./resources";
 import { projectTrust, setProjectTrust, trustArgs, type TrustSdk } from "./trust";
 import { createResourceFile, readResourceFile, writeResourceFile } from "./resource-files";
 import { importResource } from "./resource-import";
+import { inspectImported, moveToBackup, readImported } from "./import-manage";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
@@ -529,7 +532,31 @@ export class AgentDaemon {
       if (!["skill", "prompt"].includes(p.kind) || !["user", "project"].includes(p.scope) || !Array.isArray(p.files)) {
         throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 skill·prompt, scope는 user·project, files는 배열이어야 합니다");
       }
-      return importResource(p, p.cwd, agentDirOf(this.env)).catch(asInvalid);
+      return importResource(p, p.cwd, agentDirOf(this.env), importBackups()).catch(asInvalid);
+    });
+
+    // 가져온 항목의 이전 내용·제거한 것은 앱 홈에 둔다 (바로 지우지 않는다).
+    const importBackups = () => join(agentHome(this.env), "resource-backups", "imports");
+    const importedTarget = (params: unknown): ImportedTargetParams => {
+      const p = requireStrings(params, ["target", "kind"]) as unknown as ImportedTargetParams;
+      if (p.kind !== "skill" && p.kind !== "prompt") throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 skill·prompt여야 합니다");
+      return p;
+    };
+
+    peer.handle(Methods.resourcesInspectImported, (params): Promise<ImportedInspectResult> => {
+      const p = importedTarget(params);
+      return inspectImported(p.target, p.kind, agentDirOf(this.env)).catch(asInvalid);
+    });
+
+    peer.handle(Methods.resourcesReadImported, (params): Promise<string> => {
+      const p = importedTarget(params);
+      const path = (params as { path?: unknown }).path;
+      return readImported(p.target, p.kind, typeof path === "string" ? path : "", agentDirOf(this.env)).catch(asInvalid);
+    });
+
+    peer.handle(Methods.resourcesRemoveImported, async (params): Promise<{ backup: string }> => {
+      const p = importedTarget(params);
+      return { backup: await moveToBackup(p.target, p.kind, agentDirOf(this.env), importBackups()).catch(asInvalid) };
     });
 
     peer.handle(Methods.trustGet, async (params): Promise<ProjectTrustInfo> => {

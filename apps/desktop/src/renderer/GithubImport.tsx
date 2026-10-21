@@ -4,6 +4,7 @@ import { errorText } from "./folder-browser";
 import { formatSize } from "./resources-view";
 import { importName, scriptFiles, splitFrontmatter, type PackageScope } from "./market-view";
 import { Markdown } from "./markdown/Markdown";
+import { ImportedItems } from "./ImportedItems";
 
 /** 처음 보여 줄 저장소 (설계 §4.6 기본 예시) */
 const SUGGESTED = ["anthropics/skills", "badlogic/pi-skills"];
@@ -28,6 +29,8 @@ export function GithubImport({ hostId, cwd }: Props) {
   const [error, setError] = useState<string | undefined>();
   const [selected, setSelected] = useState<Selected | undefined>();
   const [imported, setImported] = useState<ImportRecord[]>([]);
+  /** 가져온 항목 관리 보기 */
+  const [manage, setManage] = useState(false);
 
   useEffect(() => {
     void window.piDesktop.listImports(hostId).then(setImported, () => setImported([]));
@@ -64,8 +67,34 @@ export function GithubImport({ hostId, cwd }: Props) {
     );
   }
 
+  if (manage) {
+    return (
+      <div className="github-import">
+        <div className="resource-editor-head">
+          <span className="resource-name">가져온 스킬·프롬프트</span>
+          <span className="spacer" />
+          <button
+            type="button"
+            onClick={() => {
+              setManage(false);
+              void window.piDesktop.listImports(hostId).then(setImported, () => {});
+            }}
+          >
+            저장소 찾기로
+          </button>
+        </div>
+        <ImportedItems hostId={hostId} />
+      </div>
+    );
+  }
+
   return (
     <div className="github-import">
+      <div className="install-steps">
+        <button type="button" className="small" onClick={() => setManage(true)}>
+          가져온 항목 관리 ({imported.length})
+        </button>
+      </div>
       <form
         className="market-search"
         onSubmit={(e) => {

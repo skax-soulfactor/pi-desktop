@@ -191,6 +191,22 @@ export interface ImportRecord {
   importedAt: number;
 }
 
+/** 가져온 항목의 지금 상태 */
+export interface ImportStatus {
+  target: string;
+  /** same: 가져온 그대로, modified: 이 호스트에서 고침, missing: 지워짐 */
+  local: "same" | "modified" | "missing";
+  /** 고치거나 더하거나 지운 파일 */
+  localChanged: string[];
+  /** same: 원본 최신과 같음, changed: 원본이 바뀜, gone: 원본에서 사라짐, unknown: 확인 못함 */
+  upstream: "same" | "changed" | "gone" | "unknown";
+  /** 비교한 원본 커밋 */
+  upstreamSha?: string;
+  upstreamChanged: string[];
+  /** 확인하지 못한 이유 (GitHub 한도 등) */
+  error?: string;
+}
+
 /** 재생 이벤트를 함께 담은 attach 결과 */
 export interface AttachResult extends SessionAttachResult {
   events: SessionEventNotification[];
@@ -306,6 +322,14 @@ export interface PiDesktopApi {
   githubImport(request: GithubImportRequest): Promise<ImportRecord>;
   /** 이 호스트로 가져온 기록 */
   listImports(hostId: string): Promise<ImportRecord[]>;
+  /** 가져온 항목들의 로컬 수정·원본 업데이트를 확인한다 (저장소마다 GitHub를 한 번씩 조회) */
+  importStatus(hostId: string): Promise<ImportStatus[]>;
+  /** 원본 최신 커밋으로 바꾼다. 이전 내용은 그 호스트의 백업 폴더로 옮겨진다 */
+  importUpdate(hostId: string, target: string): Promise<ImportRecord>;
+  /** 가져온 항목을 백업 폴더로 옮기고 기록을 지운다 */
+  importRemove(hostId: string, target: string): Promise<void>;
+  /** 파일 하나의 로컬 내용과 원본(upstreamSha) 내용 */
+  importDiff(hostId: string, target: string, path: string, upstreamSha: string): Promise<{ local: string; upstream: string }>;
   /** 작업 폴더의 프로젝트 신뢰 상태 */
   getTrust(hostId: string, cwd: string): Promise<ProjectTrustInfo>;
   /** 프로젝트 신뢰 결정을 Pi의 trust.json에 저장한다 (null이면 지운다) */
@@ -362,6 +386,10 @@ export const IpcChannels = {
   githubText: "pi:github-text",
   githubImport: "pi:github-import",
   listImports: "pi:list-imports",
+  importStatus: "pi:import-status",
+  importUpdate: "pi:import-update",
+  importRemove: "pi:import-remove",
+  importDiff: "pi:import-diff",
   getTrust: "pi:get-trust",
   setTrust: "pi:set-trust",
   readResource: "pi:read-resource",

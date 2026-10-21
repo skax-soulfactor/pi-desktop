@@ -12,6 +12,7 @@ import {
   type FsListDirResult,
   type ResourcesView,
   type ResourceImportResult,
+  type ImportedInspectResult,
   type ProjectTrustInfo,
   type ResourceFile,
   type ResourceKind,
@@ -38,7 +39,9 @@ import {
 import {
   IpcChannels,
   type AttachResult,
+  type GithubCatalog,
   type GithubImportRequest,
+  type ImportStatus,
   type GithubRepoRef,
   type ImportRecord,
   type OpenSessionRequest,
@@ -54,6 +57,7 @@ import { SshHostStore } from "./ssh-hosts";
 import { packageDetail, searchPackages } from "./marketplace";
 import { browseRepo, downloadFiles, fetchText } from "./github-catalog";
 import { ImportStore } from "./imports";
+import { compareLocal, compareUpstream, projectCwdOf } from "./import-status";
 import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
 
@@ -305,7 +309,8 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   ipcMain.handle(IpcChannels.githubText, (_event, repo: GithubRepoRef & { sha: string }, path: string) => fetchText(repo, String(path)));
   ipcMain.handle(IpcChannels.listImports, (_event, hostId: string) => imports.list(hostId));
   // 이 PC가 GitHub에서 받아 그 호스트의 데몬에 쓰게 하고, 쓴 뒤에 출처를 기록한다.
-  ipcMain.handle(IpcChannels.githubImport, async (_event, request: GithubImportRequest): Promise<ImportRecord> => {
+  /** 이 PC가 GitHub에서 받아 그 호스트 데몬에 쓰고 출처를 기록한다. replace면 이전 것을 백업하고 바꾼다 */
+  const importFromGithub = async (request: GithubImportRequest, replace = false): Promise<ImportRecord> => {
     const { item, repo } = request;
     const files =
       item.kind === "skill"
@@ -313,7 +318,7 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
         : await downloadFiles(repo, ".", [{ path: item.path, sha: item.sha, size: item.size }]);
     const written = await conn(request.hostId).request<ResourceImportResult>(
       Methods.resourcesImport,
-      { cwd: request.cwd, kind: item.kind, scope: request.scope, name: request.name, files },
+      { cwd: request.cwd, kind: item.kind, scope: request.scope, name: request.name, files, ...(replace ? { replace: true } : {}) },
       120_000,
     );
     const record: ImportRecord = {
@@ -328,7 +333,74 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     };
     imports.add(record);
     return record;
+  };
+  ipcMain.handle(IpcChannels.githubImport, (_event, request: GithubImportRequest) => importFromGithub(request));
+
+  const requireRecord = (hostId: string, target: string) => {
+    const record = imports.get(hostId, target);
+    if (!record) throw new Error(`가져온 기록이 없습니다: ${target}`);
+    return record;
+  };
+  // 저장소마다 한 번만 최신을 훑고, 항목마다 그 호스트의 파일 해시와 비교한다.
+  ipcMain.handle(IpcChannels.importStatus, async (_event, hostId: string): Promise<ImportStatus[]> => {
+    const records = imports.list(hostId);
+    const latest = new Map<string, Promise<GithubCatalog>>();
+    return Promise.all(
+      records.map(async (record): Promise<ImportStatus> => {
+        const status: ImportStatus = { target: record.target, local: "same", localChanged: [], upstream: "unknown", upstreamChanged: [] };
+        try {
+          const inspected = await conn(hostId).request<ImportedInspectResult>(Methods.resourcesInspectImported, {
+            target: record.target,
+            kind: record.kind,
+          });
+          Object.assign(status, compareLocal(record, inspected));
+          const key = `${record.source.owner}/${record.source.repo}`;
+          if (!latest.has(key)) latest.set(key, browseRepo(key));
+          Object.assign(status, compareUpstream(record, await latest.get(key)!));
+        } catch (e) {
+          status.error = e instanceof Error ? e.message : String(e);
+        }
+        return status;
+      }),
+    );
   });
+  ipcMain.handle(IpcChannels.importUpdate, async (_event, hostId: string, target: string): Promise<ImportRecord> => {
+    const record = requireRecord(hostId, target);
+    const catalog = await browseRepo(`${record.source.owner}/${record.source.repo}`);
+    const repo = { owner: catalog.owner, repo: catalog.repo, sha: catalog.sha };
+    const skill = record.kind === "skill" ? catalog.skills.find((s) => s.dir === record.source.path) : undefined;
+    const prompt = record.kind === "prompt" ? catalog.prompts.find((p) => p.path === record.source.path) : undefined;
+    if (!skill && !prompt) throw new Error("원본 저장소에서 이 항목이 사라졌습니다");
+    const cwd = record.scope === "project" ? projectCwdOf(record.target) : "";
+    return importFromGithub(
+      {
+        hostId,
+        cwd,
+        scope: record.scope,
+        name: record.name,
+        repo,
+        item: skill ? { kind: "skill", dir: skill.dir, files: skill.files } : { kind: "prompt", path: prompt!.path, sha: prompt!.sha, size: prompt!.size },
+      },
+      true,
+    );
+  });
+  ipcMain.handle(IpcChannels.importRemove, async (_event, hostId: string, target: string) => {
+    const record = requireRecord(hostId, target);
+    await conn(hostId).request(Methods.resourcesRemoveImported, { target: record.target, kind: record.kind });
+    imports.remove(hostId, target);
+  });
+  ipcMain.handle(
+    IpcChannels.importDiff,
+    async (_event, hostId: string, target: string, path: string, upstreamSha: string): Promise<{ local: string; upstream: string }> => {
+      const record = requireRecord(hostId, target);
+      const local = await conn(hostId)
+        .request<string>(Methods.resourcesReadImported, { target: record.target, kind: record.kind, path })
+        .catch(() => "");
+      const repoPath = record.kind === "prompt" ? record.source.path : record.source.path === "." ? path : `${record.source.path}/${path}`;
+      const upstream = await fetchText({ owner: record.source.owner, repo: record.source.repo, sha: upstreamSha }, repoPath).catch(() => "");
+      return { local, upstream };
+    },
+  );
   ipcMain.handle(IpcChannels.getTrust, (_event, hostId: string, cwd: string) =>
     conn(hostId).request<ProjectTrustInfo>(Methods.trustGet, { cwd }),
   );
