@@ -41,6 +41,10 @@ export const Methods = {
   modelsExportProvider: "models.exportProvider",
   /** 다른 호스트에서 받은 프로바이더를 쓴다 */
   modelsImportProvider: "models.importProvider",
+  /** 사용자 settings.json의 최상위 값 */
+  settingsRead: "settings.read",
+  /** 사용자 settings.json의 고른 최상위 키만 바꾼다 (다른 호스트에서 복사할 때) */
+  settingsMerge: "settings.merge",
   /** OpenAI 호환 엔드포인트의 /models를 이 호스트에서 불러 연결 시험 */
   modelsProbe: "models.probe",
   sessionOpen: "session.open",
@@ -306,6 +310,19 @@ export interface ModelsImportParams {
   provider: Record<string, unknown>;
   /** 이미 있으면 바꾼다. 받은 쪽에 없는 apiKey·헤더는 대상의 것을 남긴다 */
   replace?: boolean;
+}
+
+export interface SettingsReadResult {
+  exists: boolean;
+  /** 최상위 키와 값 그대로 */
+  values: Record<string, unknown>;
+  /** 파일이 깨져 읽지 못했으면 이유 (이때는 쓰지 않는다) */
+  error?: string;
+}
+
+export interface SettingsMergeParams {
+  /** 바꿀 최상위 키와 값. 여기 없는 키는 그대로 둔다 */
+  values: Record<string, unknown>;
 }
 
 export interface ModelsSaveParams {

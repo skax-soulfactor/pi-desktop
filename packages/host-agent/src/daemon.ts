@@ -49,6 +49,8 @@ import {
   type ModelsProbeResult,
   type ModelsExportResult,
   type ModelsImportParams,
+  type SettingsMergeParams,
+  type SettingsReadResult,
   type ModelsSaveParams,
   type PiUpdateParams,
   type PiUpdateResult,
@@ -85,6 +87,7 @@ import {
   saveProvider,
   storedApiKey,
 } from "./models-store";
+import { mergeSettings, readSettings } from "./settings-store";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { ensureBridge } from "./bridge";
 import { listDirectories } from "./dir-list";
@@ -364,6 +367,19 @@ export class AgentDaemon {
         throw new JsonRpcError(ErrorCodes.InvalidParams, "id와 provider가 필요합니다");
       }
       await importProvider(agentDirOf(this.env), p.id, p.provider, p.replace === true).catch((e: unknown) => {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+      });
+      return null;
+    });
+
+    peer.handle(Methods.settingsRead, (): Promise<SettingsReadResult> => readSettings(agentDirOf(this.env)));
+
+    peer.handle(Methods.settingsMerge, async (params) => {
+      const p = (params ?? {}) as Partial<SettingsMergeParams>;
+      if (!p.values || typeof p.values !== "object" || Array.isArray(p.values)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "values가 필요합니다");
+      }
+      await mergeSettings(agentDirOf(this.env), p.values).catch((e: unknown) => {
         throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
       });
       return null;
