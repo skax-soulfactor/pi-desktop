@@ -18,13 +18,6 @@ export function modelKey(model: { provider: string; id: string }): string {
   return `${model.provider}/${model.id}`;
 }
 
-/** "provider/id"를 나눈다. ID에 '/'가 들어 있을 수 있어(예: openrouter) 첫 번째 '/'에서만 자른다. */
-export function parseModelKey(key: string): { provider: string; id: string } | undefined {
-  const index = key.indexOf("/");
-  if (index <= 0 || index === key.length - 1) return undefined;
-  return { provider: key.slice(0, index), id: key.slice(index + 1) };
-}
-
 function trim(value: number): string {
   return value >= 100 ? value.toFixed(0) : value.toFixed(1).replace(/\.0$/, "");
 }

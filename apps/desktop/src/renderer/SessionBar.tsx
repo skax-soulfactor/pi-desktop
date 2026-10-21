@@ -1,6 +1,6 @@
-import { useMemo } from "react";
-import { formatCost, formatPercent, formatTokens, modelKey, parseModelKey } from "./format";
-import type { ModelInfo, SessionInfo } from "./use-session-info";
+import { formatCost, formatPercent, formatTokens } from "./format";
+import { ModelPicker } from "./ModelPicker";
+import type { SessionInfo } from "./use-session-info";
 
 const THINKING_LABELS: Record<string, string> = {
   off: "끔",
@@ -25,35 +25,21 @@ interface Props {
 
 /** 모델·thinking 수준·컨텍스트 사용량·비용·Compact (설계 §4.1 상단 바) */
 export function SessionBar({ info, running, disabled, onModel, onThinking, onCompact, treeOpen, onToggleTree }: Props) {
-  const groups = useMemo(() => groupByProvider(info.models, info.model), [info.models, info.model]);
   const usage = info.stats?.contextUsage;
   const percent = usage?.percent ?? null;
   const level = percent === null ? "unknown" : percent >= 85 ? "high" : percent >= 60 ? "mid" : "low";
 
   return (
     <section className="session-bar">
-      <label className="field">
+      <div className="field">
         <span>모델</span>
-        <select
-          value={info.model ? modelKey(info.model) : ""}
-          disabled={disabled || running || groups.length === 0}
-          onChange={(e) => {
-            const parsed = parseModelKey(e.target.value);
-            if (parsed) onModel(parsed.provider, parsed.id);
-          }}
-        >
-          {!info.model && <option value="">불러오는 중…</option>}
-          {groups.map(([provider, models]) => (
-            <optgroup key={provider} label={provider}>
-              {models.map((m) => (
-                <option key={modelKey(m)} value={modelKey(m)}>
-                  {m.name ?? m.id}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </label>
+        <ModelPicker
+          models={info.models}
+          current={info.model}
+          disabled={disabled || running}
+          onPick={(model) => onModel(model.provider, model.id)}
+        />
+      </div>
 
       <label className="field">
         <span>Thinking</span>
@@ -119,16 +105,4 @@ export function SessionBar({ info, running, disabled, onModel, onThinking, onCom
       </button>
     </section>
   );
-}
-
-/** 프로바이더별로 묶는다. 목록에 없는 현재 모델(예: 확장이 바꾼 모델)도 보이게 넣는다. */
-function groupByProvider(models: ModelInfo[], current: ModelInfo | undefined): Array<[string, ModelInfo[]]> {
-  const all = current && !models.some((m) => modelKey(m) === modelKey(current)) ? [current, ...models] : models;
-  const map = new Map<string, ModelInfo[]>();
-  for (const model of all) {
-    const list = map.get(model.provider) ?? [];
-    list.push(model);
-    map.set(model.provider, list);
-  }
-  return [...map.entries()];
 }

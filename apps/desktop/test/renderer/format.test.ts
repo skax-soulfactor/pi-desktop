@@ -7,7 +7,6 @@ import {
   formatRelative,
   formatTokens,
   modelKey,
-  parseModelKey,
 } from "../../src/renderer/format";
 
 describe("formatTokens", () => {
@@ -34,20 +33,9 @@ describe("formatCost", () => {
   });
 });
 
-describe("modelKey / parseModelKey", () => {
-  it("프로바이더와 ID를 묶고 다시 나눈다", () => {
-    const key = modelKey({ provider: "anthropic", id: "claude-haiku-5-5" });
-    expect(parseModelKey(key)).toEqual({ provider: "anthropic", id: "claude-haiku-5-5" });
-  });
-
-  it("ID에 '/'가 있어도 첫 번째 '/'에서만 자른다", () => {
-    expect(parseModelKey("openrouter/meta-llama/llama-4")).toEqual({ provider: "openrouter", id: "meta-llama/llama-4" });
-  });
-
-  it("형식이 잘못되면 undefined", () => {
-    expect(parseModelKey("nomodel")).toBeUndefined();
-    expect(parseModelKey("/x")).toBeUndefined();
-    expect(parseModelKey("x/")).toBeUndefined();
+describe("modelKey", () => {
+  it("프로바이더와 ID를 묶는다 (ID에 '/'가 있어도 그대로)", () => {
+    expect(modelKey({ provider: "openrouter", id: "meta-llama/llama-4" })).toBe("openrouter/meta-llama/llama-4");
   });
 });
 
