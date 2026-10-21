@@ -20,6 +20,8 @@ import {
   type ProjectTrustInfo,
   type TrustSetParams,
   type ResourceCreateParams,
+  type ResourceImportParams,
+  type ResourceImportResult,
   type ResourceFile,
   type ResourcePathParams,
   type ResourceWriteParams,
@@ -75,6 +77,7 @@ import { listDirectories } from "./dir-list";
 import { listResources, type ResourceSdk } from "./resources";
 import { projectTrust, setProjectTrust, trustArgs, type TrustSdk } from "./trust";
 import { createResourceFile, readResourceFile, writeResourceFile } from "./resource-files";
+import { importResource } from "./resource-import";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
@@ -520,6 +523,14 @@ export class AgentDaemon {
     const asInvalid = (e: unknown): never => {
       throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
     };
+
+    peer.handle(Methods.resourcesImport, (params): Promise<ResourceImportResult> => {
+      const p = requireStrings(params, ["cwd", "kind", "scope", "name"]) as unknown as ResourceImportParams;
+      if (!["skill", "prompt"].includes(p.kind) || !["user", "project"].includes(p.scope) || !Array.isArray(p.files)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 skill·prompt, scope는 user·project, files는 배열이어야 합니다");
+      }
+      return importResource(p, p.cwd, agentDirOf(this.env)).catch(asInvalid);
+    });
 
     peer.handle(Methods.trustGet, async (params): Promise<ProjectTrustInfo> => {
       const { cwd } = requireStrings(params, ["cwd"]) as { cwd: string };

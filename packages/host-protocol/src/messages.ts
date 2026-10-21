@@ -66,6 +66,8 @@ export const Methods = {
   resourcesRead: "resources.read",
   resourcesWrite: "resources.write",
   resourcesCreate: "resources.create",
+  /** 받은 스킬 폴더·프롬프트 파일을 사용자·프로젝트 범위에 쓴다 (개별 가져오기) */
+  resourcesImport: "resources.import",
   /** 한 폴더의 하위 폴더 목록 (폴더 탐색 창) */
   fsListDir: "fs.listDir",
   daemonStatus: "daemon.status",
@@ -562,6 +564,22 @@ export interface ResourceWriteResult {
 }
 
 export type ResourceKind = "prompt" | "skill" | "agents";
+
+export interface ResourceImportParams {
+  cwd: string;
+  kind: "skill" | "prompt";
+  scope: "user" | "project";
+  /** 가져와 쓸 이름 (소문자·숫자·하이픈) */
+  name: string;
+  /** 스킬 폴더 기준 상대 경로와 내용. 프롬프트는 파일 하나 */
+  files: Array<{ path: string; contentBase64: string }>;
+}
+
+export interface ResourceImportResult {
+  /** 쓴 곳: 스킬 폴더 또는 프롬프트 파일 */
+  target: string;
+  files: number;
+}
 
 export interface ResourceCreateParams {
   cwd: string;
