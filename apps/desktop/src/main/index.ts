@@ -26,7 +26,9 @@ import {
   type StoredReadResult,
   type StoredSession,
 } from "@pi-desktop/host-protocol";
-import { IpcChannels, type AttachResult, type OpenSessionRequest } from "../shared/api";
+import { IpcChannels, type AttachResult, type OpenSessionRequest, type TerminalOpenRequest } from "../shared/api";
+import { TerminalService } from "./terminal";
+import { terminalCommand } from "./terminal-command";
 import { devSessionOverrides } from "./dev-overrides";
 import { HostManager, LOCAL_HOST_ID, WSL_PREFIX } from "./host-manager";
 import { hostPathForExplorer } from "./host-path";
@@ -95,8 +97,29 @@ function createWindow(): void {
   }
 }
 
+const terminals = new TerminalService({ data: IpcChannels.terminalData, exit: IpcChannels.terminalExit });
+
 function registerIpc(manager: HostManager): void {
   const conn = (hostId: string) => manager.get(hostId);
+
+  // 내장 터미널: pi는 데몬이 찾은 Pi와 그 실행 node로 띄운다.
+  ipcMain.handle(IpcChannels.terminalOpen, async (event, request: TerminalOpenRequest) => {
+    const status = request.kind === "pi" ? await conn(request.hostId).request<PiStatus>(Methods.piStatus) : undefined;
+    const runtime = status?.pi ? { pi: status.pi, nodePath: status.node.path } : undefined;
+    const command = terminalCommand(
+      {
+        hostId: request.hostId,
+        kind: request.kind,
+        ...(request.cwd ? { cwd: request.cwd } : {}),
+        ...(request.args ? { args: request.args } : {}),
+      },
+      runtime,
+    );
+    return { id: terminals.open(event.sender, command, request.cols, request.rows), title: command.title };
+  });
+  ipcMain.on(IpcChannels.terminalWrite, (_event, id: string, data: string) => terminals.write(id, data));
+  ipcMain.on(IpcChannels.terminalResize, (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
+  ipcMain.on(IpcChannels.terminalClose, (_event, id: string) => terminals.close(id));
 
   ipcMain.handle(IpcChannels.listHosts, () => manager.listHosts());
   ipcMain.handle(IpcChannels.connectHost, (_event, hostId: string) => conn(hostId).current);
@@ -257,4 +280,7 @@ app.on("window-all-closed", () => {
 });
 
 // 앱을 닫아도 각 호스트의 데몬과 Pi 세션은 계속 돈다. 연결기만 정리한다 (설계 §3.4).
-app.on("will-quit", () => hosts?.dispose());
+app.on("will-quit", () => {
+  terminals.dispose();
+  hosts?.dispose();
+});

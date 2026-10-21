@@ -41,6 +41,12 @@ const api: PiDesktopApi = {
   modelsRemoveProvider: (hostId, id) => ipcRenderer.invoke(IpcChannels.modelsRemoveProvider, hostId, id),
   modelsProbe: (hostId, baseUrl, apiKey, providerId) =>
     ipcRenderer.invoke(IpcChannels.modelsProbe, hostId, baseUrl, apiKey, providerId),
+  terminalOpen: (request) => ipcRenderer.invoke(IpcChannels.terminalOpen, request),
+  terminalWrite: (id, data) => ipcRenderer.send(IpcChannels.terminalWrite, id, data),
+  terminalResize: (id, cols, rows) => ipcRenderer.send(IpcChannels.terminalResize, id, cols, rows),
+  terminalClose: (id) => ipcRenderer.send(IpcChannels.terminalClose, id),
+  onTerminalData: (listener) => subscribe(IpcChannels.terminalData, listener),
+  onTerminalExit: (listener) => subscribe(IpcChannels.terminalExit, listener),
   piLatest: (hostId, force) => ipcRenderer.invoke(IpcChannels.piLatest, hostId, force === true),
   searchFiles: (hostId, cwd, query) => ipcRenderer.invoke(IpcChannels.searchFiles, hostId, cwd, query),
   onConnection: (listener) => subscribe(IpcChannels.connectionChanged, listener),

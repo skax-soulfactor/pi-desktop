@@ -24,6 +24,7 @@
     "vitest": "^5.0.5"
   },
   "allowScripts": {
-    "electron@44.9.1": true
+    "electron@44.9.1": true,
+    "node-pty@1.1.0": true
   }
 }
