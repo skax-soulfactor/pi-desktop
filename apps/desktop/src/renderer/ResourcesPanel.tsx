@@ -21,6 +21,8 @@ interface Props {
   cwd: string;
   /** 탐색기에서 위치를 볼 수 있는 호스트(로컬·WSL)면 준다 */
   onReveal?: (path: string) => void;
+  /** 보고 있는 세션에 리소스를 다시 불러온다. 이 폴더의 세션을 보고 있고 입력 권한이 있을 때만 준다 */
+  onReload?: () => Promise<void>;
   onClose: () => void;
 }
 
@@ -30,7 +32,7 @@ interface Props {
  * 확장은 코드를 실행하지 않고 경로만 찾은 목록이다.
  * 마크다운 리소스(AGENTS.md·프롬프트·스킬)는 열어 고치고, 새로 만들 수 있다. 패키지에 든 것은 고치지 않는다.
  */
-export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onClose }: Props) {
+export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onClose }: Props) {
   const [view, setView] = useState<ResourcesView | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
@@ -111,6 +113,7 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onClose }: Pr
             file={editing}
             label={shortPath(editing.path, view)}
             onSaved={() => void load()}
+            {...(onReload ? { onReload } : {})}
             onClose={() => setEditing(undefined)}
           />
         )}

@@ -10,6 +10,8 @@ interface Props {
   label: string;
   /** 저장했다 (목록을 다시 읽게) */
   onSaved: () => void;
+  /** 보고 있는 세션에 바로 반영한다 (bridge의 /desktop:reload). 세션이 없거나 입력 권한이 없으면 주지 않는다 */
+  onReload?: () => Promise<void>;
   onClose: () => void;
 }
 
@@ -17,13 +19,15 @@ interface Props {
  * 리소스 마크다운 편집기 (설계 §4.2~4.5). 데몬이 연 뒤 바뀐 파일은 덮어쓰지 않으므로,
  * 저장이 거부되면 다시 열어 바뀐 내용을 보게 한다.
  */
-export function ResourceEditor({ hostId, cwd, file, label, onSaved, onClose }: Props) {
+export function ResourceEditor({ hostId, cwd, file, label, onSaved, onReload, onClose }: Props) {
   const [base, setBase] = useState(file);
   const [draft, setDraft] = useState(file.content);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
   const [askDiscard, setAskDiscard] = useState(false);
+  const [reloaded, setReloaded] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const dirty = draft !== base.content;
 
   async function save() {
@@ -33,6 +37,7 @@ export function ResourceEditor({ hostId, cwd, file, label, onSaved, onClose }: P
       const result = await window.piDesktop.writeResource(hostId, cwd, base.path, draft, base.mtimeMs);
       setBase({ path: result.path, content: draft, mtimeMs: result.mtimeMs });
       setSaved(true);
+      setReloaded(false);
       onSaved();
     } catch (e) {
       setError(errorText(e));
@@ -89,8 +94,30 @@ export function ResourceEditor({ hostId, cwd, file, label, onSaved, onClose }: P
         </div>
       )}
       {error && <div className="banner error">{error}</div>}
-      {saved && !dirty && (
-        <div className="banner ok">저장했습니다. 이미 열려 있는 세션에는 반영되지 않고, 새로 여는 세션부터 반영됩니다.</div>
+      {saved && !dirty && !onReload && (
+        <div className="banner ok">저장했습니다. 새로 여는 세션부터 반영됩니다.</div>
+      )}
+      {saved && !dirty && onReload && (
+        <div className="banner ok">
+          <span>{reloaded ? "저장하고 지금 세션에 반영했습니다." : "저장했습니다. 지금 보고 있는 세션에는 아직 반영되지 않았습니다."}</span>
+          {!reloaded && (
+            <button
+              type="button"
+              className="primary"
+              disabled={reloading}
+              onClick={() => {
+                setReloading(true);
+                setError(undefined);
+                onReload()
+                  .then(() => setReloaded(true))
+                  .catch((e: unknown) => setError(errorText(e)))
+                  .finally(() => setReloading(false));
+              }}
+            >
+              {reloading ? "반영 중…" : "지금 세션에 반영"}
+            </button>
+          )}
+        </div>
       )}
       <textarea
         className="resource-textarea"

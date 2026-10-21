@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { ResourcesView } from "@pi-desktop/host-protocol/messages";
-import { creatableKind, diagnosticsByPath, formatSize, isEditable, shortPath, sourceLabel, tabCount } from "../../src/renderer/resources-view";
+import {
+  creatableKind,
+  diagnosticsByPath,
+  formatSize,
+  hasReloadCommand,
+  isEditable,
+  shortPath,
+  sourceLabel,
+  tabCount,
+} from "../../src/renderer/resources-view";
 
 const view: ResourcesView = {
   cwd: "/home/me/proj",
@@ -85,5 +94,12 @@ describe("creatableKind·isEditable", () => {
     expect(isEditable({ path: "/a/prompts/x.md" })).toBe(true);
     expect(isEditable({ path: "/a/prompts/x.md", fromPackage: true })).toBe(false);
     expect(isEditable({ path: "/a/extensions/x.ts" })).toBe(false);
+  });
+});
+
+describe("hasReloadCommand", () => {
+  it("세션 명령 목록에 bridge의 desktop:reload가 있어야 한다", () => {
+    expect(hasReloadCommand([{ name: "review" }, { name: "desktop:reload" }])).toBe(true);
+    expect(hasReloadCommand([{ name: "review" }])).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
 import { PiManager, usePiStatus } from "./PiManager";
 import { ResourcesPanel } from "./ResourcesPanel";
+import { hasReloadCommand, RELOAD_COMMAND } from "./resources-view";
 import { TerminalDock, type DockTerminal } from "./TerminalDock";
 import type { TerminalSpec } from "./TerminalView";
 import { updateState } from "./pi-manager-view";
@@ -168,6 +169,24 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       // 실패하면 빈 목록으로 두어 계속 다시 요청하지 않는다. 세션이 바뀌면 다시 읽는다.
       .catch(() => setCommands([]));
   }, [hostId, sessionId]);
+
+  /**
+   * 고친 리소스를 보고 있는 세션에 바로 반영한다 (bridge 확장의 /desktop:reload, 설계 §5.3).
+   * bridge가 없는 세션(앱 업데이트 전에 연 세션)에 보내면 LLM에 질문으로 가므로 명령 목록을 먼저 확인한다.
+   */
+  const reloadSessionResources = useCallback(async () => {
+    if (!sessionId) throw new Error("보고 있는 세션이 없습니다");
+    const listed = await window.piDesktop.sendCommand(hostId, sessionId, { type: "get_commands" });
+    const list = (listed.data as { commands?: PiCommand[] } | undefined)?.commands ?? [];
+    if (!hasReloadCommand(list)) {
+      throw new Error("이 세션은 앱을 업데이트하기 전에 열려 바로 반영할 수 없습니다. 세션을 닫고 다시 열면 반영됩니다.");
+    }
+    if (chat.running) throw new Error("작업 중에는 반영할 수 없습니다. 끝난 뒤 다시 누르세요.");
+    const response = await window.piDesktop.sendCommand(hostId, sessionId, { type: "prompt", message: `/${RELOAD_COMMAND}` });
+    if (response.success !== true) throw new Error(`반영하지 못했습니다: ${String(response.error ?? "알 수 없는 오류")}`);
+    // 새로 만든 프롬프트·스킬이 / 자동완성에 보이도록 명령 목록을 다시 읽게 한다.
+    setCommands(undefined);
+  }, [hostId, sessionId, chat.running]);
 
   // 입력창 @ 파일 피커: 데몬이 세션 작업 폴더에서 찾는다 (WSL이면 WSL 안의 파일).
   const sessionCwd = session?.cwd;
@@ -861,6 +880,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           {...(host?.kind === "local" || host?.kind === "wsl"
             ? { onReveal: (path: string) => void guardQuiet(async () => void (await window.piDesktop.revealFile(hostId, resourcesCwd, path))) }
             : {})}
+          {...(session && !lost && !readOnly && connected && resourcesCwd === session.cwd ? { onReload: reloadSessionResources } : {})}
           onClose={() => setResourcesOpen(false)}
         />
       )}
