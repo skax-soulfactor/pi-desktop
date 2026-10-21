@@ -27,3 +27,28 @@ export function copyWarnings(files: ReadonlyArray<{ path: string }>, targetPlatf
 export function isAlreadyExists(message: string): boolean {
   return message.includes("이미 있는");
 }
+
+/**
+ * 로컬 경로 패키지 소스인지 (./x, ../x, /x, ~/x, C:\x, file:). 경로는 호스트마다 달라 다른 호스트에 그대로 설치할 수 없다.
+ * npm:·git:·https: 소스는 어디서나 같은 것을 받는다.
+ */
+export function isLocalPathSource(source: string): boolean {
+  return /^(\.{1,2}[\\/]|[\\/]|~[\\/]|[A-Za-z]:|file:)/.test(source.trim());
+}
+
+/** 다른 호스트에 같은 소스로 설치하는 pi 인자. project면 -l */
+export function packageInstallArgs(source: string, scope: "user" | "project"): string[] {
+  if (isLocalPathSource(source)) throw new Error(`로컬 경로 패키지는 다른 호스트에 그대로 설치할 수 없습니다: ${source}`);
+  return ["install", source, ...(scope === "project" ? ["-l"] : [])];
+}
+
+/** 경로의 마지막 이름 (구분자 / \ 모두) */
+export function baseNameOf(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+}
+
+/** 대상 호스트의 폴더에 파일 이름을 붙인다. Windows 호스트는 \, 그 밖은 / */
+export function joinHostPath(dir: string, name: string, platform: string | undefined): string {
+  const sep = platform === "win32" ? "\\" : "/";
+  return dir.endsWith("/") || dir.endsWith("\\") ? `${dir}${name}` : `${dir}${sep}${name}`;
+}

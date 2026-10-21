@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { StoredSession } from "@pi-desktop/host-protocol/messages";
+import type { ConfiguredPackageInfo, StoredSession } from "@pi-desktop/host-protocol/messages";
 import type { PendingQueue } from "./chat-state";
 import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
@@ -7,6 +7,8 @@ import { PiManager, usePiStatus } from "./PiManager";
 import { ResourcesPanel } from "./ResourcesPanel";
 import { MarketplacePanel } from "./MarketplacePanel";
 import { CopyResourceDialog, type CopyItem } from "./CopyResourceDialog";
+import { ContextCopyDialog } from "./ContextCopyDialog";
+import { PackageCopyDialog } from "./PackageCopyDialog";
 import { hasReloadCommand, RELOAD_COMMAND } from "./resources-view";
 import { TerminalDock, type DockTerminal } from "./TerminalDock";
 import type { TerminalSpec } from "./TerminalView";
@@ -110,6 +112,10 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [marketOpen, setMarketOpen] = useState(false);
   /** 다른 호스트로 복사할 리소스 */
   const [copyItem, setCopyItem] = useState<CopyItem | undefined>();
+  /** 다른 호스트로 복사할 사용자 범위 AGENTS.md 등 */
+  const [copyContextPath, setCopyContextPath] = useState<string | undefined>();
+  /** 다른 호스트에 설치할 패키지 */
+  const [copyPackage, setCopyPackage] = useState<ConfiguredPackageInfo | undefined>();
   /** 아래 도크의 내장 터미널들 (설계 §4.12) */
   const [dockTerminals, setDockTerminals] = useState<DockTerminal[]>([]);
   const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
@@ -123,8 +129,9 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
    * 그 호스트의 pi를 이 인자로 내장 터미널에서 실행한다 (패키지 설치·제거·업데이트).
    * 프로젝트 범위 명령만 그 폴더에서, 사용자 범위는 홈에서 연다. 프로젝트 폴더에서 열면 Pi가 그 폴더의 신뢰를 묻기 때문이다.
    */
-  const runPi = (args: string[], title: string, projectCwd?: string) =>
-    openTerminal({ hostId, kind: "pi", args, ...(projectCwd ? { cwd: projectCwd } : {}) }, title);
+  const runPiOn = (target: string, args: string[], title: string, projectCwd?: string) =>
+    openTerminal({ hostId: target, kind: "pi", args, ...(projectCwd ? { cwd: projectCwd } : {}) }, title);
+  const runPi = (args: string[], title: string, projectCwd?: string) => runPiOn(hostId, args, title, projectCwd);
   const closeTerminal = (key: string) => {
     setDockTerminals((prev) => {
       const next = prev.filter((t) => t.key !== key);
@@ -930,12 +937,26 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
                   setResourcesOpen(false);
                   setCopyItem({ kind, name: item.name, path: item.path, fromPackage: item.fromPackage });
                 },
+                onCopyContext: (path) => {
+                  setResourcesOpen(false);
+                  setCopyContextPath(path);
+                },
+                onCopyPackage: (pkg) => {
+                  setResourcesOpen(false);
+                  setCopyPackage(pkg);
+                },
               }
             : {})}
           onClose={() => setResourcesOpen(false)}
         />
       )}
       {active && copyItem && <CopyResourceDialog hosts={hosts} fromHostId={hostId} item={copyItem} onClose={() => setCopyItem(undefined)} />}
+      {active && copyContextPath && (
+        <ContextCopyDialog hosts={hosts} fromHostId={hostId} path={copyContextPath} onClose={() => setCopyContextPath(undefined)} />
+      )}
+      {active && copyPackage && (
+        <PackageCopyDialog hosts={hosts} fromHostId={hostId} pkg={copyPackage} onRunPi={runPiOn} onClose={() => setCopyPackage(undefined)} />
+      )}
       {active && marketOpen && (
         <MarketplacePanel
           hostId={hostId}

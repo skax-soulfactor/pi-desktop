@@ -343,8 +343,8 @@ export interface PiDesktopApi {
   setTrust(hostId: string, cwd: string, decision: boolean | null): Promise<ProjectTrustInfo>;
   /** 리소스 마크다운 파일 (데이터 폴더·.pi/·AGENTS.md만). cwd는 프로젝트 리소스 위치 기준 */
   readResource(hostId: string, cwd: string, path: string): Promise<ResourceFile>;
-  /** baseMtime: 읽었을 때의 수정 시각. 그 뒤 바뀌었으면 거부된다 */
-  writeResource(hostId: string, cwd: string, path: string, content: string, baseMtime: number): Promise<ResourceWriteResult>;
+  /** baseMtime: 읽었을 때의 수정 시각. 그 뒤 바뀌었으면 거부된다. 없으면 새 파일이어야 한다 */
+  writeResource(hostId: string, cwd: string, path: string, content: string, baseMtime?: number): Promise<ResourceWriteResult>;
   createResource(hostId: string, cwd: string, kind: ResourceKind, scope: "user" | "project", name: string): Promise<ResourceFile>;
 
   onConnection(listener: (hostId: string, state: ConnectionState) => void): () => void;
