@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import { basename, dirname, extname, relative, resolve, sep } from "node:path";
+import { projectTrust, type TrustSdk } from "./trust";
 import type {
   ConfiguredPackageInfo,
   ContextFileInfo,
@@ -37,8 +38,7 @@ interface PiDiagnostic {
 }
 
 /** 이 파일이 쓰는 Pi SDK의 일부 */
-export interface ResourceSdk {
-  SettingsManager: { create(cwd: string, agentDir?: string): unknown };
+export interface ResourceSdk extends TrustSdk {
   DefaultPackageManager: new (options: { cwd: string; agentDir: string; settingsManager: unknown }) => {
     resolve(onMissing?: (source: string) => Promise<"install" | "skip" | "error">): Promise<
       Record<"extensions" | "skills" | "prompts" | "themes", PiResolvedResource[]>
@@ -99,6 +99,7 @@ export async function listResources(sdk: ResourceSdk, cwd: string, agentDir: str
   return {
     cwd,
     agentDir,
+    trust: projectTrust(sdk, cwd, agentDir),
     contextFiles: loader.getAgentsFiles().agentsFiles.map(
       (f): ContextFileInfo => ({
         path: f.path,
