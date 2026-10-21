@@ -71,6 +71,10 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
   const [commands, setCommands] = useState<PiCommand[] | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  /** 오류가 아닌 알림 (예: HTML로 내보낸 위치) */
+  const [info, setInfo] = useState<string | undefined>();
+  /** 값이 바뀌면 사이드바가 기록을 다시 읽는다 */
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   const [treeOpen, setTreeOpen] = useState(false);
   const [handoffAsk, setHandoffAsk] = useState(false);
   const [handoffCommand, setHandoffCommand] = useState<string | undefined>();
@@ -119,7 +123,7 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
   }, [ui.title, active]);
 
   // 탭 표시와 백그라운드 알림을 위해 상태를 알린다.
-  const statusTitle = ui.title ?? follow?.title ?? (session ? baseName(session.cwd) : follow ? baseName(follow.cwd) : "새 탭");
+  const statusTitle = ui.title ?? sessionInfo.info.sessionName ?? follow?.title ?? (session ? baseName(session.cwd) : follow ? baseName(follow.cwd) : "새 탭");
   const needsInput = ui.dialogs.length > 0 || externalWrite || Boolean(pendingOpen);
   const disconnected = connection.status === "disconnected";
   const hostLabel = host?.label ?? hostId;
@@ -191,6 +195,18 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
     });
   }
 
+  /**
+   * 세션을 HTML로 내보낸다. 사용자 저장소에 파일이 생기지 않도록 세션 파일 옆에 만든다.
+   * 로컬·WSL이면 탐색기에서 보여주고, 어느 경우든 경로를 알림으로 남긴다.
+   */
+  async function exportHtml() {
+    if (!session) return;
+    const path = await sessionInfo.exportHtml(session.sessionFile);
+    if (!path) throw new Error("HTML 내보내기 결과에 파일 경로가 없습니다");
+    const revealed = await window.piDesktop.revealFile(hostId, session.cwd, path);
+    setInfo(revealed ? `HTML로 내보냈습니다 (탐색기에서 열림): ${path}` : `HTML로 내보냈습니다: ${path}`);
+  }
+
   /** 대기 중인 Steer·Follow-up을 취소하고 그 글을 입력창으로 되돌린다 (TUI의 Esc). */
   async function clearQueue() {
     if (!session) return;
@@ -250,6 +266,16 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
             Pi {session.piVersion} · {session.cwd}
           </div>
         )}
+        {session && !lost && (
+          <button
+            type="button"
+            disabled={!connected || busy}
+            onClick={() => void guard(exportHtml)}
+            title="이 세션을 HTML 파일로 내보내고 탐색기에서 보여줍니다"
+          >
+            HTML 내보내기
+          </button>
+        )}
         {session?.sessionFile && !lost && (
           <button type="button" onClick={() => setHandoffAsk(true)} title="이 세션을 터미널의 pi로 이어서 엽니다">
             TUI에서 열기
@@ -299,6 +325,17 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
           disabled={!connected || busy}
           onSelect={(target) => void guard(() => switchTo(target))}
           onOpenStored={(stored) => void guard(() => openStored(stored))}
+          {...(sessionInfo.info.sessionName ? { currentName: sessionInfo.info.sessionName } : {})}
+          {...(session && !lost && connected
+            ? {
+                onRename: (name: string) =>
+                  guard(async () => {
+                    await sessionInfo.rename(name);
+                    setHistoryRefresh((n) => n + 1);
+                  }),
+              }
+            : {})}
+          refreshKey={historyRefresh}
         />
         <div className="main">
 
@@ -353,6 +390,14 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
         </div>
       )}
       {error && <div className="banner error">{error}</div>}
+      {info && (
+        <div className="banner info">
+          <span>{info}</span>
+          <button type="button" className="small" onClick={() => setInfo(undefined)} aria-label="알림 닫기">
+            닫기
+          </button>
+        </div>
+      )}
       {chat.retry && <RetryBanner retry={chat.retry} onCancel={() => void guardQuiet(() => send({ type: "abort_retry" }))} />}
       {follow && (
         <div className="banner follow">

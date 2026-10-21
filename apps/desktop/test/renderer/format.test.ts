@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   baseName,
+  htmlExportPath,
   formatCost,
   formatPercent,
   formatRelative,
@@ -76,5 +77,16 @@ describe("baseName", () => {
     expect(baseName("C:\\Users\\me\\project\\")).toBe("project");
     expect(baseName("/home/me/app")).toBe("app");
     expect(baseName("/")).toBe("/");
+  });
+});
+
+describe("htmlExportPath", () => {
+  it("세션 파일 옆에 확장자만 html로", () => {
+    expect(htmlExportPath(String.raw`C:\Users\me\.pi\agent\sessions\x\2026_abc.jsonl`)).toBe(
+      String.raw`C:\Users\me\.pi\agent\sessions\x\2026_abc.html`,
+    );
+    expect(htmlExportPath("/home/me/.pi/agent/sessions/x/a.JSONL")).toBe("/home/me/.pi/agent/sessions/x/a.html");
+    expect(htmlExportPath("/tmp/a")).toBe("/tmp/a.html");
+    expect(htmlExportPath(undefined)).toBeUndefined();
   });
 });
