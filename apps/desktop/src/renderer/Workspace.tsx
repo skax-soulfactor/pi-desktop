@@ -92,9 +92,10 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   /** 아래 도크의 내장 터미널들 (설계 §4.12) */
   const [dockTerminals, setDockTerminals] = useState<DockTerminal[]>([]);
   const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
-  const openTerminal = (spec: TerminalSpec, title: string) => {
+  /** title을 주면 그 제목을 유지하고, 없으면 열린 뒤 실행 정보(예: "셸 (WSL: Ubuntu)")로 채운다 */
+  const openTerminal = (spec: TerminalSpec, title?: string) => {
     const key = crypto.randomUUID();
-    setDockTerminals((prev) => [...prev, { key, spec, title }]);
+    setDockTerminals((prev) => [...prev, { key, spec, title: title ?? "터미널", fixedTitle: title !== undefined }]);
     setActiveTerminal(key);
   };
   const closeTerminal = (key: string) => {
@@ -329,7 +330,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         title: "터미널: pi 열기 (이 폴더)",
         keywords: "terminal tui pi 터미널",
         disabled: !connected,
-        run: () => openTerminal({ hostId, kind: "pi", ...(session ? { cwd: session.cwd } : {}) }, "pi"),
+        run: () => openTerminal({ hostId, kind: "pi", ...(session ? { cwd: session.cwd } : {}) }),
       },
       {
         id: "terminal-shell",
@@ -337,7 +338,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         title: "터미널: 셸 열기",
         keywords: "terminal shell powershell bash 터미널",
         disabled: !connected,
-        run: () => openTerminal({ hostId, kind: "shell", ...(session ? { cwd: session.cwd } : {}) }, "셸"),
+        run: () => openTerminal({ hostId, kind: "shell", ...(session ? { cwd: session.cwd } : {}) }),
       },
     );
     list.push({
@@ -771,6 +772,10 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           initialHostId={hostId}
           onClose={() => setPiManagerOpen(false)}
           onChanged={() => void piState.reload(true)}
+          onRunInTerminal={(targetHost, command, title) => {
+            setPiManagerOpen(false);
+            openTerminal({ hostId: targetHost, kind: "shell", initialInput: `${command}\r` }, title);
+          }}
           onOAuthLogin={(targetHost, provider) => {
             setPiManagerOpen(false);
             openTerminal({ hostId: targetHost, kind: "pi", initialInput: `/login ${provider}\r` }, `pi 로그인 (${provider})`);

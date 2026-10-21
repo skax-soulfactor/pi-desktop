@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.23)
+# Pi Desktop — 설계 문서 (v0.24)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -334,6 +334,13 @@ v0.1과 같다. 스키마 기반 폼, User/Project 탭, diff 미리보기 후 �
 - 업데이트는 데몬의 `pi.update`가 Pi의 `pi update`를 그대로 실행한다. 대상은 self·extensions·all·models만 받는다. 설치 방식 판단은 Pi에 맡긴다. Pi는 npm 전역·관리형 설치가 아니면 스스로 거부한다.
 - 거부해도 종료 코드가 0이라, 성공 여부는 실행 전·후 버전으로 판단하고 거부는 출력 문구로 알아본다. 진행 출력은 `pi.updateOutput` 알림으로 보낸다.
 - 실행 중인 세션은 멈추지 않는다. 업데이트 전에 "그 세션은 지금 버전으로 계속 돌고, 새 버전을 쓰려면 다시 열어야 한다"고 알리고 확인을 받는다. 자동 정지·재시작과 특정 버전 설치·롤백은 후속 작업이다.
+
+**구현 메모: 설치·다른 버전·제거 (M2, v0.24)**
+- 앱은 명령을 몰래 실행하지 않는다. 실행할 명령을 그대로 보여주고, 확인하면 그 호스트의 내장 터미널(셸)에 입력해 눈앞에서 돈다.
+- Windows는 `npm.cmd install -g --ignore-scripts`로 설치한다(PowerShell 실행 정책 때문에 npm.ps1 대신 npm.cmd). Node가 부족하면 `winget install OpenJS.NodeJS.LTS` 단계를 둔다.
+- macOS·Linux·WSL은 공식 설치기를 `~/.pi-desktop/pi-install.sh`로 내려받아 `less`로 보여준 뒤 실행한다. 설치기는 대화형 메뉴(y 다시 설치 / u 제거 / n 아무것도 안 함)로 다루므로, 관리형 설치의 제거도 설치기로 한다.
+- 특정 버전·롤백은 npm 전역 설치만 된다. 설치기에는 버전 옵션이 없다.
+- 데이터(`~/.pi/agent`)는 아직 항상 유지한다. 백업·삭제는 후속 작업이다.
 
 **제거**
 - 방식별 명령: 관리형 설치는 설치기의 uninstall 동작(내장 터미널), npm은 `npm uninstall -g @earendil-works/pi-coding-agent`, Nix는 안내만.

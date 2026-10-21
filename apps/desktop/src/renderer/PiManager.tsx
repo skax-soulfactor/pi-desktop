@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { PiLatest, PiStatus } from "@pi-desktop/host-protocol/messages";
 import type { HostDescriptor } from "../shared/api";
 import { statusChecks } from "./pi-manager-view";
+import { PiInstallPanel } from "./PiInstallPanel";
 import { PiUpdatePanel } from "./PiUpdatePanel";
 import { ModelsPanel } from "./ModelsPanel";
 import { ProvidersPanel } from "./ProvidersPanel";
@@ -44,6 +45,7 @@ export function PiManager({
   onClose,
   onChanged,
   onOAuthLogin,
+  onRunInTerminal,
 }: {
   hosts: HostDescriptor[];
   initialHostId: string;
@@ -52,6 +54,8 @@ export function PiManager({
   onChanged?: () => void;
   /** 이 호스트의 pi를 내장 터미널에 열고 /login을 실행한다 */
   onOAuthLogin?: (hostId: string, provider: string) => void;
+  /** 이 호스트의 셸 터미널을 열고 명령을 실행한다 (설치·제거) */
+  onRunInTerminal?: (hostId: string, command: string, title: string) => void;
 }) {
   const [hostId, setHostId] = useState(initialHostId);
   const { status, latest, error, reload } = usePiStatus(hostId, true);
@@ -147,7 +151,13 @@ export function PiManager({
             }}
           />
         )}
-        {tab === "status" && <p className="pi-manager-note muted">설치·제거는 다음 단계에서 추가됩니다.</p>}
+        {tab === "status" && status && onRunInTerminal && (
+          <PiInstallPanel
+            hostId={hostId}
+            status={status}
+            onRunInTerminal={(command, title) => onRunInTerminal(hostId, command, title)}
+          />
+        )}
       </div>
     </div>
   );

@@ -5,6 +5,8 @@ export interface DockTerminal {
   key: string;
   spec: TerminalSpec;
   title: string;
+  /** 연 쪽이 정한 제목 (설치·로그인). 있으면 실행 정보로 덮어쓰지 않는다 */
+  fixedTitle?: boolean;
   exited?: number;
 }
 
@@ -59,7 +61,9 @@ export function TerminalDock({
             key={t.key}
             spec={t.spec}
             visible={!collapsed && t.key === active}
-            onOpened={(title) => onUpdate(t.key, { title })}
+            onOpened={(title) => {
+              if (!t.fixedTitle) onUpdate(t.key, { title });
+            }}
             onExit={(exitCode) => onUpdate(t.key, { exited: exitCode })}
           />
         ))}

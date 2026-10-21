@@ -16,6 +16,8 @@ export const Methods = {
   piStatus: "pi.status",
   /** npm 레지스트리의 Pi 최신 버전 (1시간 캐시) */
   piLatest: "pi.latest",
+  /** npm 레지스트리에 배포된 Pi 버전 목록 (1시간 캐시) */
+  piVersions: "pi.versions",
   /** Pi 업데이트 실행 (pi update). 출력은 pi.updateOutput 알림으로 흐른다 */
   piUpdate: "pi.update",
   /** 프로바이더 목록과 저장된 자격 증명의 종류 (키 값은 보내지 않는다) */
@@ -272,6 +274,12 @@ export interface ModelsProbeResult {
   status?: number;
   /** 엔드포인트가 알려 준 모델 ID */
   models: string[];
+  error?: string;
+}
+
+/** 배포된 Pi 버전. 묻지 못했으면 error */
+export interface PiVersions {
+  versions: string[];
   error?: string;
 }
 

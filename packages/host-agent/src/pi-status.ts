@@ -3,7 +3,7 @@ import { access, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { PiLatest, PiLocation, PiStatus } from "@pi-desktop/host-protocol";
+import type { PiLatest, PiLocation, PiStatus, PiVersions } from "@pi-desktop/host-protocol";
 import { locatePi, PI_PACKAGE_NAME } from "./pi-locator";
 
 const execFileAsync = promisify(execFile);
@@ -223,4 +223,39 @@ async function npmViewVersion(): Promise<string> {
   const version = stdout.trim();
   if (!/^\d+\.\d+\.\d+/.test(version)) throw new Error(`알 수 없는 응답: ${version.slice(0, 80)}`);
   return version;
+}
+
+let versionsCache: { at: number; value: PiVersions } | undefined;
+
+/** npm 레지스트리에 배포된 Pi 버전 목록 (`npm view <pkg> versions --json`). 1시간 캐시, 실패하면 오류를 담는다 */
+export async function piVersions(
+  view: () => Promise<string[]> = npmViewVersions,
+  now: () => number = Date.now,
+): Promise<PiVersions> {
+  if (versionsCache && now() - versionsCache.at < LATEST_TTL_MS) return versionsCache.value;
+  let value: PiVersions;
+  try {
+    value = { versions: await view() };
+  } catch (error) {
+    value = { versions: [], error: error instanceof Error ? error.message.split("\n")[0]! : String(error) };
+  }
+  versionsCache = { at: now(), value };
+  return value;
+}
+
+/** 테스트용: 버전 목록 캐시 비우기 */
+export function resetVersionsCache(): void {
+  versionsCache = undefined;
+}
+
+async function npmViewVersions(): Promise<string[]> {
+  const { stdout } = await execFileAsync("npm", ["view", PI_PACKAGE_NAME, "versions", "--json"], {
+    shell: process.platform === "win32",
+    timeout: 20_000,
+    windowsHide: true,
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  const parsed = JSON.parse(stdout) as unknown;
+  const list = Array.isArray(parsed) ? parsed : [parsed];
+  return list.filter((v): v is string => typeof v === "string");
 }

@@ -7,7 +7,9 @@ import {
   compareVersions,
   latestPiVersion,
   piStatus,
+  piVersions,
   resetLatestCache,
+  resetVersionsCache,
   satisfiesMinimum,
 } from "../src/pi-status";
 
@@ -135,5 +137,22 @@ describe("latestPiVersion", () => {
       throw new Error("network down\nstack...");
     }, () => 5);
     expect(failed).toEqual({ error: "network down", checkedAt: 5 });
+  });
+});
+
+describe("piVersions", () => {
+  beforeEach(() => resetVersionsCache());
+
+  it("버전 목록을 캐시하고, 실패하면 빈 목록과 오류", async () => {
+    let calls = 0;
+    const view = async () => {
+      calls++;
+      return ["1.2.0", "1.3.0"];
+    };
+    expect(await piVersions(view, () => 0)).toEqual({ versions: ["1.2.0", "1.3.0"] });
+    await piVersions(view, () => 1000);
+    expect(calls).toBe(1);
+    resetVersionsCache();
+    expect(await piVersions(async () => Promise.reject(new Error("offline\nmore")), () => 0)).toEqual({ versions: [], error: "offline" });
   });
 });

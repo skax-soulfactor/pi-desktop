@@ -12,6 +12,7 @@ import {
   type ProviderInfo,
   type PiLatest,
   type PiStatus,
+  type PiVersions,
   type PiUpdateResult,
   type PiUpdateTarget,
   type PiLocation,
@@ -238,6 +239,7 @@ function registerIpc(manager: HostManager): void {
         ...(providerId ? { providerId } : {}),
       }),
   );
+  ipcMain.handle(IpcChannels.piVersions, (_event, hostId: string) => conn(hostId).request<PiVersions>(Methods.piVersions));
   ipcMain.handle(IpcChannels.searchFiles, (_event, hostId: string, cwd: string, query: string) =>
     conn(hostId).request<FsSearchResult>(Methods.fsSearch, { cwd, query, limit: 30 }),
   );
