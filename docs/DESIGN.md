@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.39)
+# Pi Desktop — 설계 문서 (v0.40)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -649,7 +649,27 @@ Pi는 세션 파일 잠금을 문서화하지 않았다. 그래서 **같은 세�
   - API 키가 빠진 채 새 models.json이 생겼다.
   - 대상에 키를 넣고 다시 복사하니 거부되었고, "바꾸기" 뒤에도 대상의 키가 남았다.
   - 시험 뒤 WSL의 models.json은 지웠다(원래 없었다).
-- 아직 하지 않은 것: 모델 하나만 옮기기, settings.json 항목 단위 복사, 확장 복사, 여러 개 한꺼번에, `copies.json`, 호스트 비교 화면
+- 아직 하지 않은 것: 모델 하나만 옮기기, 확장 복사, 여러 개 한꺼번에, `copies.json`, 호스트 비교 화면
+
+**구현 메모: settings.json 항목 단위 복사 (M4, v0.40)** — 단위는 최상위 키다.
+- 데몬
+  - `settings.read`는 사용자 settings.json의 최상위 값을 그대로 준다. 깨진 파일이면 `error`를 담는다.
+  - `settings.merge`는 받은 최상위 키만 바꾸고 나머지는 둔다.
+    - 쓰기 직전에 다시 읽어, 그 사이 Pi가 바꾼 다른 키를 지우지 않는다.
+    - `settings.json.bak` 백업 뒤 원자적으로 쓴다. 깨진 파일은 덮어쓰지 않는다.
+  - 중첩 객체(compaction 등)는 키 단위로 통째로 바꾼다. 하위 필드 병합은 하지 않는다.
+- 앱: Pi 관리에 "설정" 탭
+  - 원본 호스트의 항목마다 복사할 값과 대상의 지금 값, 상태(대상에 없음·다름·같음)를 보인다.
+  - 다르거나 대상에 없는 항목은 처음부터 골라 둔다.
+  - 호스트마다 다른 항목은 고르지 않은 채 이유를 보인다: `shellPath`·`sessionDir`·`externalEditor`·`shellCommandPrefix`·`npmCommand`·`httpProxy`·`extensions`·`skills`·`prompts`·`themes`.
+  - `packages`는 고를 수 없다. 설치가 따라야 하므로 패키지 탭의 "다른 호스트에 설치"로 안내한다.
+  - 기본 모델 관련 항목에는 "대상에 같은 프로바이더·모델이 있어야 한다"고 알린다.
+  - Pi 내부 값(`lastChangelogVersion`·`deviceId`·`trackingId`)은 보이지 않는다. 프록시 주소의 계정은 가린다.
+- 프로젝트 범위 `.pi/settings.json`은 아직 다루지 않는다.
+- 확인: 로컬(Windows) dev 설정 → WSL(Ubuntu)
+  - 기본으로 고른 3개를 복사했다(defaultModel은 해제). 대상의 다른 키는 남았고 `.bak`이 생겼다.
+  - 다시 읽은 뒤에도 해제한 항목은 해제된 채였다.
+  - 시험 뒤 WSL·dev 설정은 원래대로 되돌렸다.
 
 ## 6. 기술 스택
 
