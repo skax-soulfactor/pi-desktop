@@ -16,6 +16,8 @@ export const Methods = {
   piStatus: "pi.status",
   /** npm 레지스트리의 Pi 최신 버전 (1시간 캐시) */
   piLatest: "pi.latest",
+  /** Pi 업데이트 실행 (pi update). 출력은 pi.updateOutput 알림으로 흐른다 */
+  piUpdate: "pi.update",
   sessionOpen: "session.open",
   sessionList: "session.list",
   sessionAttach: "session.attach",
@@ -59,6 +61,8 @@ export const Notifications = {
   sessionUiResolved: "session.uiResolved",
   /** 이 데몬의 Pi가 쓰는 세션 파일에 다른 프로그램(TUI 등)이 쓴 것을 감지했다 */
   sessionExternalWrite: "session.externalWrite",
+  /** pi.update 진행 출력 (요청한 앱에만 보낸다) */
+  piUpdateOutput: "pi.updateOutput",
   /** 감시 중인 저장 세션 파일이 바뀌었다 (다른 프로그램이 쓰는 중) */
   storedChanged: "stored.changed",
 } as const;
@@ -132,6 +136,32 @@ export interface PiLatest {
   version?: string;
   error?: string;
   checkedAt: number;
+}
+
+/** pi update 대상: Pi 자체, 설치한 패키지, 둘 다, 모델 카탈로그 */
+export type PiUpdateTarget = "self" | "extensions" | "all" | "models";
+
+export interface PiUpdateParams {
+  target: PiUpdateTarget;
+  /** 최신이어도 다시 설치한다 (models에는 쓰지 않는다) */
+  force?: boolean;
+  /** 앱이 정한 작업 ID. 진행 출력 알림을 이 작업과 맞추는 데 쓴다 */
+  taskId: string;
+}
+
+export interface PiUpdateResult {
+  exitCode: number | null;
+  /** 출력 끝부분 (64KB) */
+  output: string;
+  timedOut: boolean;
+  /** 실행 전·후 Pi 버전 (Pi를 찾지 못했으면 없음). 성공 여부는 종료 코드가 아니라 이것으로 본다 */
+  versionBefore?: string;
+  versionAfter?: string;
+}
+
+export interface PiUpdateOutputNotification {
+  taskId: string;
+  chunk: string;
 }
 
 export interface PiLocateParams {
