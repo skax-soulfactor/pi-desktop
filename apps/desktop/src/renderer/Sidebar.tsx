@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import type { SessionSummary, StoredSession } from "@pi-desktop/host-protocol/messages";
 import { baseName, formatRelative } from "./format";
+import { matchesQuery, normalizeSessionName } from "./session-search";
 
 type Scope = "folder" | "all";
 const SCOPE_KEY = "pi-desktop.historyScope";
@@ -14,14 +15,25 @@ interface Props {
   disabled: boolean;
   onSelect: (session: SessionSummary) => void;
   onOpenStored: (stored: StoredSession) => void;
+  /** 보고 있는 세션의 이름 (get_state). 기록을 다시 읽기 전에도 바로 보이게 한다 */
+  currentName?: string;
+  /** 보고 있는 세션의 이름을 바꾼다. 실행 중인 세션만 바꿀 수 있다 */
+  onRename?: (name: string) => Promise<void>;
+  /** 값이 바뀌면 기록을 다시 읽는다 (이름 변경 뒤 등) */
+  refreshKey?: number;
 }
 
 /**
  * 세션 사이드바 (설계 §4.1).
  * - 실행 중: 데몬이 가진 세션. 확장 다이얼로그가 답을 기다리면 "입력 필요" 표시
  * - 기록: Pi가 디스크에 저장한 세션 (데몬이 Pi SDK로 읽음). 이 폴더 / 전체 범위 전환
+ * - 검색: 두 목록을 이름·첫 메시지·폴더·파일 경로로 거른다
+ * - 이름 변경: 보고 있는 실행 중 세션의 ✎ (set_session_name)
  */
-export function Sidebar({ hostId, connected, sessions, current, disabled, onSelect, onOpenStored }: Props) {
+export function Sidebar(props: Props) {
+  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, currentName, onRename, refreshKey } = props;
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<string | undefined>();
   const [scope, setScope] = useState<Scope>(() => {
     try {
       return localStorage.getItem(SCOPE_KEY) === "all" ? "all" : "folder";
@@ -52,7 +64,7 @@ export function Sidebar({ hostId, connected, sessions, current, disabled, onSele
   useEffect(() => {
     setHistory([]);
     void load();
-  }, [load, current?.sessionFile]);
+  }, [load, current?.sessionFile, refreshKey]);
 
   // 실행이 끝나면 기록(메시지 수·수정 시각)이 바뀌므로 잠시 모았다가 다시 읽는다.
   useEffect(() => {
@@ -81,34 +93,96 @@ export function Sidebar({ hostId, connected, sessions, current, disabled, onSele
   // 실행 중 세션은 폴더 이름만으로는 구별이 안 되므로, 같은 세션 파일의 기록에서 이름이나 첫 메시지를 가져온다.
   const storedByPath = new Map(history.map((h) => [h.path, h]));
   const liveTitle = (s: SessionSummary) => {
+    if (s.sessionId === current?.sessionId && currentName) return currentName;
     const stored = s.sessionFile ? storedByPath.get(s.sessionFile) : undefined;
     return stored?.name ?? (stored?.firstMessage || baseName(s.cwd));
   };
-  const ordered = [...sessions].sort((a, b) => b.startedAt - a.startedAt);
+  const ordered = [...sessions]
+    .sort((a, b) => b.startedAt - a.startedAt)
+    .filter((s) => matchesQuery(query, [liveTitle(s), s.cwd, s.sessionFile]));
+  const shownHistory = history.filter((h) => matchesQuery(query, [h.name, h.firstMessage, h.cwd, h.path]));
+
+  const startRename = (s: SessionSummary) => setEditing(liveTitle(s));
+  const commitRename = async (value: string) => {
+    setEditing(undefined);
+    const name = normalizeSessionName(value);
+    if (name && onRename) await onRename(name);
+  };
+  const onRenameKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Enter") void commitRename(e.currentTarget.value);
+    else if (e.key === "Escape") setEditing(undefined);
+  };
 
   return (
     <aside className="sidebar">
+      <input
+        className="sidebar-search"
+        type="search"
+        placeholder="세션 검색 (이름, 첫 메시지, 폴더)"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setQuery("");
+        }}
+        aria-label="세션 검색"
+      />
       <section>
         <h3 className="sidebar-title">실행 중</h3>
-        {ordered.length === 0 && <p className="sidebar-empty">실행 중인 세션이 없습니다.</p>}
-        {ordered.map((s) => (
-          <button
-            key={s.sessionId}
-            type="button"
-            className={`session-item${s.sessionId === current?.sessionId ? " current" : ""}`}
-            disabled={disabled}
-            onClick={() => onSelect(s)}
-            title={s.sessionFile ?? s.cwd}
-          >
-            <span className={`dot ${s.state}`} />
-            <span className="session-name">{liveTitle(s)}</span>
-            <span className="session-meta-line">
-              {baseName(s.cwd)} · {formatRelative(s.startedAt)}
-              {s.state === "exited" && " · 종료됨"}
-            </span>
-            {s.pendingUi > 0 && <span className="needs-input">입력 필요</span>}
-          </button>
-        ))}
+        {ordered.length === 0 && (
+          <p className="sidebar-empty">{query ? "검색 결과가 없습니다." : "실행 중인 세션이 없습니다."}</p>
+        )}
+        {ordered.map((s) => {
+          const isCurrent = s.sessionId === current?.sessionId;
+          const canRename = isCurrent && s.state === "running" && onRename !== undefined;
+          if (isCurrent && editing !== undefined) {
+            return (
+              <div key={s.sessionId} className="session-item current editing">
+                <input
+                  className="rename-input"
+                  defaultValue={editing}
+                  autoFocus
+                  aria-label="세션 이름"
+                  onKeyDown={onRenameKey}
+                  onBlur={(e) => void commitRename(e.currentTarget.value)}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <span className="session-meta-line">Enter 저장 · Esc 취소</span>
+              </div>
+            );
+          }
+          return (
+            <div key={s.sessionId} className="session-row">
+              <button
+                type="button"
+                className={`session-item${isCurrent ? " current" : ""}`}
+                disabled={disabled}
+                onClick={() => onSelect(s)}
+                title={s.sessionFile ?? s.cwd}
+              >
+                <span className={`dot ${s.state}`} />
+                <span className="session-name">{liveTitle(s)}</span>
+                <span className="session-meta-line">
+                  {baseName(s.cwd)} · {formatRelative(s.startedAt)}
+                  {s.state === "exited" && " · 종료됨"}
+                </span>
+                {s.pendingUi > 0 && <span className="needs-input">입력 필요</span>}
+              </button>
+              {canRename && (
+                <button
+                  type="button"
+                  className="rename-button"
+                  disabled={disabled}
+                  onClick={() => startRename(s)}
+                  title="세션 이름 바꾸기 (기록과 터미널 pi의 /resume에도 보입니다)"
+                  aria-label="세션 이름 바꾸기"
+                >
+                  ✎
+                </button>
+              )}
+            </div>
+          );
+        })}
       </section>
 
       <section className="history">
@@ -130,8 +204,10 @@ export function Sidebar({ hostId, connected, sessions, current, disabled, onSele
           </div>
         </div>
         {error && <p className="sidebar-error">{error}</p>}
-        {!error && !loading && history.length === 0 && <p className="sidebar-empty">저장된 세션이 없습니다.</p>}
-        {history.map((h) => {
+        {!error && !loading && shownHistory.length === 0 && (
+          <p className="sidebar-empty">{query && history.length > 0 ? "검색 결과가 없습니다." : "저장된 세션이 없습니다."}</p>
+        )}
+        {shownHistory.map((h) => {
           const open = liveFiles.has(h.path);
           return (
             <button

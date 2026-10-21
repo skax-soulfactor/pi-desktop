@@ -229,6 +229,13 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 50%;
+  min-width: 0;
+}
+
+/* 상단 바가 좁아지면 경로(session-meta)만 줄이고, 로고·연결 표시·버튼은 한 줄로 둔다 */
+.topbar > :not(.session-meta):not(.spacer) {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .badge {
@@ -1155,6 +1162,46 @@ button.small {
   background: var(--panel-2);
 }
 
+/* 이름 바꾸기 버튼은 항목 오른쪽 위에 겹쳐 둔다 (항목이 버튼이라 안에 넣을 수 없음) */
+.session-row {
+  position: relative;
+}
+
+.rename-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0;
+}
+
+.session-row:hover .rename-button,
+.rename-button:focus-visible {
+  opacity: 1;
+}
+
+.session-item.editing {
+  grid-template-areas:
+    "name name name"
+    "meta meta meta";
+}
+
+.rename-input {
+  grid-area: name;
+  width: 100%;
+  font: inherit;
+  padding: 2px 6px;
+}
+
+.sidebar-search {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 5px 8px;
+}
+
 .session-item.current {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
@@ -1318,4 +1365,16 @@ button.toggled {
 
 .notice .resend {
   margin-left: 10px;
+}
+
+.banner.info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.banner.info span {
+  flex: 1;
+  word-break: break-all;
 }
