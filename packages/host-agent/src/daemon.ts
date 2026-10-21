@@ -13,6 +13,8 @@ import {
   Methods,
   Notifications,
   type DaemonStatus,
+  type FsSearchParams,
+  type FsSearchResult,
   type HostInfo,
   type PiLocateParams,
   type SessionAttachParams,
@@ -34,6 +36,7 @@ import {
 } from "@pi-desktop/host-protocol";
 import { runDir, socketPath } from "./paths";
 import { locatePi } from "./pi-locator";
+import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
 import { AgentSession } from "./session";
@@ -76,6 +79,8 @@ export class AgentDaemon {
   private readonly clients = new Set<Client>();
   private readonly sessions = new Map<string, AgentSession>();
   private readonly files = new FileWatcher();
+  /** 입력창 @ 파일 피커용 파일 목록 캐시 */
+  private readonly fileIndex = new FileIndex();
   private readonly env: NodeJS.ProcessEnv;
   private readonly idleShutdownMs: number;
 
@@ -314,6 +319,13 @@ export class AgentDaemon {
     peer.handle(Methods.sessionClearExternalWrite, (params) => {
       this.requireSession((params as SessionRef)?.sessionId).clearExternalWrite();
       return null;
+    });
+
+    peer.handle(Methods.fsSearch, (params): Promise<FsSearchResult> => {
+      const p = (params ?? {}) as Partial<FsSearchParams>;
+      if (typeof p.cwd !== "string" || !p.cwd) throw new JsonRpcError(ErrorCodes.InvalidParams, "cwd가 필요합니다");
+      const limit = typeof p.limit === "number" && p.limit > 0 ? Math.min(p.limit, 200) : 50;
+      return this.fileIndex.search(p.cwd, typeof p.query === "string" ? p.query : "", limit);
     });
 
     peer.handle(Methods.daemonStatus, () => this.status());

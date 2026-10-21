@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   Methods,
+  type FsSearchResult,
   type HostInfo,
   type SessionAttachResult,
   type SessionOpenResult,
@@ -115,5 +116,13 @@ describe("Host Agent 데몬 (가짜 Pi)", () => {
     await expect(
       client.request(Methods.sessionSend, { sessionId: "nope", command: { type: "get_state" } }),
     ).rejects.toMatchObject({ code: -32010 });
+  });
+
+  it("fs.search로 작업 폴더의 파일을 찾는다 (작업 폴더 기준 상대 경로, 구분자 /)", async () => {
+    const client = connect(await isolatedEnv({ PI_DESKTOP_PI_CLI: FAKE_PI }));
+    const cwd = fileURLToPath(new URL("./fixtures", import.meta.url));
+    const result = await client.request<FsSearchResult>(Methods.fsSearch, { cwd, query: "fake-pi" });
+    expect(result.files[0]).toBe("fake-pi.mjs");
+    await expect(client.request(Methods.fsSearch, { query: "x" })).rejects.toMatchObject({ code: -32602 });
   });
 });
