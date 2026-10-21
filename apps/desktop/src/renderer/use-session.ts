@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { SessionEventNotification, SessionSummary, StoredSession, WriterState } from "@pi-desktop/host-protocol/messages";
-import type { AttachResult, ConnectionState, HostDescriptor } from "../shared/api";
+import type {
+  ProjectTrustInfo,
+  SessionEventNotification,
+  SessionSummary,
+  StoredSession,
+  WriterState,
+} from "@pi-desktop/host-protocol/messages";
+import type { AttachResult, ConnectionState, HostDescriptor, OpenSessionRequest } from "../shared/api";
+import { trustPlan, type TrustAnswer } from "./project-trust";
 import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState } from "./chat-state";
 import {
   applyUiEvent,
@@ -165,6 +172,8 @@ export function useSession(tabId: string = MAIN_TAB) {
   const [pendingOpen, setPendingOpen] = useState<StoredSession | undefined>();
   /** 보고 있는 세션의 입력 권한 (설계 §3.4). other면 다른 앱이 입력 중이라 읽기 전용 */
   const [writer, setWriter] = useState<WriterState>("you");
+  /** 세션을 열기 전에 프로젝트 신뢰를 묻는 중이면 그 폴더의 상태와 답을 받을 함수 */
+  const [trustAsk, setTrustAsk] = useState<{ info: ProjectTrustInfo; resolve: (answer: TrustAnswer | undefined) => void }>();
   const followRef = useRef<FollowState | undefined>(undefined);
   /** attach 진행 중이면 그 사이 알림으로 온 이벤트를 모으는 곳 */
   const attachQueueRef = useRef<SessionEventNotification[] | undefined>(undefined);
@@ -270,13 +279,37 @@ export function useSession(tabId: string = MAIN_TAB) {
     [attach, restoreSnapshot],
   );
 
+  /**
+   * 프로젝트 신뢰를 정한 뒤 세션을 연다. 앱(RPC 모드)의 Pi는 신뢰를 묻지 못하므로, 정해진 것이 없으면
+   * 여기서 묻는다. "기억" 답은 Pi의 trust.json에 저장하고, "이번만" 답은 이 실행에만 넘긴다.
+   * 사용자가 취소하면 열지 않고 undefined.
+   */
+  const openWithTrust = useCallback(async (request: OpenSessionRequest): Promise<SessionSummary | undefined> => {
+    const host = hostRef.current;
+    // 상태를 읽지 못하면(예: 예전 데몬) 묻지 않고 Pi 기본 동작에 맡긴다.
+    const info = await api()
+      .getTrust(host, request.cwd)
+      .catch(() => undefined);
+    let once: "yes" | "no" | undefined;
+    if (info?.effective === "ask") {
+      const answer = await new Promise<TrustAnswer | undefined>((resolve) => setTrustAsk({ info, resolve }));
+      setTrustAsk(undefined);
+      if (!answer) return undefined;
+      const plan = trustPlan(answer);
+      if (plan.save !== undefined) await api().setTrust(host, request.cwd, plan.save);
+      once = plan.once;
+    }
+    return api().openSession(host, once ? { ...request, trust: once } : request);
+  }, []);
+
   const openSession = useCallback(
     async (cwd: string) => {
-      const created = await api().openSession(hostRef.current, { cwd });
+      const created = await openWithTrust({ cwd });
+      if (!created) return;
       await refreshSessions();
       await switchTo(created);
     },
-    [refreshSessions, switchTo],
+    [openWithTrust, refreshSessions, switchTo],
   );
 
   /** 사라진 세션을 같은 Pi 세션 파일로 다시 열어 대화를 이어 간다. */
@@ -284,11 +317,12 @@ export function useSession(tabId: string = MAIN_TAB) {
     const target = lost;
     if (!target) return;
     const request = target.sessionFile ? { cwd: target.cwd, sessionFile: target.sessionFile } : { cwd: target.cwd };
-    const created = await api().openSession(hostRef.current, request);
+    const created = await openWithTrust(request);
+    if (!created) return;
     await refreshSessions();
     // 새로 띄운 Pi의 저널에는 이전 대화가 없으므로 스냅샷으로 채운다.
     await switchTo(created, { snapshot: true });
-  }, [lost, refreshSessions, switchTo]);
+  }, [lost, openWithTrust, refreshSessions, switchTo]);
 
   const send = useCallback(async (command: Record<string, unknown>) => {
     const current = sessionRef.current;
@@ -360,11 +394,12 @@ export function useSession(tabId: string = MAIN_TAB) {
       }
       stopFollow();
       const request = mode === "fork" ? { cwd: stored.cwd, forkFrom: stored.path } : { cwd: stored.cwd, sessionFile: stored.path };
-      const created = await api().openSession(hostRef.current, request);
+      const created = await openWithTrust(request);
+      if (!created) return;
       await refreshSessions();
       await switchTo(created, { snapshot: true });
     },
-    [refreshSessions, switchTo, startFollow, stopFollow],
+    [openWithTrust, refreshSessions, switchTo, startFollow, stopFollow],
   );
 
   /** 다른 앱이 가지고 있던 입력 권한을 가져온다. 그 앱은 읽기 전용이 된다. */
@@ -391,10 +426,11 @@ export function useSession(tabId: string = MAIN_TAB) {
   const continueFollowedAsFork = useCallback(async () => {
     const current = followRef.current;
     if (!current) return;
-    const created = await api().openSession(hostRef.current, { cwd: current.cwd, forkFrom: current.path });
+    const created = await openWithTrust({ cwd: current.cwd, forkFrom: current.path });
+    if (!created) return;
     await refreshSessions();
     await switchTo(created, { snapshot: true });
-  }, [refreshSessions, switchTo]);
+  }, [openWithTrust, refreshSessions, switchTo]);
 
   /**
    * 지금 세션을 터미널 Pi(TUI)로 넘긴다. 같은 파일에 GUI와 TUI가 함께 쓰지 않도록 GUI 쪽 Pi를 먼저 닫고,
@@ -598,6 +634,9 @@ export function useSession(tabId: string = MAIN_TAB) {
     ignoreExternalWrite,
     writer,
     claimWriter,
+    /** 세션을 열기 전에 묻는 프로젝트 신뢰 (없으면 묻는 중이 아님) */
+    trustAsk: trustAsk?.info,
+    answerTrust: (answer: TrustAnswer | undefined) => trustAsk?.resolve(answer),
     dismissToast: (key: string) => dispatchUi({ type: "dismiss", key }),
     send,
     refreshSessions,

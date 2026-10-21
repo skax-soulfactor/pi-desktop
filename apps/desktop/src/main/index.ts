@@ -11,6 +11,7 @@ import {
   type ModelsProbeResult,
   type FsListDirResult,
   type ResourcesView,
+  type ProjectTrustInfo,
   type ResourceFile,
   type ResourceKind,
   type ResourceWriteResult,
@@ -186,6 +187,7 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore): void {
     const params: SessionOpenParams = { ...overrides, cwd: request.cwd };
     if (request.sessionFile) params.sessionFile = request.sessionFile;
     if (request.forkFrom) params.forkFrom = request.forkFrom;
+    if (request.trust) params.trust = request.trust;
     const result = await conn(hostId).request<SessionOpenResult>(Methods.sessionOpen, params);
     return result.session;
   });
@@ -283,6 +285,12 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore): void {
   // 패키지 경로 해석에 npm 조회가 끼어 느릴 수 있어 넉넉히 기다린다.
   ipcMain.handle(IpcChannels.listResources, (_event, hostId: string, cwd: string) =>
     conn(hostId).request<ResourcesView>(Methods.resourcesList, { cwd }, 120_000),
+  );
+  ipcMain.handle(IpcChannels.getTrust, (_event, hostId: string, cwd: string) =>
+    conn(hostId).request<ProjectTrustInfo>(Methods.trustGet, { cwd }),
+  );
+  ipcMain.handle(IpcChannels.setTrust, (_event, hostId: string, cwd: string, decision: boolean | null) =>
+    conn(hostId).request<ProjectTrustInfo>(Methods.trustSet, { cwd, decision }),
   );
   ipcMain.handle(IpcChannels.readResource, (_event, hostId: string, cwd: string, path: string) =>
     conn(hostId).request<ResourceFile>(Methods.resourcesRead, { cwd, path }),

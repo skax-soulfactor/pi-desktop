@@ -12,6 +12,7 @@ import type {
   ModelsProbeResult,
   FsListDirResult,
   ResourcesView,
+  ProjectTrustInfo,
   ResourceFile,
   ResourceKind,
   ResourceWriteResult,
@@ -94,6 +95,8 @@ export interface OpenSessionRequest {
   sessionFile?: string;
   /** 이 세션 파일에서 분기한 새 세션으로 연다 (다른 프로그램이 쓰는 세션을 이어 갈 때) */
   forkFrom?: string;
+  /** 이번 실행에만 쓰는 프로젝트 신뢰 결정 (pi --approve / --no-approve) */
+  trust?: "yes" | "no";
 }
 
 export interface PiDesktopApi {
@@ -185,6 +188,10 @@ export interface PiDesktopApi {
   listDir(hostId: string, path?: string): Promise<FsListDirResult>;
   /** 작업 폴더에서 Pi가 불러오는 리소스 (읽기 전용) */
   listResources(hostId: string, cwd: string): Promise<ResourcesView>;
+  /** 작업 폴더의 프로젝트 신뢰 상태 */
+  getTrust(hostId: string, cwd: string): Promise<ProjectTrustInfo>;
+  /** 프로젝트 신뢰 결정을 Pi의 trust.json에 저장한다 (null이면 지운다) */
+  setTrust(hostId: string, cwd: string, decision: boolean | null): Promise<ProjectTrustInfo>;
   /** 리소스 마크다운 파일 (데이터 폴더·.pi/·AGENTS.md만). cwd는 프로젝트 리소스 위치 기준 */
   readResource(hostId: string, cwd: string, path: string): Promise<ResourceFile>;
   /** baseMtime: 읽었을 때의 수정 시각. 그 뒤 바뀌었으면 거부된다 */
@@ -231,6 +238,8 @@ export const IpcChannels = {
   searchFiles: "pi:search-files",
   listDir: "pi:list-dir",
   listResources: "pi:list-resources",
+  getTrust: "pi:get-trust",
+  setTrust: "pi:set-trust",
   readResource: "pi:read-resource",
   writeResource: "pi:write-resource",
   createResource: "pi:create-resource",
