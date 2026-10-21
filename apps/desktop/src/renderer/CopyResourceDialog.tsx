@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import type { ResourceExportResult } from "@pi-desktop/host-protocol/messages";
 import type { HostDescriptor } from "../shared/api";
-import { copyWarnings, isAlreadyExists } from "./copy-view";
+import { copyWarnings, extensionWarnings, isAlreadyExists } from "./copy-view";
 import { errorText } from "./folder-browser";
 import { importName, type PackageScope } from "./market-view";
 import { formatSize } from "./resources-view";
 
+const KIND_LABEL = { skill: "스킬", prompt: "프롬프트", extension: "확장" } as const;
+
 export interface CopyItem {
-  kind: "skill" | "prompt";
+  kind: "skill" | "prompt" | "extension";
   name: string;
-  /** 원본 호스트의 파일 경로 (스킬은 SKILL.md) */
+  /** 원본 호스트의 파일 경로 (스킬은 SKILL.md, 폴더 확장은 index.ts·index.js) */
   path: string;
   fromPackage: boolean;
 }
@@ -22,7 +24,8 @@ interface Props {
 }
 
 /**
- * 스킬·프롬프트를 다른 호스트로 복사 (설계 §5.9). 원본 호스트 데몬이 읽고 대상 호스트 데몬이 쓴다.
+ * 스킬·프롬프트·확장을 다른 호스트로 복사 (설계 §5.9). 원본 호스트 데몬이 읽고 대상 호스트 데몬이 쓴다.
+ * 확장은 코드라 대상 OS에서 돌지 않을 것 같은 흔적을 미리 알리고, 폴더의 node_modules는 옮기지 않는다.
  * 복사한 뒤 두 사본은 서로 영향을 주지 않는다 (자동 동기화 없음).
  */
 export function CopyResourceDialog({ hosts, fromHostId, item, onClose }: Props) {
@@ -78,7 +81,13 @@ export function CopyResourceDialog({ hosts, fromHostId, item, onClose }: Props) 
     }
   }
 
-  const warnings = exported ? copyWarnings(exported.files, platform) : [];
+  const warnings = exported
+    ? item.kind === "extension"
+      ? extensionWarnings(exported.files, platform)
+      : copyWarnings(exported.files, platform)
+    : [];
+  if (exported?.skipped?.length) warnings.push(`${exported.skipped.join(", ")}은(는) 옮기지 않습니다.`);
+  const installHint = exported?.needsInstall ? "package.json의 의존성은 대상 폴더에서 npm install로 받아야 확장이 돕니다." : undefined;
   const total = exported?.files.reduce((sum, f) => sum + f.size, 0) ?? 0;
   const ready = Boolean(exported) && toHostId !== "" && name.trim() !== "" && (scope === "user" || cwd.trim() !== "");
 
@@ -86,7 +95,7 @@ export function CopyResourceDialog({ hosts, fromHostId, item, onClose }: Props) 
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal copy-resource" role="dialog" aria-label="다른 호스트로 복사" onMouseDown={(e) => e.stopPropagation()}>
         <h2 className="modal-title">
-          {item.kind === "skill" ? "스킬" : "프롬프트"} 다른 호스트로 복사: {item.name}
+          {KIND_LABEL[item.kind]} 다른 호스트로 복사: {item.name}
         </h2>
         <p className="modal-message">
           {hosts.find((h) => h.id === fromHostId)?.label ?? fromHostId}의 것을 복사합니다. 복사한 뒤 두 사본은 서로 영향을 주지 않습니다.
@@ -99,6 +108,7 @@ export function CopyResourceDialog({ hosts, fromHostId, item, onClose }: Props) 
             복사했습니다: {done.target}
             {done.backup ? `\n대상에 있던 이전 것은 ${done.backup}로 옮겼습니다.` : ""}
             {"\n"}대상 호스트에서 새로 여는 세션부터 쓰입니다.{scope === "project" ? " 프로젝트 범위는 그 폴더를 신뢰해야 불러옵니다." : ""}
+            {installHint ? `\n${installHint} 대상에서: cd "${done.target}" && npm install` : ""}
           </div>
         ) : (
           <div className="ssh-host-form">
@@ -132,6 +142,7 @@ export function CopyResourceDialog({ hosts, fromHostId, item, onClose }: Props) 
             <div className="muted">
               {exported ? `파일 ${exported.files.length}개 · ${formatSize(total)}: ${exported.files.map((f) => f.path).slice(0, 10).join(", ")}${exported.files.length > 10 ? " …" : ""}` : "원본을 읽는 중…"}
             </div>
+            {installHint && <div className="banner warn">{installHint}</div>}
             {warnings.map((w) => (
               <div key={w} className="banner warn">
                 {w}

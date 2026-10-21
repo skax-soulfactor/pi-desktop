@@ -576,8 +576,8 @@ export class AgentDaemon {
 
     peer.handle(Methods.resourcesImport, (params): Promise<ResourceImportResult> => {
       const p = requireStrings(params, ["cwd", "kind", "scope", "name"]) as unknown as ResourceImportParams;
-      if (!["skill", "prompt"].includes(p.kind) || !["user", "project"].includes(p.scope) || !Array.isArray(p.files)) {
-        throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 skill·prompt, scope는 user·project, files는 배열이어야 합니다");
+      if (!["skill", "prompt", "extension"].includes(p.kind) || !["user", "project"].includes(p.scope) || !Array.isArray(p.files)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 skill·prompt·extension, scope는 user·project, files는 배열이어야 합니다");
       }
       return importResource(p, p.cwd, agentDirOf(this.env), importBackups()).catch(asInvalid);
     });
@@ -592,7 +592,9 @@ export class AgentDaemon {
 
     peer.handle(Methods.resourcesExport, (params): Promise<ResourceExportResult> => {
       const p = requireStrings(params, ["kind", "path"]) as unknown as ResourceExportParams;
-      if (p.kind !== "skill" && p.kind !== "prompt") throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 skill·prompt여야 합니다");
+      if (!["skill", "prompt", "extension"].includes(p.kind)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 skill·prompt·extension이어야 합니다");
+      }
       return exportResource(p.kind, p.path).catch(asInvalid);
     });
 

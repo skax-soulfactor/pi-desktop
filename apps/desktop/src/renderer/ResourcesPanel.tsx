@@ -35,8 +35,8 @@ interface Props {
   onRunPi?: (args: string[], title: string, projectCwd?: string) => void;
   /** Marketplace를 연다 */
   onOpenMarketplace?: () => void;
-  /** 스킬·프롬프트를 다른 호스트로 복사한다 (다른 호스트가 있을 때만) */
-  onCopy?: (item: ResourceItem, kind: "skill" | "prompt") => void;
+  /** 스킬·프롬프트·확장을 다른 호스트로 복사한다 (다른 호스트가 있을 때만) */
+  onCopy?: (item: ResourceItem, kind: "skill" | "prompt" | "extension") => void;
   /** 사용자 범위 AGENTS.md·SYSTEM.md·APPEND_SYSTEM.md를 다른 호스트로 복사한다 */
   onCopyContext?: (path: string) => void;
   /** 패키지를 다른 호스트에 같은 소스로 설치한다 */
@@ -220,6 +220,7 @@ export function ResourcesPanel({
                 empty="확장이 없습니다."
                 title={(x) => x.name}
                 onReveal={onReveal}
+                {...(onCopy ? { onCopy: (item: ResourceItem) => onCopy(item, "extension") } : {})}
               />
             )}
             {tab === "packages" && (
@@ -358,7 +359,7 @@ function ItemList({
                 편집
               </button>
             )}
-            {onCopy && item.enabled && /.md$/i.test(item.path) && (
+            {onCopy && item.enabled && /.(md|ts|js|mts|cts|mjs|cjs)$/i.test(item.path) && (
               <button type="button" className="small" onClick={() => onCopy(item)} title="다른 호스트(WSL·SSH)로 복사합니다">
                 다른 호스트로
               </button>
