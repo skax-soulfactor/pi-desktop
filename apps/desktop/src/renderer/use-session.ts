@@ -452,9 +452,14 @@ export function useSession(tabId: string = MAIN_TAB) {
     dispatchUi({ type: "reset" });
   }, []);
 
-  useEffect(() => {
+  /** 호스트 목록을 다시 읽는다 (SSH 호스트를 추가·삭제한 뒤) */
+  const reloadHosts = useCallback(() => {
     void api().listHosts().then(setHosts, reportError);
   }, [reportError]);
+
+  useEffect(() => {
+    reloadHosts();
+  }, [reloadHosts]);
 
   // 선택된 호스트의 연결 상태 구독. 연결될 때마다 세션 목록을 받고 보던 세션을 이어서 보여준다.
   useEffect(() => {
@@ -552,6 +557,7 @@ export function useSession(tabId: string = MAIN_TAB) {
   const host = hosts.find((h) => h.id === hostId);
   return {
     hosts,
+    reloadHosts,
     host,
     hostId,
     selectHost,
