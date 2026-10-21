@@ -2,6 +2,7 @@ import type {
   SessionEventNotification,
   SessionExitNotification,
   SessionExternalWriteNotification,
+  SessionWriterChangedNotification,
   PiUpdateOutputNotification,
   SessionUiResolvedNotification,
   StoredChangedNotification,
@@ -30,6 +31,7 @@ export interface HostManagerOptions {
   onUiResolved: (hostId: string, notification: SessionUiResolvedNotification) => void;
   onStoredChanged: (hostId: string, notification: StoredChangedNotification) => void;
   onExternalWrite: (hostId: string, notification: SessionExternalWriteNotification) => void;
+  onWriterChanged: (hostId: string, notification: SessionWriterChangedNotification) => void;
   onPiUpdateOutput: (hostId: string, notification: PiUpdateOutputNotification) => void;
 }
 
@@ -64,6 +66,7 @@ export class HostManager {
         onUiResolved: (n) => this.options.onUiResolved(hostId, n),
         onStoredChanged: (n) => this.options.onStoredChanged(hostId, n),
         onExternalWrite: (n) => this.options.onExternalWrite(hostId, n),
+        onWriterChanged: (n) => this.options.onWriterChanged(hostId, n),
         onPiUpdateOutput: (n) => this.options.onPiUpdateOutput(hostId, n),
       });
       this.connections.set(hostId, connection);

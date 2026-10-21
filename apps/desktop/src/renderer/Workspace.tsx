@@ -81,6 +81,8 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     handOffToTui,
     continueFollowedAsFork,
     ignoreExternalWrite,
+    writer,
+    claimWriter,
     dismissToast,
   } = useSession(tabId);
   const isLocal = host?.kind === "local";
@@ -127,6 +129,8 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const piUpdate = updateState(piState.status?.pi?.version, piState.latest);
   // 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 썼다 (TUI 등). 같은 파일에 함께 쓰면 기록이 꼬이므로 입력을 잠근다.
   const externalWrite = session?.externalWriteAt !== undefined && !lost;
+  // 다른 앱(다른 PC 등)이 이 세션의 입력 권한을 가지고 있다. 실시간으로 보기만 한다 (설계 §3.4).
+  const readOnly = Boolean(session) && writer === "other" && !lost;
 
   // 입력 중인 초안을 세션 파일별로 저장해 두었다가 그 세션을 다시 열면 되살린다.
   const draftKey = session ? `pi-desktop.draft.${hostId}.${session.sessionFile ?? session.sessionId}` : undefined;
@@ -663,6 +667,20 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           </button>
         </div>
       )}
+      {readOnly && (
+        <div className="banner warn">
+          <span>다른 앱(다른 PC 등)이 이 세션을 조작하고 있습니다. 실시간으로 보기만 하며, 입력하려면 제어를 가져오세요.</span>
+          <button
+            type="button"
+            className="primary"
+            disabled={busy || !connected}
+            onClick={() => void guard(claimWriter)}
+            title="입력 권한을 이 앱으로 옮깁니다. 다른 앱은 읽기 전용이 됩니다"
+          >
+            제어 가져오기
+          </button>
+        </div>
+      )}
       {error && <div className="banner error">{error}</div>}
       {info && (
         <div className="banner info">
@@ -697,7 +715,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         <SessionBar
           info={sessionInfo.info}
           running={chat.running}
-          disabled={!connected || Boolean(lost) || busy}
+          disabled={!connected || Boolean(lost) || busy || readOnly}
           onModel={(provider, id) => void guard(() => sessionInfo.setModel(provider, id))}
           onThinking={(level) => void guard(() => sessionInfo.setThinkingLevel(level))}
           onCompact={() => void guard(sessionInfo.compact)}
@@ -730,7 +748,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       <Composer
         value={draft}
         onChange={setDraft}
-        disabled={!session || !connected || Boolean(lost) || Boolean(follow) || Boolean(externalWrite)}
+        disabled={!session || !connected || Boolean(lost) || Boolean(follow) || Boolean(externalWrite) || readOnly}
         placeholder={
           session
             ? "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈, ↑ 이전 입력, / 명령, @ 파일, 이미지 붙여넣기, !셸 명령, !!컨텍스트 제외)"

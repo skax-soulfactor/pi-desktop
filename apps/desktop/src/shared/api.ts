@@ -26,6 +26,7 @@ import type {
   SessionEventNotification,
   SessionExitNotification,
   SessionExternalWriteNotification,
+  SessionWriterChangedNotification,
   SessionSummary,
   SessionUiResolvedNotification,
   StoredChangedNotification,
@@ -122,6 +123,8 @@ export interface PiDesktopApi {
   closeSession(hostId: string, sessionId: string): Promise<void>;
   /** 다른 프로그램의 끼어들기 표시를 지운다 ("무시하고 계속") */
   clearExternalWrite(hostId: string, sessionId: string): Promise<void>;
+  /** 이 세션의 입력 권한을 가져온다. 가지고 있던 다른 앱은 읽기 전용이 된다 */
+  claimWriter(hostId: string, sessionId: string): Promise<void>;
   /** Pi RPC 명령을 보내고 Pi의 응답을 받는다 */
   sendCommand(hostId: string, sessionId: string, command: Record<string, unknown>): Promise<PiResponse>;
   /** 응답이 없는 레코드를 Pi에 보낸다 (예: 확장 다이얼로그 응답 extension_ui_response) */
@@ -186,6 +189,7 @@ export interface PiDesktopApi {
   onStoredChanged(listener: (hostId: string, notification: StoredChangedNotification) => void): () => void;
   /** 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 쓴 것이 감지되었다 */
   onExternalWrite(listener: (hostId: string, notification: SessionExternalWriteNotification) => void): () => void;
+  onWriterChanged(listener: (hostId: string, notification: SessionWriterChangedNotification) => void): () => void;
   onPiUpdateOutput(listener: (hostId: string, notification: PiUpdateOutputNotification) => void): () => void;
 }
 
@@ -208,6 +212,7 @@ export const IpcChannels = {
   attachSession: "pi:attach-session",
   closeSession: "pi:close-session",
   clearExternalWrite: "pi:clear-external-write",
+  claimWriter: "pi:claim-writer",
   sendCommand: "pi:send-command",
   sendRecord: "pi:send-record",
   pickDirectory: "pi:pick-directory",
@@ -241,4 +246,5 @@ export const IpcChannels = {
   uiResolved: "pi:ui-resolved",
   storedChanged: "pi:stored-changed",
   externalWrite: "pi:external-write",
+  writerChanged: "pi:writer-changed",
 } as const;
