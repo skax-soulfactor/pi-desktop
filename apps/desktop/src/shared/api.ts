@@ -229,6 +229,28 @@ export interface CopyStatus {
   error?: string;
 }
 
+/** 호스트 비교에 쓰는 사용자 범위 리소스 하나 (설계 §5.9 "호스트 비교 화면") */
+export interface InventoryItem {
+  kind: CopyKind;
+  /** 견줄 때 쓰는 이름 (스킬·확장은 폴더나 파일 이름, 프롬프트는 /이름, 컨텍스트는 파일 이름) */
+  name: string;
+  /** 리소스 목록의 경로 (호스트 기준) */
+  path: string;
+  /** 내용 해시. 파일 하나면 그 파일의 git blob SHA, 여럿이면 경로·SHA 목록의 SHA-1 */
+  digest?: string;
+  files: number;
+  /** 읽지 못했으면 이유 */
+  error?: string;
+}
+
+/** 한 호스트의 사용자 범위 리소스 목록 */
+export interface HostInventory {
+  hostId: string;
+  agentDir: string;
+  platform: string;
+  items: InventoryItem[];
+}
+
 /** 가져온 항목의 지금 상태 */
 export interface ImportStatus {
   target: string;
@@ -376,6 +398,8 @@ export interface PiDesktopApi {
   importStatus(hostId: string): Promise<ImportStatus[]>;
   /** 다른 호스트로 복사한 기록을 남긴다 (같은 대상 위치는 바꾼다) */
   recordCopy(input: CopyRecordInput): Promise<void>;
+  /** 호스트 비교용: 그 호스트의 사용자 범위 스킬·프롬프트·확장·AGENTS.md 등과 내용 해시 */
+  hostInventory(hostId: string): Promise<HostInventory>;
   /** 이 호스트로 복사해 온 항목들의 기록과, 그 뒤 사본·원본이 바뀌었는지 */
   copyStatus(hostId: string): Promise<Array<{ record: CopyRecord; status: CopyStatus }>>;
   /** 원본 최신 커밋으로 바꾼다. 이전 내용은 그 호스트의 백업 폴더로 옮겨진다 */
@@ -449,6 +473,7 @@ export const IpcChannels = {
   importStatus: "pi:import-status",
   recordCopy: "pi:record-copy",
   copyStatus: "pi:copy-status",
+  hostInventory: "pi:host-inventory",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",
   importDiff: "pi:import-diff",

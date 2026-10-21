@@ -74,6 +74,7 @@ const api: PiDesktopApi = {
   importStatus: (hostId) => ipcRenderer.invoke(IpcChannels.importStatus, hostId),
   recordCopy: (input) => ipcRenderer.invoke(IpcChannels.recordCopy, input),
   copyStatus: (hostId) => ipcRenderer.invoke(IpcChannels.copyStatus, hostId),
+  hostInventory: (hostId) => ipcRenderer.invoke(IpcChannels.hostInventory, hostId),
   importUpdate: (hostId, target) => ipcRenderer.invoke(IpcChannels.importUpdate, hostId, target),
   importRemove: (hostId, target) => ipcRenderer.invoke(IpcChannels.importRemove, hostId, target),
   importDiff: (hostId, target, path, upstreamSha) => ipcRenderer.invoke(IpcChannels.importDiff, hostId, target, path, upstreamSha),
