@@ -44,15 +44,33 @@ export type ChatItem =
     }
   | { kind: "notice"; key: string; level: "info" | "error"; text: string };
 
+/** Steer·Follow-up으로 보내 두고 아직 Pi가 처리하지 않은 메시지 (queue_update) */
+export interface PendingQueue {
+  steering: string[];
+  followUp: string[];
+}
+
+/** 응답 오류로 자동 재시도를 기다리는 중 (auto_retry_start ~ auto_retry_end) */
+export interface RetryState {
+  attempt: number;
+  maxAttempts: number;
+  delayMs: number;
+  errorMessage: string;
+}
+
 export interface ChatState {
   items: ChatItem[];
   /** Pi가 자동으로 이어서 할 작업이 남아 있는지 (agent_start ~ agent_settled) */
   running: boolean;
   /** 마지막으로 반영한 저널 순번 */
   lastSeq: number;
+  queue: PendingQueue;
+  retry?: RetryState;
 }
 
-export const initialChatState: ChatState = { items: [], running: false, lastSeq: 0 };
+const EMPTY_QUEUE: PendingQueue = { steering: [], followUp: [] };
+
+export const initialChatState: ChatState = { items: [], running: false, lastSeq: 0, queue: EMPTY_QUEUE };
 
 type AnyEvent = Record<string, unknown> & { type?: string };
 
@@ -65,8 +83,14 @@ export function applyEvent(state: ChatState, seq: number, raw: unknown): ChatSta
   switch (event.type) {
     case "agent_start":
       return { ...next, running: true };
-    case "agent_settled":
-      return { ...next, running: false, items: finishOpenAssistant(next.items) };
+    case "agent_settled": {
+      // 더 이어서 할 일이 없으므로 대기 큐와 재시도 상태도 끝난 것으로 본다.
+      const { retry: _retry, ...rest } = next;
+      return { ...rest, running: false, queue: EMPTY_QUEUE, items: finishOpenAssistant(next.items) };
+    }
+
+    case "queue_update":
+      return { ...next, queue: { steering: queueTexts(event.steering), followUp: queueTexts(event.followUp) } };
 
     case "message_start": {
       const message = event.message as AnyEvent | undefined;
@@ -190,21 +214,46 @@ export function applyEvent(state: ChatState, seq: number, raw: unknown): ChatSta
 
     case "auto_retry_start":
       return withNotice(
-        next,
+        {
+          ...next,
+          // 재시도할 실패 응답(내용 없는 오류)은 재시도 안내로 대신하고 화면에서 뺀다.
+          items: dropFailedAttempt(next.items),
+          retry: {
+            attempt: Number(event.attempt ?? 0),
+            maxAttempts: Number(event.maxAttempts ?? 0),
+            delayMs: Number(event.delayMs ?? 0),
+            errorMessage: String(event.errorMessage ?? ""),
+          },
+        },
         `r${seq}`,
         "info",
         `응답 오류로 ${Math.round(Number(event.delayMs ?? 0) / 1000)}초 뒤 다시 시도합니다 ` +
           `(${String(event.attempt)}/${String(event.maxAttempts)}): ${String(event.errorMessage ?? "")}`,
       );
 
-    case "auto_retry_end":
+    case "auto_retry_end": {
+      const { retry: _retry, ...rest } = next;
       return event.success === false
-        ? withNotice(next, `r${seq}`, "error", `재시도 실패: ${String(event.finalError ?? "알 수 없는 오류")}`)
-        : next;
+        ? withNotice(rest, `r${seq}`, "error", `재시도 실패: ${String(event.finalError ?? "알 수 없는 오류")}`)
+        : rest;
+    }
 
     default:
       return next;
   }
+}
+
+function dropFailedAttempt(items: ChatItem[]): ChatItem[] {
+  const last = items.at(-1);
+  const failedEmpty =
+    last?.kind === "assistant" && last.stopReason === "error" && last.blocks.every((b) => b.type === "text" && !b.text.trim());
+  return failedEmpty ? items.slice(0, -1) : items;
+}
+
+/** queue_update의 큐 항목은 문자열이다. 다른 모양이 와도 글자만 뽑는다. */
+function queueTexts(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => (typeof v === "string" ? v : contentText((v as AnyEvent | null)?.content ?? (v as AnyEvent | null)?.text)));
 }
 
 /** 셸 명령 카드의 toolCallId. Pi 툴 호출 id와 겹치지 않게 접두사를 붙인다. */
@@ -316,7 +365,7 @@ export function snapshotState(messages: unknown[], lastSeq: number, running: boo
   if (running && last?.kind !== "assistant" && !toolStillRunning) {
     items.push({ kind: "assistant", key: "s-live", blocks: [], done: false });
   }
-  return { items, running, lastSeq };
+  return { items, running, lastSeq, queue: EMPTY_QUEUE };
 }
 
 /** 프롬프트를 보냈는데 Pi가 거부했을 때처럼, 이벤트가 아닌 안내를 끼워 넣는다. */

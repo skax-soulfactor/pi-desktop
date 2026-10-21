@@ -227,3 +227,49 @@ describe("applyEvent — 툴 호출 id 재사용", () => {
     ]);
   });
 });
+
+describe("applyEvent — 대기 큐와 자동 재시도", () => {
+  it("queue_update는 큐 전체를 바꾸고, agent_settled에서 비운다", () => {
+    const queued = run([
+      { type: "agent_start" },
+      { type: "queue_update", steering: ["방향 바꿔"], followUp: ["끝나면 요약", "테스트도"] },
+    ]);
+    expect(queued.queue).toEqual({ steering: ["방향 바꿔"], followUp: ["끝나면 요약", "테스트도"] });
+    const drained = run([{ type: "queue_update", steering: [], followUp: ["테스트도"] }], queued);
+    expect(drained.queue).toEqual({ steering: [], followUp: ["테스트도"] });
+    expect(run([{ type: "agent_settled" }], drained).queue).toEqual({ steering: [], followUp: [] });
+  });
+
+  it("자동 재시도 중 상태를 두고, 끝나거나 실행이 끝나면 지운다", () => {
+    const retrying = run([
+      { type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 2000, errorMessage: "529 overloaded" },
+    ]);
+    expect(retrying.retry).toEqual({ attempt: 1, maxAttempts: 3, delayMs: 2000, errorMessage: "529 overloaded" });
+    expect(run([{ type: "auto_retry_end", success: true, attempt: 2 }], retrying).retry).toBeUndefined();
+    expect(run([{ type: "agent_settled" }], retrying).retry).toBeUndefined();
+  });
+});
+
+describe("applyEvent — 재시도한 실패 응답", () => {
+  const failed = (text = "") => [
+    { type: "message_start", message: { role: "assistant" } },
+    { type: "message_end", message: { role: "assistant", content: text ? [{ type: "text", text }] : [], stopReason: "error", errorMessage: "529" } },
+  ];
+  const retry = (attempt: number) => ({ type: "auto_retry_start", attempt, maxAttempts: 3, delayMs: 2000, errorMessage: "529" });
+
+  it("재시도가 시작되면 바로 앞의 빈 오류 응답을 빼고, 마지막 실패만 남긴다", () => {
+    const state = run([
+      { type: "message_start", message: { role: "user", content: "질문" } },
+      ...failed(),
+      retry(1),
+      ...failed(),
+      { type: "auto_retry_end", success: false, attempt: 1, finalError: "529" },
+    ]);
+    expect(state.items.map((i) => i.kind)).toEqual(["user", "notice", "assistant", "notice"]);
+  });
+
+  it("내용이 있는 오류 응답은 지우지 않는다", () => {
+    const state = run([...failed("일부 답"), retry(1)]);
+    expect(state.items.map((i) => i.kind)).toEqual(["assistant", "notice"]);
+  });
+});
