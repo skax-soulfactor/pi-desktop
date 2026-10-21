@@ -8,6 +8,9 @@ import type {
   FsSearchResult,
   PiLatest,
   PiStatus,
+  PiUpdateOutputNotification,
+  PiUpdateResult,
+  PiUpdateTarget,
   HostInfo,
   PiLocation,
   PiResponse,
@@ -91,6 +94,10 @@ export interface PiDesktopApi {
   piStatus(hostId: string): Promise<PiStatus>;
   /** Pi 최신 버전 (데몬이 1시간 캐시, force면 다시 묻는다) */
   piLatest(hostId: string, force?: boolean): Promise<PiLatest>;
+  /**
+   * Pi 업데이트 (pi update). 끝날 때까지 기다린다. 진행 출력은 onPiUpdateOutput으로 taskId와 함께 온다.
+   */
+  piUpdate(hostId: string, target: PiUpdateTarget, taskId: string, force?: boolean): Promise<PiUpdateResult>;
   /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커). 경로는 작업 폴더 기준, 구분자 "/" */
   searchFiles(hostId: string, cwd: string, query: string): Promise<FsSearchResult>;
 
@@ -103,6 +110,7 @@ export interface PiDesktopApi {
   onStoredChanged(listener: (hostId: string, notification: StoredChangedNotification) => void): () => void;
   /** 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 쓴 것이 감지되었다 */
   onExternalWrite(listener: (hostId: string, notification: SessionExternalWriteNotification) => void): () => void;
+  onPiUpdateOutput(listener: (hostId: string, notification: PiUpdateOutputNotification) => void): () => void;
 }
 
 /** IPC 채널 이름. invoke(요청/응답)와 send(main → renderer 알림)를 구분한다. */
@@ -127,6 +135,8 @@ export const IpcChannels = {
   searchFiles: "pi:search-files",
   piStatus: "pi:pi-status",
   piLatest: "pi:pi-latest",
+  piUpdate: "pi:pi-update",
+  piUpdateOutput: "pi:pi-update-output",
   connectionChanged: "pi:connection-changed",
   sessionEvent: "pi:session-event",
   sessionExit: "pi:session-exit",

@@ -724,7 +724,12 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       )}
       {active && <Toasts toasts={ui.toasts} onDismiss={dismissToast} />}
       {active && piManagerOpen && (
-        <PiManager hosts={hosts} initialHostId={hostId} onClose={() => setPiManagerOpen(false)} />
+        <PiManager
+          hosts={hosts}
+          initialHostId={hostId}
+          onClose={() => setPiManagerOpen(false)}
+          onChanged={() => void piState.reload(true)}
+        />
       )}
       {active && palette && (
         <CommandPalette

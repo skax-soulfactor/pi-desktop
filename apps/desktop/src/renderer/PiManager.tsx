@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { PiLatest, PiStatus } from "@pi-desktop/host-protocol/messages";
 import type { HostDescriptor } from "../shared/api";
 import { statusChecks } from "./pi-manager-view";
+import { PiUpdatePanel } from "./PiUpdatePanel";
 
 /** 한 호스트의 Pi 상태와 최신 버전. 최신 버전은 데몬이 1시간 캐시한다 */
 export function usePiStatus(hostId: string, enabled: boolean) {
@@ -33,17 +34,19 @@ export function usePiStatus(hostId: string, enabled: boolean) {
 }
 
 /**
- * Pi 관리 창 (설계 §4.9). 지금은 읽기 전용 상태 화면이다.
- * 설치·업데이트·제거는 다음 단계에서 이 창에 붙인다.
+ * Pi 관리 창 (설계 §4.9). 상태 점검표와 업데이트. 설치·제거는 다음 단계에서 붙인다.
  */
 export function PiManager({
   hosts,
   initialHostId,
   onClose,
+  onChanged,
 }: {
   hosts: HostDescriptor[];
   initialHostId: string;
   onClose: () => void;
+  /** 업데이트 등으로 상태가 바뀌었을 수 있다 (상단 바 표시를 다시 읽게) */
+  onChanged?: () => void;
 }) {
   const [hostId, setHostId] = useState(initialHostId);
   const { status, latest, error, reload } = usePiStatus(hostId, true);
@@ -107,9 +110,18 @@ export function PiManager({
             </tbody>
           </table>
         )}
-        <p className="pi-manager-note muted">
-          설치·업데이트·제거는 다음 단계에서 추가됩니다. 지금은 상태만 확인합니다.
-        </p>
+        {status && (
+          <PiUpdatePanel
+            hostId={hostId}
+            status={status}
+            latest={latest}
+            onFinished={() => {
+              void reload(true);
+              onChanged?.();
+            }}
+          />
+        )}
+        <p className="pi-manager-note muted">설치·제거는 다음 단계에서 추가됩니다.</p>
       </div>
     </div>
   );

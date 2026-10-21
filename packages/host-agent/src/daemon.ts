@@ -20,6 +20,8 @@ import {
   type PiLatestParams,
   type PiLocateParams,
   type PiStatus,
+  type PiUpdateParams,
+  type PiUpdateResult,
   type SessionAttachParams,
   type SessionAttachResult,
   type SessionEventNotification,
@@ -40,6 +42,7 @@ import {
 import { runDir, socketPath } from "./paths";
 import { locatePi } from "./pi-locator";
 import { latestPiVersion, piStatus } from "./pi-status";
+import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
@@ -85,6 +88,8 @@ export class AgentDaemon {
   private readonly files = new FileWatcher();
   /** 입력창 @ 파일 피커용 파일 목록 캐시 */
   private readonly fileIndex = new FileIndex();
+  /** 한 호스트에서 업데이트는 한 번에 하나만 */
+  private updating = false;
   private readonly env: NodeJS.ProcessEnv;
   private readonly idleShutdownMs: number;
 
@@ -194,6 +199,29 @@ export class AgentDaemon {
     peer.handle(Methods.piLatest, (params): Promise<PiLatest> =>
       latestPiVersion((params as PiLatestParams | undefined)?.force === true),
     );
+
+    peer.handle(Methods.piUpdate, async (params): Promise<PiUpdateResult> => {
+      const p = (params ?? {}) as Partial<PiUpdateParams>;
+      if (!isUpdateTarget(p.target) || typeof p.taskId !== "string") {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "target(self|extensions|all|models)과 taskId가 필요합니다");
+      }
+      if (this.updating) throw new JsonRpcError(ErrorCodes.InvalidParams, "이미 업데이트가 진행 중입니다");
+      this.updating = true;
+      try {
+        const before = await locatePi({ env: this.env });
+        const run = await runPiUpdate(before, p.target, {
+          force: p.force === true,
+          env: this.env,
+          onOutput: (chunk) => peer.notify(Notifications.piUpdateOutput, { taskId: p.taskId, chunk }),
+        });
+        const after = await locatePi({ env: this.env }).catch(() => undefined);
+        const result: PiUpdateResult = { ...run, versionBefore: before.version };
+        if (after) result.versionAfter = after.version;
+        return result;
+      } finally {
+        this.updating = false;
+      }
+    });
 
     peer.handle(Methods.sessionOpen, async (params): Promise<SessionOpenResult> => {
       const p = params as SessionOpenParams;

@@ -2,6 +2,7 @@ import type {
   SessionEventNotification,
   SessionExitNotification,
   SessionExternalWriteNotification,
+  PiUpdateOutputNotification,
   SessionUiResolvedNotification,
   StoredChangedNotification,
 } from "@pi-desktop/host-protocol";
@@ -23,6 +24,7 @@ export interface HostManagerOptions {
   onUiResolved: (hostId: string, notification: SessionUiResolvedNotification) => void;
   onStoredChanged: (hostId: string, notification: StoredChangedNotification) => void;
   onExternalWrite: (hostId: string, notification: SessionExternalWriteNotification) => void;
+  onPiUpdateOutput: (hostId: string, notification: PiUpdateOutputNotification) => void;
 }
 
 /**
@@ -52,6 +54,7 @@ export class HostManager {
         onUiResolved: (n) => this.options.onUiResolved(hostId, n),
         onStoredChanged: (n) => this.options.onStoredChanged(hostId, n),
         onExternalWrite: (n) => this.options.onExternalWrite(hostId, n),
+        onPiUpdateOutput: (n) => this.options.onPiUpdateOutput(hostId, n),
       });
       this.connections.set(hostId, connection);
       connection.start();

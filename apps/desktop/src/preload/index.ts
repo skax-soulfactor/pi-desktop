@@ -29,6 +29,8 @@ const api: PiDesktopApi = {
   pickDirectory: () => ipcRenderer.invoke(IpcChannels.pickDirectory),
   revealFile: (hostId, cwd, path) => ipcRenderer.invoke(IpcChannels.revealFile, hostId, cwd, path),
   piStatus: (hostId) => ipcRenderer.invoke(IpcChannels.piStatus, hostId),
+  piUpdate: (hostId, target, taskId, force) =>
+    ipcRenderer.invoke(IpcChannels.piUpdate, hostId, target, taskId, force === true),
   piLatest: (hostId, force) => ipcRenderer.invoke(IpcChannels.piLatest, hostId, force === true),
   searchFiles: (hostId, cwd, query) => ipcRenderer.invoke(IpcChannels.searchFiles, hostId, cwd, query),
   onConnection: (listener) => subscribe(IpcChannels.connectionChanged, listener),
@@ -37,6 +39,7 @@ const api: PiDesktopApi = {
   onUiResolved: (listener) => subscribe(IpcChannels.uiResolved, listener),
   onStoredChanged: (listener) => subscribe(IpcChannels.storedChanged, listener),
   onExternalWrite: (listener) => subscribe(IpcChannels.externalWrite, listener),
+  onPiUpdateOutput: (listener) => subscribe(IpcChannels.piUpdateOutput, listener),
 };
 
 contextBridge.exposeInMainWorld("piDesktop", api);

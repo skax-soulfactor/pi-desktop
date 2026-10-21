@@ -68,6 +68,11 @@ export class TestClient {
     return this.peer.request<T>(method, params);
   }
 
+  /** 그 밖의 알림을 구독한다 */
+  onNotification(method: string, handler: (params: unknown) => void): () => void {
+    return this.peer.on(method, handler);
+  }
+
   /** 조건을 만족하는 이벤트가 올 때까지 기다린다. */
   waitForEvent(
     predicate: (event: Record<string, unknown>, notification: SessionEventNotification) => boolean,
