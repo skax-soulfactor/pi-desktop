@@ -11,6 +11,9 @@ import {
   type ModelsProbeResult,
   type FsListDirResult,
   type ResourcesView,
+  type ResourceFile,
+  type ResourceKind,
+  type ResourceWriteResult,
   type FsSearchResult,
   type ProviderInfo,
   type PiLatest,
@@ -280,6 +283,19 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore): void {
   // 패키지 경로 해석에 npm 조회가 끼어 느릴 수 있어 넉넉히 기다린다.
   ipcMain.handle(IpcChannels.listResources, (_event, hostId: string, cwd: string) =>
     conn(hostId).request<ResourcesView>(Methods.resourcesList, { cwd }, 120_000),
+  );
+  ipcMain.handle(IpcChannels.readResource, (_event, hostId: string, cwd: string, path: string) =>
+    conn(hostId).request<ResourceFile>(Methods.resourcesRead, { cwd, path }),
+  );
+  ipcMain.handle(
+    IpcChannels.writeResource,
+    (_event, hostId: string, cwd: string, path: string, content: string, baseMtime: number) =>
+      conn(hostId).request<ResourceWriteResult>(Methods.resourcesWrite, { cwd, path, content, baseMtime }),
+  );
+  ipcMain.handle(
+    IpcChannels.createResource,
+    (_event, hostId: string, cwd: string, kind: ResourceKind, scope: "user" | "project", name: string) =>
+      conn(hostId).request<ResourceFile>(Methods.resourcesCreate, { cwd, kind, scope, name }),
   );
   ipcMain.handle(IpcChannels.revealFile, (_event, hostId: string, cwd: string, path: string) => {
     const target = hostPathForExplorer(hostId, cwd, path, WSL_PREFIX);

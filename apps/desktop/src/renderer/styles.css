@@ -2428,3 +2428,36 @@ button.toggled {
 .resource-problem.error {
   color: var(--bad);
 }
+
+/* 리소스 편집 */
+.resource-new {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.resource-new input {
+  min-width: 200px;
+}
+
+.resource-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.resource-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.resource-textarea {
+  width: 100%;
+  min-height: 50vh;
+  font: 13px/1.5 ui-monospace, Consolas, monospace;
+  resize: vertical;
+  tab-size: 2;
+}

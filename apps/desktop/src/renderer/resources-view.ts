@@ -79,3 +79,13 @@ export function diagnosticsByPath(diagnostics: readonly ResourceDiagnosticInfo[]
 export function formatSize(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 }
+
+/** 탭에서 새로 만들 수 있는 리소스 종류. 없으면 그 탭에서는 만들지 않는다 */
+export function creatableKind(tab: ResourceTab): "prompt" | "skill" | "agents" | undefined {
+  return tab === "prompts" ? "prompt" : tab === "skills" ? "skill" : tab === "context" ? "agents" : undefined;
+}
+
+/** 앱에서 고칠 수 있는 리소스: 패키지에 든 것이 아닌 마크다운 파일 (확장 코드는 다루지 않는다) */
+export function isEditable(item: { path: string; fromPackage?: boolean }): boolean {
+  return !item.fromPackage && /\.md$/i.test(item.path);
+}

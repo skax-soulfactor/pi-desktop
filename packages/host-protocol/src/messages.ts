@@ -58,6 +58,10 @@ export const Methods = {
   fsSearch: "fs.search",
   /** 작업 폴더에서 Pi가 불러오는 리소스 목록 (AGENTS.md·프롬프트·스킬·확장, 읽기 전용) */
   resourcesList: "resources.list",
+  /** 리소스 마크다운 파일 읽기·쓰기·새로 만들기 (데이터 폴더·.pi/·AGENTS.md만) */
+  resourcesRead: "resources.read",
+  resourcesWrite: "resources.write",
+  resourcesCreate: "resources.create",
   /** 한 폴더의 하위 폴더 목록 (폴더 탐색 창) */
   fsListDir: "fs.listDir",
   daemonStatus: "daemon.status",
@@ -497,6 +501,41 @@ export interface FsSearchResult {
 export interface ResourcesListParams {
   /** 작업 폴더 (호스트 기준). 프로젝트 리소스(.pi/, 상위 폴더의 AGENTS.md)를 여기서 찾는다 */
   cwd: string;
+}
+
+/** 리소스 파일 요청의 공통 인자. cwd는 프로젝트 리소스 위치를 가리는 기준이다 */
+export interface ResourcePathParams {
+  cwd: string;
+  path: string;
+}
+
+export interface ResourceFile {
+  path: string;
+  content: string;
+  /** 읽은 때의 수정 시각. 저장할 때 그 사이 바뀌었는지 확인하는 데 쓴다 */
+  mtimeMs: number;
+}
+
+export interface ResourceWriteParams extends ResourcePathParams {
+  content: string;
+  /** 읽었을 때의 수정 시각. 그 뒤에 바뀌었으면 거부한다. 없으면 새 파일이어야 한다 */
+  baseMtime?: number;
+}
+
+export interface ResourceWriteResult {
+  path: string;
+  mtimeMs: number;
+}
+
+export type ResourceKind = "prompt" | "skill" | "agents";
+
+export interface ResourceCreateParams {
+  cwd: string;
+  kind: ResourceKind;
+  /** user: 데이터 폴더, project: 작업 폴더의 .pi/ (AGENTS.md는 작업 폴더) */
+  scope: "user" | "project";
+  /** 프롬프트·스킬 이름 (소문자·숫자·하이픈). AGENTS.md는 쓰지 않는다 */
+  name: string;
 }
 
 /** 리소스가 어디서 왔는지 */

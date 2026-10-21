@@ -17,6 +17,11 @@ import {
   type FsSearchResult,
   type FsListDirParams,
   type ResourcesListParams,
+  type ResourceCreateParams,
+  type ResourceFile,
+  type ResourcePathParams,
+  type ResourceWriteParams,
+  type ResourceWriteResult,
   type ResourcesView,
   type FsListDirResult,
   type HostInfo,
@@ -65,6 +70,7 @@ import { probeEndpoint, readModelsFile, removeProvider, saveProvider, storedApiK
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { listDirectories } from "./dir-list";
 import { listResources, type ResourceSdk } from "./resources";
+import { createResourceFile, readResourceFile, writeResourceFile } from "./resource-files";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
@@ -504,6 +510,33 @@ export class AgentDaemon {
       });
     });
 
+    // 리소스 파일 오류는 사용자에게 보여 줄 문구이므로 InvalidParams로 그대로 넘긴다.
+    const asInvalid = (e: unknown): never => {
+      throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+    };
+
+    peer.handle(Methods.resourcesRead, (params): Promise<ResourceFile> => {
+      const p = requireStrings(params, ["cwd", "path"]) as unknown as ResourcePathParams;
+      return readResourceFile(p.path, p.cwd, agentDirOf(this.env)).catch(asInvalid);
+    });
+
+    peer.handle(Methods.resourcesWrite, (params): Promise<ResourceWriteResult> => {
+      const p = requireStrings(params, ["cwd", "path", "content"]) as unknown as ResourceWriteParams;
+      const base = typeof p.baseMtime === "number" ? p.baseMtime : undefined;
+      const backups = join(agentHome(this.env), "resource-backups");
+      return writeResourceFile(p.path, p.content, base, p.cwd, agentDirOf(this.env), backups).catch(asInvalid);
+    });
+
+    peer.handle(Methods.resourcesCreate, (params): Promise<ResourceFile> => {
+      const p = requireStrings(params, ["cwd", "kind", "scope"]) as unknown as ResourceCreateParams;
+      if (!["prompt", "skill", "agents"].includes(p.kind) || !["user", "project"].includes(p.scope)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 prompt·skill·agents, scope는 user·project여야 합니다");
+      }
+      return createResourceFile(p.kind, p.scope, typeof p.name === "string" ? p.name.trim() : "", p.cwd, agentDirOf(this.env)).catch(
+        asInvalid,
+      );
+    });
+
     peer.handle(Methods.fsListDir, (params): Promise<FsListDirResult> => {
       const path = (params as Partial<FsListDirParams> | undefined)?.path;
       return listDirectories(typeof path === "string" ? path : undefined, homedir()).catch((e: unknown) => {
@@ -653,6 +686,15 @@ function isInside(child: string, parent: string): boolean {
   };
   const [c, p] = [norm(child), norm(parent)];
   return c === p || c.startsWith(p.endsWith(sep) ? p : p + sep);
+}
+
+/** 문자열 인자들이 있는지 확인하고 그대로 돌려준다 */
+function requireStrings(params: unknown, keys: string[]): Record<string, unknown> {
+  const p = (params ?? {}) as Record<string, unknown>;
+  for (const key of keys) {
+    if (typeof p[key] !== "string") throw new JsonRpcError(ErrorCodes.InvalidParams, `${key}가 필요합니다`);
+  }
+  return p;
 }
 
 function requireId(params: unknown): string {

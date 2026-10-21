@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ResourceDiagnosticInfo, ResourceItem, ResourcesView } from "@pi-desktop/host-protocol/messages";
+import type { ResourceDiagnosticInfo, ResourceFile, ResourceItem, ResourcesView } from "@pi-desktop/host-protocol/messages";
 import { errorText } from "./folder-browser";
-import { diagnosticsByPath, formatSize, RESOURCE_TABS, shortPath, sourceLabel, tabCount, type ResourceTab } from "./resources-view";
+import { ResourceEditor } from "./ResourceEditor";
+import {
+  creatableKind,
+  diagnosticsByPath,
+  formatSize,
+  isEditable,
+  RESOURCE_TABS,
+  shortPath,
+  sourceLabel,
+  tabCount,
+  type ResourceTab,
+} from "./resources-view";
 
 interface Props {
   hostId: string;
@@ -14,15 +25,18 @@ interface Props {
 }
 
 /**
- * 리소스 창 (설계 §4.2~4.5, M4 첫 단계: 읽기 전용).
+ * 리소스 창 (설계 §4.2~4.5).
  * 이 작업 폴더에서 Pi가 실제로 불러오는 AGENTS.md·시스템 프롬프트·프롬프트·스킬·확장·패키지를 출처와 함께 보여 준다.
  * 확장은 코드를 실행하지 않고 경로만 찾은 목록이다.
+ * 마크다운 리소스(AGENTS.md·프롬프트·스킬)는 열어 고치고, 새로 만들 수 있다. 패키지에 든 것은 고치지 않는다.
  */
 export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onClose }: Props) {
   const [view, setView] = useState<ResourcesView | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<ResourceTab>("context");
+  /** 편집 중인 파일. 있으면 목록 대신 편집기를 보여 준다 */
+  const [editing, setEditing] = useState<ResourceFile | undefined>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,16 +56,25 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onClose }: Pr
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      // 편집 중에는 Esc로 닫지 않는다 (고친 내용을 잃지 않게).
+      if (e.key === "Escape" && !editing) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, editing]);
+
+  async function open(path: string) {
+    try {
+      setEditing(await window.piDesktop.readResource(hostId, cwd, path));
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
 
   const diagnostics = useMemo(() => diagnosticsByPath(view?.diagnostics ?? []), [view]);
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop" onMouseDown={() => !editing && onClose()}>
       <div className="modal resources" role="dialog" aria-label="리소스" onMouseDown={(e) => e.stopPropagation()}>
         <header className="pi-manager-head">
           <h2>리소스</h2>
@@ -81,9 +104,29 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onClose }: Pr
             불러올 때 문제가 {view.diagnostics.length}건 있습니다 (이름 충돌 등). 해당 항목에 표시했습니다.
           </div>
         )}
-        {view && (
+        {view && editing && (
+          <ResourceEditor
+            hostId={hostId}
+            cwd={cwd}
+            file={editing}
+            label={shortPath(editing.path, view)}
+            onSaved={() => void load()}
+            onClose={() => setEditing(undefined)}
+          />
+        )}
+        {view && !editing && creatableKind(tab) && (
+          <NewResourceForm
+            kind={creatableKind(tab)!}
+            onCreate={async (scope, name) => {
+              const file = await window.piDesktop.createResource(hostId, cwd, creatableKind(tab)!, scope, name);
+              await load();
+              setEditing(file);
+            }}
+          />
+        )}
+        {view && !editing && (
           <div className="resources-body">
-            {tab === "context" && <ContextList view={view} onReveal={onReveal} />}
+            {tab === "context" && <ContextList view={view} onReveal={onReveal} onEdit={(p) => void open(p)} />}
             {tab === "prompts" && (
               <ItemList
                 view={view}
@@ -92,6 +135,7 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onClose }: Pr
                 empty="프롬프트가 없습니다. ~/.pi/agent/prompts/ 또는 .pi/prompts/에 .md 파일을 두면 /이름으로 씁니다."
                 title={(p) => `/${p.name}${p.argumentHint ? ` ${p.argumentHint}` : ""}`}
                 onReveal={onReveal}
+                onEdit={(p) => void open(p)}
               />
             )}
             {tab === "skills" && (
@@ -103,6 +147,7 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onClose }: Pr
                 title={(s) => s.name}
                 note={(s) => (s.disableModelInvocation ? `/skill:${s.name} 명령으로만 씀` : undefined)}
                 onReveal={onReveal}
+                onEdit={(p) => void open(p)}
               />
             )}
             {tab === "extensions" && (
@@ -123,7 +168,15 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onClose }: Pr
   );
 }
 
-function ContextList({ view, onReveal }: { view: ResourcesView; onReveal: ((path: string) => void) | undefined }) {
+function ContextList({
+  view,
+  onReveal,
+  onEdit,
+}: {
+  view: ResourcesView;
+  onReveal: ((path: string) => void) | undefined;
+  onEdit: (path: string) => void;
+}) {
   const rows: Array<{ label: string; path: string; detail: string }> = [
     ...view.contextFiles.map((f) => ({
       label: f.scope === "user" ? "AGENTS.md (사용자)" : "AGENTS.md (프로젝트)",
@@ -149,6 +202,11 @@ function ContextList({ view, onReveal }: { view: ResourcesView; onReveal: ((path
               </span>
             </div>
             {r.detail && <span className="muted">{r.detail}</span>}
+            {isEditable({ path: r.path }) && (
+              <button type="button" className="small" onClick={() => onEdit(r.path)}>
+                편집
+              </button>
+            )}
             {onReveal && (
               <button type="button" className="small" onClick={() => onReveal(r.path)}>
                 위치 열기
@@ -169,6 +227,7 @@ function ItemList({
   title,
   note,
   onReveal,
+  onEdit,
 }: {
   view: ResourcesView;
   items: ResourceItem[];
@@ -177,6 +236,8 @@ function ItemList({
   title: (item: ResourceItem) => string;
   note?: (item: ResourceItem) => string | undefined;
   onReveal: ((path: string) => void) | undefined;
+  /** 없으면 고치지 않는 목록 (확장) */
+  onEdit?: (path: string) => void;
 }) {
   if (items.length === 0) return <p className="muted">{empty}</p>;
   return (
@@ -203,6 +264,11 @@ function ItemList({
                 </span>
               ))}
             </div>
+            {onEdit && isEditable(item) && (
+              <button type="button" className="small" onClick={() => onEdit(item.path)}>
+                편집
+              </button>
+            )}
             {onReveal && !item.path.startsWith("builtin:") && (
               <button type="button" className="small" onClick={() => onReveal(item.path)}>
                 위치 열기
@@ -239,5 +305,57 @@ function PackageList({ view }: { view: ResourcesView }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+const KIND_LABEL = { prompt: "프롬프트", skill: "스킬", agents: "AGENTS.md" } as const;
+
+/** 새 프롬프트·스킬·AGENTS.md 만들기. 만들면 바로 편집기로 연다 */
+function NewResourceForm({
+  kind,
+  onCreate,
+}: {
+  kind: "prompt" | "skill" | "agents";
+  onCreate: (scope: "user" | "project", name: string) => Promise<void>;
+}) {
+  const [scope, setScope] = useState<"user" | "project">("project");
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | undefined>();
+  const [busy, setBusy] = useState(false);
+
+  async function create() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await onCreate(scope, name.trim());
+      setName("");
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      className="resource-new"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void create();
+      }}
+    >
+      <span className="muted">새 {KIND_LABEL[kind]}</span>
+      <select value={scope} onChange={(e) => setScope(e.target.value as "user" | "project")} aria-label="범위">
+        <option value="project">{kind === "agents" ? "이 작업 폴더" : "프로젝트 (.pi/)"}</option>
+        <option value="user">사용자 (데이터 폴더)</option>
+      </select>
+      {kind !== "agents" && (
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름 (소문자·숫자·하이픈)" aria-label="이름" spellCheck={false} />
+      )}
+      <button type="submit" disabled={busy || (kind !== "agents" && !name.trim())}>
+        만들기
+      </button>
+      {error && <span className="resource-problem error">{error}</span>}
+    </form>
   );
 }
