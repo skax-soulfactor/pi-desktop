@@ -25,6 +25,8 @@ export const Methods = {
   storedRead: "stored.read",
   storedWatch: "stored.watch",
   storedUnwatch: "stored.unwatch",
+  /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커) */
+  fsSearch: "fs.search",
   daemonStatus: "daemon.status",
   daemonShutdown: "daemon.shutdown",
 } as const;
@@ -232,6 +234,22 @@ export interface DaemonStatus {
 export const DIALOG_METHODS: readonly string[] = ["select", "confirm", "input", "editor"];
 
 /** stored.inspect / stored.read / stored.watch 요청 */
+export interface FsSearchParams {
+  /** 검색할 작업 폴더 (호스트 기준 경로) */
+  cwd: string;
+  /** 검색어. 비면 얕은 경로부터 */
+  query: string;
+  /** 최대 결과 수 (기본 50) */
+  limit?: number;
+}
+
+export interface FsSearchResult {
+  /** 작업 폴더 기준 상대 경로. 구분자는 "/", 폴더는 끝에 "/" */
+  files: string[];
+  /** 파일이 너무 많아 일부만 검색했다 */
+  truncated: boolean;
+}
+
 export interface StoredPathParams {
   /** 세션 파일 경로 */
   path: string;

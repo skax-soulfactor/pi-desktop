@@ -117,6 +117,16 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
       .catch(() => setCommands([]));
   }, [hostId, sessionId]);
 
+  // 입력창 @ 파일 피커: 데몬이 세션 작업 폴더에서 찾는다 (WSL이면 WSL 안의 파일).
+  const sessionCwd = session?.cwd;
+  const searchFiles = useCallback(
+    async (query: string) => {
+      if (!sessionCwd) return [];
+      return (await window.piDesktop.searchFiles(hostId, sessionCwd, query)).files;
+    },
+    [hostId, sessionCwd],
+  );
+
   // 확장이 setTitle로 바꾼 제목을 창 제목에 반영한다 (보이는 탭만).
   useEffect(() => {
     if (active) document.title = ui.title ? `${ui.title} — Pi Desktop` : "Pi Desktop";
@@ -458,12 +468,13 @@ export function Workspace({ tabId, active, onStatus }: WorkspaceProps) {
         disabled={!session || !connected || Boolean(lost) || Boolean(follow) || Boolean(externalWrite)}
         placeholder={
           session
-            ? "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈, ↑ 이전 입력, / 명령, !셸 명령, !!컨텍스트 제외)"
+            ? "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈, ↑ 이전 입력, / 명령, @ 파일, !셸 명령, !!컨텍스트 제외)"
             : "먼저 세션을 여세요"
         }
         running={chat.running}
         commands={commands}
         onNeedCommands={loadCommands}
+        onSearchFiles={searchFiles}
         onSubmit={submit}
         onAbort={() => void guard(abortRun)}
       />

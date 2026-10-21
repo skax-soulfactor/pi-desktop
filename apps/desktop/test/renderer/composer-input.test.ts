@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  atQuery,
+  fileMention,
+  replaceRange,
   filterCommands,
   HISTORY_LIMIT,
   parseInput,
@@ -66,5 +69,26 @@ describe("입력 히스토리", () => {
     expect(shouldNavigateHistory(text, 5, -1)).toBe(false);
     expect(shouldNavigateHistory(text, 5, 1)).toBe(true);
     expect(shouldNavigateHistory(text, 2, 1)).toBe(false);
+  });
+});
+
+describe("@ 파일 피커", () => {
+  it("커서 바로 앞의 @낱말을 찾는다 (맨 앞이거나 공백 뒤만)", () => {
+    expect(atQuery("@src/ap", 7)).toEqual({ start: 0, query: "src/ap" });
+    expect(atQuery("이거 봐 @", 6)).toEqual({ start: 5, query: "" });
+    expect(atQuery("메일 me@x.com", 11)).toBeUndefined();
+    expect(atQuery("@done ", 6)).toBeUndefined();
+    expect(atQuery('보기 @"my do', 11)).toEqual({ start: 3, query: "my do" });
+  });
+
+  it("고른 경로를 넣는다: 파일은 뒤에 공백, 폴더는 이어서, 공백 있는 경로는 따옴표", () => {
+    expect(fileMention("src/app.ts")).toBe("@src/app.ts ");
+    expect(fileMention("src/")).toBe("@src/");
+    expect(fileMention("my docs/a b.md")).toBe('@"my docs/a b.md" ');
+    expect(fileMention("my docs/")).toBe('@"my docs/');
+  });
+
+  it("범위를 바꾸고 커서를 넣은 글 끝에 둔다", () => {
+    expect(replaceRange("봐 @sr 줘", 2, 5, "@src/a.ts ")).toEqual({ text: "봐 @src/a.ts  줘", caret: 12 });
   });
 });
