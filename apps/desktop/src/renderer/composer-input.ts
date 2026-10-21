@@ -73,3 +73,26 @@ export function stepHistory(history: readonly string[], index: number, step: -1 
 export function shouldNavigateHistory(text: string, caret: number, step: -1 | 1): boolean {
   return step < 0 ? !text.slice(0, caret).includes("\n") : !text.slice(caret).includes("\n");
 }
+
+/**
+ * 커서 바로 앞의 `@낱말`(파일 피커 검색어)을 찾는다. `@`는 글 맨 앞이거나 공백 뒤여야 한다
+ * (이메일 주소 등은 건드리지 않는다). 따옴표로 시작한 경로(`@"a b`)도 이어서 친다.
+ */
+export function atQuery(text: string, caret: number): { start: number; query: string } | undefined {
+  const before = text.slice(0, caret);
+  const match = /(^|\s)@("[^"\n]*|[^\s"]*)$/.exec(before);
+  if (!match) return undefined;
+  const token = match[2]!;
+  return { start: before.length - token.length - 1, query: token.replace(/^"/, "") };
+}
+
+/** 파일 피커에서 고른 경로를 넣을 글. 공백이 있으면 따옴표로 감싼다. 폴더(끝이 "/")면 이어서 고를 수 있게 공백을 붙이지 않는다 */
+export function fileMention(path: string): string {
+  const quoted = /\s/.test(path) ? `"${path}"` : path;
+  return path.endsWith("/") ? `@${quoted}`.replace(/"$/, "") : `@${quoted} `;
+}
+
+/** text의 [start, end)를 insert로 바꾸고 새 커서 위치를 돌려준다 */
+export function replaceRange(text: string, start: number, end: number, insert: string): { text: string; caret: number } {
+  return { text: text.slice(0, start) + insert + text.slice(end), caret: start + insert.length };
+}
