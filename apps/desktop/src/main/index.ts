@@ -48,6 +48,7 @@ import {
   type ImportStatus,
   type GithubRepoRef,
   type ImportRecord,
+  type CopyRecordInput,
   type OpenSessionRequest,
   type SshHostConfig,
   type TerminalOpenRequest,
@@ -61,6 +62,7 @@ import { SshHostStore } from "./ssh-hosts";
 import { packageDetail, searchPackages } from "./marketplace";
 import { browseRepo, downloadFiles, fetchText } from "./github-catalog";
 import { ImportStore } from "./imports";
+import { compareCopy, CopyStore, exportKindOf, fileShas } from "./copies";
 import { compareLocal, compareUpstream, projectCwdOf } from "./import-status";
 import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
@@ -130,7 +132,7 @@ function createWindow(): void {
 
 const terminals = new TerminalService({ data: IpcChannels.terminalData, exit: IpcChannels.terminalExit });
 
-function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: ImportStore): void {
+function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: ImportStore, copies: CopyStore): void {
   const conn = (hostId: string) => manager.get(hostId);
 
   // 내장 터미널: pi는 데몬이 찾은 Pi와 그 실행 node로 띄운다.
@@ -359,6 +361,22 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     imports.add(record);
     return record;
   };
+  ipcMain.handle(IpcChannels.recordCopy, (_event, input: CopyRecordInput) => {
+    copies.add(input);
+  });
+  // 사본(이 호스트)과 원본(복사해 온 호스트)을 다시 읽어 해시를 견준다. 원본 호스트가 닿지 않으면 unknown.
+  ipcMain.handle(IpcChannels.copyStatus, (_event, hostId: string) =>
+    Promise.all(
+      copies.listTo(hostId).map(async (record) => {
+        const status = await compareCopy(record, async (side) => {
+          const [host, path] = side === "local" ? [record.toHostId, record.toPath] : [record.fromHostId, record.fromPath];
+          const result = await conn(host).request<ResourceExportResult>(Methods.resourcesExport, { kind: exportKindOf(record.kind), path }, 20_000);
+          return fileShas(result.files);
+        });
+        return { record, status };
+      }),
+    ),
+  );
   ipcMain.handle(IpcChannels.githubImport, (_event, request: GithubImportRequest) => importFromGithub(request));
 
   const requireRecord = (hostId: string, target: string) => {
@@ -479,7 +497,12 @@ app.whenReady().then(() => {
     onWriterChanged: (hostId, n) => sendToRenderer(IpcChannels.writerChanged, hostId, n),
     onPiUpdateOutput: (hostId, n) => sendToRenderer(IpcChannels.piUpdateOutput, hostId, n),
   });
-  registerIpc(hosts, sshHosts, new ImportStore(join(app.getPath("userData"), "imports.json")));
+  registerIpc(
+    hosts,
+    sshHosts,
+    new ImportStore(join(app.getPath("userData"), "imports.json")),
+    new CopyStore(join(app.getPath("userData"), "copies.json")),
+  );
   createWindow();
 
   app.on("activate", () => {
