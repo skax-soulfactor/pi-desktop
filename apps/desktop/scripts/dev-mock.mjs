@@ -42,6 +42,8 @@ writeFileSync(
           models: [
             { id: "mock-model" },
             { id: "mock-reasoning", name: "Mock Reasoning", reasoning: true, contextWindow: 200000 },
+            // 이미지 첨부 확인용 (나머지 모델은 이미지를 받지 않는다)
+            { id: "mock-vision", name: "Mock Vision", input: ["text", "image"] },
           ],
         },
         "mock-router": {
