@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.22)
+# Pi Desktop — 설계 문서 (v0.23)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -288,7 +288,7 @@ v0.1과 같다. 목록마다 출처 배지(user / project / package 이름)를 �
   - apiKey가 그대로 키 값이면 가리고, 바꾸지 않으면 유지한다.
   - 쓰기 전에 `models.json.bak`으로 백업하고, 깨진 파일은 덮어쓰지 않는다.
   - "연결 테스트"는 데몬이 그 호스트에서 `{baseUrl}/models`를 불러 모델 ID를 가져온다(WSL의 localhost가 맞게).
-- OAuth 로그인(내장 터미널)은 후속 작업이다.
+- OAuth 로그인은 내장 터미널에서 한다(§4.12, v0.23).
 
 ### 4.8 Settings
 v0.1과 같다. 스키마 기반 폼, User/Project 탭, diff 미리보기 후 저장, 원본 JSON 편집 모드.
@@ -346,6 +346,14 @@ v0.1과 같다. Playground 스크립트도 Host Agent를 통해 **대상 호스�
 
 ### 4.12 내장 터미널 (신규, 공통 인프라)
 xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인, TUI 전용 확장 폴백, 사용자가 원할 때 진짜 `pi` TUI 열기다.
+
+**구현 메모 (M2, v0.23)**: 사용자 결정에 따라 터미널은 **Electron main에서 node-pty로** 띄운다. 데몬의 `pty.*`는 두지 않는다.
+- node-pty 1.1.0은 N-API라 Electron용으로 다시 빌드할 필요가 없고, Windows 사전 빌드를 포함한다.
+- 로컬은 찾은 Pi의 node와 cli.js로 직접(pi.cmd shim 없이), 셸은 PowerShell로 띄운다.
+- WSL은 `wsl.exe -d <배포판> --cd <폴더>`로 실행한다. Windows ConPTY가 WSL까지 감싸므로 크기 조정이 리눅스까지 전달된다(데몬 쪽 `script` 방식은 크기 조정이 안 된다).
+- 원격(SSH)은 M3에서 같은 방식(`ssh -t`)으로 붙인다.
+- 화면은 작업 영역 아래 도크(여러 탭, 접기)다. 열기는 명령 팔레트의 "터미널: pi 열기·셸 열기"다.
+- OAuth 로그인은 프로바이더 탭의 버튼으로 한다. pi를 띄우고 화면이 잠잠해진 뒤 `/login <프로바이더>`를 대신 입력한다.
 
 ## 5. 상세 설계 포인트
 
