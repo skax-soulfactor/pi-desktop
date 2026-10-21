@@ -1872,3 +1872,33 @@ button.toggled {
   margin: 12px 0 0;
   font-size: 12px;
 }
+
+/* Pi 업데이트 */
+.pi-update {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pi-update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pi-update-output {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font: 12px/1.5 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+}
+
+.banner.ok {
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
+}
