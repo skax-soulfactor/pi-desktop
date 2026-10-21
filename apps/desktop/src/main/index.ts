@@ -63,6 +63,7 @@ import { packageDetail, searchPackages } from "./marketplace";
 import { browseRepo, downloadFiles, fetchText } from "./github-catalog";
 import { ImportStore } from "./imports";
 import { compareCopy, CopyStore, exportKindOf, fileShas } from "./copies";
+import { collectInventory } from "./host-inventory";
 import { compareLocal, compareUpstream, projectCwdOf } from "./import-status";
 import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
@@ -376,6 +377,9 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
         return { record, status };
       }),
     ),
+  );
+  ipcMain.handle(IpcChannels.hostInventory, (_event, hostId: string) =>
+    collectInventory(hostId, (method, params, timeoutMs) => conn(hostId).request(method, params, timeoutMs)),
   );
   ipcMain.handle(IpcChannels.githubImport, (_event, request: GithubImportRequest) => importFromGithub(request));
 
