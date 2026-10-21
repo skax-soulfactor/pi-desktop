@@ -2544,3 +2544,29 @@ button.toggled {
   border-top: 1px solid var(--border);
   padding-top: 8px;
 }
+
+.market-tabs {
+  margin: 4px 0 6px;
+}
+
+.market-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.market-security > div {
+  width: 100%;
+  text-align: left;
+}
+
+.market-frontmatter {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 12px/1.5 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  color: var(--muted);
+}
