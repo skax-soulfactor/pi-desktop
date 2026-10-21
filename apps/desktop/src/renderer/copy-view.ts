@@ -116,3 +116,33 @@ export function extensionWarnings(
   }
   return warnings;
 }
+
+/** 글을 UTF-8 base64로 (복사 기록에 넘길 때) */
+export function textToBase64(text: string): string {
+  let binary = "";
+  for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/**
+ * 복사한 뒤 대상의 리소스 목록에 보일 경로. 쓴 곳(target)이 폴더면 원본과 같은 진입 파일을 붙인다
+ * (스킬은 SKILL.md, 폴더 확장은 원본의 index 파일). 구분자는 target의 것을 따른다.
+ */
+export function copiedEntryPath(kind: "skill" | "prompt" | "extension", target: string, sourcePath: string, files: number): string {
+  const sep = target.includes("\\") && !target.includes("/") ? "\\" : "/";
+  if (kind === "skill") return `${target}${sep}SKILL.md`;
+  if (kind === "extension" && (files > 1 || /^index\.(ts|js)$/i.test(baseNameOf(sourcePath)))) return `${target}${sep}${baseNameOf(sourcePath)}`;
+  return target;
+}
+
+/** 복사 기록과 상태를 리소스 목록에 붙일 짧은 글 */
+export function copyNote(
+  status: { local: string; source: string } | undefined,
+  fromLabel: string,
+): string {
+  const parts = [`${fromLabel}에서 복사됨`];
+  if (status?.local === "modified") parts.push("이 호스트에서 고침");
+  if (status?.source === "changed") parts.push("이후 원본이 바뀜");
+  if (status?.source === "gone") parts.push("원본이 없어짐");
+  return parts.join(" · ");
+}

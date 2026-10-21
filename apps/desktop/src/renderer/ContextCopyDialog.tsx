@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ResourceFile } from "@pi-desktop/host-protocol/messages";
 import type { HostDescriptor } from "../shared/api";
-import { baseNameOf, joinHostPath } from "./copy-view";
+import { baseNameOf, joinHostPath, textToBase64 } from "./copy-view";
 import { errorText } from "./folder-browser";
 import { lineDiff } from "./text-diff";
 import { DiffView } from "./ToolCards";
@@ -60,6 +60,18 @@ export function ContextCopyDialog({ hosts, fromHostId, path, onClose }: Props) {
     try {
       await window.piDesktop.writeResource(toHostId, "", targetPath, source.content, existing?.mtimeMs);
       setDone(targetPath);
+      // 출처 기록은 안내용이라 실패해도 복사는 끝난 것으로 둔다.
+      void window.piDesktop
+        .recordCopy({
+          kind: "context",
+          name: fileName,
+          fromHostId,
+          fromPath: path,
+          toHostId,
+          toPath: targetPath,
+          files: [{ path: fileName, contentBase64: textToBase64(source.content) }],
+        })
+        .catch(() => {});
     } catch (e) {
       setError(errorText(e));
     } finally {

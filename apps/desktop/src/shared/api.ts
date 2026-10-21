@@ -196,6 +196,39 @@ export interface ImportRecord {
   importedAt: number;
 }
 
+/** 다른 호스트로 복사한 리소스 종류. context는 사용자 AGENTS.md·SYSTEM.md·APPEND_SYSTEM.md */
+export type CopyKind = "skill" | "prompt" | "extension" | "context";
+
+/** 다른 호스트로 복사한 기록 (설계 §5.9 "출처 기록", 앱 userData의 copies.json). 안내용이고 자동으로 반영하지 않는다 */
+export interface CopyRecord {
+  kind: CopyKind;
+  name: string;
+  fromHostId: string;
+  /** 원본을 다시 읽을 경로 (리소스 목록의 경로: 스킬은 SKILL.md, 폴더 확장은 index 파일) */
+  fromPath: string;
+  toHostId: string;
+  /** 대상에서 리소스 목록에 보일 경로 (같은 모양) */
+  toPath: string;
+  /** 복사한 파일과 git blob SHA */
+  files: Record<string, string>;
+  copiedAt: number;
+}
+
+/** 복사가 끝난 뒤 앱에 남길 내용. 해시는 앱이 계산한다 */
+export interface CopyRecordInput extends Omit<CopyRecord, "files" | "copiedAt"> {
+  files: Array<{ path: string; contentBase64: string }>;
+}
+
+/** 복사한 항목의 지금 상태 */
+export interface CopyStatus {
+  toPath: string;
+  /** 이 호스트의 사본: same 복사한 그대로, modified 고침, missing 지워짐 */
+  local: "same" | "modified" | "missing" | "unknown";
+  /** 원본: same 그대로, changed 바뀜, gone 사라짐, unknown 확인 못함 (호스트 연결 안 됨 등) */
+  source: "same" | "changed" | "gone" | "unknown";
+  error?: string;
+}
+
 /** 가져온 항목의 지금 상태 */
 export interface ImportStatus {
   target: string;
@@ -341,6 +374,10 @@ export interface PiDesktopApi {
   importResourceFiles(hostId: string, params: ResourceImportParams): Promise<ResourceImportResult>;
   /** 가져온 항목들의 로컬 수정·원본 업데이트를 확인한다 (저장소마다 GitHub를 한 번씩 조회) */
   importStatus(hostId: string): Promise<ImportStatus[]>;
+  /** 다른 호스트로 복사한 기록을 남긴다 (같은 대상 위치는 바꾼다) */
+  recordCopy(input: CopyRecordInput): Promise<void>;
+  /** 이 호스트로 복사해 온 항목들의 기록과, 그 뒤 사본·원본이 바뀌었는지 */
+  copyStatus(hostId: string): Promise<Array<{ record: CopyRecord; status: CopyStatus }>>;
   /** 원본 최신 커밋으로 바꾼다. 이전 내용은 그 호스트의 백업 폴더로 옮겨진다 */
   importUpdate(hostId: string, target: string): Promise<ImportRecord>;
   /** 가져온 항목을 백업 폴더로 옮기고 기록을 지운다 */
@@ -410,6 +447,8 @@ export const IpcChannels = {
   settingsMerge: "pi:settings-merge",
   importResourceFiles: "pi:import-resource-files",
   importStatus: "pi:import-status",
+  recordCopy: "pi:record-copy",
+  copyStatus: "pi:copy-status",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",
   importDiff: "pi:import-diff",

@@ -2617,3 +2617,8 @@ button.toggled {
 .settings-copy-table tr.muted {
   opacity: 0.6;
 }
+
+.resource-badge.copied.changed {
+  color: var(--warn);
+  border-color: var(--warn);
+}
