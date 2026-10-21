@@ -41,6 +41,7 @@ import { devSessionOverrides } from "./dev-overrides";
 import { HostManager, LOCAL_HOST_ID, WSL_PREFIX } from "./host-manager";
 import { SSH_PREFIX, sshExecutable } from "./ssh";
 import { SshHostStore } from "./ssh-hosts";
+import { packageDetail, searchPackages } from "./marketplace";
 import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
 
@@ -286,6 +287,8 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore): void {
   ipcMain.handle(IpcChannels.listResources, (_event, hostId: string, cwd: string) =>
     conn(hostId).request<ResourcesView>(Methods.resourcesList, { cwd }, 120_000),
   );
+  ipcMain.handle(IpcChannels.marketSearch, (_event, query: string, from: number) => searchPackages(String(query ?? ""), Number(from) || 0));
+  ipcMain.handle(IpcChannels.marketDetail, (_event, name: string) => packageDetail(String(name)));
   ipcMain.handle(IpcChannels.getTrust, (_event, hostId: string, cwd: string) =>
     conn(hostId).request<ProjectTrustInfo>(Methods.trustGet, { cwd }),
   );

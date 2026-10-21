@@ -1,0 +1,56 @@
+/**
+ * Marketplace 화면의 순수 함수들 (설계 §4.6).
+ * 설치·제거·업데이트는 그 호스트의 pi 명령을 내장 터미널에서 눈앞에 실행한다 (Pi 설치와 같은 방식).
+ */
+
+export type PackageScope = "user" | "project";
+
+/** npm 이름 (scope 포함). 앞쪽 하이픈은 막는다 */
+const NPM_NAME = /^(?:@[a-z0-9~][a-z0-9-._~]*\/)?[a-z0-9~][a-z0-9-._~]*$/;
+const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+/**
+ * pi install 인자. version이 없으면 최신을 따라가고(pi update로 갱신), 있으면 그 버전에 고정된다.
+ * project면 -l로 프로젝트 설정(.pi/settings.json)에 적는다.
+ */
+export function installArgs(name: string, version: string | undefined, scope: PackageScope): string[] {
+  if (!NPM_NAME.test(name)) throw new Error(`npm 패키지 이름이 아닙니다: ${name}`);
+  if (version !== undefined && !VERSION.test(version)) throw new Error(`버전 형식이 아닙니다: ${version}`);
+  return ["install", `npm:${name}${version ? `@${version}` : ""}`, ...(scope === "project" ? ["-l"] : [])];
+}
+
+/** 설치된 패키지 소스 (설정에 적힌 그대로) 제거·업데이트 인자 */
+export function removeArgs(source: string, scope: PackageScope): string[] {
+  return ["remove", source, ...(scope === "project" ? ["-l"] : [])];
+}
+
+export function updateArgs(source: string): string[] {
+  return ["update", source];
+}
+
+/** 설정의 npm 소스에서 패키지 이름: npm:@x/y@1.2.3 → @x/y, npm:foo → foo. npm이 아니면 undefined */
+export function npmNameOfSource(source: string): string | undefined {
+  if (!source.startsWith("npm:")) return undefined;
+  const spec = source.slice(4);
+  const at = spec.indexOf("@", spec.startsWith("@") ? 1 : 0);
+  return at > 0 ? spec.slice(0, at) : spec;
+}
+
+/** 버전이 고정된 npm 소스인지 (pi update로 바뀌지 않는다) */
+export function isPinned(source: string): boolean {
+  const name = npmNameOfSource(source);
+  return name !== undefined && source.length > `npm:${name}`.length;
+}
+
+/** 다운로드 수를 짧게: 1565803 → 1.6M, 12345 → 12K */
+export function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  return String(n);
+}
+
+const KIND_LABELS: Record<string, string> = { extensions: "확장", skills: "스킬", prompts: "프롬프트", themes: "테마" };
+
+export function kindLabel(kind: string): string {
+  return KIND_LABELS[kind] ?? kind;
+}

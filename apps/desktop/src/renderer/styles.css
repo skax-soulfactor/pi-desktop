@@ -2461,3 +2461,86 @@ button.toggled {
   resize: vertical;
   tab-size: 2;
 }
+
+/* Marketplace (설계 §4.6) */
+.marketplace {
+  width: min(900px, calc(100vw - 32px));
+}
+
+.market-search {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.market-search input {
+  flex: 1;
+}
+
+.market-total {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.market-list {
+  max-height: 58vh;
+  overflow-y: auto;
+}
+
+.market-list li {
+  cursor: pointer;
+}
+
+.market-list li:hover {
+  background: var(--panel-2);
+}
+
+.market-meta {
+  font-size: 12px;
+}
+
+.resource-badge.on {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.market-detail {
+  max-height: 72vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.market-title {
+  font-size: 18px;
+}
+
+.market-security {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.market-install {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.market-install label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.market-readme {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
