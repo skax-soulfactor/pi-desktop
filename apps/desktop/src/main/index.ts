@@ -18,7 +18,8 @@ import {
 } from "@pi-desktop/host-protocol";
 import { IpcChannels, type AttachResult, type OpenSessionRequest } from "../shared/api";
 import { devSessionOverrides } from "./dev-overrides";
-import { HostManager, LOCAL_HOST_ID } from "./host-manager";
+import { HostManager, LOCAL_HOST_ID, WSL_PREFIX } from "./host-manager";
+import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -163,6 +164,12 @@ function registerIpc(manager: HostManager): void {
     const options = { properties: ["openDirectory" as const] };
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
+  });
+  ipcMain.handle(IpcChannels.revealFile, (_event, hostId: string, cwd: string, path: string) => {
+    const target = hostPathForExplorer(hostId, cwd, path, WSL_PREFIX);
+    if (!target) return false;
+    shell.showItemInFolder(target);
+    return true;
   });
 }
 
