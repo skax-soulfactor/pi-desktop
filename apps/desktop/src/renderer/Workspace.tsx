@@ -6,6 +6,7 @@ import { ChoiceDialog } from "./ChoiceDialog";
 import { PiManager, usePiStatus } from "./PiManager";
 import { ResourcesPanel } from "./ResourcesPanel";
 import { MarketplacePanel } from "./MarketplacePanel";
+import { CopyResourceDialog, type CopyItem } from "./CopyResourceDialog";
 import { hasReloadCommand, RELOAD_COMMAND } from "./resources-view";
 import { TerminalDock, type DockTerminal } from "./TerminalDock";
 import type { TerminalSpec } from "./TerminalView";
@@ -107,6 +108,8 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [sshHostsOpen, setSshHostsOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
+  /** 다른 호스트로 복사할 리소스 */
+  const [copyItem, setCopyItem] = useState<CopyItem | undefined>();
   /** 아래 도크의 내장 터미널들 (설계 §4.12) */
   const [dockTerminals, setDockTerminals] = useState<DockTerminal[]>([]);
   const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
@@ -921,9 +924,18 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
             setResourcesOpen(false);
             setMarketOpen(true);
           }}
+          {...(hosts.length > 1
+            ? {
+                onCopy: (item, kind) => {
+                  setResourcesOpen(false);
+                  setCopyItem({ kind, name: item.name, path: item.path, fromPackage: item.fromPackage });
+                },
+              }
+            : {})}
           onClose={() => setResourcesOpen(false)}
         />
       )}
+      {active && copyItem && <CopyResourceDialog hosts={hosts} fromHostId={hostId} item={copyItem} onClose={() => setCopyItem(undefined)} />}
       {active && marketOpen && (
         <MarketplacePanel
           hostId={hostId}

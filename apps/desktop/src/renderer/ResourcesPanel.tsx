@@ -29,6 +29,8 @@ interface Props {
   onRunPi?: (args: string[], title: string, projectCwd?: string) => void;
   /** Marketplace를 연다 */
   onOpenMarketplace?: () => void;
+  /** 스킬·프롬프트를 다른 호스트로 복사한다 (다른 호스트가 있을 때만) */
+  onCopy?: (item: ResourceItem, kind: "skill" | "prompt") => void;
   onClose: () => void;
 }
 
@@ -38,7 +40,7 @@ interface Props {
  * 확장은 코드를 실행하지 않고 경로만 찾은 목록이다.
  * 마크다운 리소스(AGENTS.md·프롬프트·스킬)는 열어 고치고, 새로 만들 수 있다. 패키지에 든 것은 고치지 않는다.
  */
-export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onRunPi, onOpenMarketplace, onClose }: Props) {
+export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onRunPi, onOpenMarketplace, onCopy, onClose }: Props) {
   const [view, setView] = useState<ResourcesView | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
@@ -170,6 +172,7 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onR
                 title={(p) => `/${p.name}${p.argumentHint ? ` ${p.argumentHint}` : ""}`}
                 onReveal={onReveal}
                 onEdit={(p) => void open(p)}
+                {...(onCopy ? { onCopy: (item: ResourceItem) => onCopy(item, "prompt") } : {})}
               />
             )}
             {tab === "skills" && (
@@ -182,6 +185,7 @@ export function ResourcesPanel({ hostId, hostLabel, cwd, onReveal, onReload, onR
                 note={(s) => (s.disableModelInvocation ? `/skill:${s.name} 명령으로만 씀` : undefined)}
                 onReveal={onReveal}
                 onEdit={(p) => void open(p)}
+                {...(onCopy ? { onCopy: (item: ResourceItem) => onCopy(item, "skill") } : {})}
               />
             )}
             {tab === "extensions" && (
@@ -275,6 +279,7 @@ function ItemList({
   note,
   onReveal,
   onEdit,
+  onCopy,
 }: {
   view: ResourcesView;
   items: ResourceItem[];
@@ -285,6 +290,8 @@ function ItemList({
   onReveal: ((path: string) => void) | undefined;
   /** 없으면 고치지 않는 목록 (확장) */
   onEdit?: (path: string) => void;
+  /** 다른 호스트로 복사 */
+  onCopy?: (item: ResourceItem) => void;
 }) {
   const badge = projectBadge(view.trust);
   if (items.length === 0) return <p className="muted">{empty}</p>;
@@ -316,6 +323,11 @@ function ItemList({
             {onEdit && isEditable(item) && (
               <button type="button" className="small" onClick={() => onEdit(item.path)}>
                 편집
+              </button>
+            )}
+            {onCopy && item.enabled && /.md$/i.test(item.path) && (
+              <button type="button" className="small" onClick={() => onCopy(item)} title="다른 호스트(WSL·SSH)로 복사합니다">
+                다른 호스트로
               </button>
             )}
             {onReveal && !item.path.startsWith("builtin:") && (

@@ -16,6 +16,9 @@ import type {
   ResourceFile,
   ResourceKind,
   ResourceWriteResult,
+  ResourceExportResult,
+  ResourceImportParams,
+  ResourceImportResult,
   FsSearchResult,
   ProviderInfo,
   PiLatest,
@@ -322,6 +325,10 @@ export interface PiDesktopApi {
   githubImport(request: GithubImportRequest): Promise<ImportRecord>;
   /** 이 호스트로 가져온 기록 */
   listImports(hostId: string): Promise<ImportRecord[]>;
+  /** 다른 호스트로 복사할 스킬 폴더·프롬프트를 원본 호스트에서 읽는다 (설계 §5.9) */
+  exportResource(hostId: string, kind: "skill" | "prompt", path: string): Promise<ResourceExportResult>;
+  /** 받은 스킬·프롬프트 파일을 그 호스트의 범위에 쓴다 (replace면 이전 것을 백업하고 바꾼다) */
+  importResourceFiles(hostId: string, params: ResourceImportParams): Promise<ResourceImportResult>;
   /** 가져온 항목들의 로컬 수정·원본 업데이트를 확인한다 (저장소마다 GitHub를 한 번씩 조회) */
   importStatus(hostId: string): Promise<ImportStatus[]>;
   /** 원본 최신 커밋으로 바꾼다. 이전 내용은 그 호스트의 백업 폴더로 옮겨진다 */
@@ -386,6 +393,8 @@ export const IpcChannels = {
   githubText: "pi:github-text",
   githubImport: "pi:github-import",
   listImports: "pi:list-imports",
+  exportResource: "pi:export-resource",
+  importResourceFiles: "pi:import-resource-files",
   importStatus: "pi:import-status",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",
