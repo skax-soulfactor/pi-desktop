@@ -6,6 +6,8 @@ import type {
   ResourceItem,
   ResourcesView,
 } from "@pi-desktop/host-protocol/messages";
+import type { HostDescriptor } from "../shared/api";
+import { copyNote } from "./copy-view";
 import { errorText } from "./folder-browser";
 import { ResourceEditor } from "./ResourceEditor";
 import { projectBadge, projectResourcesSkipped, trustStatusText } from "./project-trust";
@@ -22,9 +24,14 @@ import {
   type ResourceTab,
 } from "./resources-view";
 
+/** 다른 호스트에서 복사해 온 항목에 붙일 안내 (경로 → 글) */
+type CopiedNotes = Map<string, { text: string; title: string }>;
+
 interface Props {
   hostId: string;
   hostLabel: string;
+  /** 복사해 온 출처의 호스트 이름을 보일 때 쓴다 */
+  hosts?: HostDescriptor[];
   /** 리소스를 찾을 작업 폴더 */
   cwd: string;
   /** 탐색기에서 위치를 볼 수 있는 호스트(로컬·WSL)면 준다 */
@@ -53,6 +60,7 @@ interface Props {
 export function ResourcesPanel({
   hostId,
   hostLabel,
+  hosts = [],
   cwd,
   onReveal,
   onReload,
@@ -85,6 +93,34 @@ export function ResourcesPanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 다른 호스트에서 복사해 온 기록과 그 뒤 바뀐 것 (설계 §5.9 "출처 기록"). 원본 호스트를 읽느라 늦을 수 있어 따로 채운다.
+  const [copied, setCopied] = useState<CopiedNotes>(new Map());
+  useEffect(() => {
+    let alive = true;
+    void window.piDesktop.copyStatus(hostId).then(
+      (entries) => {
+        if (!alive) return;
+        const label = (id: string) => hosts.find((h) => h.id === id)?.label ?? id;
+        setCopied(
+          new Map(
+            entries.map(({ record, status }) => [
+              record.toPath,
+              {
+                text: copyNote(status, label(record.fromHostId)),
+                title: `${label(record.fromHostId)}의 ${record.fromPath}에서 ${new Date(record.copiedAt).toLocaleString()}에 복사${status.error ? `
+원본을 확인하지 못함: ${status.error}` : ""}`,
+              },
+            ]),
+          ),
+        );
+      },
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+  }, [hostId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -185,11 +221,12 @@ export function ResourcesPanel({
         {view && !editing && (
           <div className="resources-body">
             {tab === "context" && (
-              <ContextList view={view} onReveal={onReveal} onEdit={(p) => void open(p)} {...(onCopyContext ? { onCopy: onCopyContext } : {})} />
+              <ContextList view={view} copied={copied} onReveal={onReveal} onEdit={(p) => void open(p)} {...(onCopyContext ? { onCopy: onCopyContext } : {})} />
             )}
             {tab === "prompts" && (
               <ItemList
                 view={view}
+                copied={copied}
                 items={view.prompts}
                 diagnostics={diagnostics}
                 empty="프롬프트가 없습니다. ~/.pi/agent/prompts/ 또는 .pi/prompts/에 .md 파일을 두면 /이름으로 씁니다."
@@ -202,6 +239,7 @@ export function ResourcesPanel({
             {tab === "skills" && (
               <ItemList
                 view={view}
+                copied={copied}
                 items={view.skills}
                 diagnostics={diagnostics}
                 empty="스킬이 없습니다. ~/.pi/agent/skills/<이름>/SKILL.md 또는 .pi/skills/에 두면 불러옵니다."
@@ -215,6 +253,7 @@ export function ResourcesPanel({
             {tab === "extensions" && (
               <ItemList
                 view={view}
+                copied={copied}
                 items={view.extensions}
                 diagnostics={diagnostics}
                 empty="확장이 없습니다."
@@ -247,11 +286,13 @@ export function ResourcesPanel({
 
 function ContextList({
   view,
+  copied,
   onReveal,
   onEdit,
   onCopy,
 }: {
   view: ResourcesView;
+  copied: CopiedNotes;
   onReveal: ((path: string) => void) | undefined;
   onEdit: (path: string) => void;
   /** 사용자 범위(데이터 폴더) 파일만 다른 호스트로 복사한다 */
@@ -276,7 +317,10 @@ function ContextList({
         {rows.map((r) => (
           <li key={r.path}>
             <div className="resource-main">
-              <span className="resource-name">{r.label}</span>
+              <span className="resource-name">
+                {r.label}
+                <CopiedBadge note={copied.get(r.path)} />
+              </span>
               <span className="muted resource-path" title={r.path}>
                 {shortPath(r.path, view)}
               </span>
@@ -306,6 +350,7 @@ function ContextList({
 
 function ItemList({
   view,
+  copied,
   items,
   diagnostics,
   empty,
@@ -316,6 +361,7 @@ function ItemList({
   onCopy,
 }: {
   view: ResourcesView;
+  copied: CopiedNotes;
   items: ResourceItem[];
   diagnostics: Map<string, ResourceDiagnosticInfo[]>;
   empty: string;
@@ -343,6 +389,7 @@ function ItemList({
                 {!item.enabled && <span className="resource-badge off">꺼짐</span>}
                 {badge && item.scope === "project" && <span className="resource-badge off">{badge}</span>}
                 {extra && <span className="resource-badge">{extra}</span>}
+                <CopiedBadge note={copied.get(item.path)} />
               </span>
               {item.description && <span className="resource-desc">{item.description}</span>}
               <span className="muted resource-path" title={item.path}>
@@ -509,5 +556,14 @@ function NewResourceForm({
       </button>
       {error && <span className="resource-problem error">{error}</span>}
     </form>
+  );
+}
+
+function CopiedBadge({ note }: { note: { text: string; title: string } | undefined }) {
+  if (!note) return null;
+  return (
+    <span className={`resource-badge copied${note.text.includes(" · ") ? " changed" : ""}`} title={note.title}>
+      {note.text}
+    </span>
   );
 }

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   baseNameOf,
+  copiedEntryPath,
+  copyNote,
   copyWarnings,
   droppedText,
   extensionWarnings,
@@ -9,6 +11,7 @@ import {
   isLocalPathSource,
   joinHostPath,
   packageInstallArgs,
+  textToBase64,
 } from "../../src/renderer/copy-view";
 
 const files = [{ path: "SKILL.md" }, { path: "scripts/run.sh" }, { path: "scripts/setup.ps1" }, { path: "a.py" }];
@@ -94,5 +97,22 @@ describe("extensionWarnings", () => {
     expect(extensionWarnings(files, "linux")[0]).toContain("드라이브 경로(C:\\)");
     expect(extensionWarnings(files, "linux")[0]).toContain("나눠 쓰는 코드");
     expect(extensionWarnings([file("한글.ts", "// 한글만")], "linux")).toEqual([]);
+  });
+});
+
+describe("copiedEntryPath·copyNote·textToBase64", () => {
+  it("대상에서 목록에 보일 진입 파일 경로를 만든다", () => {
+    expect(copiedEntryPath("skill", "/home/me/.pi/agent/skills/pdf", "C:/x/SKILL.md", 2)).toBe("/home/me/.pi/agent/skills/pdf/SKILL.md");
+    expect(copiedEntryPath("prompt", "/a/prompts/r.md", "/b/r.md", 1)).toBe("/a/prompts/r.md");
+    expect(copiedEntryPath("extension", "/a/extensions/x.ts", "/b/solo.ts", 1)).toBe("/a/extensions/x.ts");
+    expect(copiedEntryPath("extension", "C:\\a\\extensions\\t", "/b/t/index.js", 3)).toBe("C:\\a\\extensions\\t\\index.js");
+  });
+
+  it("출처와 바뀐 것을 짧게 알리고, 한글도 base64로 바꾼다", () => {
+    expect(copyNote(undefined, "WSL: Ubuntu")).toBe("WSL: Ubuntu에서 복사됨");
+    expect(copyNote({ local: "modified", source: "changed" }, "로컬")).toBe("로컬에서 복사됨 · 이 호스트에서 고침 · 이후 원본이 바뀜");
+    expect(copyNote({ local: "same", source: "gone" }, "로컬")).toBe("로컬에서 복사됨 · 원본이 없어짐");
+    expect(atob(textToBase64("ab"))).toBe("ab");
+    expect(textToBase64("한")).toBe("7ZWc");
   });
 });

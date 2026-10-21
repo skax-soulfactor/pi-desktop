@@ -921,6 +921,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         <ResourcesPanel
           hostId={hostId}
           hostLabel={hostLabel}
+          hosts={hosts}
           cwd={resourcesCwd}
           {...(host?.kind === "local" || host?.kind === "wsl"
             ? { onReveal: (path: string) => void guardQuiet(async () => void (await window.piDesktop.revealFile(hostId, resourcesCwd, path))) }

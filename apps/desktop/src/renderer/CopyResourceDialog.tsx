@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ResourceExportResult } from "@pi-desktop/host-protocol/messages";
 import type { HostDescriptor } from "../shared/api";
-import { copyWarnings, extensionWarnings, isAlreadyExists } from "./copy-view";
+import { copiedEntryPath, copyWarnings, extensionWarnings, isAlreadyExists } from "./copy-view";
 import { errorText } from "./folder-browser";
 import { importName, type PackageScope } from "./market-view";
 import { formatSize } from "./resources-view";
@@ -72,6 +72,18 @@ export function CopyResourceDialog({ hosts, fromHostId, item, onClose }: Props) 
       });
       setDone({ target: result.target, ...(result.backup ? { backup: result.backup } : {}) });
       setExists(false);
+      // 출처 기록은 안내용이라 실패해도 복사는 끝난 것으로 둔다.
+      void window.piDesktop
+        .recordCopy({
+          kind: item.kind,
+          name: name.trim(),
+          fromHostId,
+          fromPath: item.path,
+          toHostId,
+          toPath: copiedEntryPath(item.kind, result.target, item.path, exported.files.length),
+          files: exported.files.map((f) => ({ path: f.path, contentBase64: f.contentBase64 })),
+        })
+        .catch(() => {});
     } catch (e) {
       const message = errorText(e);
       setExists(isAlreadyExists(message));
