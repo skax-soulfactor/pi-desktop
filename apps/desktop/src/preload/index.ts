@@ -31,6 +31,10 @@ const api: PiDesktopApi = {
   piStatus: (hostId) => ipcRenderer.invoke(IpcChannels.piStatus, hostId),
   piUpdate: (hostId, target, taskId, force) =>
     ipcRenderer.invoke(IpcChannels.piUpdate, hostId, target, taskId, force === true),
+  authProviders: (hostId) => ipcRenderer.invoke(IpcChannels.authProviders, hostId),
+  authCheck: (hostId, provider) => ipcRenderer.invoke(IpcChannels.authCheck, hostId, provider),
+  authSetApiKey: (hostId, provider, key) => ipcRenderer.invoke(IpcChannels.authSetApiKey, hostId, provider, key),
+  authRemove: (hostId, provider) => ipcRenderer.invoke(IpcChannels.authRemove, hostId, provider),
   piLatest: (hostId, force) => ipcRenderer.invoke(IpcChannels.piLatest, hostId, force === true),
   searchFiles: (hostId, cwd, query) => ipcRenderer.invoke(IpcChannels.searchFiles, hostId, cwd, query),
   onConnection: (listener) => subscribe(IpcChannels.connectionChanged, listener),
