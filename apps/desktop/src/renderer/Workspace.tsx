@@ -19,6 +19,7 @@ import { Composer } from "./Composer";
 import { modelAcceptsImages, rpcImages, type ImageAttachment } from "./attachments";
 import type { ParsedInput, PiCommand } from "./composer-input";
 import { terminalActionDetail } from "./activity-view";
+import { EventInspector } from "./EventInspector";
 import { baseName, formatRelative } from "./format";
 import { tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
@@ -111,6 +112,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [sshHostsOpen, setSshHostsOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   /** 다른 호스트로 복사할 리소스 */
   const [copyItem, setCopyItem] = useState<CopyItem | undefined>();
   /** 다른 호스트로 복사할 사용자 범위 AGENTS.md 등 */
@@ -402,6 +404,14 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         run: () => openTerminal({ hostId, kind: "shell", ...(session ? { cwd: session.cwd } : {}) }),
       },
     );
+    list.push({
+      id: "event-inspector",
+      group: "개발자 도구",
+      title: "Event Inspector (이 세션의 RPC 이벤트 원본)",
+      keywords: "event inspector rpc raw json debug 이벤트 디버그 개발자",
+      disabled: !session,
+      run: () => setInspectorOpen(true),
+    });
     list.push({
       id: "marketplace",
       group: "Pi",
@@ -968,6 +978,15 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           fromCwd={resourcesCwd}
           onRunPi={runPiOn}
           onClose={() => setCopyPackage(undefined)}
+        />
+      )}
+      {active && inspectorOpen && session && (
+        <EventInspector
+          hostId={hostId}
+          hostLabel={hostLabel}
+          sessionId={session.sessionId}
+          title={statusTitle}
+          onClose={() => setInspectorOpen(false)}
         />
       )}
       {active && marketOpen && (

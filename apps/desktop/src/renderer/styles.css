@@ -2808,3 +2808,106 @@ details > summary.settings-section {
 .host-compare-changes summary {
   cursor: pointer;
 }
+
+.modal.event-inspector {
+  width: min(1100px, calc(100vw - 32px));
+  height: min(820px, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+}
+
+.event-inspector-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-inspector-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.event-type {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+
+.event-type.off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.event-type.unhandled,
+.event-list li.unhandled .event-name {
+  color: var(--warn);
+}
+
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.event-list li {
+  border-bottom: 1px solid var(--border);
+}
+
+.event-row {
+  display: grid;
+  grid-template-columns: 56px 96px 200px 1fr;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 3px 6px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.event-row:hover {
+  background: var(--hover, rgb(127 127 127 / 10%));
+}
+
+.event-seq,
+.event-time,
+.event-summary {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-detail {
+  padding: 4px 8px 8px;
+}
+
+.event-detail pre {
+  margin: 4px 0 0;
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
