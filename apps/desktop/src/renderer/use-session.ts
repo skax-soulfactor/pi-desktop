@@ -339,9 +339,15 @@ export function useSession(tabId: string = MAIN_TAB) {
   const reloadFollow = useCallback(async () => {
     const current = followRef.current;
     if (!current) return;
-    const read = await api().readStored(current.hostId, current.path);
+    // 파일이 아직 없으면(따라 보는 쪽이 첫 메시지를 보내기 전) 빈 대화로 두고, 생기면 감시가 다시 부른다.
+    const read = await api()
+      .readStored(current.hostId, current.path)
+      .catch((e: unknown) => {
+        if (/ENOENT|no such file/i.test(String(e))) return { messages: [] };
+        throw e;
+      });
     if (followRef.current?.path !== current.path) return;
-    dispatch({ type: "snapshot", state: snapshotState(read.messages, 0, false) });
+    dispatch({ type: "snapshot", state: snapshotState(read.messages as Parameters<typeof snapshotState>[0], 0, false) });
   }, []);
 
   /**
@@ -436,13 +442,28 @@ export function useSession(tabId: string = MAIN_TAB) {
    * 지금 세션을 터미널 Pi(TUI)로 넘긴다. 같은 파일에 GUI와 TUI가 함께 쓰지 않도록 GUI 쪽 Pi를 먼저 닫고,
    * 그 파일을 팔로우 모드로 계속 보여준다. 터미널에서 실행할 명령은 화면이 만든다.
    */
-  const handOffToTui = useCallback(async (): Promise<{ cwd: string; sessionFile: string } | undefined> => {
+  /**
+   * GUI 쪽 Pi를 닫고 TUI로 넘긴다. 세션 파일이 있으면 읽기 전용으로 따라 보여 준다.
+   * 메시지를 주고받기 전에는 Pi가 파일을 쓰지 않아 파일이 없을 수 있다(exists: false). 이때는 따라 보지 않는다.
+   */
+  const handOffToTui = useCallback(async (): Promise<{ cwd: string; sessionFile: string; exists: boolean } | undefined> => {
     const current = sessionRef.current;
     if (!current?.sessionFile) return undefined;
+    const exists = await api()
+      .inspectStored(hostRef.current, current.sessionFile)
+      .then(
+        () => true,
+        () => false,
+      );
     await api().closeSession(hostRef.current, current.sessionId);
     await refreshSessions();
-    await startFollow({ path: current.sessionFile, cwd: current.cwd });
-    return { cwd: current.cwd, sessionFile: current.sessionFile };
+    if (exists) await startFollow({ path: current.sessionFile, cwd: current.cwd });
+    else {
+      sessionRef.current = undefined;
+      setSession(undefined);
+      dispatch({ type: "reset" });
+    }
+    return { cwd: current.cwd, sessionFile: current.sessionFile, exists };
   }, [refreshSessions, startFollow]);
 
   /**

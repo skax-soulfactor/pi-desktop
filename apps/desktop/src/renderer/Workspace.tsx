@@ -23,7 +23,7 @@ import { EventInspector } from "./EventInspector";
 import { useExtensionDevMode } from "./use-dev-mode";
 import { PlaygroundPanel } from "./PlaygroundPanel";
 import { baseName, formatRelative } from "./format";
-import { tuiCommand } from "./tui-command";
+import { piSessionIdOf, tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
 import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
 import { FolderBrowser } from "./FolderBrowser";
@@ -305,8 +305,14 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       const target = await handOffToTui();
       if (!target) return;
       const posix = host?.kind === "wsl" || connection.status !== "connected" || connection.host.platform !== "win32";
-      const command = tuiCommand(posix ? "posix" : "windows", target.cwd, target.sessionFile);
-      setHandoffCommand(command);
+      const sessionId = target.exists ? undefined : piSessionIdOf(target.sessionFile);
+      const command = tuiCommand(posix ? "posix" : "windows", target.cwd, sessionId ? { sessionId } : { sessionFile: target.sessionFile });
+      if (target.exists) setHandoffCommand(command);
+      else {
+        setInfo(
+          `메시지를 주고받기 전이라 세션 파일이 아직 없어, 같은 세션 ID로 TUI를 여는 명령을 복사했습니다. 이 창은 따라 보지 않으며, TUI에서 대화한 뒤 기록에서 열 수 있습니다.\n${command}`,
+        );
+      }
       try {
         await navigator.clipboard.writeText(command);
       } catch {
