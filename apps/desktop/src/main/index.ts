@@ -117,6 +117,11 @@ function sendToRenderer(channel: string, ...payload: unknown[]): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...payload);
 }
 
+function windowIcon(): { icon?: string } {
+  if (!app.isPackaged) return { icon: join(app.getAppPath(), "build", "icon.png") };
+  return process.platform === "linux" ? { icon: join(process.resourcesPath, "icon.png") } : {};
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -125,8 +130,9 @@ function createWindow(): void {
     minHeight: 480,
     title: "Pi Desktop",
     backgroundColor: "#16171d",
-    // 설치본은 실행 파일·설치 아이콘을 쓰고, 개발 실행만 창 아이콘을 직접 준다 (build/icon.png).
-    ...(app.isPackaged ? {} : { icon: join(app.getAppPath(), "build", "icon.png") }),
+    // Windows·macOS 설치본은 실행 파일 아이콘을 쓴다. Linux는 실행 파일에 아이콘이 없으므로(특히 AppImage는 .desktop도 없다)
+    // 설치본도 창 아이콘을 직접 준다. 제목줄·작업 표시줄이 이것을 쓴다 (X11 _NET_WM_ICON, Wayland xdg-toplevel-icon).
+    ...windowIcon(),
     webPreferences: {
       preload: join(here, "../preload/index.cjs"),
       contextIsolation: true,
