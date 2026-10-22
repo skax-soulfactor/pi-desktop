@@ -49,6 +49,9 @@ export const Methods = {
   packagesResources: "packages.resources",
   /** 패키지 리소스를 켜고 끈다 (settings.json의 패키지 필터) */
   packagesSetFilter: "packages.setFilter",
+  /** 스크립트를 이 호스트의 Pi SDK로 실행한다 (SDK Playground). 끝날 때까지 응답을 기다리고 출력은 playground.output으로 */
+  playgroundRun: "playground.run",
+  playgroundStop: "playground.stop",
   /** 파일·폴더 트리를 감시한다 (Extension Dev Mode). 바뀌면 files.changed로 알린다 */
   filesWatchTree: "files.watchTree",
   filesUnwatchTree: "files.unwatchTree",
@@ -137,6 +140,8 @@ export const Notifications = {
   storedChanged: "stored.changed",
   /** files.watchTree로 감시하는 파일이 바뀌었다 */
   filesChanged: "files.changed",
+  /** playground.run의 출력 (요청한 앱에만) */
+  playgroundOutput: "playground.output",
 } as const;
 
 export interface HostInfo {
@@ -862,6 +867,31 @@ export interface StoredReadResult {
 }
 
 /** stored.changed 알림 */
+export interface PlaygroundRunParams {
+  /** 앱이 정한 실행 ID (출력·중지를 맞추는 데 쓴다) */
+  runId: string;
+  /** ES 모듈 JavaScript. 앞에 `const pi = await import(<Pi SDK>)`가 붙는다 */
+  code: string;
+  /** 작업 폴더 (없으면 홈) */
+  cwd?: string;
+  timeoutMs?: number;
+}
+
+export interface PlaygroundRunResult {
+  exitCode: number | null;
+  signal?: string;
+  durationMs: number;
+  timedOut: boolean;
+  /** 출력이 한도를 넘어 잘렸다 */
+  truncated: boolean;
+}
+
+export interface PlaygroundOutputNotification {
+  runId: string;
+  stream: "stdout" | "stderr";
+  text: string;
+}
+
 export interface FilesWatchTreeParams {
   /** 앱이 정한 감시 ID. 같은 ID로 다시 부르면 뿌리를 바꾼다 */
   watchId: string;

@@ -53,6 +53,8 @@ import {
   type ModelsImportModelParams,
   type SettingsMergeParams,
   type FilesWatchTreeParams,
+  type PlaygroundRunParams,
+  type PlaygroundRunResult,
   type SettingsTarget,
   type SettingsWriteParams,
   type PackageResourceItem,
@@ -111,6 +113,7 @@ import { exportResource } from "./resource-export";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
 import { watchTree } from "./tree-watcher";
+import { Playground } from "./playground";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
 import { AgentSession } from "./session";
 import { AGENT_VERSION } from "./version";
@@ -156,6 +159,7 @@ export class AgentDaemon {
   /** 세션별 입력 권한(writer)을 가진 연결 id (설계 §3.4). 없으면 아무도 없다 */
   private readonly writers = new Map<string, number>();
   private readonly files = new FileWatcher();
+  private playground: Playground | undefined;
   /** 입력창 @ 파일 피커용 파일 목록 캐시 */
   private readonly fileIndex = new FileIndex();
   /** 한 호스트에서 업데이트는 한 번에 하나만 */
@@ -557,6 +561,36 @@ export class AgentDaemon {
         client.watches.set(path, this.files.watch(path, (change) => peer.notify(Notifications.storedChanged, change)));
       }
       return null;
+    });
+
+    // SDK Playground: 이 호스트의 Pi SDK로 스크립트를 실행하고 출력을 이 앱에만 알린다.
+    peer.handle(Methods.playgroundRun, async (params): Promise<PlaygroundRunResult> => {
+      const p = (params ?? {}) as Partial<PlaygroundRunParams>;
+      if (typeof p.runId !== "string" || !p.runId || typeof p.code !== "string") {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "runId와 code가 필요합니다");
+      }
+      this.playground ??= new Playground(join(agentHome(this.env), "playground"));
+      const pi = await locatePi({ env: this.env });
+      const runId = p.runId;
+      const playground = this.playground;
+      // 앱이 끊기면 실행 중인 스크립트도 멈춘다.
+      client.watches.set(`play:${runId}`, () => playground.stop(runId));
+      return playground
+        .run(
+          pi,
+          { runId, code: p.code, ...(typeof p.cwd === "string" && p.cwd ? { cwd: p.cwd } : {}), ...(typeof p.timeoutMs === "number" ? { timeoutMs: p.timeoutMs } : {}) },
+          { env: this.env, onOutput: (stream, text) => peer.notify(Notifications.playgroundOutput, { runId, stream, text }) },
+        )
+        .catch((e: unknown) => {
+          throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+        })
+        .finally(() => client.watches.delete(`play:${runId}`));
+    });
+
+    peer.handle(Methods.playgroundStop, (params) => {
+      const runId = (params as { runId?: unknown } | undefined)?.runId;
+      if (typeof runId !== "string") throw new JsonRpcError(ErrorCodes.InvalidParams, "runId가 필요합니다");
+      return { stopped: this.playground?.stop(runId) ?? false };
     });
 
     // Extension Dev Mode: 확장 파일·폴더를 감시한다. 앱이 끊기면 함께 멈춘다 (client.watches에 tree:<id>로 둔다).
