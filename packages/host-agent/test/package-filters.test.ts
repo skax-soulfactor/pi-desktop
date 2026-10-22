@@ -29,6 +29,22 @@ describe("applyPackageFilter", () => {
     ]);
     expect(() => applyPackageFilter(["npm:a"], "npm:z", [])).toThrow("설정에 없는 패키지");
   });
+
+  it("빈 배열(하나도 안 불러옴)은 지우지 않고, set은 종류별 배열을 통째로 적는다", () => {
+    const none = [{ source: "npm:b", themes: [] as string[] }];
+    expect(applyPackageFilter(none, "npm:b", [{ type: "skills", pattern: "skills/x", enabled: false }])[0]).toEqual({
+      source: "npm:b",
+      themes: [],
+      skills: ["-skills/x"],
+    });
+    expect(applyPackageFilter(["npm:b"], "npm:b", [], false, { extensions: [], prompts: ["-prompts/p.md"] })[0]).toEqual({
+      source: "npm:b",
+      extensions: [],
+      prompts: ["-prompts/p.md"],
+    });
+    // reset 뒤에 set을 적는다 (다른 호스트의 필터로 바꾸기)
+    expect(applyPackageFilter([{ source: "npm:b", skills: ["-a"] }], "npm:b", [], true, { themes: [] })[0]).toEqual({ source: "npm:b", themes: [] });
+  });
 });
 
 describe("listPackageResources·setPackageFilter (실제 Pi SDK)", () => {

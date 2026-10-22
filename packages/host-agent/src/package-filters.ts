@@ -8,7 +8,8 @@ import type { PackageFilterChange, PackageResourceItem, PackageResourceType } fr
  * Pi의 `pi config`가 하는 것과 같은 규칙을 따른다:
  * - 경로는 패키지 리소스 기준 폴더(baseDir)에서의 상대 경로
  * - 같은 경로를 가리키던 이전 항목(+, -, !, 그대로)은 지우고 새로 붙인다
- * - 종류 배열이 비면 그 키를 지우고, 필터가 하나도 없으면 문자열 소스로 되돌린다
+ * - 필터가 하나도 없으면 문자열 소스로 되돌린다. 빈 배열([])은 "그 종류는 하나도 불러오지 않음"이라 지우지 않는다
+ * - set은 종류별 배열을 통째로 적는다 (설치할 때 종류를 빼거나, 다른 호스트의 필터를 옮길 때)
  * 쓰기는 Pi의 SettingsManager로 한다 (Pi와 같은 잠금·병합).
  */
 
@@ -49,6 +50,7 @@ export function applyPackageFilter(
   source: string,
   changes: readonly PackageFilterChange[],
   reset = false,
+  set: Partial<Record<PackageResourceType, string[]>> = {},
 ): PackageSource[] {
   const next = [...packages];
   const index = next.findIndex((p) => (typeof p === "string" ? p : p.source) === source);
@@ -56,12 +58,12 @@ export function applyPackageFilter(
   const current = next[index]!;
   const pkg: Exclude<PackageSource, string> = typeof current === "string" ? { source: current } : { ...current };
   if (reset) for (const type of RESOURCE_TYPES) delete pkg[type];
+  for (const type of RESOURCE_TYPES) if (Array.isArray(set[type])) pkg[type] = [...set[type]!];
   for (const change of changes) {
     const kept = (pkg[change.type] ?? []).filter((entry) => stripPrefix(entry) !== change.pattern);
     kept.push(`${change.enabled ? "+" : "-"}${change.pattern}`);
     pkg[change.type] = kept;
   }
-  for (const type of RESOURCE_TYPES) if (pkg[type] !== undefined && pkg[type]!.length === 0) delete pkg[type];
   const hasFilters = RESOURCE_TYPES.some((type) => pkg[type] !== undefined);
   // 필터가 없으면 문자열로 되돌린다. autoload 같은 다른 키가 있으면 객체로 둔다.
   const otherKeys = Object.keys(pkg).filter((k) => k !== "source" && !RESOURCE_TYPES.includes(k as PackageResourceType));
@@ -94,11 +96,17 @@ export async function setPackageFilter(
   sdk: PackageFilterSdk,
   cwd: string,
   agentDir: string,
-  params: { source: string; scope: "user" | "project"; changes: PackageFilterChange[]; reset?: boolean },
+  params: {
+    source: string;
+    scope: "user" | "project";
+    changes: PackageFilterChange[];
+    reset?: boolean;
+    set?: Partial<Record<PackageResourceType, string[]>>;
+  },
 ): Promise<void> {
   const settings = sdk.SettingsManager.create(cwd, agentDir, { projectTrusted: params.scope === "project" });
   const current = params.scope === "project" ? settings.getProjectSettings() : settings.getGlobalSettings();
-  const next = applyPackageFilter(current.packages ?? [], params.source, params.changes, params.reset === true);
+  const next = applyPackageFilter(current.packages ?? [], params.source, params.changes, params.reset === true, params.set);
   if (params.scope === "project") settings.setProjectPackages(next);
   else settings.setPackages(next);
   await settings.flush();
