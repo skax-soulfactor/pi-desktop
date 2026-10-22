@@ -41,6 +41,7 @@ import type {
   SessionExitNotification,
   SessionExternalWriteNotification,
   SessionWriterChangedNotification,
+  FilesChangedNotification,
   SessionSummary,
   SessionUiResolvedNotification,
   StoredChangedNotification,
@@ -320,6 +321,9 @@ export interface PiDesktopApi {
   /** 세션 파일 변경 감시 시작·해제 (팔로우 모드) */
   watchStored(hostId: string, path: string): Promise<void>;
   unwatchStored(hostId: string, path: string): Promise<void>;
+  /** 파일·폴더 트리를 감시한다 (Extension Dev Mode). 같은 watchId로 다시 부르면 뿌리를 바꾼다 */
+  watchTree(hostId: string, watchId: string, roots: string[]): Promise<void>;
+  unwatchTree(hostId: string, watchId: string): Promise<void>;
   openSession(hostId: string, request: OpenSessionRequest): Promise<SessionSummary>;
   /**
    * 세션에 붙는다. 재생된 이벤트는 알림이 아니라 결과의 events로 함께 돌려준다.
@@ -471,6 +475,8 @@ export interface PiDesktopApi {
   /** 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 쓴 것이 감지되었다 */
   onExternalWrite(listener: (hostId: string, notification: SessionExternalWriteNotification) => void): () => void;
   onWriterChanged(listener: (hostId: string, notification: SessionWriterChangedNotification) => void): () => void;
+  /** watchTree로 감시하는 파일이 바뀌었다 */
+  onFilesChanged(listener: (hostId: string, notification: FilesChangedNotification) => void): () => void;
   onPiUpdateOutput(listener: (hostId: string, notification: PiUpdateOutputNotification) => void): () => void;
 }
 
@@ -490,6 +496,8 @@ export const IpcChannels = {
   readStored: "pi:read-stored",
   watchStored: "pi:watch-stored",
   unwatchStored: "pi:unwatch-stored",
+  watchTree: "pi:watch-tree",
+  unwatchTree: "pi:unwatch-tree",
   attachSession: "pi:attach-session",
   closeSession: "pi:close-session",
   clearExternalWrite: "pi:clear-external-write",
@@ -561,4 +569,5 @@ export const IpcChannels = {
   storedChanged: "pi:stored-changed",
   externalWrite: "pi:external-write",
   writerChanged: "pi:writer-changed",
+  filesChanged: "pi:files-changed",
 } as const;
