@@ -29,6 +29,7 @@ import { useSession } from "./use-session";
 import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
 import { FolderBrowser } from "./FolderBrowser";
 import { NewFolderDialog } from "./NewFolderDialog";
+import logoUrl from "../../build/icon.svg?url";
 import { SshHostsDialog } from "./SshHostsDialog";
 import { restoreQueueToDraft } from "./run-status";
 import { QueuePanel, RetryBanner } from "./RunStatus";
@@ -750,7 +751,10 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   return (
     <div className="app" hidden={!active} ref={root}>
       <header className="topbar">
-        <div className="brand">Pi Desktop</div>
+        <div className="brand">
+          <img className="brand-logo" src={logoUrl} alt="" />
+          Pi Desktop
+        </div>
         <select
           className="host-select"
           aria-label="호스트"

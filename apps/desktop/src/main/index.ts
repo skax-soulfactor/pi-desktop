@@ -125,6 +125,8 @@ function createWindow(): void {
     minHeight: 480,
     title: "Pi Desktop",
     backgroundColor: "#16171d",
+    // 설치본은 실행 파일·설치 아이콘을 쓰고, 개발 실행만 창 아이콘을 직접 준다 (build/icon.png).
+    ...(app.isPackaged ? {} : { icon: join(app.getAppPath(), "build", "icon.png") }),
     webPreferences: {
       preload: join(here, "../preload/index.cjs"),
       contextIsolation: true,
