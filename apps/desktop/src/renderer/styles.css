@@ -2190,8 +2190,53 @@ button.toggled {
 }
 
 .terminal-view {
+  position: relative;
   width: 100%;
   height: 100%;
+}
+
+.terminal-screen {
+  width: 100%;
+  height: 100%;
+}
+
+/* 터미널 오른쪽 클릭 메뉴 */
+.terminal-menu {
+  position: absolute;
+  z-index: 10;
+  min-width: 200px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+}
+
+.terminal-menu button {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.terminal-menu button:hover:not(:disabled) {
+  background: var(--panel);
+}
+
+.terminal-menu button:disabled {
+  color: var(--muted);
+}
+
+.terminal-menu kbd {
+  color: var(--muted);
+  font-family: inherit;
+  white-space: nowrap;
 }
 
 /* Pi 설치·다른 버전·제거 (설계 §4.9) */
