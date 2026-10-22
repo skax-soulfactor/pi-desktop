@@ -284,7 +284,8 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     },
   );
   handle(IpcChannels.pickDirectory, async () => {
-    const options = { properties: ["openDirectory" as const] };
+    // 대화상자에서도 새 폴더를 만들 수 있게 한다 (macOS 새 폴더 버튼, Windows는 없는 경로를 쓰면 만들지 묻는다).
+    const options = { properties: ["openDirectory" as const, "createDirectory" as const, "promptToCreate" as const] };
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
   });
@@ -341,6 +342,9 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   );
   handle(IpcChannels.listDir, (_event, hostId: string, path: string | undefined) =>
     conn(hostId).request<FsListDirResult>(Methods.fsListDir, path ? { path } : {}),
+  );
+  handle(IpcChannels.makeDir, async (_event, hostId: string, parent: string, name: string) =>
+    (await conn(hostId).request<{ path: string }>(Methods.fsMakeDir, { parent, name })).path,
   );
   // 패키지 경로 해석에 npm 조회가 끼어 느릴 수 있어 넉넉히 기다린다.
   handle(IpcChannels.listResources, (_event, hostId: string, cwd: string) =>

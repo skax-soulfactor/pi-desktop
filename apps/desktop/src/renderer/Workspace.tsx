@@ -28,6 +28,7 @@ import { piSessionIdOf, tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
 import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
 import { FolderBrowser } from "./FolderBrowser";
+import { NewFolderDialog } from "./NewFolderDialog";
 import { SshHostsDialog } from "./SshHostsDialog";
 import { restoreQueueToDraft } from "./run-status";
 import { QueuePanel, RetryBanner } from "./RunStatus";
@@ -112,6 +113,9 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [piManagerOpen, setPiManagerOpen] = useState(false);
   const [piManagerTab, setPiManagerTab] = useState<"status" | "providers" | "settings">("status");
   const [folderBrowserOpen, setFolderBrowserOpen] = useState(false);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  /** 새 폴더 대화상자가 상위 폴더를 고르려고 연 탐색 창의 응답 */
+  const browseForParent = useRef<((path: string | undefined) => void) | undefined>(undefined);
   const [agentReplaceAsk, setAgentReplaceAsk] = useState(false);
   const [sshHostsOpen, setSshHostsOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
@@ -808,6 +812,9 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         >
           폴더 선택
         </button>
+        <button type="button" disabled={!connected || busy} onClick={() => setNewFolderOpen(true)} title="세션을 시작할 새 폴더를 이 호스트에 만듭니다">
+          새 폴더
+        </button>
         <button
           type="button"
           className="primary"
@@ -1159,16 +1166,43 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           }}
         />
       )}
+      {active && newFolderOpen && (
+        <NewFolderDialog
+          hostId={hostId}
+          hostLabel={hostLabel}
+          initialParent={cwd}
+          onBrowse={async (current) => {
+            if (isLocal) return window.piDesktop.pickDirectory();
+            return new Promise<string | undefined>((resolve) => {
+              browseForParent.current = resolve;
+              setFolderBrowserOpen(true);
+            });
+          }}
+          onCreated={(path, startSession) => {
+            setNewFolderOpen(false);
+            setCwd(path);
+            if (startSession) void guard(() => openSession(path));
+          }}
+          onClose={() => setNewFolderOpen(false)}
+        />
+      )}
       {active && folderBrowserOpen && (
         <FolderBrowser
           hostId={hostId}
           hostLabel={hostLabel}
           initialPath={cwd}
           onPick={(path) => {
-            setCwd(path);
             setFolderBrowserOpen(false);
+            if (browseForParent.current) {
+              browseForParent.current(path);
+              browseForParent.current = undefined;
+            } else setCwd(path);
           }}
-          onClose={() => setFolderBrowserOpen(false)}
+          onClose={() => {
+            setFolderBrowserOpen(false);
+            browseForParent.current?.(undefined);
+            browseForParent.current = undefined;
+          }}
         />
       )}
       {active && piManagerOpen && (

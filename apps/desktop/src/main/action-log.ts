@@ -90,6 +90,7 @@ export const LOGGED: Record<string, Describer> = {
       summary: `프로젝트 신뢰: ${str(cwd)} → ${decision === true ? "신뢰" : decision === false ? "신뢰 안 함" : "기억 지움"}`,
     }),
   },
+  "pi:make-dir": { describe: ([hostId, parent, name]) => ({ hostId: str(hostId), summary: `새 폴더: ${str(name)} (${str(parent) || "홈"})` }) },
   "pi:write-resource": { describe: ([hostId, , path]) => ({ hostId: str(hostId), summary: `리소스 저장: ${str(path)}` }) },
   "pi:create-resource": {
     describe: ([hostId, , kind, scope, name]) => ({ hostId: str(hostId), summary: `리소스 만들기: ${str(kind)} ${str(name)} (${scope === "project" ? "프로젝트" : "사용자"})` }),

@@ -62,6 +62,7 @@ const api: PiDesktopApi = {
   piLatest: (hostId, force) => ipcRenderer.invoke(IpcChannels.piLatest, hostId, force === true),
   searchFiles: (hostId, cwd, query) => ipcRenderer.invoke(IpcChannels.searchFiles, hostId, cwd, query),
   listDir: (hostId, path) => ipcRenderer.invoke(IpcChannels.listDir, hostId, path),
+  makeDir: (hostId, parent, name) => ipcRenderer.invoke(IpcChannels.makeDir, hostId, parent, name),
   listResources: (hostId, cwd) => ipcRenderer.invoke(IpcChannels.listResources, hostId, cwd),
   marketSearch: (query, from) => ipcRenderer.invoke(IpcChannels.marketSearch, query, from),
   marketDetail: (name) => ipcRenderer.invoke(IpcChannels.marketDetail, name),
