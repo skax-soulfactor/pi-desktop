@@ -404,7 +404,7 @@ export interface PiDesktopApi {
   /** 받은 프로바이더를 그 호스트의 models.json에 쓴다. replace면 이미 있는 것을 바꾼다 (대상 키는 남김) */
   modelsImport(hostId: string, id: string, provider: Record<string, unknown>, replace: boolean): Promise<void>;
   /** 설정에 적힌 패키지 하나가 내놓는 리소스와 켜짐 여부 */
-  packageResources(hostId: string, cwd: string, source: string, scope: "user" | "project"): Promise<PackageResourceItem[]>;
+  packageResources(hostId: string, cwd: string, source: string, scope: "user" | "project", overlay?: boolean): Promise<PackageResourceItem[]>;
   /** 패키지 리소스를 켜고 끈다 (그 범위 settings.json의 패키지 필터). reset이면 필터를 먼저 지운다 */
   setPackageFilter(
     hostId: string,
@@ -415,6 +415,8 @@ export interface PiDesktopApi {
     reset: boolean,
     /** 종류별 배열을 통째로 적는다 (설치할 때 종류 빼기, 다른 호스트의 필터 옮기기) */
     set?: Partial<Record<"extensions" | "skills" | "prompts" | "themes", string[]>>,
+    /** 사용자 패키지를 이 프로젝트(cwd)에서만 고른다 (프로젝트 settings의 autoload: false 항목) */
+    overlay?: boolean,
   ): Promise<void>;
   /** 그 호스트의 settings.json (target이 없으면 사용자 범위) */
   settingsRead(hostId: string, target?: SettingsTarget): Promise<SettingsReadResult>;

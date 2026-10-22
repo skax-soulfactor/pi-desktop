@@ -334,8 +334,8 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       await conn(hostId).request(Methods.modelsImportProvider, { id, provider, ...(replace ? { replace: true } : {}) });
     },
   );
-  handle(IpcChannels.packageResources, (_event, hostId: string, cwd: string, source: string, scope: "user" | "project") =>
-    conn(hostId).request<PackageResourceItem[]>(Methods.packagesResources, { cwd, source, scope }, 120_000),
+  handle(IpcChannels.packageResources, (_event, hostId: string, cwd: string, source: string, scope: "user" | "project", overlay?: boolean) =>
+    conn(hostId).request<PackageResourceItem[]>(Methods.packagesResources, { cwd, source, scope, ...(overlay ? { overlay: true } : {}) }, 120_000),
   );
   handle(
     IpcChannels.setPackageFilter,
@@ -348,10 +348,11 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       changes: PackageFilterChange[],
       reset: boolean,
       set?: PackageSetFilterParams["set"],
+      overlay?: boolean,
     ) => {
       await conn(hostId).request(
         Methods.packagesSetFilter,
-        { cwd, source, scope, changes, ...(reset ? { reset: true } : {}), ...(set ? { set } : {}) },
+        { cwd, source, scope, changes, ...(reset ? { reset: true } : {}), ...(set ? { set } : {}), ...(overlay ? { overlay: true } : {}) },
         60_000,
       );
     },

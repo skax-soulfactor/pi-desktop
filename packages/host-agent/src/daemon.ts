@@ -383,7 +383,7 @@ export class AgentDaemon {
       if (p.scope !== "user" && p.scope !== "project") throw new JsonRpcError(ErrorCodes.InvalidParams, "scope는 user·project여야 합니다");
       // 사용자 범위는 작업 폴더가 없어도 된다 (데이터 폴더를 쓴다). 프로젝트 범위는 있어야 한다.
       if (typeof p.cwd !== "string" || !p.cwd) {
-        if (p.scope === "project") throw new JsonRpcError(ErrorCodes.InvalidParams, "프로젝트 범위에는 cwd가 필요합니다");
+        if (p.scope === "project" || p.overlay === true) throw new JsonRpcError(ErrorCodes.InvalidParams, "프로젝트 범위에는 cwd가 필요합니다");
         return { ...p, cwd: agentDirOf(this.env) };
       }
       return p;
@@ -392,7 +392,7 @@ export class AgentDaemon {
 
     peer.handle(Methods.packagesResources, async (params): Promise<PackageResourceItem[]> => {
       const p = packageParams(params);
-      return listPackageResources(await filterSdk(), p.cwd, agentDirOf(this.env), p.source, p.scope).catch(asInvalid);
+      return listPackageResources(await filterSdk(), p.cwd, agentDirOf(this.env), p.source, p.scope, p.overlay === true).catch(asInvalid);
     });
 
     peer.handle(Methods.packagesSetFilter, async (params) => {

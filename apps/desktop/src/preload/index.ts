@@ -70,9 +70,9 @@ const api: PiDesktopApi = {
   modelsImport: (hostId, id, provider, replace) => ipcRenderer.invoke(IpcChannels.modelsImport, hostId, id, provider, replace),
   settingsRead: (hostId, target) => ipcRenderer.invoke(IpcChannels.settingsRead, hostId, target),
   settingsWrite: (hostId, content, baseMtime, target) => ipcRenderer.invoke(IpcChannels.settingsWrite, hostId, content, baseMtime, target),
-  packageResources: (hostId, cwd, source, scope) => ipcRenderer.invoke(IpcChannels.packageResources, hostId, cwd, source, scope),
-  setPackageFilter: (hostId, cwd, source, scope, changes, reset, set) =>
-    ipcRenderer.invoke(IpcChannels.setPackageFilter, hostId, cwd, source, scope, changes, reset, set),
+  packageResources: (hostId, cwd, source, scope, overlay) => ipcRenderer.invoke(IpcChannels.packageResources, hostId, cwd, source, scope, overlay),
+  setPackageFilter: (hostId, cwd, source, scope, changes, reset, set, overlay) =>
+    ipcRenderer.invoke(IpcChannels.setPackageFilter, hostId, cwd, source, scope, changes, reset, set, overlay),
   settingsMerge: (hostId, values, remove, target) => ipcRenderer.invoke(IpcChannels.settingsMerge, hostId, values, remove, target),
   settingsSchema: (hostId) => ipcRenderer.invoke(IpcChannels.settingsSchema, hostId),
   importResourceFiles: (hostId, params) => ipcRenderer.invoke(IpcChannels.importResourceFiles, hostId, params),

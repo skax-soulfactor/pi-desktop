@@ -445,8 +445,10 @@ function PackageList({
 }) {
   /** 제거를 한 번 더 누르라고 묻는 중인 패키지 */
   const [confirmRemove, setConfirmRemove] = useState<string | undefined>();
-  /** 리소스를 고르고 있는 패키지 (범위:소스) */
+  /** 리소스를 고르고 있는 패키지 (범위:소스, 덧씌우기면 끝에 :overlay) */
   const [filtering, setFiltering] = useState<string | undefined>();
+  /** 작업 폴더가 데이터 폴더가 아니면 프로젝트다 (사용자 패키지를 이 프로젝트에서만 고를 수 있다) */
+  const inProject = view.cwd.replace(/[\\/]+$/, "") !== view.agentDir.replace(/[\\/]+$/, "");
   const find = onOpenMarketplace && (
     <button type="button" className="small" onClick={onOpenMarketplace}>
       Marketplace에서 패키지 찾기…
@@ -465,7 +467,7 @@ function PackageList({
     {find}
     <ul className="resource-list">
       {view.packages.map((p) => (
-        <li key={`${p.scope}:${p.source}`} className={filtering === `${p.scope}:${p.source}` ? "package-filtering" : undefined}>
+        <li key={`${p.scope}:${p.source}`} className={filtering?.startsWith(`${p.scope}:${p.source}`) ? "package-filtering" : undefined}>
           <div className="resource-main">
             <span className="resource-name">
               {p.source}
@@ -487,6 +489,16 @@ function PackageList({
               title="이 패키지의 확장·스킬·프롬프트·테마를 하나씩 켜고 끕니다"
             >
               리소스 고르기
+            </button>
+          )}
+          {p.installedPath && p.scope === "user" && inProject && filtering !== `${p.scope}:${p.source}:overlay` && (
+            <button
+              type="button"
+              className="small"
+              onClick={() => setFiltering(`${p.scope}:${p.source}:overlay`)}
+              title="사용자 설정은 그대로 두고 이 프로젝트에서만 켜고 끕니다 (.pi/settings.json)"
+            >
+              이 프로젝트에서만 고르기
             </button>
           )}
           {onCopy && (
@@ -520,8 +532,16 @@ function PackageList({
               )}
             </>
           )}
-          {filtering === `${p.scope}:${p.source}` && (
-            <PackageFilterEditor hostId={hostId} cwd={view.cwd} pkg={p} onSaved={onChanged} onClose={() => setFiltering(undefined)} />
+          {filtering?.startsWith(`${p.scope}:${p.source}`) && (
+            <PackageFilterEditor
+              key={filtering}
+              hostId={hostId}
+              cwd={view.cwd}
+              pkg={p}
+              overlay={filtering.endsWith(":overlay")}
+              onSaved={onChanged}
+              onClose={() => setFiltering(undefined)}
+            />
           )}
         </li>
       ))}

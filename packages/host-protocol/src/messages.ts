@@ -328,6 +328,8 @@ export interface PackageResourcesParams {
   /** 설정에 적힌 그대로의 소스 */
   source: string;
   scope: "user" | "project";
+  /** 사용자 패키지를 이 프로젝트(cwd)에서만 고르는 덧씌우기 (프로젝트 settings의 autoload: false 항목) */
+  overlay?: boolean;
 }
 
 export interface PackageResourceItem {

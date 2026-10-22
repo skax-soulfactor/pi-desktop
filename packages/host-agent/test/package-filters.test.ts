@@ -47,6 +47,14 @@ describe("applyPackageFilter", () => {
   });
 });
 
+describe("applyPackageFilter overlay", () => {
+  it("없으면 autoload: false 항목을 만들고, 덧씌울 것이 없어지면 지운다", () => {
+    const added = applyPackageFilter(["npm:other"], "npm:b", [{ type: "skills", pattern: "skills/x", enabled: false }], false, {}, true);
+    expect(added).toEqual(["npm:other", { source: "npm:b", autoload: false, skills: ["-skills/x"] }]);
+    expect(applyPackageFilter(added, "npm:b", [], true, {}, true)).toEqual(["npm:other"]);
+  });
+});
+
 describe("listPackageResources·setPackageFilter (실제 Pi SDK)", () => {
   it("로컬 패키지의 스킬·프롬프트를 나열하고, 끄면 settings.json에 적혀 다시 읽을 때 꺼져 있다", async () => {
     const base = mkdtempSync(join(tmpdir(), "pi-pkg-filter-"));
@@ -81,5 +89,24 @@ describe("listPackageResources·setPackageFilter (실제 Pi SDK)", () => {
 
     await setPackageFilter(sdk, base, agentDir, { source: pkg, scope: "user", changes: [], reset: true });
     expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).packages).toEqual([pkg]);
+
+    // 이 프로젝트에서만 프롬프트를 끈다 (사용자 설정은 그대로)
+    const project = join(base, "proj");
+    mkdirSync(project);
+    const prompt = after.find((i) => i.type === "prompts")!;
+    await setPackageFilter(sdk, project, agentDir, {
+      source: pkg,
+      scope: "user",
+      overlay: true,
+      changes: [{ type: "prompts", pattern: prompt.pattern, enabled: false }],
+    });
+    expect(JSON.parse(readFileSync(join(project, ".pi", "settings.json"), "utf8")).packages).toEqual([
+      { source: pkg, autoload: false, prompts: [`-${prompt.pattern}`] },
+    ]);
+    const inProject = await listPackageResources(sdk, project, agentDir, pkg, "user", true);
+    expect(inProject.find((i) => i.type === "prompts")!.enabled).toBe(false);
+    expect((await listPackageResources(sdk, base, agentDir, pkg, "user")).find((i) => i.type === "prompts")!.enabled).toBe(true);
+    await setPackageFilter(sdk, project, agentDir, { source: pkg, scope: "user", overlay: true, changes: [], reset: true });
+    expect(JSON.parse(readFileSync(join(project, ".pi", "settings.json"), "utf8")).packages).toEqual([]);
   });
 });
