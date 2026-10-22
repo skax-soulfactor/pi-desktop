@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
+import type { SettingsTarget } from "@pi-desktop/host-protocol/messages";
 import { errorText } from "./folder-browser";
+import { SettingsJsonEditor } from "./SettingsJsonEditor";
 import {
   changedEdits,
   parseNumberOr,
@@ -12,17 +14,78 @@ import {
 
 interface Props {
   hostId: string;
+  /** 프로젝트 범위를 고를 때 처음 넣어 둘 작업 폴더 (지금 탭의 폴더) */
+  projectCwd?: string;
 }
 
 /**
- * 사용자 settings.json 폼 (설계 §4.8). 그 호스트에 설치된 Pi의 스키마로 필드를 만든다.
+ * settings.json 편집 (설계 §4.8): 범위(사용자 / 프로젝트 폴더)와 방식(폼 / JSON)을 고른다.
+ * 프로젝트 범위는 그 폴더의 .pi/settings.json이고, 같은 키는 사용자 설정보다 우선한다.
+ */
+export function SettingsFormPanel({ hostId, projectCwd = "" }: Props) {
+  const [scope, setScope] = useState<"user" | "project">("user");
+  const [cwdInput, setCwdInput] = useState(projectCwd);
+  const [cwd, setCwd] = useState(projectCwd);
+  const [mode, setMode] = useState<"form" | "json">("form");
+  const target: SettingsTarget | undefined = scope === "project" ? { scope, cwd } : undefined;
+  const key = `${hostId}|${scope}|${scope === "project" ? cwd : ""}`;
+
+  return (
+    <div className="settings-editor">
+      <div className="settings-copy-head">
+        <label>
+          범위{" "}
+          <select value={scope} onChange={(e) => setScope(e.target.value as "user" | "project")}>
+            <option value="user">사용자 (데이터 폴더)</option>
+            <option value="project">프로젝트 (폴더의 .pi/)</option>
+          </select>
+        </label>
+        {scope === "project" && (
+          <form
+            className="settings-cwd"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setCwd(cwdInput.trim());
+            }}
+          >
+            <input value={cwdInput} onChange={(e) => setCwdInput(e.target.value)} placeholder="이 호스트의 프로젝트 폴더" spellCheck={false} />
+            <button type="submit" disabled={!cwdInput.trim() || cwdInput.trim() === cwd}>
+              열기
+            </button>
+          </form>
+        )}
+        <span className="spacer" />
+        <div className="segmented" role="tablist">
+          <button type="button" className={mode === "form" ? "on" : ""} onClick={() => setMode("form")}>
+            폼
+          </button>
+          <button type="button" className={mode === "json" ? "on" : ""} onClick={() => setMode("json")}>
+            JSON
+          </button>
+        </div>
+      </div>
+      {scope === "project" && !cwd ? (
+        <p className="muted">프로젝트 폴더를 넣고 "열기"를 누르세요.</p>
+      ) : mode === "form" ? (
+        <SettingsForm key={key} hostId={hostId} target={target} />
+      ) : (
+        <SettingsJsonEditor key={key} hostId={hostId} target={target} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * settings.json 폼. 그 호스트에 설치된 Pi의 스키마로 필드를 만든다.
  * 고친 것은 미리 보고 저장하며, 저장은 고친 최상위 키만 바꾼다(settings.merge, 이전 파일은 .bak).
  * 값을 비우거나 "기본값"을 고르면 키를 지워 Pi 기본값으로 되돌린다.
  */
-export function SettingsFormPanel({ hostId }: Props) {
+function SettingsForm({ hostId, target }: { hostId: string; target: SettingsTarget | undefined }) {
   const [schema, setSchema] = useState<Record<string, unknown> | null | undefined>();
   const [values, setValues] = useState<Record<string, unknown> | undefined>();
   const [readError, setReadError] = useState<string | undefined>();
+  /** 파일이 이미 있었는지 (저장하면 .bak이 남는지) */
+  const [existed, setExisted] = useState(false);
   const [edits, setEdits] = useState<Map<string, unknown>>(new Map());
   /** numberOr 입력 중인 글자 (아직 값이 아닌 것) */
   const [drafts, setDrafts] = useState<Map<string, string>>(new Map());
@@ -33,8 +96,9 @@ export function SettingsFormPanel({ hostId }: Props) {
   const [notice, setNotice] = useState<string | undefined>();
 
   async function loadValues() {
-    const read = await window.piDesktop.settingsRead(hostId);
+    const read = await window.piDesktop.settingsRead(hostId, target);
     setReadError(read.error);
+    setExisted(read.exists);
     setValues(read.values);
   }
 
@@ -71,11 +135,14 @@ export function SettingsFormPanel({ hostId }: Props) {
     setError(undefined);
     try {
       const patch = settingsPatch(values, form.fields, new Map(changes.map((c) => [c.key, c.after])));
-      await window.piDesktop.settingsMerge(hostId, patch.set, patch.remove);
+      const hadFile = existed;
+      await window.piDesktop.settingsMerge(hostId, patch.set, patch.remove, target);
       await loadValues();
       setEdits(new Map());
       setPreview(false);
-      setNotice(`${changes.length}개 항목을 저장했습니다. 이전 파일은 settings.json.bak에 남습니다. 새로 여는 세션부터 쓰입니다.`);
+      setNotice(
+        `${changes.length}개 항목을 저장했습니다.${hadFile ? " 이전 파일은 settings.json.bak에 남습니다." : " 파일을 새로 만들었습니다."} 새로 여는 세션부터 쓰입니다.`,
+      );
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -88,7 +155,7 @@ export function SettingsFormPanel({ hostId }: Props) {
     return <div className="banner warn">이 호스트의 Pi는 설정 스키마(schemas/settings.schema.json)를 함께 배포하지 않아 폼을 만들 수 없습니다.</div>;
   }
   if (!form || !values) return <p className="muted">설정과 스키마를 읽는 중…</p>;
-  if (readError) return <div className="banner error">{readError} 파일을 고친 뒤 다시 여세요.</div>;
+  if (readError) return <div className="banner error">{readError} "JSON"에서 고친 뒤 다시 여세요.</div>;
 
   const q = query.trim().toLowerCase();
   const matches = (f: SettingsField) => !q || f.key.toLowerCase().includes(q) || (f.description ?? "").toLowerCase().includes(q);
@@ -128,7 +195,10 @@ export function SettingsFormPanel({ hostId }: Props) {
         </button>
       </div>
       <p className="muted">
-        사용자 settings.json입니다. 이 호스트에 설치된 Pi의 스키마로 만든 폼이라 Pi 버전에 맞는 항목이 나옵니다. 비우거나 "기본값"을 고르면 Pi 기본값으로 돌아갑니다.
+        {target?.scope === "project"
+          ? "프로젝트 .pi/settings.json입니다. 같은 키는 사용자 설정보다 우선하고, Pi는 그 폴더를 신뢰해야 이 설정을 씁니다. 설명에 Global setting only라고 적힌 항목은 사용자 범위에서만 쓰입니다. "
+          : "사용자 settings.json입니다. "}
+        이 호스트에 설치된 Pi의 스키마로 만든 폼이라 Pi 버전에 맞는 항목이 나옵니다. 비우거나 "기본값"을 고르면 {target?.scope === "project" ? "이 범위에서 지워집니다" : "Pi 기본값으로 돌아갑니다"}.
       </p>
       {invalid.length > 0 && <div className="banner warn">값이 맞지 않는 항목: {invalid.join(", ")}</div>}
       {error && <div className="banner error">{error}</div>}

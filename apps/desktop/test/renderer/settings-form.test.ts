@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 // 저장소에 설치된 Pi가 함께 배포한 실제 스키마
 import schemaText from "../../../../node_modules/@earendil-works/pi-coding-agent/schemas/settings.schema.json?raw";
-import { changedEdits, parseNumberOr, schemaFields, settingsPatch, settingText, valueAt } from "../../src/renderer/settings-form";
+import { changedEdits, jsonProblem, parseNumberOr, schemaFields, settingsPatch, settingText, valueAt } from "../../src/renderer/settings-form";
 
 const schema = JSON.parse(schemaText) as Record<string, unknown>;
 
@@ -61,5 +61,14 @@ describe("parseNumberOr·settingText", () => {
     expect(parseNumberOr("abc", { options: ["auto"] })).toBeUndefined();
     expect(settingText(undefined)).toBe("기본값");
     expect(settingText(false)).toBe("false");
+  });
+});
+
+describe("jsonProblem", () => {
+  it("최상위가 객체인 JSON만 받는다", () => {
+    expect(jsonProblem('{ "theme": "dark" }')).toBeUndefined();
+    expect(jsonProblem("[]")).toContain("객체");
+    expect(jsonProblem("null")).toContain("객체");
+    expect(jsonProblem("{ x")).toContain("올바르지");
   });
 });

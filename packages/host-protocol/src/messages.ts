@@ -49,8 +49,10 @@ export const Methods = {
   settingsRead: "settings.read",
   /** 설치된 Pi가 함께 배포한 settings.json의 JSON Schema (없으면 null) */
   settingsSchema: "settings.schema",
-  /** 사용자 settings.json의 고른 최상위 키만 바꾼다 (다른 호스트에서 복사할 때) */
+  /** settings.json의 고른 최상위 키만 바꾼다 (설정 폼, 다른 호스트에서 복사할 때) */
   settingsMerge: "settings.merge",
+  /** settings.json 원본 글을 그대로 쓴다 (JSON 편집 모드, 읽은 뒤 바뀌었으면 거부) */
+  settingsWrite: "settings.write",
   /** OpenAI 호환 엔드포인트의 /models를 이 호스트에서 불러 연결 시험 */
   modelsProbe: "models.probe",
   sessionOpen: "session.open",
@@ -348,15 +350,34 @@ export interface PackageSetFilterParams extends PackageResourcesParams {
   reset?: boolean;
 }
 
+/** 어느 settings.json인지. 없으면 사용자 범위 */
+export interface SettingsTarget {
+  scope?: "user" | "project";
+  /** 프로젝트 범위의 작업 폴더 (그 아래 .pi/settings.json) */
+  cwd?: string;
+}
+
 export interface SettingsReadResult {
+  /** 읽은 파일 경로 (호스트 기준) */
+  path: string;
   exists: boolean;
+  /** 원본 글 (JSON 편집 모드). 파일이 없으면 빈 글 */
+  raw: string;
+  /** 수정 시각. 파일이 없으면 없음 */
+  mtimeMs?: number;
   /** 최상위 키와 값 그대로 */
   values: Record<string, unknown>;
   /** 파일이 깨져 읽지 못했으면 이유 (이때는 쓰지 않는다) */
   error?: string;
 }
 
-export interface SettingsMergeParams {
+export interface SettingsWriteParams extends SettingsTarget {
+  content: string;
+  /** 읽을 때의 수정 시각. null이면 새 파일이어야 한다 */
+  baseMtime: number | null;
+}
+
+export interface SettingsMergeParams extends SettingsTarget {
   /** 바꿀 최상위 키와 값. 여기 없는 키는 그대로 둔다 */
   values: Record<string, unknown>;
   /** 지울 최상위 키 (Pi 기본값으로 되돌림) */

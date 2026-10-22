@@ -991,6 +991,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         <PiManager
           hosts={hosts}
           initialHostId={hostId}
+          {...(resourcesCwd ? { projectCwd: resourcesCwd } : {})}
           onClose={() => setPiManagerOpen(false)}
           onChanged={() => void piState.reload(true)}
           onRunInTerminal={(targetHost, command, title) => {
