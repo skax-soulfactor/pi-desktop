@@ -15,6 +15,8 @@ interface Props {
   disabled: boolean;
   onSelect: (session: SessionSummary) => void;
   onOpenStored: (stored: StoredSession) => void;
+  /** 실행 중인 세션을 닫는다 (Pi 종료). 대화는 기록에 남는다 */
+  onClose: (session: SessionSummary) => void;
   /** 보고 있는 세션의 이름 (get_state). 기록을 다시 읽기 전에도 바로 보이게 한다 */
   currentName?: string;
   /** 보고 있는 세션의 이름을 바꾼다. 실행 중인 세션만 바꿀 수 있다 */
@@ -29,9 +31,10 @@ interface Props {
  * - 기록: Pi가 디스크에 저장한 세션 (데몬이 Pi SDK로 읽음). 이 폴더 / 전체 범위 전환
  * - 검색: 두 목록을 이름·첫 메시지·폴더·파일 경로로 거른다
  * - 이름 변경: 보고 있는 실행 중 세션의 ✎ (set_session_name)
+ * - 닫기: 실행 중 세션의 ✕. Pi를 끄고, 다시 쓰려면 기록에서 연다
  */
 export function Sidebar(props: Props) {
-  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, currentName, onRename, refreshKey } = props;
+  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, onClose, currentName, onRename, refreshKey } = props;
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<string | undefined>();
   const [scope, setScope] = useState<Scope>(() => {
@@ -42,6 +45,9 @@ export function Sidebar(props: Props) {
     }
   });
   const [history, setHistory] = useState<StoredSession[]>([]);
+  // 한 번 읽은 기록의 제목(세션 파일 → 이름이나 첫 메시지). 기록은 "이 폴더"로 걸러지므로, 다른 폴더의
+  // 실행 중 세션도 제목이 바뀌지 않게 지금 목록과 따로 기억해 둔다.
+  const [titles, setTitles] = useState<ReadonlyMap<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -52,7 +58,16 @@ export function Sidebar(props: Props) {
     if (!connected) return;
     setLoading(true);
     try {
-      setHistory(await window.piDesktop.listHistory(hostId, folder));
+      const list = await window.piDesktop.listHistory(hostId, folder);
+      setHistory(list);
+      setTitles((prev) => {
+        const next = new Map(prev);
+        for (const h of list) {
+          const title = h.name ?? h.firstMessage;
+          if (title) next.set(h.path, title);
+        }
+        return next;
+      });
       setError(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -61,8 +76,14 @@ export function Sidebar(props: Props) {
     }
   }, [connected, hostId, folder]);
 
+  // 다른 호스트의 기록이 잠깐이라도 보이지 않게 호스트가 바뀔 때만 비운다.
+  // 세션을 바꿀 때마다 비우면 목록이 깜박인다.
   useEffect(() => {
     setHistory([]);
+    setTitles(new Map());
+  }, [hostId]);
+
+  useEffect(() => {
     void load();
   }, [load, current?.sessionFile, refreshKey]);
 
@@ -91,11 +112,10 @@ export function Sidebar(props: Props) {
 
   const liveFiles = new Set(sessions.filter((s) => s.state === "running").map((s) => s.sessionFile));
   // 실행 중 세션은 폴더 이름만으로는 구별이 안 되므로, 같은 세션 파일의 기록에서 이름이나 첫 메시지를 가져온다.
-  const storedByPath = new Map(history.map((h) => [h.path, h]));
+  // 기록에 아직 없으면(첫 메시지 전 등) 데몬이 아는 제목, 그것도 없으면 폴더 이름.
   const liveTitle = (s: SessionSummary) => {
     if (s.sessionId === current?.sessionId && currentName) return currentName;
-    const stored = s.sessionFile ? storedByPath.get(s.sessionFile) : undefined;
-    return stored?.name ?? (stored?.firstMessage || baseName(s.cwd));
+    return (s.sessionFile ? titles.get(s.sessionFile) : undefined) ?? s.title ?? baseName(s.cwd);
   };
   const ordered = [...sessions]
     .sort((a, b) => b.startedAt - a.startedAt)
@@ -180,6 +200,16 @@ export function Sidebar(props: Props) {
                   ✎
                 </button>
               )}
+              <button
+                type="button"
+                className="close-session-button"
+                disabled={disabled}
+                onClick={() => onClose(s)}
+                title={s.state === "running" ? "세션 닫기 (Pi를 끕니다. 대화는 기록에 남아 다시 열 수 있습니다)" : "목록에서 지우기"}
+                aria-label="세션 닫기"
+              >
+                ✕
+              </button>
             </div>
           );
         })}
