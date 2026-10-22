@@ -1178,7 +1178,7 @@ button.small {
 .rename-button {
   position: absolute;
   top: 4px;
-  right: 4px;
+  right: 26px;
   padding: 0 6px;
   border: 0;
   background: transparent;
@@ -1187,8 +1187,26 @@ button.small {
 }
 
 .session-row:hover .rename-button,
-.rename-button:focus-visible {
+.rename-button:focus-visible,
+.session-row:hover .close-session-button,
+.close-session-button:focus-visible {
   opacity: 1;
+}
+
+/* 실행 중 세션 닫기 ✕ (줄에 마우스를 올리면 보인다) */
+.close-session-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0;
+}
+
+.close-session-button:hover:not(:disabled) {
+  color: var(--danger, #c0392b);
 }
 
 .session-item.editing {

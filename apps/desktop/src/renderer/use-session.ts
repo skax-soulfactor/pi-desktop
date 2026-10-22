@@ -433,6 +433,19 @@ export function useSession(tabId: string = MAIN_TAB) {
     });
   }, []);
 
+  /**
+   * 팔로우 중인 세션 파일을 GUI에서 다시 연다 (TUI로 넘겼다가 TUI를 닫은 뒤 돌아오기).
+   * 같은 파일에 쓰므로 TUI가 아직 열려 있으면 기록이 꼬일 수 있다. 화면이 그 점을 알린다.
+   */
+  const resumeFollowed = useCallback(async () => {
+    const current = followRef.current;
+    if (!current) return;
+    const created = await openWithTrust({ cwd: current.cwd, sessionFile: current.path });
+    if (!created) return;
+    await refreshSessions();
+    await switchTo(created);
+  }, [openWithTrust, refreshSessions, switchTo]);
+
   /** 팔로우 중인 세션을 같은 파일에 쓰지 않고, 분기한 새 세션으로 이어 쓴다. */
   const continueFollowedAsFork = useCallback(async () => {
     const current = followRef.current;
@@ -470,6 +483,26 @@ export function useSession(tabId: string = MAIN_TAB) {
     }
     return { cwd: current.cwd, sessionFile: current.sessionFile, exists };
   }, [refreshSessions, startFollow]);
+
+  /**
+   * 실행 중인 세션을 닫는다(Pi 프로세스 종료). 대화는 세션 파일에 남으므로 기록에서 다시 열 수 있다.
+   * 보던 세션이면 화면을 비운다.
+   */
+  const closeSession = useCallback(
+    async (target: SessionSummary) => {
+      await api().closeSession(hostRef.current, target.sessionId);
+      if (sessionRef.current?.sessionId === target.sessionId) {
+        sessionRef.current = undefined;
+        setSession(undefined);
+        setLost(undefined);
+        dispatch({ type: "reset" });
+        dispatchUi({ type: "reset" });
+        writeStorage(lastSessionKey(hostRef.current), null);
+      }
+      await refreshSessions();
+    },
+    [refreshSessions],
+  );
 
   /**
    * fork·clone처럼 같은 Pi 프로세스가 새 세션 파일로 옮겨 가는 명령을 보낸다.
@@ -656,6 +689,8 @@ export function useSession(tabId: string = MAIN_TAB) {
     cancelPendingOpen: () => setPendingOpen(undefined),
     stopFollow,
     handOffToTui,
+    closeSession,
+    resumeFollowed,
     continueFollowedAsFork,
     ignoreExternalWrite,
     writer,

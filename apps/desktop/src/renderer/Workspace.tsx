@@ -95,6 +95,8 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     cancelPendingOpen,
     stopFollow,
     handOffToTui,
+    closeSession,
+    resumeFollowed,
     continueFollowedAsFork,
     ignoreExternalWrite,
     writer,
@@ -888,6 +890,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           disabled={!connected || busy}
           onSelect={(target) => void guard(() => switchTo(target))}
           onOpenStored={(stored) => void guard(() => openStored(stored))}
+          onClose={(target) => void guard(() => closeSession(target))}
           {...(sessionInfo.info.sessionName ? { currentName: sessionInfo.info.sessionName } : {})}
           {...(session && !lost && connected
             ? {
@@ -986,8 +989,18 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
                 {"\n"}터미널에서 실행하세요 (클립보드에 복사됨): <code>{handoffCommand}</code>
               </>
             )}
+            {"\n"}TUI를 끝냈으면 "GUI에서 이어 쓰기"로 이 세션을 다시 엽니다. TUI를 계속 쓰면서 GUI에서도 쓰려면 분기하세요.
           </span>
-          <button type="button" className="primary" disabled={busy} onClick={() => void guard(continueFollowedAsFork)}>
+          <button
+            type="button"
+            className="primary"
+            disabled={busy}
+            onClick={() => void guard(resumeFollowed)}
+            title="같은 세션 파일을 GUI에서 다시 엽니다. TUI가 아직 열려 있으면 기록이 섞일 수 있으니 먼저 TUI를 끝내세요."
+          >
+            GUI에서 이어 쓰기
+          </button>
+          <button type="button" disabled={busy} onClick={() => void guard(continueFollowedAsFork)}>
             분기해서 이어 쓰기
           </button>
           <button type="button" onClick={() => stopFollow()}>

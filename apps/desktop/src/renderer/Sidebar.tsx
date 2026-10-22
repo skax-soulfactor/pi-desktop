@@ -15,6 +15,8 @@ interface Props {
   disabled: boolean;
   onSelect: (session: SessionSummary) => void;
   onOpenStored: (stored: StoredSession) => void;
+  /** 실행 중인 세션을 닫는다 (Pi 종료). 대화는 기록에 남는다 */
+  onClose: (session: SessionSummary) => void;
   /** 보고 있는 세션의 이름 (get_state). 기록을 다시 읽기 전에도 바로 보이게 한다 */
   currentName?: string;
   /** 보고 있는 세션의 이름을 바꾼다. 실행 중인 세션만 바꿀 수 있다 */
@@ -29,9 +31,10 @@ interface Props {
  * - 기록: Pi가 디스크에 저장한 세션 (데몬이 Pi SDK로 읽음). 이 폴더 / 전체 범위 전환
  * - 검색: 두 목록을 이름·첫 메시지·폴더·파일 경로로 거른다
  * - 이름 변경: 보고 있는 실행 중 세션의 ✎ (set_session_name)
+ * - 닫기: 실행 중 세션의 ✕. Pi를 끄고, 다시 쓰려면 기록에서 연다
  */
 export function Sidebar(props: Props) {
-  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, currentName, onRename, refreshKey } = props;
+  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, onClose, currentName, onRename, refreshKey } = props;
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<string | undefined>();
   const [scope, setScope] = useState<Scope>(() => {
@@ -197,6 +200,16 @@ export function Sidebar(props: Props) {
                   ✎
                 </button>
               )}
+              <button
+                type="button"
+                className="close-session-button"
+                disabled={disabled}
+                onClick={() => onClose(s)}
+                title={s.state === "running" ? "세션 닫기 (Pi를 끕니다. 대화는 기록에 남아 다시 열 수 있습니다)" : "목록에서 지우기"}
+                aria-label="세션 닫기"
+              >
+                ✕
+              </button>
             </div>
           );
         })}
