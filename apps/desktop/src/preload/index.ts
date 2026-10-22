@@ -88,6 +88,15 @@ const api: PiDesktopApi = {
   copyStatus: (hostId) => ipcRenderer.invoke(IpcChannels.copyStatus, hostId),
   hostInventory: (hostId) => ipcRenderer.invoke(IpcChannels.hostInventory, hostId),
   listActionLog: (limit) => ipcRenderer.invoke(IpcChannels.listActionLog, limit),
+  updateState: () => ipcRenderer.invoke(IpcChannels.updateState),
+  checkForUpdates: () => ipcRenderer.invoke(IpcChannels.checkForUpdates),
+  installUpdate: () => ipcRenderer.invoke(IpcChannels.installUpdate),
+  openRelease: () => ipcRenderer.invoke(IpcChannels.openRelease),
+  onUpdateState: (listener) => {
+    const handler = (_event: unknown, state: Parameters<typeof listener>[0]) => listener(state);
+    ipcRenderer.on(IpcChannels.updateStateChanged, handler);
+    return () => ipcRenderer.removeListener(IpcChannels.updateStateChanged, handler);
+  },
   logAction: (entry) => ipcRenderer.invoke(IpcChannels.logAction, entry),
   importUpdate: (hostId, target) => ipcRenderer.invoke(IpcChannels.importUpdate, hostId, target),
   importRemove: (hostId, target) => ipcRenderer.invoke(IpcChannels.importRemove, hostId, target),

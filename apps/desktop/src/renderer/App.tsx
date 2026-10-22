@@ -13,6 +13,7 @@ import { tabShowing, type ActivityEntry } from "./activity-view";
 import type { PaletteCommand } from "./palette";
 import { ActivityButton, useActivity } from "./ActivityPanel";
 import { sharedEventLog } from "./event-log";
+import { UpdateBadge, useUpdateState } from "./UpdateBadge";
 import { forgetTab, MAIN_TAB, setTabHost, setTabSession } from "./use-session";
 import { Workspace, type WorkspaceStatus } from "./Workspace";
 
@@ -32,6 +33,7 @@ export function App() {
   tabsRef.current = tabs;
 
   useEffect(() => saveTabs(tabs), [tabs]);
+  const update = useUpdateState();
 
   // Event Inspector가 열기 전에 온 이벤트도 보이도록 앱이 켜질 때부터 세션 이벤트를 모은다.
   useEffect(() => {
@@ -126,8 +128,26 @@ export function App() {
         run: () => activate(id),
       });
     });
+    list.push({
+      id: "app-update",
+      group: "앱",
+      title:
+        update?.status === "downloaded"
+          ? `다시 시작해 ${update.version} 설치`
+          : update?.status === "available"
+            ? `새 버전 ${update.version} 내려받기 페이지 열기`
+            : "업데이트 확인",
+      hint: update ? `지금 ${update.current}` : "",
+      keywords: "update upgrade version release 업데이트 버전",
+      disabled: !update || update.status === "disabled",
+      run: () => {
+        if (update?.status === "downloaded") void window.piDesktop.installUpdate();
+        else if (update?.status === "available") void window.piDesktop.openRelease();
+        else void window.piDesktop.checkForUpdates();
+      },
+    });
     return list;
-  }, [tabs, statuses, newTab, close, activate]);
+  }, [tabs, statuses, newTab, close, activate, update]);
 
   // 단축키: Ctrl+T 새 탭, Ctrl+W 탭 닫기, Ctrl+Tab·Ctrl+Shift+Tab 탭 이동, Ctrl+1~9 탭 고르기
   useEffect(() => {
@@ -196,6 +216,7 @@ export function App() {
           +
         </button>
         <div className="tabbar-spacer" />
+        <UpdateBadge state={update} />
         <ActivityButton entries={activity} onOpen={openActivity} />
       </nav>
       <div className="workspaces">

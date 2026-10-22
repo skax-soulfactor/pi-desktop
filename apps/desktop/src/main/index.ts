@@ -72,6 +72,7 @@ import { ImportStore } from "./imports";
 import { compareCopy, CopyStore, exportKindOf, fileShas } from "./copies";
 import { collectInventory } from "./host-inventory";
 import { ActionLog } from "./action-log";
+import { Updater } from "./updater";
 import { compareLocal, compareUpstream, projectCwdOf } from "./import-status";
 import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
@@ -97,8 +98,8 @@ function agentVersion(script: string): string {
       // 다음 후보
     }
   }
-}
   return "0.0.0";
+}
 
 // 개발·E2E 검증용: 지정한 포트로 Chrome DevTools Protocol을 연다. 일반 실행에서는 열지 않는다.
 if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT) {
@@ -586,6 +587,14 @@ app.whenReady().then(() => {
     new ActionLog(join(app.getPath("userData"), "activity-log.jsonl")),
   );
   createWindow();
+
+  // 자동 업데이트 (설치한 앱에서만 확인한다)
+  const updater = new Updater((state) => sendToRenderer(IpcChannels.updateStateChanged, state));
+  ipcMain.handle(IpcChannels.updateState, () => updater.current);
+  ipcMain.handle(IpcChannels.checkForUpdates, () => updater.check());
+  ipcMain.handle(IpcChannels.installUpdate, () => updater.install());
+  ipcMain.handle(IpcChannels.openRelease, () => updater.openRelease());
+  updater.start();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
