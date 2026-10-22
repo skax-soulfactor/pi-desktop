@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.52)
+# Pi Desktop — 설계 문서 (v0.53)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -612,6 +612,36 @@ v0.1과 같다. Playground 스크립트도 Host Agent를 통해 **대상 호스�
   - WSL(Ubuntu): `process.platform`이 linux, node v24.20.0, SDK exports 157개로 나왔다.
   - 0.3초마다 찍는 무한 루프를 중지하자 "멈춤 (SIGTERM)"이 나왔다.
   - 데몬이 예전 것이라 로컬은 "지금 바꾸기"로 바꿨다. WSL은 실행 중인 세션이 없어 앱이 알아서 바꿨다.
+
+**구현 메모: 인스톨러·자동 업데이트 (M5, v0.53)**
+- 설치 파일: electron-builder(`apps/desktop/electron-builder.yml`). `npm run dist`는 지금 OS용을 만든다.
+  - 대상 형식
+    - Windows: NSIS(설치 폴더 선택 가능, 사용자별 설치)
+    - macOS: dmg·zip(x64·arm64)
+    - Linux: AppImage·deb
+  - Host Agent 번들은 앱 밖(로컬 node·WSL·SSH)에서 도는 파일이다. 그래서 asar에 넣지 않고 `resources/host-agent`에 두며, 설치본은 `process.resourcesPath`에서 찾는다. 버전은 옆의 package.json에서 읽는다.
+  - 화면 의존성은 vite 번들에 들어가므로 devDependencies로 옮겼다. 설치본의 node_modules에는 node-pty·electron-updater만 들어간다(app.asar 약 7MB, 설치 파일 약 115MB).
+  - node-pty는 N-API라 Electron에 맞춰 다시 빌드하지 않는다.
+  - electron-builder가 정확한 버전을 요구해 Electron을 고정했다(44.9.1). 설치본의 패키지 이름은 `pi-desktop`이다.
+- 코드 서명: 인증서가 없어 하지 않는다.
+  - Windows는 첫 설치 때 SmartScreen 경고가 나지만 업데이트는 된다.
+  - macOS는 Gatekeeper 경고가 나고 자동 설치가 거부된다(Squirrel.Mac이 서명을 요구).
+- 자동 업데이트(앱 main `updater.ts`, electron-updater)
+  - 배포처: GitHub Releases(`publish: github`, 공개 저장소라 토큰 없음). `publish`를 바꾸면 generic URL·S3 등도 쓸 수 있다.
+  - 확인 시점: 시작 15초 뒤, 6시간마다, 명령 팔레트 "업데이트 확인". 설치한 앱에서만 돌고, 개발 실행은 disabled다.
+  - OS별 동작(`update-policy.ts`)
+    - Windows·AppImage: 내려받아 두었다가 탭 바 배지 "다시 시작해 <버전> 설치"로 바꾼다. 앱을 끌 때도 설치한다.
+    - 서명 없는 macOS·deb: "새 버전 <버전>"을 알리고 누르면 릴리스 페이지를 연다.
+  - 시험용 `PI_DESKTOP_UPDATE_URL`을 주면 그 주소(generic)에서 확인한다.
+- 릴리스 워크플로(`.github/workflows/release.yml`)
+  - 태그 `v*`를 올리면 세 OS 러너에서 앱 버전을 태그에 맞춰 만든다.
+  - 마지막 작업이 결과물(설치 파일, blockmap, `latest*.yml`)을 모아 `gh release create`로 한 번에 올린다. 세 OS가 같은 릴리스에 동시에 올리다 부딪히지 않게 하기 위해서다.
+  - 손으로 돌리면(workflow_dispatch) 만들기만 한다.
+- 확인(Windows 로컬)
+  - `npm run dist`로 설치 파일을 만들었다. 압축을 푼 앱(`win-unpacked`)이 `resources/host-agent`의 번들로 데몬을 띄워 연결했다.
+  - 실제 GitHub 확인은 아직 릴리스가 없어 "No published versions"였다.
+  - 버전만 0.0.2로 만든 설치 파일을 로컬 HTTP 서버에 두고 `PI_DESKTOP_UPDATE_URL`로 가리켰다. 0.0.1 앱이 찾아 내려받아(blockmap 차등 시도 뒤 전체) "다시 시작해 0.0.2 설치" 배지를 띄웠다. 설치는 하지 않았다.
+  - macOS·Linux 빌드는 첫 태그(또는 손으로 돌린 워크플로)에서 확인한다.
 
 ### 4.12 내장 터미널 (신규, 공통 인프라)
 xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인, TUI 전용 확장 폴백, 사용자가 원할 때 진짜 `pi` TUI 열기다.
