@@ -803,8 +803,12 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         )}
         <div className="spacer" />
         {session && (
-          <div className="session-meta" title={session.sessionFile}>
-            Pi {session.piVersion} · {session.cwd}
+          // 아래 입력줄(새 세션을 시작할 폴더)과 헷갈리지 않게 "지금 세션"의 폴더 이름만 보이고, 전체 경로는 툴팁에 둔다.
+          <div
+            className="session-meta"
+            title={`지금 보고 있는 세션의 폴더: ${session.cwd}\nPi ${session.piVersion}${session.sessionFile ? `\n${session.sessionFile}` : ""}`}
+          >
+            <span className="session-meta-label">지금 세션</span> {baseName(session.cwd)}
           </div>
         )}
         {devMode.on && (
@@ -840,11 +844,15 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       </header>
 
       <section className="toolbar">
+        <label className="toolbar-label" htmlFor={`cwd-${tabId}`} title="새 세션을 시작할 폴더입니다. 지금 보고 있는 세션의 폴더는 상단 바에 있습니다.">
+          새 세션 폴더
+        </label>
         <input
+          id={`cwd-${tabId}`}
           className="cwd"
           placeholder={
             isLocal
-              ? "작업 폴더 경로"
+              ? "새 세션을 시작할 폴더 경로"
               : host?.kind === "ssh"
                 ? "서버의 작업 폴더 경로 (예: /home/me/project)"
                 : "WSL 안의 작업 폴더 경로 (예: /home/me/project)"
