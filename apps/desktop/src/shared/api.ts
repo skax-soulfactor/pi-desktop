@@ -254,6 +254,18 @@ export interface HostInventory {
   items: InventoryItem[];
 }
 
+/** 작업 기록 한 줄 (앱 userData의 activity-log.jsonl). 키 값·파일 내용은 담지 않는다 */
+export interface ActionLogEntry {
+  time: number;
+  /** 작업한 호스트. 앱 설정(SSH 호스트 목록 등)은 "app" */
+  hostId: string;
+  summary: string;
+  /** 터미널에서 실행한 명령 등 */
+  detail?: string;
+  ok: boolean;
+  error?: string;
+}
+
 /** 가져온 항목의 지금 상태 */
 export interface ImportStatus {
   target: string;
@@ -416,6 +428,10 @@ export interface PiDesktopApi {
   importStatus(hostId: string): Promise<ImportStatus[]>;
   /** 다른 호스트로 복사한 기록을 남긴다 (같은 대상 위치는 바꾼다) */
   recordCopy(input: CopyRecordInput): Promise<void>;
+  /** 작업 기록 (최근 것부터) */
+  listActionLog(limit?: number): Promise<ActionLogEntry[]>;
+  /** 화면에서 시작한 작업을 기록에 남긴다 (터미널에서 실행한 설치·제거 명령 등) */
+  logAction(entry: { hostId: string; summary: string; detail?: string }): Promise<void>;
   /** 호스트 비교용: 그 호스트의 사용자 범위 스킬·프롬프트·확장·AGENTS.md 등과 내용 해시 */
   hostInventory(hostId: string): Promise<HostInventory>;
   /** 이 호스트로 복사해 온 항목들의 기록과, 그 뒤 사본·원본이 바뀌었는지 */
@@ -496,6 +512,8 @@ export const IpcChannels = {
   recordCopy: "pi:record-copy",
   copyStatus: "pi:copy-status",
   hostInventory: "pi:host-inventory",
+  listActionLog: "pi:list-action-log",
+  logAction: "pi:log-action",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",
   importDiff: "pi:import-diff",
