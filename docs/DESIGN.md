@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.44)
+# Pi Desktop — 설계 문서 (v0.45)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -408,6 +408,34 @@ v0.1과 같다. 목록마다 출처 배지(user / project / package 이름)를 �
 
 ### 4.8 Settings
 v0.1과 같다. 스키마 기반 폼, User/Project 탭, diff 미리보기 후 저장, 원본 JSON 편집 모드.
+
+**구현 메모: 설정 폼 첫 단계 (M4, v0.45)** — Pi 관리의 "설정" 탭(편집 / 다른 호스트로 복사), 사용자 범위만
+- 스키마
+  - 데몬의 `settings.schema`가 그 호스트에 설치된 Pi의 `schemas/settings.schema.json`을 그대로 준다.
+  - 앱에 항목을 적어 두지 않으므로 Pi 버전마다 늘거나 바뀐 항목을 따른다(§1 기능 감지).
+  - 스키마를 배포하지 않는 Pi면 폼을 만들 수 없다고 알린다.
+- 필드로 바꾸는 규칙
+  - boolean, 숫자(정수), 문자열은 그대로 쓴다.
+  - `enum`과 const들의 `anyOf`는 선택지로 쓴다. `boolean|const`는 true·false·const 선택지가 된다.
+  - `number|const`는 숫자 또는 그 값을 받는 입력이다.
+  - 속성이 있는 객체는 한 단계 펼친다(`compaction.enabled`).
+  - 배열·패턴 객체·더 깊은 객체는 "폼에서 다루지 않는 항목"으로 이름만 알린다.
+  - 숨기는 것
+    - Pi 내부 값: `lastChangelogVersion`·`deviceId`·`trackingId`·`$schema`
+    - 다른 화면에서 다루는 목록: `packages`·`extensions`·`skills`·`prompts`·`themes`
+- 화면
+  - 자주 쓰는 설정(기본 모델·생각 수준·신뢰·steering·compaction·retry 등)을 먼저 보이고, 나머지는 접어 둔다. 이름·설명으로 찾는다.
+  - 값이 없으면 "기본값(스키마 default)"으로 보인다. 비우거나 "기본값"을 고르면 키를 지운다. 하위 필드가 모두 비면 상위 키도 지운다.
+  - 맞지 않는 입력이 있으면 저장을 막는다. 저장 전에 "지금 → 바꿀 값"을 미리 본다.
+- 저장
+  - `settings.merge`로 고친 최상위 키만 바꾼다. 하위 필드는 지금 객체에 덮어 보낸다.
+  - 지울 키는 `remove`로 보낸다. 이전 파일은 `settings.json.bak`으로 남는다.
+- 아직 하지 않은 것: 프로젝트 범위(`.pi/settings.json`) 탭, 원본 JSON 편집 모드
+- 확인: 격리된 dev 설정에서 확인했다.
+  - 바꾼 것: 생각 수준, compaction 두 필드, `httpIdleTimeoutMs: "disabled"`
+  - 잘못된 값은 저장이 막혔다.
+  - 미리보기 뒤 저장하자 그 키들만 바뀌었다.
+  - compaction 하위 필드를 기본값으로 되돌리자 `compaction` 키가 지워졌다.
 
 ### 4.9 Pi Manager (신규) — 설치·업데이트·사용·제거
 
