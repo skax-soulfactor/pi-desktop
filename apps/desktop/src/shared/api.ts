@@ -259,6 +259,26 @@ export interface HostInventory {
   items: InventoryItem[];
 }
 
+/** 앱 자동 업데이트 상태 (M5) */
+export interface UpdateState {
+  /**
+   * disabled: 개발 실행, idle: 아직 확인 안 함, checking, none: 최신, available: 새 버전(알리기만 하는 곳),
+   * downloading, downloaded: 다시 시작하면 설치, error
+   */
+  status: "disabled" | "idle" | "checking" | "none" | "available" | "downloading" | "downloaded" | "error";
+  /** 지금 앱 버전 */
+  current: string;
+  /** auto: 내려받아 설치(Windows·AppImage), notify: 알리기만(서명 없는 macOS·deb) */
+  mode: "auto" | "notify";
+  /** 새 버전 */
+  version?: string;
+  percent?: number;
+  /** 알리기만 하는 곳에서 열 릴리스 페이지 */
+  url?: string;
+  checkedAt?: number;
+  error?: string;
+}
+
 /** 작업 기록 한 줄 (앱 userData의 activity-log.jsonl). 키 값·파일 내용은 담지 않는다 */
 export interface ActionLogEntry {
   time: number;
@@ -447,6 +467,14 @@ export interface PiDesktopApi {
   importStatus(hostId: string): Promise<ImportStatus[]>;
   /** 다른 호스트로 복사한 기록을 남긴다 (같은 대상 위치는 바꾼다) */
   recordCopy(input: CopyRecordInput): Promise<void>;
+  /** 앱 자동 업데이트 상태와 조작 (M5) */
+  updateState(): Promise<UpdateState>;
+  checkForUpdates(): Promise<UpdateState>;
+  /** 내려받은 업데이트를 설치하며 다시 시작한다 */
+  installUpdate(): Promise<void>;
+  /** 새 버전의 릴리스 페이지를 연다 (알리기만 하는 곳) */
+  openRelease(): Promise<void>;
+  onUpdateState(listener: (state: UpdateState) => void): () => void;
   /** 작업 기록 (최근 것부터) */
   listActionLog(limit?: number): Promise<ActionLogEntry[]>;
   /** 화면에서 시작한 작업을 기록에 남긴다 (터미널에서 실행한 설치·제거 명령 등) */
@@ -541,6 +569,11 @@ export const IpcChannels = {
   copyStatus: "pi:copy-status",
   hostInventory: "pi:host-inventory",
   listActionLog: "pi:list-action-log",
+  updateState: "pi:update-state",
+  checkForUpdates: "pi:check-for-updates",
+  installUpdate: "pi:install-update",
+  openRelease: "pi:open-release",
+  updateStateChanged: "pi:update-state-changed",
   logAction: "pi:log-action",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",

@@ -17,6 +17,42 @@ packages/host-agent    대상 호스트에서 도는 상주 데몬(agentd)과 �
 앱은 `host-agent connect`를 띄워 데몬에 붙고, 데몬이 `pi --mode rpc` 프로세스와 이벤트 저널을 소유합니다.
 그래서 앱을 닫아도 Pi는 계속 작업하고, 다시 열면 놓친 이벤트를 재생해 이어서 보여줍니다 (설계 §3.4).
 
+## 설치와 업데이트
+
+[Releases](https://github.com/skax-soulfactor/pi-desktop/releases)에서 OS에 맞는 파일을 받습니다.
+
+| OS | 파일 | 자동 업데이트 |
+|---|---|---|
+| Windows | `Pi-Desktop-Setup-<버전>.exe` | 내려받아 두었다가 탭 바의 "다시 시작해 <버전> 설치"로 바꿉니다 |
+| macOS | `Pi-Desktop-<버전>-arm64.dmg` / `-x64.dmg` | 새 버전을 알리고 릴리스 페이지를 엽니다 (아래 "코드 서명") |
+| Linux | `Pi-Desktop-<버전>-x86_64.AppImage` / `.deb` | AppImage는 Windows처럼 자동, deb는 알리기만 합니다 |
+
+앱은 시작 15초 뒤와 6시간마다 새 버전을 확인합니다. 명령 팔레트의 "업데이트 확인"으로 바로 확인할 수도 있습니다.
+
+**코드 서명**: 운영체제가 "이 프로그램을 누가 만들었고 그 뒤 바뀌지 않았다"를 확인하는 디지털 서명입니다. 지금은 인증서가 없어 서명하지 않으므로 다음처럼 동작합니다.
+- Windows: 처음 설치할 때 SmartScreen이 "알 수 없는 게시자" 경고를 띄웁니다. "추가 정보 → 실행"을 누르면 됩니다. 자동 업데이트는 정상으로 동작합니다.
+  - 서명하려면 코드 서명 인증서(연 수십만 원 수준)를 사서 CI 비밀 값으로 넣으면 됩니다.
+- macOS: Gatekeeper가 처음 실행을 막습니다. Finder에서 앱을 우클릭 → "열기"로 엽니다. 서명이 없으면 macOS의 자동 설치가 거부되므로, 앱은 새 버전을 알리고 릴리스 페이지를 엽니다.
+  - 서명하려면 Apple Developer Program(연 99달러) 가입과 공증(notarization)이 필요합니다.
+- Linux: 서명이 필요 없습니다.
+
+**릴리스를 올리는 곳**: 지금은 이 저장소의 GitHub Releases입니다(공개 저장소라 토큰 없이 확인합니다). `apps/desktop/electron-builder.yml`의 `publish`만 바꾸면 다른 곳을 쓸 수 있습니다.
+- 다른 GitHub 저장소: `owner`·`repo`를 바꿉니다. 예를 들어 소스는 비공개로 두고 배포용 공개 저장소만 따로 둘 수 있습니다.
+- 내 웹 서버·S3·Cloudflare R2 등: `provider: generic`과 `url`을 씁니다. 그 주소에 설치 파일과 `latest*.yml`을 올리면 됩니다. `provider: s3`로 S3에 직접 올릴 수도 있습니다.
+- 비공개 GitHub 저장소: 앱이 확인할 때 토큰이 필요해 일반 배포에는 맞지 않습니다.
+
+**릴리스 만들기**(관리자): 버전 태그를 올리면 GitHub Actions(`.github/workflows/release.yml`)가 세 OS에서 설치 파일을 만들어 Releases에 올립니다. 앱 버전은 태그를 따릅니다.
+
+```bash
+git tag v0.1.0
+```
+
+```bash
+git push origin v0.1.0
+```
+
+Actions 탭에서 "Release"를 손으로 돌리면 만들기만 하고 올리지 않습니다(릴리스 전 미리 확인). 로컬에서 지금 OS용 설치 파일만 만들 때는 `npm run dist -w @pi-desktop/desktop`을 씁니다(결과는 `apps/desktop/release/`).
+
 ## 개발 환경
 
 - Node.js 22.19 이상 (Pi 요구 사항)
