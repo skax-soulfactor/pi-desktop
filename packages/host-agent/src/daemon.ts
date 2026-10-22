@@ -16,6 +16,7 @@ import {
   type FsSearchParams,
   type FsSearchResult,
   type FsListDirParams,
+  type FsMakeDirParams,
   type ResourcesListParams,
   type ProjectTrustInfo,
   type TrustSetParams,
@@ -103,7 +104,7 @@ import { mergeSettings, readSettings, readSettingsSchema, settingsFileFor, write
 import { listPackageResources, setPackageFilter, type PackageFilterSdk } from "./package-filters";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { ensureBridge } from "./bridge";
-import { listDirectories } from "./dir-list";
+import { listDirectories, makeDirectory } from "./dir-list";
 import { listResources, type ResourceSdk } from "./resources";
 import { projectTrust, setProjectTrust, trustArgs, type TrustSdk } from "./trust";
 import { createResourceFile, readResourceFile, writeResourceFile } from "./resource-files";
@@ -797,6 +798,15 @@ export class AgentDaemon {
       return listDirectories(typeof path === "string" ? path : undefined, homedir()).catch((e: unknown) => {
         throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
       });
+    });
+
+    peer.handle(Methods.fsMakeDir, async (params): Promise<{ path: string }> => {
+      const p = (params ?? {}) as Partial<FsMakeDirParams>;
+      if (typeof p.name !== "string") throw new JsonRpcError(ErrorCodes.InvalidParams, "name이 필요합니다");
+      const path = await makeDirectory(typeof p.parent === "string" ? p.parent : undefined, p.name, homedir()).catch((e: unknown) => {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+      });
+      return { path };
     });
 
     peer.handle(Methods.daemonStatus, () => this.status());

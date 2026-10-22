@@ -3009,3 +3009,35 @@ details > summary.settings-section {
   opacity: 0.8;
   cursor: default;
 }
+
+.new-folder-parent {
+  display: flex;
+  gap: 6px;
+}
+
+.new-folder-parent input {
+  flex: 1;
+  min-width: 0;
+}
+
+.folder-new {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.folder-new input {
+  flex: 1;
+  min-width: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.brand-logo {
+  width: 22px;
+  height: 22px;
+}

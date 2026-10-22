@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -73,6 +73,7 @@ import { compareCopy, CopyStore, exportKindOf, fileShas } from "./copies";
 import { collectInventory } from "./host-inventory";
 import { ActionLog } from "./action-log";
 import { Updater } from "./updater";
+import { appMenuTemplate } from "./app-menu";
 import { compareLocal, compareUpstream, projectCwdOf } from "./import-status";
 import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
@@ -124,6 +125,8 @@ function createWindow(): void {
     minHeight: 480,
     title: "Pi Desktop",
     backgroundColor: "#16171d",
+    // 설치본은 실행 파일·설치 아이콘을 쓰고, 개발 실행만 창 아이콘을 직접 준다 (build/icon.png).
+    ...(app.isPackaged ? {} : { icon: join(app.getAppPath(), "build", "icon.png") }),
     webPreferences: {
       preload: join(here, "../preload/index.cjs"),
       contextIsolation: true,
@@ -284,7 +287,8 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     },
   );
   handle(IpcChannels.pickDirectory, async () => {
-    const options = { properties: ["openDirectory" as const] };
+    // 대화상자에서도 새 폴더를 만들 수 있게 한다 (macOS 새 폴더 버튼, Windows는 없는 경로를 쓰면 만들지 묻는다).
+    const options = { properties: ["openDirectory" as const, "createDirectory" as const, "promptToCreate" as const] };
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
   });
@@ -341,6 +345,9 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   );
   handle(IpcChannels.listDir, (_event, hostId: string, path: string | undefined) =>
     conn(hostId).request<FsListDirResult>(Methods.fsListDir, path ? { path } : {}),
+  );
+  handle(IpcChannels.makeDir, async (_event, hostId: string, parent: string, name: string) =>
+    (await conn(hostId).request<{ path: string }>(Methods.fsMakeDir, { parent, name })).path,
   );
   // 패키지 경로 해석에 npm 조회가 끼어 느릴 수 있어 넉넉히 기다린다.
   handle(IpcChannels.listResources, (_event, hostId: string, cwd: string) =>
@@ -585,6 +592,22 @@ app.whenReady().then(() => {
     new ImportStore(join(app.getPath("userData"), "imports.json")),
     new CopyStore(join(app.getPath("userData"), "copies.json")),
     new ActionLog(join(app.getPath("userData"), "activity-log.jsonl")),
+  );
+  // 앱 기능 메뉴: 항목은 화면(지금 탭)에 명령 id를 보낸다 (app-menu.ts)
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      appMenuTemplate(process.platform, {
+        command: (id) => mainWindow?.webContents.send(IpcChannels.menuCommand, id),
+        openUrl: (url) => void shell.openExternal(url),
+        about: () =>
+          void dialog.showMessageBox({
+            type: "info",
+            title: "Pi Desktop 정보",
+            message: `Pi Desktop ${app.getVersion()}`,
+            detail: `Pi coding agent를 포크하지 않고 GUI로 쓰는 데스크톱 앱\nElectron ${process.versions.electron} · Node ${process.versions.node}\nhttps://github.com/skax-soulfactor/pi-desktop`,
+          }),
+      }),
+    ),
   );
   createWindow();
 

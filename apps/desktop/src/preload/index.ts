@@ -62,6 +62,7 @@ const api: PiDesktopApi = {
   piLatest: (hostId, force) => ipcRenderer.invoke(IpcChannels.piLatest, hostId, force === true),
   searchFiles: (hostId, cwd, query) => ipcRenderer.invoke(IpcChannels.searchFiles, hostId, cwd, query),
   listDir: (hostId, path) => ipcRenderer.invoke(IpcChannels.listDir, hostId, path),
+  makeDir: (hostId, parent, name) => ipcRenderer.invoke(IpcChannels.makeDir, hostId, parent, name),
   listResources: (hostId, cwd) => ipcRenderer.invoke(IpcChannels.listResources, hostId, cwd),
   marketSearch: (query, from) => ipcRenderer.invoke(IpcChannels.marketSearch, query, from),
   marketDetail: (name) => ipcRenderer.invoke(IpcChannels.marketDetail, name),
@@ -92,6 +93,11 @@ const api: PiDesktopApi = {
   checkForUpdates: () => ipcRenderer.invoke(IpcChannels.checkForUpdates),
   installUpdate: () => ipcRenderer.invoke(IpcChannels.installUpdate),
   openRelease: () => ipcRenderer.invoke(IpcChannels.openRelease),
+  onMenuCommand: (listener) => {
+    const handler = (_event: unknown, id: string) => listener(id);
+    ipcRenderer.on(IpcChannels.menuCommand, handler);
+    return () => ipcRenderer.removeListener(IpcChannels.menuCommand, handler);
+  },
   onUpdateState: (listener) => {
     const handler = (_event: unknown, state: Parameters<typeof listener>[0]) => listener(state);
     ipcRenderer.on(IpcChannels.updateStateChanged, handler);

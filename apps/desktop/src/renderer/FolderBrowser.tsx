@@ -25,6 +25,8 @@ export function FolderBrowser({ hostId, hostLabel, initialPath, onPick, onClose 
   const [showHidden, setShowHidden] = useState(false);
   const [selected, setSelected] = useState(0);
   const [typedPath, setTypedPath] = useState("");
+  /** 지금 폴더 안에 새 폴더를 만드는 중이면 그 이름 */
+  const [newName, setNewName] = useState<string | undefined>();
   const list = useRef<HTMLUListElement>(null);
   const filterInput = useRef<HTMLInputElement>(null);
 
@@ -151,10 +153,38 @@ export function FolderBrowser({ hostId, hostLabel, initialPath, onPick, onClose 
           {listing && dirs.length === 0 && <li className="palette-empty">{emptyText(listing.dirs, filter, showHidden)}</li>}
           {listing?.truncated && <li className="palette-empty">폴더가 너무 많아 일부만 보여 줍니다. 거르기로 찾으세요.</li>}
         </ul>
+        {newName !== undefined && listing && (
+          <form
+            className="folder-new"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void (async () => {
+                try {
+                  const made = await window.piDesktop.makeDir(hostId, listing.path, newName);
+                  setNewName(undefined);
+                  await open(made);
+                } catch (err) {
+                  setError(errorText(err));
+                }
+              })();
+            }}
+          >
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="새 폴더 이름" spellCheck={false} autoFocus />
+            <button type="submit" className="primary" disabled={!newName.trim()}>
+              만들고 들어가기
+            </button>
+            <button type="button" onClick={() => setNewName(undefined)}>
+              취소
+            </button>
+          </form>
+        )}
         <div className="modal-actions">
           <span className="folder-current muted" title={listing?.path}>
             {listing?.path}
           </span>
+          <button type="button" disabled={!listing || loading || newName !== undefined} onClick={() => setNewName("")}>
+            새 폴더
+          </button>
           <button type="button" onClick={onClose}>
             취소
           </button>

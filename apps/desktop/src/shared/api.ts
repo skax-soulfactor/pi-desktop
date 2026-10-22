@@ -414,6 +414,8 @@ export interface PiDesktopApi {
   /** 작업 폴더에서 파일을 찾는다 (입력창 @ 파일 피커). 경로는 작업 폴더 기준, 구분자 "/" */
   searchFiles(hostId: string, cwd: string, query: string): Promise<FsSearchResult>;
   /** 호스트의 한 폴더에 있는 하위 폴더 목록 (폴더 탐색 창). path가 없으면 홈 */
+  /** 그 호스트에 새 폴더를 만든다 (parent가 비었으면 홈). 만든 폴더의 절대 경로 */
+  makeDir(hostId: string, parent: string, name: string): Promise<string>;
   listDir(hostId: string, path?: string): Promise<FsListDirResult>;
   /** 작업 폴더에서 Pi가 불러오는 리소스 (읽기 전용) */
   listResources(hostId: string, cwd: string): Promise<ResourcesView>;
@@ -475,6 +477,8 @@ export interface PiDesktopApi {
   /** 새 버전의 릴리스 페이지를 연다 (알리기만 하는 곳) */
   openRelease(): Promise<void>;
   onUpdateState(listener: (state: UpdateState) => void): () => void;
+  /** 메뉴바에서 고른 명령 id (app-menu.ts) */
+  onMenuCommand(listener: (id: string) => void): () => void;
   /** 작업 기록 (최근 것부터) */
   listActionLog(limit?: number): Promise<ActionLogEntry[]>;
   /** 화면에서 시작한 작업을 기록에 남긴다 (터미널에서 실행한 설치·제거 명령 등) */
@@ -545,6 +549,7 @@ export const IpcChannels = {
   revealFile: "pi:reveal-file",
   searchFiles: "pi:search-files",
   listDir: "pi:list-dir",
+  makeDir: "pi:make-dir",
   listResources: "pi:list-resources",
   marketSearch: "pi:market-search",
   marketDetail: "pi:market-detail",
@@ -574,6 +579,7 @@ export const IpcChannels = {
   installUpdate: "pi:install-update",
   openRelease: "pi:open-release",
   updateStateChanged: "pi:update-state-changed",
+  menuCommand: "pi:menu-command",
   logAction: "pi:log-action",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",
