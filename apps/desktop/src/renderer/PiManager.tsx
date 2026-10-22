@@ -4,6 +4,7 @@ import type { HostDescriptor } from "../shared/api";
 import { statusChecks } from "./pi-manager-view";
 import { PiDataPanel } from "./PiDataPanel";
 import { SettingsCopyPanel } from "./SettingsCopyPanel";
+import { SettingsFormPanel } from "./SettingsFormPanel";
 import { HostComparePanel } from "./HostComparePanel";
 import { PiInstallPanel } from "./PiInstallPanel";
 import { PiUpdatePanel } from "./PiUpdatePanel";
@@ -64,6 +65,7 @@ export function PiManager({
   const { status, latest, error, reload } = usePiStatus(hostId, true);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<"status" | "providers" | "models" | "settings" | "compare">("status");
+  const [settingsMode, setSettingsMode] = useState<"edit" | "copy">("edit");
   const checks = status ? statusChecks(status, latest) : [];
 
   useEffect(() => {
@@ -129,7 +131,19 @@ export function PiManager({
           />
         )}
         {tab === "models" && <ModelsPanel hostId={hostId} hosts={hosts} onChanged={() => void reload()} />}
-        {tab === "settings" && <SettingsCopyPanel hostId={hostId} hosts={hosts} />}
+        {tab === "settings" && (
+          <>
+            <div className="segmented settings-mode" role="tablist">
+              <button type="button" className={settingsMode === "edit" ? "on" : ""} onClick={() => setSettingsMode("edit")}>
+                편집
+              </button>
+              <button type="button" className={settingsMode === "copy" ? "on" : ""} onClick={() => setSettingsMode("copy")}>
+                다른 호스트로 복사
+              </button>
+            </div>
+            {settingsMode === "edit" ? <SettingsFormPanel hostId={hostId} /> : <SettingsCopyPanel hostId={hostId} hosts={hosts} />}
+          </>
+        )}
         {tab === "compare" && <HostComparePanel hostId={hostId} hosts={hosts} />}
         {tab === "status" && error && <div className="banner error">{error}</div>}
         {tab === "status" && !status && !error && <p className="muted">상태를 읽는 중…</p>}

@@ -337,9 +337,12 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   ipcMain.handle(IpcChannels.settingsRead, (_event, hostId: string) =>
     conn(hostId).request<SettingsReadResult>(Methods.settingsRead, {}),
   );
-  ipcMain.handle(IpcChannels.settingsMerge, async (_event, hostId: string, values: Record<string, unknown>) => {
-    await conn(hostId).request(Methods.settingsMerge, { values });
+  ipcMain.handle(IpcChannels.settingsMerge, async (_event, hostId: string, values: Record<string, unknown>, remove?: string[]) => {
+    await conn(hostId).request(Methods.settingsMerge, { values, ...(remove && remove.length > 0 ? { remove } : {}) });
   });
+  ipcMain.handle(IpcChannels.settingsSchema, (_event, hostId: string) =>
+    conn(hostId).request<Record<string, unknown> | null>(Methods.settingsSchema),
+  );
   ipcMain.handle(IpcChannels.exportResource, (_event, hostId: string, kind: "skill" | "prompt" | "extension", path: string) =>
     conn(hostId).request<ResourceExportResult>(Methods.resourcesExport, { kind, path }, 120_000),
   );
