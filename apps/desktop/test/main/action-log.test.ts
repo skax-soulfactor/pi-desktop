@@ -53,5 +53,6 @@ describe("ActionLog", () => {
     const lines = readFileSync(file, "utf8").trim().split("\n");
     expect(lines.length).toBeLessThanOrEqual(2500);
     expect(log.list(1)[0]!.summary).toBe("n2599");
-  });
+    // 파일에 2600번 덧붙이므로 다른 테스트와 함께 돌면 기본 제한(5초)을 넘을 수 있다.
+  }, 30_000);
 });
