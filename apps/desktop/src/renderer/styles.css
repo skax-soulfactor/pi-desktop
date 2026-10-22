@@ -3087,3 +3087,18 @@ details > summary.settings-section {
   border-radius: 999px;
   margin-right: 2px;
 }
+
+/* 이 호스트에 Pi가 없을 때 사이드바 기록 자리의 설치 안내 */
+.sidebar-notice {
+  margin: 4px 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
+}
+
+.sidebar-notice p {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
