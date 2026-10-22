@@ -90,7 +90,7 @@ import {
   saveProvider,
   storedApiKey,
 } from "./models-store";
-import { mergeSettings, readSettings } from "./settings-store";
+import { mergeSettings, readSettings, readSettingsSchema } from "./settings-store";
 import { listPackageResources, setPackageFilter, type PackageFilterSdk } from "./package-filters";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { ensureBridge } from "./bridge";
@@ -397,12 +397,17 @@ export class AgentDaemon {
 
     peer.handle(Methods.settingsRead, (): Promise<SettingsReadResult> => readSettings(agentDirOf(this.env)));
 
+    peer.handle(Methods.settingsSchema, async () => readSettingsSchema(await locatePi({ env: this.env })));
+
     peer.handle(Methods.settingsMerge, async (params) => {
       const p = (params ?? {}) as Partial<SettingsMergeParams>;
       if (!p.values || typeof p.values !== "object" || Array.isArray(p.values)) {
         throw new JsonRpcError(ErrorCodes.InvalidParams, "values가 필요합니다");
       }
-      await mergeSettings(agentDirOf(this.env), p.values).catch((e: unknown) => {
+      if (p.remove !== undefined && (!Array.isArray(p.remove) || p.remove.some((k) => typeof k !== "string"))) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "remove는 문자열 배열이어야 합니다");
+      }
+      await mergeSettings(agentDirOf(this.env), p.values, p.remove).catch((e: unknown) => {
         throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
       });
       return null;

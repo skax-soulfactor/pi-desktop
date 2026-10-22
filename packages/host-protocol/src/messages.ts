@@ -47,6 +47,8 @@ export const Methods = {
   packagesSetFilter: "packages.setFilter",
   /** 사용자 settings.json의 최상위 값 */
   settingsRead: "settings.read",
+  /** 설치된 Pi가 함께 배포한 settings.json의 JSON Schema (없으면 null) */
+  settingsSchema: "settings.schema",
   /** 사용자 settings.json의 고른 최상위 키만 바꾼다 (다른 호스트에서 복사할 때) */
   settingsMerge: "settings.merge",
   /** OpenAI 호환 엔드포인트의 /models를 이 호스트에서 불러 연결 시험 */
@@ -357,6 +359,8 @@ export interface SettingsReadResult {
 export interface SettingsMergeParams {
   /** 바꿀 최상위 키와 값. 여기 없는 키는 그대로 둔다 */
   values: Record<string, unknown>;
+  /** 지울 최상위 키 (Pi 기본값으로 되돌림) */
+  remove?: string[];
 }
 
 export interface ModelsSaveParams {
