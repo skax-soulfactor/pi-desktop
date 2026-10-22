@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.53)
+# Pi Desktop — 설계 문서 (v0.54)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -642,6 +642,22 @@ v0.1과 같다. Playground 스크립트도 Host Agent를 통해 **대상 호스�
   - 실제 GitHub 확인은 아직 릴리스가 없어 "No published versions"였다.
   - 버전만 0.0.2로 만든 설치 파일을 로컬 HTTP 서버에 두고 `PI_DESKTOP_UPDATE_URL`로 가리켰다. 0.0.1 앱이 찾아 내려받아(blockmap 차등 시도 뒤 전체) "다시 시작해 0.0.2 설치" 배지를 띄웠다. 설치는 하지 않았다.
   - macOS·Linux 빌드는 첫 태그(또는 손으로 돌린 워크플로)에서 확인한다.
+
+**구현 메모: v0.1.0 사용 피드백 반영 (v0.54)**
+- 앱 아이콘: `apps/desktop/build/icon.svg`(보라 그라데이션, 붓질한 π, 청록 커서)
+  - `scripts/render-icon.mjs`가 설치된 Electron으로 1024px PNG를 만든다. electron-builder가 `build/icon.png`로 각 OS 아이콘을 만든다.
+  - 개발 실행 창 아이콘과 상단 바 로고에도 쓴다.
+- 메뉴바(`main/app-menu.ts`): Electron 기본 메뉴 대신 파일·편집·보기·세션·Pi·개발자 도구·도움말
+  - 앱 기능 항목은 명령 id를 화면에 보낸다(`pi:menu-command`). 탭·업데이트·활동은 App이, 나머지는 지금 탭의 Workspace가 같은 id의 명령 팔레트 명령으로 실행한다.
+  - 단축키는 화면이 처리하므로 메뉴에는 표시만 한다(`registerAccelerator: false`). 편집·확대·전체 화면은 Electron role이다.
+  - 테스트가 메뉴의 모든 id를 어디선가 처리하는지 확인한다.
+- 새 폴더: 데몬 `fs.makeDir {parent?, name}`이 폴더를 만들고 절대 경로를 돌려준다. 이름에 경로 구분자·금지 문자가 있거나 이미 있으면 거절한다.
+  - 상단의 "새 폴더" 대화상자(위치·이름, "만들고 새 세션")와 폴더 탐색기의 "새 폴더"가 쓴다.
+- 입력창 `/`: Pi RPC `get_commands`는 확장 명령·프롬프트 템플릿·스킬만 준다. TUI 기본 명령(/model, /compact, /tree …)은 TUI 안에만 있다.
+  - 앱이 같은 이름의 앱 명령을 더해 보여 주고, 보내면 가로채 앱 기능으로 처리한다(`app-commands.ts`). 같은 이름의 Pi 명령이 있으면 Pi 명령이 이긴다.
+- TUI 넘기기 오류: Pi는 첫 메시지 전에는 세션 파일을 만들지 않는다. 그래서 빈 세션을 넘기면 없는 파일을 따라가다 ENOENT가 났다.
+  - 파일이 없으면 따라가지 않고 `pi --session-id <id>`(없으면 만든다) 명령을 복사한다.
+- 확인(dev:mock, CDP): 상단 바 로고, 메뉴 명령 이벤트로 명령 팔레트·새 폴더 대화상자 열기, `/` 목록에 Pi 명령과 앱 명령이 함께 나오는 것을 보았다.
 
 ### 4.12 내장 터미널 (신규, 공통 인프라)
 xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인, TUI 전용 확장 폴백, 사용자가 원할 때 진짜 `pi` TUI 열기다.
