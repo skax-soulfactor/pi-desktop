@@ -104,6 +104,8 @@ export const Methods = {
   resourcesRemoveImported: "resources.removeImported",
   /** 한 폴더의 하위 폴더 목록 (폴더 탐색 창) */
   fsListDir: "fs.listDir",
+  /** 세션을 시작할 새 폴더를 만든다 */
+  fsMakeDir: "fs.makeDir",
   daemonStatus: "daemon.status",
   daemonShutdown: "daemon.shutdown",
 } as const;
@@ -818,6 +820,12 @@ export interface ResourcesView {
   themes: ResourceItem[];
   packages: ConfiguredPackageInfo[];
   diagnostics: ResourceDiagnosticInfo[];
+}
+
+export interface FsMakeDirParams {
+  /** 상위 폴더 (호스트 기준). 비었거나 "~"면 홈, 상대 경로는 홈 기준 */
+  parent?: string;
+  name: string;
 }
 
 export interface FsListDirParams {

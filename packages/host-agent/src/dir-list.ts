@@ -1,4 +1,4 @@
-import { readdir, stat } from "node:fs/promises";
+import { mkdir, readdir, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { FsListDirResult } from "@pi-desktop/host-protocol";
 
@@ -51,4 +51,33 @@ export async function listDirectories(input: string | undefined, home: string): 
     dirs: dirs.slice(0, MAX_DIRS),
     truncated: dirs.length > MAX_DIRS,
   };
+}
+
+/** 폴더 이름으로 쓸 수 없는 글자 (Windows 기준이 가장 좁으므로 모든 호스트에 같은 규칙을 쓴다) */
+const BAD_NAME = /[<>:"/\\|?*\u0000-\u001f]/;
+
+/** 새 폴더 이름의 문제. 없으면 undefined */
+export function folderNameProblem(name: string): string | undefined {
+  const trimmed = name.trim();
+  if (!trimmed) return "폴더 이름을 넣으세요";
+  if (trimmed === "." || trimmed === "..") return "쓸 수 없는 이름입니다";
+  if (BAD_NAME.test(trimmed)) return '폴더 이름에 < > : " / \\ | ? * 는 쓸 수 없습니다';
+  if (/[. ]$/.test(trimmed)) return "폴더 이름은 점이나 공백으로 끝날 수 없습니다";
+  return undefined;
+}
+
+/**
+ * 세션을 시작할 새 폴더를 만든다 (parent 아래 name). parent는 listDirectories와 같은 규칙으로 푼다.
+ * 이미 있으면 거부한다. 만든 폴더의 절대 경로를 돌려준다.
+ */
+export async function makeDirectory(parent: string | undefined, name: string, home: string): Promise<string> {
+  const problem = folderNameProblem(name);
+  if (problem) throw new Error(problem);
+  const base = resolveDirPath(parent, home);
+  const info = await stat(base).catch(() => undefined);
+  if (!info?.isDirectory()) throw new Error(`상위 폴더가 없습니다: ${base}`);
+  const path = join(base, name.trim());
+  if (await stat(path).catch(() => undefined)) throw new Error(`이미 있습니다: ${path}`);
+  await mkdir(path);
+  return path;
 }
