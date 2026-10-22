@@ -6,7 +6,8 @@ import { remoteSh, sshArgs } from "./ssh";
 /**
  * 내장 터미널에서 실행할 명령을 정한다 (설계 §4.12). 순수 함수라 테스트한다.
  *
- * - 로컬(Windows): Pi는 찾은 Pi의 node와 cli.js로 직접 실행하고(pi.cmd shim을 거치지 않는다), 셸은 PowerShell.
+ * - 로컬: Pi는 찾은 Pi의 node와 cli.js로 직접 실행한다(pi.cmd shim을 거치지 않는다).
+ *   셸은 Windows면 PowerShell, macOS·Linux면 사용자의 로그인 셸($SHELL, 없으면 /bin/sh).
  * - WSL: wsl.exe가 배포판 안에서 실행한다. Windows ConPTY가 WSL까지 감싸므로 창 크기 조정도 된다.
  *   Pi는 데몬이 찾은 node·cli.js와 그 환경 변수(관리형 설치의 PI_MANAGED_INSTALL_ROOT 등)로 실행한다.
  * - SSH: `ssh -t`로 서버에 터미널을 붙인다. 셸은 서버 사용자의 로그인 셸, Pi는 WSL과 같은 방식으로 실행한다.
@@ -45,7 +46,12 @@ export interface TerminalCommand {
 
 const WSL_PREFIX = "wsl:";
 
-export function terminalCommand(target: TerminalTarget, runtime: PiRuntime | undefined): TerminalCommand {
+export function terminalCommand(
+  target: TerminalTarget,
+  runtime: PiRuntime | undefined,
+  platform: string = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): TerminalCommand {
   const pi = target.kind === "pi";
   if (pi && !runtime) throw new Error("이 호스트에서 Pi를 찾지 못했습니다");
   const piArgs = pi ? [runtime!.pi.cliPath, ...(target.args ?? [])] : [];
@@ -82,7 +88,9 @@ export function terminalCommand(target: TerminalTarget, runtime: PiRuntime | und
   if (target.hostId !== "local") throw new Error(`이 호스트의 터미널은 아직 지원하지 않습니다: ${target.hostId}`);
   const command: TerminalCommand = pi
     ? { file: runtime!.nodePath, args: piArgs, env: { ...(runtime!.pi.env ?? {}) }, title }
-    : { file: "powershell.exe", args: ["-NoLogo"], env: {}, title };
+    : platform === "win32"
+      ? { file: "powershell.exe", args: ["-NoLogo"], env: {}, title }
+      : { file: env.SHELL || "/bin/sh", args: ["-l"], env: {}, title };
   if (target.cwd) command.cwd = target.cwd;
   return command;
 }

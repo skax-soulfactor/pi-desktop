@@ -27,8 +27,16 @@ describe("terminalCommand", () => {
     });
   });
 
-  it("로컬 셸은 PowerShell", () => {
-    expect(terminalCommand({ hostId: "local", kind: "shell" }, undefined)).toMatchObject({ file: "powershell.exe", args: ["-NoLogo"] });
+  it("로컬 셸은 Windows면 PowerShell", () => {
+    expect(terminalCommand({ hostId: "local", kind: "shell" }, undefined, "win32")).toMatchObject({ file: "powershell.exe", args: ["-NoLogo"] });
+  });
+
+  it("로컬 셸은 macOS·Linux면 로그인 셸, $SHELL이 없으면 /bin/sh", () => {
+    expect(terminalCommand({ hostId: "local", kind: "shell" }, undefined, "linux", { SHELL: "/usr/bin/zsh" })).toMatchObject({
+      file: "/usr/bin/zsh",
+      args: ["-l"],
+    });
+    expect(terminalCommand({ hostId: "local", kind: "shell" }, undefined, "darwin", {})).toMatchObject({ file: "/bin/sh", args: ["-l"] });
   });
 
   it("WSL pi: wsl.exe가 배포판 안에서 env로 관리형 설치 변수를 넘겨 실행한다", () => {
