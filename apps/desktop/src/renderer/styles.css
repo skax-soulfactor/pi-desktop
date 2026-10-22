@@ -2636,3 +2636,31 @@ button.toggled {
 .host-compare-table td:nth-child(3) {
   white-space: nowrap;
 }
+
+.resource-list li.package-filtering {
+  flex-wrap: wrap;
+}
+
+.package-filter {
+  flex-basis: 100%;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.package-filter-group + .package-filter-group {
+  margin-top: 8px;
+}
+
+.package-filter-head {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.package-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}

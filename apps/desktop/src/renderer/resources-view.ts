@@ -100,3 +100,23 @@ export const RELOAD_COMMAND = "desktop:reload";
 export function hasReloadCommand(commands: ReadonlyArray<{ name: string }>): boolean {
   return commands.some((c) => c.name === RELOAD_COMMAND);
 }
+
+export const PACKAGE_TYPE_LABEL = { extensions: "확장", skills: "스킬", prompts: "프롬프트", themes: "테마" } as const;
+
+/** 패키지 리소스 하나를 가리키는 키 (종류마다 경로가 겹칠 수 있다) */
+export function packageResourceKey(item: { type: string; pattern: string }): string {
+  return `${item.type}:${item.pattern}`;
+}
+
+/** 처음 상태와 달라진 것만 settings.json에 적을 변경으로 */
+export function packageFilterChanges<T extends "extensions" | "skills" | "prompts" | "themes">(
+  items: ReadonlyArray<{ type: T; pattern: string; enabled: boolean }>,
+  checked: ReadonlyMap<string, boolean>,
+): Array<{ type: T; pattern: string; enabled: boolean }> {
+  return items
+    .filter((item) => {
+      const now = checked.get(packageResourceKey(item));
+      return now !== undefined && now !== item.enabled;
+    })
+    .map((item) => ({ type: item.type, pattern: item.pattern, enabled: !item.enabled }));
+}
