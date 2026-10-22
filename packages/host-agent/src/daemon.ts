@@ -50,6 +50,8 @@ import {
   type ModelsExportResult,
   type ModelsImportParams,
   type SettingsMergeParams,
+  type SettingsTarget,
+  type SettingsWriteParams,
   type PackageResourceItem,
   type PackageResourcesParams,
   type PackageSetFilterParams,
@@ -90,7 +92,7 @@ import {
   saveProvider,
   storedApiKey,
 } from "./models-store";
-import { mergeSettings, readSettings, readSettingsSchema } from "./settings-store";
+import { mergeSettings, readSettings, readSettingsSchema, settingsFileFor, writeSettingsRaw } from "./settings-store";
 import { listPackageResources, setPackageFilter, type PackageFilterSdk } from "./package-filters";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { ensureBridge } from "./bridge";
@@ -395,7 +397,30 @@ export class AgentDaemon {
       return null;
     });
 
-    peer.handle(Methods.settingsRead, (): Promise<SettingsReadResult> => readSettings(agentDirOf(this.env)));
+    // 범위에 맞는 settings.json. 프로젝트 범위는 작업 폴더가 있어야 한다.
+    const settingsFile = (params: unknown): string => {
+      const p = (params ?? {}) as SettingsTarget;
+      if (p.scope !== undefined && p.scope !== "user" && p.scope !== "project") {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "scope는 user·project여야 합니다");
+      }
+      try {
+        return settingsFileFor(p.scope, agentDirOf(this.env), typeof p.cwd === "string" ? p.cwd : undefined);
+      } catch (e) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+      }
+    };
+
+    peer.handle(Methods.settingsRead, (params): Promise<SettingsReadResult> => readSettings(settingsFile(params)));
+
+    peer.handle(Methods.settingsWrite, async (params) => {
+      const p = (params ?? {}) as Partial<SettingsWriteParams>;
+      if (typeof p.content !== "string" || !(p.baseMtime === null || typeof p.baseMtime === "number")) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "content와 baseMtime이 필요합니다");
+      }
+      return writeSettingsRaw(settingsFile(params), p.content, p.baseMtime).catch((e: unknown) => {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+      });
+    });
 
     peer.handle(Methods.settingsSchema, async () => readSettingsSchema(await locatePi({ env: this.env })));
 
@@ -407,7 +432,7 @@ export class AgentDaemon {
       if (p.remove !== undefined && (!Array.isArray(p.remove) || p.remove.some((k) => typeof k !== "string"))) {
         throw new JsonRpcError(ErrorCodes.InvalidParams, "remove는 문자열 배열이어야 합니다");
       }
-      await mergeSettings(agentDirOf(this.env), p.values, p.remove).catch((e: unknown) => {
+      await mergeSettings(settingsFile(params), p.values, p.remove).catch((e: unknown) => {
         throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
       });
       return null;
