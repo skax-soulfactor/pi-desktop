@@ -18,6 +18,8 @@ import {
   type ModelsExportModelResult,
   type SettingsReadResult,
   type SettingsTarget,
+  type PlaygroundRunParams,
+  type PlaygroundRunResult,
   type PackageFilterChange,
   type PackageSetFilterParams,
   type PackageResourceItem,
@@ -199,6 +201,13 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   );
   handle(IpcChannels.watchStored, async (_event, hostId: string, path: string) => {
     await conn(hostId).request(Methods.storedWatch, { path });
+  });
+  // 스크립트가 끝날 때까지 기다린다 (제한 시간 + 여유).
+  handle(IpcChannels.playgroundRun, (_event, hostId: string, params: PlaygroundRunParams) =>
+    conn(hostId).request<PlaygroundRunResult>(Methods.playgroundRun, params, (params.timeoutMs ?? 120_000) + 30_000),
+  );
+  handle(IpcChannels.playgroundStop, async (_event, hostId: string, runId: string) => {
+    await conn(hostId).request(Methods.playgroundStop, { runId });
   });
   handle(IpcChannels.watchTree, async (_event, hostId: string, watchId: string, roots: string[]) => {
     await conn(hostId).request(Methods.filesWatchTree, { watchId, roots });
@@ -558,6 +567,7 @@ app.whenReady().then(() => {
     onExternalWrite: (hostId, n) => sendToRenderer(IpcChannels.externalWrite, hostId, n),
     onWriterChanged: (hostId, n) => sendToRenderer(IpcChannels.writerChanged, hostId, n),
     onFilesChanged: (hostId, n) => sendToRenderer(IpcChannels.filesChanged, hostId, n),
+    onPlaygroundOutput: (hostId, n) => sendToRenderer(IpcChannels.playgroundOutput, hostId, n),
     onPiUpdateOutput: (hostId, n) => sendToRenderer(IpcChannels.piUpdateOutput, hostId, n),
   });
   registerIpc(

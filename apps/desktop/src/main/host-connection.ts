@@ -12,6 +12,7 @@ import {
   type SessionExternalWriteNotification,
   type SessionWriterChangedNotification,
   type FilesChangedNotification,
+  type PlaygroundOutputNotification,
   type SessionUiResolvedNotification,
   type StoredChangedNotification,
   type PiUpdateOutputNotification,
@@ -43,6 +44,7 @@ export interface HostConnectionOptions {
   onExternalWrite: (notification: SessionExternalWriteNotification) => void;
   onWriterChanged: (notification: SessionWriterChangedNotification) => void;
   onFilesChanged: (notification: FilesChangedNotification) => void;
+  onPlaygroundOutput: (notification: PlaygroundOutputNotification) => void;
   onPiUpdateOutput: (notification: PiUpdateOutputNotification) => void;
 }
 
@@ -148,6 +150,7 @@ export class HostConnection {
     peer.on(Notifications.sessionExternalWrite, (p) => this.options.onExternalWrite(p as SessionExternalWriteNotification));
     peer.on(Notifications.sessionWriterChanged, (p) => this.options.onWriterChanged(p as SessionWriterChangedNotification));
     peer.on(Notifications.filesChanged, (p) => this.options.onFilesChanged(p as FilesChangedNotification));
+    peer.on(Notifications.playgroundOutput, (p) => this.options.onPlaygroundOutput(p as PlaygroundOutputNotification));
     peer.on(Notifications.piUpdateOutput, (p) => this.options.onPiUpdateOutput(p as PiUpdateOutputNotification));
 
     // stdout에 프로토콜이 아닌 줄(예: 셸 안내 문구)이 섞여도 무시하고 계속 읽는다.

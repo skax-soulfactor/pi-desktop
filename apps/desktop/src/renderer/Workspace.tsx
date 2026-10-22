@@ -21,6 +21,7 @@ import type { ParsedInput, PiCommand } from "./composer-input";
 import { terminalActionDetail } from "./activity-view";
 import { EventInspector } from "./EventInspector";
 import { useExtensionDevMode } from "./use-dev-mode";
+import { PlaygroundPanel } from "./PlaygroundPanel";
 import { baseName, formatRelative } from "./format";
 import { tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
@@ -114,6 +115,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [playgroundOpen, setPlaygroundOpen] = useState(false);
   /** 다른 호스트로 복사할 리소스 */
   const [copyItem, setCopyItem] = useState<CopyItem | undefined>();
   /** 다른 호스트로 복사할 사용자 범위 AGENTS.md 등 */
@@ -416,6 +418,13 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         run: () => openTerminal({ hostId, kind: "shell", ...(session ? { cwd: session.cwd } : {}) }),
       },
     );
+    list.push({
+      id: "sdk-playground",
+      group: "개발자 도구",
+      title: "SDK Playground (이 호스트의 Pi SDK로 스크립트 실행)",
+      keywords: "sdk playground script javascript run 스크립트 실행 개발자",
+      run: () => setPlaygroundOpen(true),
+    });
     list.push({
       id: "extension-dev-mode",
       group: "개발자 도구",
@@ -1008,6 +1017,14 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           fromCwd={resourcesCwd}
           onRunPi={runPiOn}
           onClose={() => setCopyPackage(undefined)}
+        />
+      )}
+      {active && playgroundOpen && (
+        <PlaygroundPanel
+          hosts={hosts}
+          hostId={hostId}
+          {...(resourcesCwd ? { cwd: resourcesCwd } : {})}
+          onClose={() => setPlaygroundOpen(false)}
         />
       )}
       {active && inspectorOpen && session && (

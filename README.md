@@ -204,6 +204,14 @@ npm test
 - 앱이 화면에 쓰지 않는 종류는 주황색으로 표시됩니다. Pi가 새 이벤트를 더했는지 알아볼 때 씁니다.
 - 앱이 켜진 뒤 받은 이벤트를 세션마다 최근 2000개까지 보관합니다.
 
+## SDK Playground
+
+명령 팔레트(Ctrl+K)의 "SDK Playground"로 고른 호스트에서 그 호스트에 설치된 Pi SDK로 스크립트를 실행합니다.
+- JavaScript(ES 모듈)로 씁니다. `pi`로 SDK를 바로 쓰고(예: `await pi.SessionManager.listAll()`), 최상위 await를 쓸 수 있습니다.
+- WSL·SSH를 고르면 그 안의 node와 Pi SDK로 돕니다. 작업 폴더와 제한 시간(30초·2분·10분)을 고를 수 있습니다.
+- Ctrl+Enter로 실행하고, 출력은 바로바로 보입니다. 실행 중에는 중지할 수 있습니다. 예제도 고를 수 있습니다.
+- 터미널처럼 그 호스트에서 내 권한으로 실행됩니다.
+
 ## Extension Dev Mode
 
 확장을 만들 때 명령 팔레트(Ctrl+K)의 "Extension Dev Mode 켜기"를 쓰면, 확장 파일을 저장할 때마다 지금 세션에 바로 반영합니다.

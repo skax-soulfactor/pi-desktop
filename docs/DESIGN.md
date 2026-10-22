@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.51)
+# Pi Desktop — 설계 문서 (v0.52)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -593,6 +593,25 @@ v0.1과 같다. Playground 스크립트도 Host Agent를 통해 **대상 호스�
   - 켠 뒤 파일의 명령 설명을 고치자 "반영: hello-dev.ts"가 나왔고, `/` 자동완성의 설명이 바뀌었다.
   - 새 확장 파일을 만들자 그 명령이 생겼다.
   - 처음에는 예전 데몬이 새 메서드를 몰라 "Agent 업데이트 대기"로 바꾸라는 안내가 나왔다. 바꾼 뒤 동작했다.
+
+**구현 메모: SDK Playground (M5, v0.52)** — 고른 호스트의 Pi SDK로 스크립트를 실행한다(§4.10)
+- 데몬: `playground.run {runId, code, cwd?, timeoutMs?}`·`playground.stop {runId}`, 알림 `playground.output {runId, stream, text}`
+  - 스크립트(ES 모듈 JavaScript) 앞에 `const pi = await import(<설치된 Pi의 dist/index.js>)`를 붙인다. 최상위 await를 쓸 수 있다.
+  - Pi를 실행하는 것과 같은 node·환경(`PI_CODING_AGENT_DIR` 등)으로 띄운다. 파일은 앱 홈의 `playground`에 임시로 쓰고, 끝나면 지운다.
+  - 출력은 요청한 앱에만 바로 알린다. 1MB를 넘으면 자른다.
+  - 멈추는 경우: 제한 시간(기본 2분)을 넘을 때, stop할 때, 앱 연결이 끊길 때.
+  - 응답: 종료 코드, 신호, 걸린 시간, 시간 초과, 잘림
+  - 사용자가 쓴 코드를 그대로 실행하므로 터미널처럼 그 사용자의 권한으로 돈다.
+- 앱: 명령 팔레트 "SDK Playground"(개발자 도구)
+  - 고르는 것: 호스트(로컬·WSL·SSH), 작업 폴더(기본은 지금 탭 폴더), 제한 시간(30초·2분·10분), 예제 셋
+  - 편집기: Tab은 공백 두 칸이고, Ctrl+Enter로 실행한다. 쓴 스크립트는 이 PC(localStorage)에 남는다.
+  - 출력은 바로바로 보이고 표준 오류는 빨갛다. 끝나면 결과 한 줄을 보인다. 실행 중에는 중지할 수 있다.
+- 참고: Pi의 `SessionManager.listAll()`은 인자가 없으면 `PI_CODING_AGENT_SESSION_DIR`을 보지 않는다. 그래서 예제는 그 변수를 넘긴다.
+- 확인
+  - 로컬(Windows): "최근 세션" 예제가 세션 26개를 보였다.
+  - WSL(Ubuntu): `process.platform`이 linux, node v24.20.0, SDK exports 157개로 나왔다.
+  - 0.3초마다 찍는 무한 루프를 중지하자 "멈춤 (SIGTERM)"이 나왔다.
+  - 데몬이 예전 것이라 로컬은 "지금 바꾸기"로 바꿨다. WSL은 실행 중인 세션이 없어 앱이 알아서 바꿨다.
 
 ### 4.12 내장 터미널 (신규, 공통 인프라)
 xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인, TUI 전용 확장 폴백, 사용자가 원할 때 진짜 `pi` TUI 열기다.

@@ -2929,3 +2929,62 @@ details > summary.settings-section {
   border-color: var(--danger, #d33);
   color: var(--danger, #d33);
 }
+
+.modal.playground {
+  width: min(1100px, calc(100vw - 32px));
+  height: min(860px, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.playground-options {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.playground-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.playground-options label:first-child {
+  flex: 1;
+}
+
+.playground-options label:first-child input {
+  flex: 1;
+}
+
+.playground-code {
+  flex: 1;
+  min-height: 200px;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 13px;
+  tab-size: 2;
+  resize: none;
+}
+
+.playground-result {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.playground-output {
+  flex: 1;
+  min-height: 140px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 12px;
+}
+
+.playground-output .stderr {
+  color: var(--danger, #d33);
+}

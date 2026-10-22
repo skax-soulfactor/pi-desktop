@@ -42,6 +42,9 @@ import type {
   SessionExternalWriteNotification,
   SessionWriterChangedNotification,
   FilesChangedNotification,
+  PlaygroundOutputNotification,
+  PlaygroundRunParams,
+  PlaygroundRunResult,
   SessionSummary,
   SessionUiResolvedNotification,
   StoredChangedNotification,
@@ -324,6 +327,9 @@ export interface PiDesktopApi {
   /** 파일·폴더 트리를 감시한다 (Extension Dev Mode). 같은 watchId로 다시 부르면 뿌리를 바꾼다 */
   watchTree(hostId: string, watchId: string, roots: string[]): Promise<void>;
   unwatchTree(hostId: string, watchId: string): Promise<void>;
+  /** SDK Playground: 스크립트를 그 호스트의 Pi SDK로 실행한다. 끝날 때까지 기다리고 출력은 onPlaygroundOutput으로 */
+  playgroundRun(hostId: string, params: PlaygroundRunParams): Promise<PlaygroundRunResult>;
+  playgroundStop(hostId: string, runId: string): Promise<void>;
   openSession(hostId: string, request: OpenSessionRequest): Promise<SessionSummary>;
   /**
    * 세션에 붙는다. 재생된 이벤트는 알림이 아니라 결과의 events로 함께 돌려준다.
@@ -477,6 +483,7 @@ export interface PiDesktopApi {
   onWriterChanged(listener: (hostId: string, notification: SessionWriterChangedNotification) => void): () => void;
   /** watchTree로 감시하는 파일이 바뀌었다 */
   onFilesChanged(listener: (hostId: string, notification: FilesChangedNotification) => void): () => void;
+  onPlaygroundOutput(listener: (hostId: string, notification: PlaygroundOutputNotification) => void): () => void;
   onPiUpdateOutput(listener: (hostId: string, notification: PiUpdateOutputNotification) => void): () => void;
 }
 
@@ -498,6 +505,8 @@ export const IpcChannels = {
   unwatchStored: "pi:unwatch-stored",
   watchTree: "pi:watch-tree",
   unwatchTree: "pi:unwatch-tree",
+  playgroundRun: "pi:playground-run",
+  playgroundStop: "pi:playground-stop",
   attachSession: "pi:attach-session",
   closeSession: "pi:close-session",
   clearExternalWrite: "pi:clear-external-write",
@@ -570,4 +579,5 @@ export const IpcChannels = {
   externalWrite: "pi:external-write",
   writerChanged: "pi:writer-changed",
   filesChanged: "pi:files-changed",
+  playgroundOutput: "pi:playground-output",
 } as const;
