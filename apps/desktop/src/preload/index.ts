@@ -23,6 +23,8 @@ const api: PiDesktopApi = {
   watchStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.watchStored, hostId, path),
   unwatchStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.unwatchStored, hostId, path),
   watchTree: (hostId, watchId, roots) => ipcRenderer.invoke(IpcChannels.watchTree, hostId, watchId, roots),
+  playgroundRun: (hostId, params) => ipcRenderer.invoke(IpcChannels.playgroundRun, hostId, params),
+  playgroundStop: (hostId, runId) => ipcRenderer.invoke(IpcChannels.playgroundStop, hostId, runId),
   unwatchTree: (hostId, watchId) => ipcRenderer.invoke(IpcChannels.unwatchTree, hostId, watchId),
   openSession: (hostId, request) => ipcRenderer.invoke(IpcChannels.openSession, hostId, request),
   attachSession: (hostId, sessionId, lastSeq) =>
@@ -104,6 +106,7 @@ const api: PiDesktopApi = {
   onExternalWrite: (listener) => subscribe(IpcChannels.externalWrite, listener),
   onWriterChanged: (listener) => subscribe(IpcChannels.writerChanged, listener),
   onFilesChanged: (listener) => subscribe(IpcChannels.filesChanged, listener),
+  onPlaygroundOutput: (listener) => subscribe(IpcChannels.playgroundOutput, listener),
   onPiUpdateOutput: (listener) => subscribe(IpcChannels.piUpdateOutput, listener),
 };
 
