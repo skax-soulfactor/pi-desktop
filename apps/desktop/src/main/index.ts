@@ -78,19 +78,27 @@ import { ReplayCollector } from "./replay-collector";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
-/** 번들된 Host Agent 위치. 개발 중에는 워크스페이스의 빌드 결과를 쓴다. 패키징 경로는 M5에서 정한다. */
+/**
+ * 번들된 Host Agent 위치. 설치한 앱은 리소스의 host-agent 폴더(electron-builder.yml의 extraResources),
+ * 개발 중에는 워크스페이스의 빌드 결과를 쓴다.
+ */
 function agentScriptPath(): string {
-  return process.env.PI_DESKTOP_AGENT_SCRIPT ?? resolve(app.getAppPath(), "../../packages/host-agent/dist/host-agent.mjs");
+  if (process.env.PI_DESKTOP_AGENT_SCRIPT) return process.env.PI_DESKTOP_AGENT_SCRIPT;
+  if (app.isPackaged) return join(process.resourcesPath, "host-agent", "host-agent.mjs");
+  return resolve(app.getAppPath(), "../../packages/host-agent/dist/host-agent.mjs");
 }
 
-/** Agent 번들 옆의 package.json에서 버전을 읽는다 (원격 배포 파일 이름에 쓰임). */
+/** Agent 번들의 package.json에서 버전을 읽는다 (원격 배포 파일 이름에 쓰임). 설치본은 같은 폴더, 개발은 한 단계 위 */
 function agentVersion(script: string): string {
-  try {
-    return String(JSON.parse(readFileSync(join(dirname(script), "..", "package.json"), "utf8")).version ?? "0.0.0");
-  } catch {
-    return "0.0.0";
+  for (const candidate of [join(dirname(script), "package.json"), join(dirname(script), "..", "package.json")]) {
+    try {
+      return String(JSON.parse(readFileSync(candidate, "utf8")).version ?? "0.0.0");
+    } catch {
+      // 다음 후보
+    }
   }
 }
+  return "0.0.0";
 
 // 개발·E2E 검증용: 지정한 포트로 Chrome DevTools Protocol을 연다. 일반 실행에서는 열지 않는다.
 if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT) {
