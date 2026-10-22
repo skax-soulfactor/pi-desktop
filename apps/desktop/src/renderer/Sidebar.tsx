@@ -42,6 +42,9 @@ export function Sidebar(props: Props) {
     }
   });
   const [history, setHistory] = useState<StoredSession[]>([]);
+  // 한 번 읽은 기록의 제목(세션 파일 → 이름이나 첫 메시지). 기록은 "이 폴더"로 걸러지므로, 다른 폴더의
+  // 실행 중 세션도 제목이 바뀌지 않게 지금 목록과 따로 기억해 둔다.
+  const [titles, setTitles] = useState<ReadonlyMap<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -52,7 +55,16 @@ export function Sidebar(props: Props) {
     if (!connected) return;
     setLoading(true);
     try {
-      setHistory(await window.piDesktop.listHistory(hostId, folder));
+      const list = await window.piDesktop.listHistory(hostId, folder);
+      setHistory(list);
+      setTitles((prev) => {
+        const next = new Map(prev);
+        for (const h of list) {
+          const title = h.name ?? h.firstMessage;
+          if (title) next.set(h.path, title);
+        }
+        return next;
+      });
       setError(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -61,8 +73,14 @@ export function Sidebar(props: Props) {
     }
   }, [connected, hostId, folder]);
 
+  // 다른 호스트의 기록이 잠깐이라도 보이지 않게 호스트가 바뀔 때만 비운다.
+  // 세션을 바꿀 때마다 비우면 목록이 깜박인다.
   useEffect(() => {
     setHistory([]);
+    setTitles(new Map());
+  }, [hostId]);
+
+  useEffect(() => {
     void load();
   }, [load, current?.sessionFile, refreshKey]);
 
@@ -91,11 +109,10 @@ export function Sidebar(props: Props) {
 
   const liveFiles = new Set(sessions.filter((s) => s.state === "running").map((s) => s.sessionFile));
   // 실행 중 세션은 폴더 이름만으로는 구별이 안 되므로, 같은 세션 파일의 기록에서 이름이나 첫 메시지를 가져온다.
-  const storedByPath = new Map(history.map((h) => [h.path, h]));
+  // 기록에 아직 없으면(첫 메시지 전 등) 데몬이 아는 제목, 그것도 없으면 폴더 이름.
   const liveTitle = (s: SessionSummary) => {
     if (s.sessionId === current?.sessionId && currentName) return currentName;
-    const stored = s.sessionFile ? storedByPath.get(s.sessionFile) : undefined;
-    return stored?.name ?? (stored?.firstMessage || baseName(s.cwd));
+    return (s.sessionFile ? titles.get(s.sessionFile) : undefined) ?? s.title ?? baseName(s.cwd);
   };
   const ordered = [...sessions]
     .sort((a, b) => b.startedAt - a.startedAt)
