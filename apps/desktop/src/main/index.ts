@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -73,6 +73,7 @@ import { compareCopy, CopyStore, exportKindOf, fileShas } from "./copies";
 import { collectInventory } from "./host-inventory";
 import { ActionLog } from "./action-log";
 import { Updater } from "./updater";
+import { appMenuTemplate } from "./app-menu";
 import { compareLocal, compareUpstream, projectCwdOf } from "./import-status";
 import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
@@ -589,6 +590,22 @@ app.whenReady().then(() => {
     new ImportStore(join(app.getPath("userData"), "imports.json")),
     new CopyStore(join(app.getPath("userData"), "copies.json")),
     new ActionLog(join(app.getPath("userData"), "activity-log.jsonl")),
+  );
+  // 앱 기능 메뉴: 항목은 화면(지금 탭)에 명령 id를 보낸다 (app-menu.ts)
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      appMenuTemplate(process.platform, {
+        command: (id) => mainWindow?.webContents.send(IpcChannels.menuCommand, id),
+        openUrl: (url) => void shell.openExternal(url),
+        about: () =>
+          void dialog.showMessageBox({
+            type: "info",
+            title: "Pi Desktop 정보",
+            message: `Pi Desktop ${app.getVersion()}`,
+            detail: `Pi coding agent를 포크하지 않고 GUI로 쓰는 데스크톱 앱\nElectron ${process.versions.electron} · Node ${process.versions.node}\nhttps://github.com/skax-soulfactor/pi-desktop`,
+          }),
+      }),
+    ),
   );
   createWindow();
 

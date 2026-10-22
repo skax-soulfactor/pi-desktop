@@ -66,6 +66,9 @@ interface WorkspaceProps {
 /** 호스트 선택 목록에서 SSH 호스트 관리 창을 여는 항목 */
 const SSH_MANAGE = "__ssh-manage__";
 
+/** 메뉴바 명령을 지금 탭에 전하는 창 이벤트 (detail: 명령 id) */
+export const MENU_EVENT = "pi-desktop-menu";
+
 export function Workspace({ tabId, active, onStatus, appCommands }: WorkspaceProps) {
   const {
     hosts,
@@ -696,6 +699,53 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       }),
     );
   }
+
+  // 메뉴바 명령: 지금 탭만 처리한다. 대부분은 같은 id의 명령 팔레트 명령을 실행한다.
+  const menuRef = useRef<(id: string) => void>(() => {});
+  menuRef.current = (id: string) => {
+    switch (id) {
+      case "palette":
+        void openPalette();
+        return;
+      case "folder-pick":
+        if (isLocal) void guard(async () => {
+          const picked = await window.piDesktop.pickDirectory();
+          if (picked) setCwd(picked);
+        });
+        else setFolderBrowserOpen(true);
+        return;
+      case "new-folder":
+        setNewFolderOpen(true);
+        return;
+      case "pi-providers":
+      case "pi-settings":
+        setPiManagerTab(id === "pi-providers" ? "providers" : "settings");
+        setPiManagerOpen(true);
+        return;
+      case "model":
+        void openPalette("model");
+        return;
+      case "thinking":
+        void openPalette("Thinking");
+        return;
+    }
+    const command = paletteCommands([]).find((c) => c.id === id);
+    if (!command) {
+      setInfo("지금은 할 수 없는 메뉴입니다 (세션이나 연결이 필요할 수 있습니다).");
+      return;
+    }
+    if (command.disabled) {
+      setInfo(`지금은 할 수 없습니다: ${command.title}`);
+      return;
+    }
+    command.run();
+  };
+  useEffect(() => {
+    if (!active) return;
+    const onMenu = (e: Event) => menuRef.current((e as CustomEvent<string>).detail);
+    window.addEventListener(MENU_EVENT, onMenu);
+    return () => window.removeEventListener(MENU_EVENT, onMenu);
+  }, [active]);
 
   return (
     <div className="app" hidden={!active} ref={root}>

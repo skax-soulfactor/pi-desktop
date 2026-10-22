@@ -477,6 +477,8 @@ export interface PiDesktopApi {
   /** 새 버전의 릴리스 페이지를 연다 (알리기만 하는 곳) */
   openRelease(): Promise<void>;
   onUpdateState(listener: (state: UpdateState) => void): () => void;
+  /** 메뉴바에서 고른 명령 id (app-menu.ts) */
+  onMenuCommand(listener: (id: string) => void): () => void;
   /** 작업 기록 (최근 것부터) */
   listActionLog(limit?: number): Promise<ActionLogEntry[]>;
   /** 화면에서 시작한 작업을 기록에 남긴다 (터미널에서 실행한 설치·제거 명령 등) */
@@ -577,6 +579,7 @@ export const IpcChannels = {
   installUpdate: "pi:install-update",
   openRelease: "pi:open-release",
   updateStateChanged: "pi:update-state-changed",
+  menuCommand: "pi:menu-command",
   logAction: "pi:log-action",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",

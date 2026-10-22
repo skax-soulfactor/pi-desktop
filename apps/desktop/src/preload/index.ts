@@ -93,6 +93,11 @@ const api: PiDesktopApi = {
   checkForUpdates: () => ipcRenderer.invoke(IpcChannels.checkForUpdates),
   installUpdate: () => ipcRenderer.invoke(IpcChannels.installUpdate),
   openRelease: () => ipcRenderer.invoke(IpcChannels.openRelease),
+  onMenuCommand: (listener) => {
+    const handler = (_event: unknown, id: string) => listener(id);
+    ipcRenderer.on(IpcChannels.menuCommand, handler);
+    return () => ipcRenderer.removeListener(IpcChannels.menuCommand, handler);
+  },
   onUpdateState: (listener) => {
     const handler = (_event: unknown, state: Parameters<typeof listener>[0]) => listener(state);
     ipcRenderer.on(IpcChannels.updateStateChanged, handler);

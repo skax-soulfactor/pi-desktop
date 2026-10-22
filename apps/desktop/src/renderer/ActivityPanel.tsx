@@ -69,12 +69,18 @@ export function useActivity(hosts: readonly HostRef[]): ActivityEntry[] {
 export function ActivityButton({
   entries,
   onOpen,
+  openSignal = 0,
 }: {
   entries: ActivityEntry[];
   /** 세션을 보여준다 (보는 탭으로 가거나 새 탭을 연다) */
   onOpen: (entry: ActivityEntry) => void;
+  /** 값이 바뀌면 패널을 연다 (메뉴바 "활동·작업 기록") */
+  openSignal?: number;
 }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (openSignal > 0) setOpen(true);
+  }, [openSignal]);
   const [view, setView] = useState<"sessions" | "log">("sessions");
   const root = useRef<HTMLDivElement>(null);
   const { input, busy } = activityCounts(entries);

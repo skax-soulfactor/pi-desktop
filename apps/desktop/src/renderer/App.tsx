@@ -15,7 +15,7 @@ import { ActivityButton, useActivity } from "./ActivityPanel";
 import { sharedEventLog } from "./event-log";
 import { UpdateBadge, useUpdateState } from "./UpdateBadge";
 import { forgetTab, MAIN_TAB, setTabHost, setTabSession } from "./use-session";
-import { Workspace, type WorkspaceStatus } from "./Workspace";
+import { MENU_EVENT, Workspace, type WorkspaceStatus } from "./Workspace";
 
 /**
  * 워크스페이스 탭 (설계 §3.3). 탭마다 호스트와 세션을 따로 가지고, 숨긴 탭도 연결과 상태를 유지한다.
@@ -34,6 +34,7 @@ export function App() {
 
   useEffect(() => saveTabs(tabs), [tabs]);
   const update = useUpdateState();
+  const [activityOpen, setActivityOpen] = useState(0);
 
   // Event Inspector가 열기 전에 온 이벤트도 보이도록 앱이 켜질 때부터 세션 이벤트를 모은다.
   useEffect(() => {
@@ -174,7 +175,27 @@ export function App() {
         {tabs.ids.map((id, index) => {
           const status = statuses[id];
           const mark = attention[id];
-          return (
+          // 메뉴바 명령: 앱 수준(탭·업데이트·활동)은 여기서, 나머지는 지금 탭의 Workspace가 처리한다 (MENU_EVENT).
+  const appCommandsRef = useRef(appCommands);
+  appCommandsRef.current = appCommands;
+  useEffect(
+    () =>
+      window.piDesktop.onMenuCommand((id) => {
+        if (id === "activity") {
+          setActivityOpen((n) => n + 1);
+          return;
+        }
+        const own = appCommandsRef.current.find((c) => c.id === id);
+        if (own) {
+          if (!own.disabled) own.run();
+          return;
+        }
+        window.dispatchEvent(new CustomEvent(MENU_EVENT, { detail: id }));
+      }),
+    [],
+  );
+
+  return (
             <div
               key={id}
               role="tab"
@@ -217,7 +238,7 @@ export function App() {
         </button>
         <div className="tabbar-spacer" />
         <UpdateBadge state={update} />
-        <ActivityButton entries={activity} onOpen={openActivity} />
+        <ActivityButton entries={activity} onOpen={openActivity} openSignal={activityOpen} />
       </nav>
       <div className="workspaces">
         {tabs.ids.map((id) => (
