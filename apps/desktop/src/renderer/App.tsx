@@ -12,6 +12,7 @@ import {
 import { tabShowing, type ActivityEntry } from "./activity-view";
 import type { PaletteCommand } from "./palette";
 import { ActivityButton, useActivity } from "./ActivityPanel";
+import { sharedEventLog } from "./event-log";
 import { forgetTab, MAIN_TAB, setTabHost, setTabSession } from "./use-session";
 import { Workspace, type WorkspaceStatus } from "./Workspace";
 
@@ -31,6 +32,11 @@ export function App() {
   tabsRef.current = tabs;
 
   useEffect(() => saveTabs(tabs), [tabs]);
+
+  // Event Inspector가 열기 전에 온 이벤트도 보이도록 앱이 켜질 때부터 세션 이벤트를 모은다.
+  useEffect(() => {
+    sharedEventLog();
+  }, []);
 
   // 탭을 열면 그 탭의 알림 표시를 지운다.
   useEffect(() => {
