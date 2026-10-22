@@ -1831,15 +1831,28 @@ button.toggled {
 }
 
 .pi-manager {
-  width: 640px;
+  width: 760px;
   max-width: calc(100vw - 32px);
 }
 
+/* 머리줄: 글자는 줄바꿈하지 않고, 창이 좁으면 항목 단위로 다음 줄로 넘긴다 */
 .pi-manager-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.pi-manager-head > *,
+.pi-manager-head .segmented button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pi-manager-head select {
+  flex-shrink: 1;
+  min-width: 120px;
 }
 
 .pi-manager-head h2 {
@@ -3073,4 +3086,19 @@ details > summary.settings-section {
   border: 1px solid var(--border);
   border-radius: 999px;
   margin-right: 2px;
+}
+
+/* 이 호스트에 Pi가 없을 때 사이드바 기록 자리의 설치 안내 */
+.sidebar-notice {
+  margin: 4px 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
+}
+
+.sidebar-notice p {
+  margin: 0 0 8px;
+  color: var(--muted);
 }

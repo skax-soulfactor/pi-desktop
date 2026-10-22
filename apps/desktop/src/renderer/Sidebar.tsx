@@ -23,6 +23,10 @@ interface Props {
   onRename?: (name: string) => Promise<void>;
   /** 값이 바뀌면 기록을 다시 읽는다 (이름 변경 뒤 등) */
   refreshKey?: number;
+  /** 이 호스트에 Pi가 없으면 기록 오류 대신 설치 안내를 보인다 */
+  piMissing?: boolean;
+  /** Pi 설치 화면(Pi 관리 → 상태)을 연다 */
+  onInstallPi?: () => void;
 }
 
 /**
@@ -34,7 +38,7 @@ interface Props {
  * - 닫기: 실행 중 세션의 ✕. Pi를 끄고, 다시 쓰려면 기록에서 연다
  */
 export function Sidebar(props: Props) {
-  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, onClose, currentName, onRename, refreshKey } = props;
+  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, onClose, currentName, onRename, refreshKey, piMissing, onInstallPi } = props;
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<string | undefined>();
   const [scope, setScope] = useState<Scope>(() => {
@@ -233,8 +237,19 @@ export function Sidebar(props: Props) {
             </button>
           </div>
         </div>
-        {error && <p className="sidebar-error">{error}</p>}
-        {!error && !loading && shownHistory.length === 0 && (
+        {piMissing ? (
+          <div className="sidebar-notice">
+            <p>이 호스트에 Pi가 설치되어 있지 않아 세션을 열거나 기록을 볼 수 없습니다.</p>
+            {onInstallPi && (
+              <button type="button" className="primary" onClick={onInstallPi}>
+                Pi 설치하기
+              </button>
+            )}
+          </div>
+        ) : (
+          error && <p className="sidebar-error">{error}</p>
+        )}
+        {!piMissing && !error && !loading && shownHistory.length === 0 && (
           <p className="sidebar-empty">{query && history.length > 0 ? "검색 결과가 없습니다." : "저장된 세션이 없습니다."}</p>
         )}
         {shownHistory.map((h) => {

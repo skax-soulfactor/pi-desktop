@@ -899,6 +899,11 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           onSelect={(target) => void guard(() => switchTo(target))}
           onOpenStored={(stored) => void guard(() => openStored(stored))}
           onClose={(target) => void guard(() => closeSession(target))}
+          piMissing={Boolean(piState.status && !piState.status.pi)}
+          onInstallPi={() => {
+            setPiManagerTab("status");
+            setPiManagerOpen(true);
+          }}
           {...(sessionInfo.info.sessionName ? { currentName: sessionInfo.info.sessionName } : {})}
           {...(session && !lost && connected
             ? {

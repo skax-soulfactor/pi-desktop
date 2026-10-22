@@ -11,7 +11,12 @@ import { PiUpdatePanel } from "./PiUpdatePanel";
 import { ModelsPanel } from "./ModelsPanel";
 import { ProvidersPanel } from "./ProvidersPanel";
 
-/** 한 호스트의 Pi 상태와 최신 버전. 최신 버전은 데몬이 1시간 캐시한다 */
+/** 최신 버전 조회가 실패했을 때 다시 묻는 간격 */
+const LATEST_RETRY_MS = 2 * 60_000;
+/** 최신 버전을 다시 묻는 간격 (데몬 캐시가 1시간이라 그보다 길게) */
+const LATEST_REFRESH_MS = 6 * 60 * 60_000;
+
+/** 한 호스트의 Pi 상태와 최신 버전. 최신 버전은 데몬이 1시간(실패는 1분) 캐시한다 */
 export function usePiStatus(hostId: string, enabled: boolean) {
   const [status, setStatus] = useState<PiStatus | undefined>();
   const [latest, setLatest] = useState<PiLatest | undefined>();
@@ -36,6 +41,22 @@ export function usePiStatus(hostId: string, enabled: boolean) {
     setLatest(undefined);
     if (enabled) void load();
   }, [enabled, load]);
+
+  // 최신 버전을 다시 묻는다: 실패했으면 곧(일시적 네트워크 오류일 수 있다), 성공했으면 몇 시간마다.
+  // 연결할 때 한 번만 물으면 한 번 실패한 뒤로는 앱을 다시 열 때까지 업데이트 배지가 나오지 않는다.
+  useEffect(() => {
+    if (!enabled || !latest) return;
+    const timer = setTimeout(
+      () => {
+        void window.piDesktop
+          .piLatest(hostId, false)
+          .then(setLatest)
+          .catch(() => {});
+      },
+      latest.error ? LATEST_RETRY_MS : LATEST_REFRESH_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [enabled, hostId, latest]);
 
   return { status, latest, error, reload: load };
 }
