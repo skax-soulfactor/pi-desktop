@@ -70,6 +70,15 @@ const SSH_MANAGE = "__ssh-manage__";
 /** 메뉴바 명령을 지금 탭에 전하는 창 이벤트 (detail: 명령 id) */
 export const MENU_EVENT = "pi-desktop-menu";
 
+/** Pi 설치 명령 뒤 상태를 다시 읽는 간격과 최대 시간 (설치기가 메뉴로 물어보며 기다릴 수 있다) */
+const PI_WATCH_INTERVAL_MS = 3_000;
+const PI_WATCH_LIMIT_MS = 30 * 60_000;
+
+/** 설치·제거·업데이트로 바뀌었는지 비교할 Pi 위치·버전 */
+function piFingerprint(pi: { cliPath: string; version: string } | undefined): string {
+  return pi ? `${pi.cliPath}@${pi.version}` : "";
+}
+
 export function Workspace({ tabId, active, onStatus, appCommands }: WorkspaceProps) {
   const {
     hosts,
@@ -145,6 +154,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     const key = crypto.randomUUID();
     setDockTerminals((prev) => [...prev, { key, spec, title: title ?? "터미널", fixedTitle: title !== undefined, ...(onSuccess ? { onSuccess } : {}) }]);
     setActiveTerminal(key);
+    return key;
   };
   /**
    * 그 호스트의 pi를 이 인자로 내장 터미널에서 실행한다 (패키지 설치·제거·업데이트).
@@ -172,6 +182,41 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   // 상단 바의 Pi 버전·업데이트 표시 (연결되면 한 번 읽는다. 최신 버전은 데몬이 캐시)
   const piState = usePiStatus(hostId, connected);
   const piUpdate = updateState(piState.status?.pi?.version, piState.latest);
+  /**
+   * Pi 설치·제거·업데이트 명령을 셸 터미널에 보낸 뒤, Pi 상태가 바뀔 때까지 몇 초마다 다시 읽는다.
+   * 명령은 셸 안에서 돌아 끝나도 터미널이 닫히지 않으므로 종료 코드로는 알 수 없다. 터미널을 닫으면 한 번 더 읽고 그만둔다.
+   */
+  const [piWatch, setPiWatch] = useState<{ terminalKey: string; hostId: string; before: string; until: number } | undefined>();
+  const reloadPi = piState.reload;
+  useEffect(() => {
+    if (!piWatch) return;
+    const done = () => {
+      setPiWatch(undefined);
+      // 기록은 사이드바가 piMissing이 바뀌면 다시 읽는다.
+      void reloadPi(true);
+    };
+    if (piWatch.hostId !== hostId) {
+      setPiWatch(undefined);
+      return;
+    }
+    if (!dockTerminals.some((t) => t.key === piWatch.terminalKey)) {
+      done();
+      return;
+    }
+    const timer = setInterval(() => {
+      if (Date.now() > piWatch.until) {
+        setPiWatch(undefined);
+        return;
+      }
+      void window.piDesktop
+        .piStatus(piWatch.hostId)
+        .then((status) => {
+          if (piFingerprint(status.pi) !== piWatch.before) done();
+        })
+        .catch(() => {});
+    }, PI_WATCH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [piWatch, hostId, dockTerminals, reloadPi]);
   // 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 썼다 (TUI 등). 같은 파일에 함께 쓰면 기록이 꼬이므로 입력을 잠근다.
   const externalWrite = session?.externalWriteAt !== undefined && !lost;
   // 다른 앱(다른 PC 등)이 이 세션의 입력 권한을 가지고 있다. 실시간으로 보기만 한다 (설계 §3.4).
@@ -899,7 +944,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           onSelect={(target) => void guard(() => switchTo(target))}
           onOpenStored={(stored) => void guard(() => openStored(stored))}
           onClose={(target) => void guard(() => closeSession(target))}
-          piMissing={Boolean(piState.status && !piState.status.pi)}
+          {...(piState.status ? { piMissing: !piState.status.pi } : piState.error ? { piMissing: false } : {})}
           onInstallPi={() => {
             setPiManagerTab("status");
             setPiManagerOpen(true);
@@ -1298,7 +1343,10 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           onChanged={() => void piState.reload(true)}
           onRunInTerminal={(targetHost, command, title) => {
             setPiManagerOpen(false);
-            openTerminal({ hostId: targetHost, kind: "shell", initialInput: `${command}\r` }, title);
+            const terminalKey = openTerminal({ hostId: targetHost, kind: "shell", initialInput: `${command}\r` }, title);
+            if (targetHost === hostId) {
+              setPiWatch({ terminalKey, hostId, before: piFingerprint(piState.status?.pi), until: Date.now() + PI_WATCH_LIMIT_MS });
+            }
           }}
           onOAuthLogin={(targetHost, provider) => {
             setPiManagerOpen(false);

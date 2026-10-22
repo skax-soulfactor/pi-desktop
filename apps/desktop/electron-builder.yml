@@ -12,6 +12,8 @@ directories:
 # 설치본의 package.json 이름. 워크스페이스 이름(@pi-desktop/desktop) 대신 써서 업데이트 캐시 폴더 이름 등이 깔끔하다.
 extraMetadata:
   name: pi-desktop
+  # Linux에서 Electron이 창의 app_id로 쓴다 (linux.syncDesktopName).
+  desktopName: pi-desktop.desktop
 
 # electron-vite가 만든 결과물만 담는다. 화면(React 등)은 이미 번들에 들어 있다.
 files:
@@ -24,6 +26,9 @@ extraResources:
     to: host-agent/host-agent.mjs
   - from: ../../packages/host-agent/package.json
     to: host-agent/package.json
+  # Linux 창 아이콘 (main/index.ts의 windowIcon). 실행 파일에 아이콘이 없어 창에 직접 준다.
+  - from: build/icon.png
+    to: icon.png
 
 # node-pty는 네이티브 모듈이라 asar 밖에 풀어 둔다.
 # N-API 모듈이라 Electron에 맞춰 다시 빌드하지 않는다 (Windows·macOS는 미리 빌드된 파일, Linux는 npm ci 때 빌드한 것을 쓴다).
@@ -72,4 +77,6 @@ linux:
       arch: [x64]
   category: Development
   maintainer: skax-soulfactor
+  # .desktop 파일 이름·StartupWMClass를 desktopName(창의 Wayland app_id·X11 WM_CLASS)과 맞춰 작업 표시줄이 앱 아이콘을 찾게 한다.
+  syncDesktopName: true
   artifactName: Pi-Desktop-${version}-${arch}.${ext}

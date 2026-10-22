@@ -1,7 +1,7 @@
 import { app, shell } from "electron";
 import electronUpdater from "electron-updater";
 import type { UpdateState } from "../shared/api";
-import { CHECK_INTERVAL_MS, FIRST_CHECK_MS, releaseUrl, updateMode } from "./update-policy";
+import { CHECK_INTERVAL_MS, FIRST_CHECK_MS, isLocalBuild, releaseUrl, updateMode } from "./update-policy";
 
 const { autoUpdater } = electronUpdater;
 
@@ -21,9 +21,12 @@ export class Updater {
   private readonly mode = updateMode(process.platform, process.env);
 
   constructor(private readonly broadcast: (state: UpdateState) => void) {
-    this.state = app.isPackaged
-      ? { status: "idle", current: app.getVersion(), mode: this.mode }
-      : { status: "disabled", current: app.getVersion(), mode: this.mode, error: "개발 실행에서는 업데이트를 확인하지 않습니다" };
+    const current = app.getVersion();
+    this.state = !app.isPackaged
+      ? { status: "disabled", current, mode: this.mode, error: "개발 실행에서는 업데이트를 확인하지 않습니다" }
+      : isLocalBuild(current, process.env)
+        ? { status: "disabled", current, mode: this.mode, error: "로컬 빌드에서는 업데이트를 확인하지 않습니다" }
+        : { status: "idle", current, mode: this.mode };
   }
 
   start(): void {
