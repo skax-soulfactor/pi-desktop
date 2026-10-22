@@ -46,6 +46,7 @@ export function usePiStatus(hostId: string, enabled: boolean) {
 export function PiManager({
   hosts,
   initialHostId,
+  initialTab = "status",
   onClose,
   onChanged,
   onOAuthLogin,
@@ -54,6 +55,8 @@ export function PiManager({
 }: {
   hosts: HostDescriptor[];
   initialHostId: string;
+  /** 처음 열 탭 (/settings, /login 등) */
+  initialTab?: "status" | "providers" | "models" | "settings" | "compare";
   /** 지금 탭의 작업 폴더 (설정의 프로젝트 범위 기본값) */
   projectCwd?: string;
   onClose: () => void;
@@ -67,7 +70,7 @@ export function PiManager({
   const [hostId, setHostId] = useState(initialHostId);
   const { status, latest, error, reload } = usePiStatus(hostId, true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState<"status" | "providers" | "models" | "settings" | "compare">("status");
+  const [tab, setTab] = useState<"status" | "providers" | "models" | "settings" | "compare">(initialTab);
   const [settingsMode, setSettingsMode] = useState<"edit" | "copy">("edit");
   const checks = status ? statusChecks(status, latest) : [];
 

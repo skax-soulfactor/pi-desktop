@@ -4,8 +4,17 @@ import { cycleIndex, filterPalette, type PaletteCommand } from "./palette";
 /**
  * 명령 팔레트 (Ctrl+K). 검색해서 고르고 Enter로 실행한다. Esc나 바깥을 누르면 닫는다.
  */
-export function CommandPalette({ commands, onClose }: { commands: PaletteCommand[]; onClose: () => void }) {
-  const [query, setQuery] = useState("");
+export function CommandPalette({
+  commands,
+  initialQuery = "",
+  onClose,
+}: {
+  commands: PaletteCommand[];
+  /** 처음 넣어 둘 검색어 (예: /model은 "model") */
+  initialQuery?: string;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState(initialQuery);
   const [selected, setSelected] = useState(0);
   const list = useRef<HTMLUListElement>(null);
   const shown = useMemo(() => filterPalette(commands, query), [commands, query]);

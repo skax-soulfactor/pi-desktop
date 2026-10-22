@@ -21,6 +21,7 @@ import type { ParsedInput, PiCommand } from "./composer-input";
 import { terminalActionDetail } from "./activity-view";
 import { EventInspector } from "./EventInspector";
 import { useExtensionDevMode } from "./use-dev-mode";
+import { parseAppSlash, splitModelArg, withAppCommands, type AppSlashCommand } from "./app-commands";
 import { PlaygroundPanel } from "./PlaygroundPanel";
 import { baseName, formatRelative } from "./format";
 import { piSessionIdOf, tuiCommand } from "./tui-command";
@@ -109,6 +110,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [treeOpen, setTreeOpen] = useState(false);
   const [piManagerOpen, setPiManagerOpen] = useState(false);
+  const [piManagerTab, setPiManagerTab] = useState<"status" | "providers" | "settings">("status");
   const [folderBrowserOpen, setFolderBrowserOpen] = useState(false);
   const [agentReplaceAsk, setAgentReplaceAsk] = useState(false);
   const [sshHostsOpen, setSshHostsOpen] = useState(false);
@@ -150,7 +152,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     });
   };
   /** 명령 팔레트가 열려 있으면 그때 읽은 최근 기록 */
-  const [palette, setPalette] = useState<{ history: StoredSession[] } | undefined>();
+  const [palette, setPalette] = useState<{ history: StoredSession[]; query?: string } | undefined>();
   const root = useRef<HTMLDivElement>(null);
   const [handoffAsk, setHandoffAsk] = useState(false);
   const [handoffCommand, setHandoffCommand] = useState<string | undefined>();
@@ -357,12 +359,12 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
    * (Pi rpc-commands.md clear_queue 안내와 같은 순서).
    */
   /** 명령 팔레트를 연다. 최근 기록과 Pi 명령 목록을 함께 읽는다 */
-  async function openPalette() {
-    setPalette({ history: [] });
+  async function openPalette(query?: string) {
+    setPalette({ history: [], ...(query ? { query } : {}) });
     if (session && !commands) loadCommands();
     if (!connected) return;
     const history = await window.piDesktop.listHistory(hostId, undefined).catch(() => []);
-    setPalette((prev) => (prev ? { history: history.slice(0, 15) } : prev));
+    setPalette((prev) => (prev ? { ...prev, history: history.slice(0, 15) } : prev));
   }
 
   // 팔레트가 닫혀 화면에서 빠진 다음에 포커스를 준다 (같은 순간에 주면 사라지는 입력칸에 밀린다).
@@ -568,6 +570,98 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     await send({ type: "abort" });
   }
 
+  /** 입력창 앱 명령을 처리한다 (TUI 기본 명령에 해당하는 앱 동작) */
+  async function runAppSlash(command: AppSlashCommand, args: string) {
+    if (command.unsupported) {
+      setInfo(`/${command.name}: ${command.unsupported}`);
+      return;
+    }
+    switch (command.name) {
+      case "model": {
+        const target = args ? splitModelArg(args) : undefined;
+        if (target) await sessionInfo.setModel(target.provider, target.modelId);
+        else void openPalette(args || "model");
+        return;
+      }
+      case "thinking":
+        if (args) await sessionInfo.setThinkingLevel(args as Parameters<typeof sessionInfo.setThinkingLevel>[0]);
+        else void openPalette("Thinking");
+        return;
+      case "compact":
+        if (args) {
+          await send({ type: "compact", customInstructions: args });
+          await sessionInfo.refresh();
+        } else await sessionInfo.compact();
+        return;
+      case "new":
+        if (session) await openSession(session.cwd);
+        return;
+      case "resume":
+        void openPalette();
+        return;
+      case "name":
+        if (args) {
+          await send({ type: "set_session_name", name: args });
+          await sessionInfo.refresh();
+        } else setInfo(`세션 이름: ${sessionInfo.info.sessionName ?? "(없음)"}`);
+        return;
+      case "session": {
+        const response = await window.piDesktop.sendCommand(hostId, session!.sessionId, { type: "get_session_stats" });
+        setInfo(`세션 정보\n${JSON.stringify(response.data ?? {}, null, 2)}`);
+        return;
+      }
+      case "tree":
+        setTreeOpen(true);
+        return;
+      case "fork":
+        setTreeOpen(true);
+        setInfo("트리에서 분기할 메시지를 고른 뒤 \"여기서 분기\"를 누르세요.");
+        return;
+      case "clone":
+        await branchSession({ type: "clone" });
+        return;
+      case "copy": {
+        const response = await window.piDesktop.sendCommand(hostId, session!.sessionId, { type: "get_last_assistant_text" });
+        const text = (response.data as { text?: string } | undefined)?.text;
+        if (!text) {
+          setInfo("복사할 답변이 없습니다.");
+          return;
+        }
+        await navigator.clipboard.writeText(text);
+        setInfo("마지막 답변을 복사했습니다.");
+        return;
+      }
+      case "export":
+        await exportHtml();
+        return;
+      case "reload":
+        await reloadSessionResources();
+        setInfo("확장·스킬·프롬프트·컨텍스트를 다시 불러왔습니다.");
+        return;
+      case "settings":
+        setPiManagerTab("settings");
+        setPiManagerOpen(true);
+        return;
+      case "login":
+        if (args) openTerminal({ hostId, kind: "pi", initialInput: `/login ${args}\r` }, `pi 로그인 (${args})`);
+        else {
+          setPiManagerTab("providers");
+          setPiManagerOpen(true);
+        }
+        return;
+      case "logout":
+        setPiManagerTab("providers");
+        setPiManagerOpen(true);
+        return;
+      case "trust":
+        setResourcesOpen(true);
+        return;
+      case "hotkeys":
+        void openPalette();
+        return;
+    }
+  }
+
   /** 실행 중이면 Pi 규칙대로 steer/followUp 중 하나를 지정해야 한다. */
   function submit(
     input: Exclude<ParsedInput, { kind: "empty" }>,
@@ -582,6 +676,12 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       return;
     }
     const { message } = input;
+    // TUI 기본 명령(/model, /compact …)은 RPC로 오지 않으므로 앱이 처리한다 (app-commands.ts).
+    const appSlash = attachments.length === 0 ? parseAppSlash(message, commands) : undefined;
+    if (appSlash) {
+      void guard(() => runAppSlash(appSlash.command, appSlash.args));
+      return;
+    }
     const images = rpcImages(attachments);
     void guard(() =>
       send({
@@ -879,7 +979,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
             : "먼저 세션을 여세요"
         }
         running={chat.running}
-        commands={commands}
+        commands={commands ? withAppCommands(commands) : undefined}
         onNeedCommands={loadCommands}
         onSearchFiles={searchFiles}
         acceptsImages={modelAcceptsImages(sessionInfo.info.model)}
@@ -1075,8 +1175,12 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         <PiManager
           hosts={hosts}
           initialHostId={hostId}
+          initialTab={piManagerTab}
           {...(resourcesCwd ? { projectCwd: resourcesCwd } : {})}
-          onClose={() => setPiManagerOpen(false)}
+          onClose={() => {
+            setPiManagerOpen(false);
+            setPiManagerTab("status");
+          }}
           onChanged={() => void piState.reload(true)}
           onRunInTerminal={(targetHost, command, title) => {
             setPiManagerOpen(false);
@@ -1091,6 +1195,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       {active && palette && (
         <CommandPalette
           commands={paletteCommands(palette.history)}
+          {...(palette.query ? { initialQuery: palette.query } : {})}
           onClose={() => {
             setPalette(undefined);
             focusComposer();
