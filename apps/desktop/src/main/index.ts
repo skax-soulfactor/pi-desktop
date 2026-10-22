@@ -67,6 +67,7 @@ import { browseRepo, downloadFiles, fetchText } from "./github-catalog";
 import { ImportStore } from "./imports";
 import { compareCopy, CopyStore, exportKindOf, fileShas } from "./copies";
 import { collectInventory } from "./host-inventory";
+import { ActionLog } from "./action-log";
 import { compareLocal, compareUpstream, projectCwdOf } from "./import-status";
 import { hostPathForExplorer } from "./host-path";
 import { ReplayCollector } from "./replay-collector";
@@ -136,11 +137,17 @@ function createWindow(): void {
 
 const terminals = new TerminalService({ data: IpcChannels.terminalData, exit: IpcChannels.terminalExit });
 
-function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: ImportStore, copies: CopyStore): void {
+function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: ImportStore, copies: CopyStore, actionLog: ActionLog): void {
+  // 관리 작업은 작업 기록에 남긴다 (action-log.ts의 LOGGED에 있는 채널만).
+  const handle: typeof ipcMain.handle = (channel, listener) => ipcMain.handle(channel, actionLog.wrap(channel, listener));
+  handle(IpcChannels.listActionLog, (_event, limit?: number) => actionLog.list(typeof limit === "number" ? limit : undefined));
+  handle(IpcChannels.logAction, (_event, entry: { hostId: string; summary: string; detail?: string }) => {
+    actionLog.add({ hostId: String(entry.hostId), summary: String(entry.summary), ...(entry.detail ? { detail: String(entry.detail) } : {}), ok: true });
+  });
   const conn = (hostId: string) => manager.get(hostId);
 
   // 내장 터미널: pi는 데몬이 찾은 Pi와 그 실행 node로 띄운다.
-  ipcMain.handle(IpcChannels.terminalOpen, async (event, request: TerminalOpenRequest) => {
+  handle(IpcChannels.terminalOpen, async (event, request: TerminalOpenRequest) => {
     const status = request.kind === "pi" ? await conn(request.hostId).request<PiStatus>(Methods.piStatus) : undefined;
     const runtime = status?.pi ? { pi: status.pi, nodePath: status.node.path } : undefined;
     const command = terminalCommand(
@@ -159,42 +166,42 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   ipcMain.on(IpcChannels.terminalResize, (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
   ipcMain.on(IpcChannels.terminalClose, (_event, id: string) => terminals.close(id));
 
-  ipcMain.handle(IpcChannels.listHosts, () => manager.listHosts());
+  handle(IpcChannels.listHosts, () => manager.listHosts());
   const sshTarget = (hostId: string) => {
     const host = hostId.startsWith(SSH_PREFIX) ? sshHosts.get(hostId.slice(SSH_PREFIX.length)) : undefined;
     return host ? { executable: sshExecutable(), host } : undefined;
   };
-  ipcMain.handle(IpcChannels.listSshHosts, () => sshHosts.list());
-  ipcMain.handle(IpcChannels.saveSshHost, (_event, host: SshHostConfig, previousName: string | undefined) => {
+  handle(IpcChannels.listSshHosts, () => sshHosts.list());
+  handle(IpcChannels.saveSshHost, (_event, host: SshHostConfig, previousName: string | undefined) => {
     sshHosts.save(host, previousName);
     // 고친 호스트는 다음에 쓸 때 새 설정으로 다시 연결한다.
     if (previousName !== undefined) manager.forget(`${SSH_PREFIX}${previousName}`);
   });
-  ipcMain.handle(IpcChannels.removeSshHost, (_event, name: string) => {
+  handle(IpcChannels.removeSshHost, (_event, name: string) => {
     sshHosts.remove(name);
     manager.forget(`${SSH_PREFIX}${name}`);
   });
-  ipcMain.handle(IpcChannels.connectHost, (_event, hostId: string) => conn(hostId).current);
-  ipcMain.handle(IpcChannels.replaceAgent, (_event, hostId: string) => conn(hostId).replaceAgent());
-  ipcMain.handle(IpcChannels.locatePi, (_event, hostId: string) =>
+  handle(IpcChannels.connectHost, (_event, hostId: string) => conn(hostId).current);
+  handle(IpcChannels.replaceAgent, (_event, hostId: string) => conn(hostId).replaceAgent());
+  handle(IpcChannels.locatePi, (_event, hostId: string) =>
     conn(hostId).request<PiLocation>(Methods.piLocate, hostId === LOCAL_HOST_ID ? { piCliPath: process.env.PI_DESKTOP_PI_CLI } : {}),
   );
   // 저장된 세션 파일 검사·읽기·감시 (팔로우 모드). Pi CLI 경로는 SDK를 불러올 때만 필요하다.
   const storedParams = (hostId: string, path: string) =>
     hostId === LOCAL_HOST_ID && process.env.PI_DESKTOP_PI_CLI ? { path, piCliPath: process.env.PI_DESKTOP_PI_CLI } : { path };
-  ipcMain.handle(IpcChannels.inspectStored, (_event, hostId: string, path: string) =>
+  handle(IpcChannels.inspectStored, (_event, hostId: string, path: string) =>
     conn(hostId).request<StoredInspectResult>(Methods.storedInspect, { path }),
   );
-  ipcMain.handle(IpcChannels.readStored, (_event, hostId: string, path: string) =>
+  handle(IpcChannels.readStored, (_event, hostId: string, path: string) =>
     conn(hostId).request<StoredReadResult>(Methods.storedRead, storedParams(hostId, path)),
   );
-  ipcMain.handle(IpcChannels.watchStored, async (_event, hostId: string, path: string) => {
+  handle(IpcChannels.watchStored, async (_event, hostId: string, path: string) => {
     await conn(hostId).request(Methods.storedWatch, { path });
   });
-  ipcMain.handle(IpcChannels.unwatchStored, async (_event, hostId: string, path: string) => {
+  handle(IpcChannels.unwatchStored, async (_event, hostId: string, path: string) => {
     await conn(hostId).request(Methods.storedUnwatch, { path });
   });
-  ipcMain.handle(IpcChannels.listHistory, (_event, hostId: string, cwd: string | undefined) => {
+  handle(IpcChannels.listHistory, (_event, hostId: string, cwd: string | undefined) => {
     const params: SessionHistoryParams = cwd ? { cwd } : {};
     // 개발용 덮어쓰기(격리된 Pi 설정)는 로컬 호스트에만 적용한다.
     if (hostId === LOCAL_HOST_ID) {
@@ -205,10 +212,10 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     }
     return conn(hostId).request<StoredSession[]>(Methods.sessionHistory, params);
   });
-  ipcMain.handle(IpcChannels.listSessions, (_event, hostId: string) =>
+  handle(IpcChannels.listSessions, (_event, hostId: string) =>
     conn(hostId).request<SessionSummary[]>(Methods.sessionList),
   );
-  ipcMain.handle(IpcChannels.openSession, async (_event, hostId: string, request: OpenSessionRequest) => {
+  handle(IpcChannels.openSession, async (_event, hostId: string, request: OpenSessionRequest) => {
     // 개발용 덮어쓰기 값은 Windows 경로라서 로컬 호스트에만 적용한다.
     const overrides = hostId === LOCAL_HOST_ID ? devSessionOverrides() : {};
     const params: SessionOpenParams = { ...overrides, cwd: request.cwd };
@@ -218,7 +225,7 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     const result = await conn(hostId).request<SessionOpenResult>(Methods.sessionOpen, params);
     return result.session;
   });
-  ipcMain.handle(IpcChannels.attachSession, async (_event, hostId: string, sessionId: string, lastSeq: number) => {
+  handle(IpcChannels.attachSession, async (_event, hostId: string, sessionId: string, lastSeq: number) => {
     const key = replayKey(hostId, sessionId);
     const events = replays.begin(key);
     try {
@@ -229,64 +236,64 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       replays.end(key, events);
     }
   });
-  ipcMain.handle(IpcChannels.closeSession, (_event, hostId: string, sessionId: string) =>
+  handle(IpcChannels.closeSession, (_event, hostId: string, sessionId: string) =>
     conn(hostId).request(Methods.sessionClose, { sessionId }),
   );
-  ipcMain.handle(IpcChannels.claimWriter, async (_event, hostId: string, sessionId: string) => {
+  handle(IpcChannels.claimWriter, async (_event, hostId: string, sessionId: string) => {
     await conn(hostId).request(Methods.sessionClaimWriter, { sessionId });
   });
-  ipcMain.handle(IpcChannels.clearExternalWrite, async (_event, hostId: string, sessionId: string) => {
+  handle(IpcChannels.clearExternalWrite, async (_event, hostId: string, sessionId: string) => {
     await conn(hostId).request(Methods.sessionClearExternalWrite, { sessionId });
   });
-  ipcMain.handle(
+  handle(
     IpcChannels.sendCommand,
     (_event, hostId: string, sessionId: string, command: Record<string, unknown>) =>
       // `!` 셸 명령은 끝나야 응답이 오므로 시간 제한을 두지 않는다. 멈추려면 abort_bash를 보낸다.
       conn(hostId).request<PiResponse>(Methods.sessionSend, { sessionId, command }, command.type === "bash" ? 0 : undefined),
   );
-  ipcMain.handle(
+  handle(
     IpcChannels.sendRecord,
     async (_event, hostId: string, sessionId: string, record: Record<string, unknown>) => {
       await conn(hostId).request(Methods.sessionSend, { sessionId, command: record, noResponse: true });
     },
   );
-  ipcMain.handle(IpcChannels.pickDirectory, async () => {
+  handle(IpcChannels.pickDirectory, async () => {
     const options = { properties: ["openDirectory" as const] };
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
   });
-  ipcMain.handle(IpcChannels.piStatus, (_event, hostId: string) => conn(hostId).request<PiStatus>(Methods.piStatus));
-  ipcMain.handle(IpcChannels.piLatest, (_event, hostId: string, force: boolean) =>
+  handle(IpcChannels.piStatus, (_event, hostId: string) => conn(hostId).request<PiStatus>(Methods.piStatus));
+  handle(IpcChannels.piLatest, (_event, hostId: string, force: boolean) =>
     conn(hostId).request<PiLatest>(Methods.piLatest, { force }),
   );
-  ipcMain.handle(IpcChannels.piUpdate, (_event, hostId: string, target: PiUpdateTarget, taskId: string, force: boolean) =>
+  handle(IpcChannels.piUpdate, (_event, hostId: string, target: PiUpdateTarget, taskId: string, force: boolean) =>
     // 업데이트는 몇 분 걸릴 수 있어 응답 시간 제한을 두지 않는다 (데몬이 15분에서 멈춘다).
     conn(hostId).request<PiUpdateResult>(Methods.piUpdate, { target, taskId, force }, 0),
   );
-  ipcMain.handle(IpcChannels.authProviders, (_event, hostId: string) =>
+  handle(IpcChannels.authProviders, (_event, hostId: string) =>
     conn(hostId).request<ProviderInfo[]>(Methods.authProviders),
   );
-  ipcMain.handle(IpcChannels.authCheck, (_event, hostId: string, provider: string) =>
+  handle(IpcChannels.authCheck, (_event, hostId: string, provider: string) =>
     conn(hostId).request<AuthCheckResult>(Methods.authCheck, { provider }),
   );
   // 키는 데몬으로만 넘기고 로그에 남기지 않는다.
-  ipcMain.handle(IpcChannels.authSetApiKey, async (_event, hostId: string, provider: string, key: string) => {
+  handle(IpcChannels.authSetApiKey, async (_event, hostId: string, provider: string, key: string) => {
     await conn(hostId).request(Methods.authSetApiKey, { provider, key });
   });
-  ipcMain.handle(IpcChannels.authRemove, (_event, hostId: string, provider: string) =>
+  handle(IpcChannels.authRemove, (_event, hostId: string, provider: string) =>
     conn(hostId).request<{ removed: boolean }>(Methods.authRemove, { provider }),
   );
-  ipcMain.handle(IpcChannels.modelsRead, (_event, hostId: string) => conn(hostId).request<ModelsFileView>(Methods.modelsRead));
-  ipcMain.handle(
+  handle(IpcChannels.modelsRead, (_event, hostId: string) => conn(hostId).request<ModelsFileView>(Methods.modelsRead));
+  handle(
     IpcChannels.modelsSaveProvider,
     async (_event, hostId: string, provider: CustomProviderForm, previousId: string | undefined) => {
       await conn(hostId).request(Methods.modelsSaveProvider, previousId ? { provider, previousId } : { provider });
     },
   );
-  ipcMain.handle(IpcChannels.modelsRemoveProvider, (_event, hostId: string, id: string) =>
+  handle(IpcChannels.modelsRemoveProvider, (_event, hostId: string, id: string) =>
     conn(hostId).request<{ removed: boolean }>(Methods.modelsRemoveProvider, { id }),
   );
-  ipcMain.handle(
+  handle(
     IpcChannels.modelsProbe,
     (_event, hostId: string, baseUrl: string, apiKey: string | undefined, providerId: string | undefined) =>
       conn(hostId).request<ModelsProbeResult>(Methods.modelsProbe, {
@@ -296,69 +303,69 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       }),
   );
   // 백업은 데이터 크기에 따라 오래 걸릴 수 있어 시간 제한을 두지 않는다 (데몬의 tar가 10분에서 멈춘다).
-  ipcMain.handle(IpcChannels.dataBackup, (_event, hostId: string) =>
+  handle(IpcChannels.dataBackup, (_event, hostId: string) =>
     conn(hostId).request<DataBackupResult>(Methods.dataBackup, undefined, 0),
   );
-  ipcMain.handle(IpcChannels.dataDelete, async (_event, hostId: string, confirm: string) => {
+  handle(IpcChannels.dataDelete, async (_event, hostId: string, confirm: string) => {
     await conn(hostId).request(Methods.dataDelete, { confirm }, 0);
   });
-  ipcMain.handle(IpcChannels.piVersions, (_event, hostId: string) => conn(hostId).request<PiVersions>(Methods.piVersions));
-  ipcMain.handle(IpcChannels.searchFiles, (_event, hostId: string, cwd: string, query: string) =>
+  handle(IpcChannels.piVersions, (_event, hostId: string) => conn(hostId).request<PiVersions>(Methods.piVersions));
+  handle(IpcChannels.searchFiles, (_event, hostId: string, cwd: string, query: string) =>
     conn(hostId).request<FsSearchResult>(Methods.fsSearch, { cwd, query, limit: 30 }),
   );
-  ipcMain.handle(IpcChannels.listDir, (_event, hostId: string, path: string | undefined) =>
+  handle(IpcChannels.listDir, (_event, hostId: string, path: string | undefined) =>
     conn(hostId).request<FsListDirResult>(Methods.fsListDir, path ? { path } : {}),
   );
   // 패키지 경로 해석에 npm 조회가 끼어 느릴 수 있어 넉넉히 기다린다.
-  ipcMain.handle(IpcChannels.listResources, (_event, hostId: string, cwd: string) =>
+  handle(IpcChannels.listResources, (_event, hostId: string, cwd: string) =>
     conn(hostId).request<ResourcesView>(Methods.resourcesList, { cwd }, 120_000),
   );
-  ipcMain.handle(IpcChannels.marketSearch, (_event, query: string, from: number) => searchPackages(String(query ?? ""), Number(from) || 0));
-  ipcMain.handle(IpcChannels.marketDetail, (_event, name: string) => packageDetail(String(name)));
-  ipcMain.handle(IpcChannels.githubBrowse, (_event, spec: string) => browseRepo(String(spec)));
-  ipcMain.handle(IpcChannels.githubText, (_event, repo: GithubRepoRef & { sha: string }, path: string) => fetchText(repo, String(path)));
-  ipcMain.handle(IpcChannels.modelsExport, (_event, hostId: string, id: string) =>
+  handle(IpcChannels.marketSearch, (_event, query: string, from: number) => searchPackages(String(query ?? ""), Number(from) || 0));
+  handle(IpcChannels.marketDetail, (_event, name: string) => packageDetail(String(name)));
+  handle(IpcChannels.githubBrowse, (_event, spec: string) => browseRepo(String(spec)));
+  handle(IpcChannels.githubText, (_event, repo: GithubRepoRef & { sha: string }, path: string) => fetchText(repo, String(path)));
+  handle(IpcChannels.modelsExport, (_event, hostId: string, id: string) =>
     conn(hostId).request<ModelsExportResult>(Methods.modelsExportProvider, { id }),
   );
-  ipcMain.handle(
+  handle(
     IpcChannels.modelsImport,
     async (_event, hostId: string, id: string, provider: Record<string, unknown>, replace: boolean) => {
       await conn(hostId).request(Methods.modelsImportProvider, { id, provider, ...(replace ? { replace: true } : {}) });
     },
   );
-  ipcMain.handle(IpcChannels.packageResources, (_event, hostId: string, cwd: string, source: string, scope: "user" | "project") =>
+  handle(IpcChannels.packageResources, (_event, hostId: string, cwd: string, source: string, scope: "user" | "project") =>
     conn(hostId).request<PackageResourceItem[]>(Methods.packagesResources, { cwd, source, scope }, 120_000),
   );
-  ipcMain.handle(
+  handle(
     IpcChannels.setPackageFilter,
     async (_event, hostId: string, cwd: string, source: string, scope: "user" | "project", changes: PackageFilterChange[], reset: boolean) => {
       await conn(hostId).request(Methods.packagesSetFilter, { cwd, source, scope, changes, ...(reset ? { reset: true } : {}) }, 60_000);
     },
   );
-  ipcMain.handle(IpcChannels.settingsRead, (_event, hostId: string, target?: SettingsTarget) =>
+  handle(IpcChannels.settingsRead, (_event, hostId: string, target?: SettingsTarget) =>
     conn(hostId).request<SettingsReadResult>(Methods.settingsRead, { ...target }),
   );
-  ipcMain.handle(
+  handle(
     IpcChannels.settingsWrite,
     (_event, hostId: string, content: string, baseMtime: number | null, target?: SettingsTarget) =>
       conn(hostId).request<{ mtimeMs: number }>(Methods.settingsWrite, { ...target, content, baseMtime }),
   );
-  ipcMain.handle(
+  handle(
     IpcChannels.settingsMerge,
     async (_event, hostId: string, values: Record<string, unknown>, remove?: string[], target?: SettingsTarget) => {
       await conn(hostId).request(Methods.settingsMerge, { ...target, values, ...(remove && remove.length > 0 ? { remove } : {}) });
     },
   );
-  ipcMain.handle(IpcChannels.settingsSchema, (_event, hostId: string) =>
+  handle(IpcChannels.settingsSchema, (_event, hostId: string) =>
     conn(hostId).request<Record<string, unknown> | null>(Methods.settingsSchema),
   );
-  ipcMain.handle(IpcChannels.exportResource, (_event, hostId: string, kind: "skill" | "prompt" | "extension", path: string) =>
+  handle(IpcChannels.exportResource, (_event, hostId: string, kind: "skill" | "prompt" | "extension", path: string) =>
     conn(hostId).request<ResourceExportResult>(Methods.resourcesExport, { kind, path }, 120_000),
   );
-  ipcMain.handle(IpcChannels.importResourceFiles, (_event, hostId: string, params: ResourceImportParams) =>
+  handle(IpcChannels.importResourceFiles, (_event, hostId: string, params: ResourceImportParams) =>
     conn(hostId).request<ResourceImportResult>(Methods.resourcesImport, params, 120_000),
   );
-  ipcMain.handle(IpcChannels.listImports, (_event, hostId: string) => imports.list(hostId));
+  handle(IpcChannels.listImports, (_event, hostId: string) => imports.list(hostId));
   // 이 PC가 GitHub에서 받아 그 호스트의 데몬에 쓰게 하고, 쓴 뒤에 출처를 기록한다.
   /** 이 PC가 GitHub에서 받아 그 호스트 데몬에 쓰고 출처를 기록한다. replace면 이전 것을 백업하고 바꾼다 */
   const importFromGithub = async (request: GithubImportRequest, replace = false): Promise<ImportRecord> => {
@@ -385,11 +392,11 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     imports.add(record);
     return record;
   };
-  ipcMain.handle(IpcChannels.recordCopy, (_event, input: CopyRecordInput) => {
+  handle(IpcChannels.recordCopy, (_event, input: CopyRecordInput) => {
     copies.add(input);
   });
   // 사본(이 호스트)과 원본(복사해 온 호스트)을 다시 읽어 해시를 견준다. 원본 호스트가 닿지 않으면 unknown.
-  ipcMain.handle(IpcChannels.copyStatus, (_event, hostId: string) =>
+  handle(IpcChannels.copyStatus, (_event, hostId: string) =>
     Promise.all(
       copies.listTo(hostId).map(async (record) => {
         const status = await compareCopy(record, async (side) => {
@@ -401,10 +408,10 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       }),
     ),
   );
-  ipcMain.handle(IpcChannels.hostInventory, (_event, hostId: string) =>
+  handle(IpcChannels.hostInventory, (_event, hostId: string) =>
     collectInventory(hostId, (method, params, timeoutMs) => conn(hostId).request(method, params, timeoutMs)),
   );
-  ipcMain.handle(IpcChannels.githubImport, (_event, request: GithubImportRequest) => importFromGithub(request));
+  handle(IpcChannels.githubImport, (_event, request: GithubImportRequest) => importFromGithub(request));
 
   const requireRecord = (hostId: string, target: string) => {
     const record = imports.get(hostId, target);
@@ -412,7 +419,7 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     return record;
   };
   // 저장소마다 한 번만 최신을 훑고, 항목마다 그 호스트의 파일 해시와 비교한다.
-  ipcMain.handle(IpcChannels.importStatus, async (_event, hostId: string): Promise<ImportStatus[]> => {
+  handle(IpcChannels.importStatus, async (_event, hostId: string): Promise<ImportStatus[]> => {
     const records = imports.list(hostId);
     const latest = new Map<string, Promise<GithubCatalog>>();
     return Promise.all(
@@ -434,7 +441,7 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       }),
     );
   });
-  ipcMain.handle(IpcChannels.importUpdate, async (_event, hostId: string, target: string): Promise<ImportRecord> => {
+  handle(IpcChannels.importUpdate, async (_event, hostId: string, target: string): Promise<ImportRecord> => {
     const record = requireRecord(hostId, target);
     const catalog = await browseRepo(`${record.source.owner}/${record.source.repo}`);
     const repo = { owner: catalog.owner, repo: catalog.repo, sha: catalog.sha };
@@ -454,12 +461,12 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       true,
     );
   });
-  ipcMain.handle(IpcChannels.importRemove, async (_event, hostId: string, target: string) => {
+  handle(IpcChannels.importRemove, async (_event, hostId: string, target: string) => {
     const record = requireRecord(hostId, target);
     await conn(hostId).request(Methods.resourcesRemoveImported, { target: record.target, kind: record.kind });
     imports.remove(hostId, target);
   });
-  ipcMain.handle(
+  handle(
     IpcChannels.importDiff,
     async (_event, hostId: string, target: string, path: string, upstreamSha: string): Promise<{ local: string; upstream: string }> => {
       const record = requireRecord(hostId, target);
@@ -471,16 +478,16 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       return { local, upstream };
     },
   );
-  ipcMain.handle(IpcChannels.getTrust, (_event, hostId: string, cwd: string) =>
+  handle(IpcChannels.getTrust, (_event, hostId: string, cwd: string) =>
     conn(hostId).request<ProjectTrustInfo>(Methods.trustGet, { cwd }),
   );
-  ipcMain.handle(IpcChannels.setTrust, (_event, hostId: string, cwd: string, decision: boolean | null) =>
+  handle(IpcChannels.setTrust, (_event, hostId: string, cwd: string, decision: boolean | null) =>
     conn(hostId).request<ProjectTrustInfo>(Methods.trustSet, { cwd, decision }),
   );
-  ipcMain.handle(IpcChannels.readResource, (_event, hostId: string, cwd: string, path: string) =>
+  handle(IpcChannels.readResource, (_event, hostId: string, cwd: string, path: string) =>
     conn(hostId).request<ResourceFile>(Methods.resourcesRead, { cwd, path }),
   );
-  ipcMain.handle(
+  handle(
     IpcChannels.writeResource,
     (_event, hostId: string, cwd: string, path: string, content: string, baseMtime: number | undefined) =>
       conn(hostId).request<ResourceWriteResult>(Methods.resourcesWrite, {
@@ -490,12 +497,12 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
         ...(typeof baseMtime === "number" ? { baseMtime } : {}),
       }),
   );
-  ipcMain.handle(
+  handle(
     IpcChannels.createResource,
     (_event, hostId: string, cwd: string, kind: ResourceKind, scope: "user" | "project", name: string) =>
       conn(hostId).request<ResourceFile>(Methods.resourcesCreate, { cwd, kind, scope, name }),
   );
-  ipcMain.handle(IpcChannels.revealFile, (_event, hostId: string, cwd: string, path: string) => {
+  handle(IpcChannels.revealFile, (_event, hostId: string, cwd: string, path: string) => {
     const target = hostPathForExplorer(hostId, cwd, path, WSL_PREFIX);
     if (!target) return false;
     shell.showItemInFolder(target);
@@ -529,6 +536,7 @@ app.whenReady().then(() => {
     sshHosts,
     new ImportStore(join(app.getPath("userData"), "imports.json")),
     new CopyStore(join(app.getPath("userData"), "copies.json")),
+    new ActionLog(join(app.getPath("userData"), "activity-log.jsonl")),
   );
   createWindow();
 

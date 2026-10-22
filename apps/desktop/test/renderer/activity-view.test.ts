@@ -6,6 +6,7 @@ import {
   activityTitle,
   collectActivity,
   tabShowing,
+  terminalActionDetail,
 } from "../../src/renderer/activity-view";
 
 const session = (id: string, over: Partial<SessionSummary> = {}): SessionSummary => ({
@@ -52,5 +53,15 @@ describe("tabShowing·activityTitle", () => {
   it("제목이 없으면 작업 폴더 이름", () => {
     expect(activityTitle(session("a", { title: "인증 작업" }))).toBe("인증 작업");
     expect(activityTitle(session("a", { cwd: "C:\\work\\api\\" }))).toBe("api");
+  });
+});
+
+describe("terminalActionDetail", () => {
+  it("대신 실행하는 명령만 글로 만든다", () => {
+    expect(terminalActionDetail({ kind: "pi", args: ["install", "npm:pi-tools", "-l"] })).toBe("pi install npm:pi-tools -l");
+    expect(terminalActionDetail({ kind: "pi", initialInput: "/login anthropic\r" })).toBe("pi (입력: /login anthropic)");
+    expect(terminalActionDetail({ kind: "shell", initialInput: "npm install -g x\r" })).toBe("npm install -g x");
+    expect(terminalActionDetail({ kind: "shell" })).toBeUndefined();
+    expect(terminalActionDetail({ kind: "pi" })).toBeUndefined();
   });
 });

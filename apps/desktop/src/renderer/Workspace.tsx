@@ -18,6 +18,7 @@ import type { PaletteCommand } from "./palette";
 import { Composer } from "./Composer";
 import { modelAcceptsImages, rpcImages, type ImageAttachment } from "./attachments";
 import type { ParsedInput, PiCommand } from "./composer-input";
+import { terminalActionDetail } from "./activity-view";
 import { baseName, formatRelative } from "./format";
 import { tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
@@ -121,6 +122,9 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
   /** title을 주면 그 제목을 유지하고, 없으면 열린 뒤 실행 정보(예: "셸 (WSL: Ubuntu)")로 채운다 */
   const openTerminal = (spec: TerminalSpec, title?: string) => {
+    // 설치·제거·업데이트처럼 대신 실행하는 명령은 작업 기록에 남긴다 (결과는 터미널 출력에서 본다).
+    const detail = terminalActionDetail(spec);
+    if (detail) void window.piDesktop.logAction({ hostId: spec.hostId, summary: `터미널에서 실행: ${title ?? "명령"}`, detail }).catch(() => {});
     const key = crypto.randomUUID();
     setDockTerminals((prev) => [...prev, { key, spec, title: title ?? "터미널", fixedTitle: title !== undefined }]);
     setActiveTerminal(key);

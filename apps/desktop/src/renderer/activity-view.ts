@@ -63,3 +63,16 @@ export function activityTitle(session: SessionSummary): string {
   const parts = session.cwd.split(/[\\/]/).filter(Boolean);
   return parts.at(-1) ?? session.cwd;
 }
+
+/**
+ * 터미널에서 대신 실행하는 명령을 작업 기록에 남길 글로 (설치·제거·업데이트·로그인 등).
+ * 사용자가 직접 연 빈 터미널(인자·초기 입력 없음)은 남기지 않는다.
+ */
+export function terminalActionDetail(spec: { kind: "pi" | "shell"; args?: string[]; initialInput?: string }): string | undefined {
+  const input = spec.initialInput?.replace(/\r$/, "").trim();
+  if (spec.kind === "pi") {
+    if (!spec.args?.length && !input) return undefined;
+    return ["pi", ...(spec.args ?? []), ...(input ? [`(입력: ${input})`] : [])].join(" ");
+  }
+  return input || undefined;
+}
