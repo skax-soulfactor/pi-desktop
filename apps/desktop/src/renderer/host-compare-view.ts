@@ -65,3 +65,57 @@ export function compareSummary(rows: readonly CompareRow[]): Record<CompareState
   for (const row of rows) summary[row.state] += 1;
   return summary;
 }
+
+/** 덮어쓰면 대상에서 일어날 파일 변화 */
+export interface FileChange {
+  path: string;
+  /** added: 새로 생김, removed: 대상에만 있어 사라짐, changed: 내용이 바뀜 */
+  change: "added" | "removed" | "changed";
+  /** 글 파일이면 대상의 지금 내용 */
+  before?: string;
+  /** 글 파일이면 복사할 내용 */
+  after?: string;
+}
+
+/** base64를 글로. 0바이트가 있으면 글 파일이 아니라고 보고 undefined */
+function textOf(contentBase64: string): string | undefined {
+  const binary = atob(contentBase64);
+  if (binary.includes("\0")) return undefined;
+  return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
+}
+
+/**
+ * 복사할 파일들(from)로 대상(to)을 바꾸면 무엇이 달라지는지. 폴더째 바꾸므로 대상에만 있던 파일은 사라진다.
+ * 양쪽이 파일 하나씩이면 이름이 달라도(프롬프트 이름, 파일 하나 스킬) 서로 짝짓는다.
+ */
+export function fileChanges(
+  from: ReadonlyArray<{ path: string; contentBase64: string }>,
+  to: ReadonlyArray<{ path: string; contentBase64: string }>,
+): FileChange[] {
+  const pairs: Array<[{ path: string; contentBase64: string } | undefined, { path: string; contentBase64: string } | undefined]> = [];
+  if (from.length === 1 && to.length === 1) pairs.push([from[0], to[0]]);
+  else {
+    const target = new Map(to.map((f) => [f.path, f]));
+    for (const f of from) {
+      pairs.push([f, target.get(f.path)]);
+      target.delete(f.path);
+    }
+    for (const t of target.values()) pairs.push([undefined, t]);
+  }
+  const changes: FileChange[] = [];
+  for (const [a, b] of pairs) {
+    if (a && b && a.contentBase64 === b.contentBase64) continue;
+    const change: FileChange = { path: (a ?? b)!.path, change: !b ? "added" : !a ? "removed" : "changed" };
+    const before = b ? textOf(b.contentBase64) : undefined;
+    const after = a ? textOf(a.contentBase64) : undefined;
+    if (before !== undefined) change.before = before;
+    if (after !== undefined) change.after = after;
+    changes.push(change);
+  }
+  return changes.sort((x, y) => x.path.localeCompare(y.path));
+}
+
+/** 여러 줄을 한꺼번에 복사할 때 그 방향으로 옮길 수 있는 줄 (원본 쪽에 있고, 같지 않고, 확인 못함이 아닌 것) */
+export function bulkCopyable(rows: readonly CompareRow[], direction: "toB" | "toA"): CompareRow[] {
+  return rows.filter((r) => r.state !== "same" && r.state !== "unknown" && (direction === "toB" ? r.a : r.b));
+}
