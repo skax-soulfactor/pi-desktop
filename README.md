@@ -270,6 +270,11 @@ npm test
 
 - 명령 팔레트의 "터미널: pi 열기"와 "터미널: 셸 열기"로 작업 영역 아래 도크에 터미널을 엽니다. 지금 탭의 호스트(로컬·WSL)와 세션 폴더에서 열립니다.
 - 터미널은 여러 개를 탭으로 열 수 있고, 접어 두어도 계속 돕니다. 탭을 닫으면 프로세스가 끝납니다.
+- 복사·붙여넣기
+  - Windows·Linux: `Ctrl+Shift+C`·`Ctrl+Shift+V`. 글을 선택했으면 `Ctrl+C`도 복사이고, 선택이 없으면 `Ctrl+C`는 실행 중인 명령을 멈춥니다. `Ctrl+V`도 붙여넣기입니다.
+  - macOS: `Cmd+C`·`Cmd+V`
+  - 터미널을 오른쪽 클릭하면 복사·붙여넣기·모두 선택 메뉴가 나옵니다.
+- `eza --icons`·starship 같은 프로그램의 아이콘은 Nerd Font로 그립니다. Nerd Font(예: MesloLGS, JetBrainsMono, Symbols Nerd Font)가 하나라도 설치되어 있어야 하며, 없으면 네모로 보입니다.
 - 개발 환경에서는 `node-pty`(네이티브 모듈)가 설치됩니다. Windows·macOS는 사전 빌드를 쓰고, 그 밖의 플랫폼은 설치 중에 빌드합니다.
 
 ## 명령 팔레트

@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.57)
+# Pi Desktop — 설계 문서 (v0.58)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -717,6 +717,17 @@ xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인
 - 원격(SSH)은 M3에서 같은 방식(`ssh -t`)으로 붙인다.
 - 화면은 작업 영역 아래 도크(여러 탭, 접기)다. 열기는 명령 팔레트의 "터미널: pi 열기·셸 열기"다.
 - OAuth 로그인은 프로바이더 탭의 버튼으로 한다. pi를 띄우고 화면이 잠잠해진 뒤 `/login <프로바이더>`를 대신 입력한다.
+
+**구현 메모: 복사·붙여넣기 (v0.58)**
+- 그전에는 xterm.js가 `Ctrl+C`·`Ctrl+V`를 제어 문자로 터미널에 보내 버려, 메뉴바의 편집 → 복사·붙여넣기로만 할 수 있었다.
+- 단축키(`terminal-keys.ts`, `attachCustomKeyEventHandler`): Windows Terminal·VS Code와 같다.
+  - Windows·Linux: `Ctrl+Shift+C/V`, 선택이 있을 때의 `Ctrl+C`, 그리고 `Ctrl+V`. macOS: `Cmd+C/V`.
+  - 한글 입력 중에도 맞도록 물리 키(`e.code`)를 본다.
+  - 복사는 선택한 글을 `navigator.clipboard`에 쓴다. 붙여넣기는 막지 않고 브라우저의 paste 이벤트를 xterm이 받게 둔다(괄호 붙여넣기 모드를 지킨다).
+- 오른쪽 클릭 메뉴: 복사(선택이 있을 때)·붙여넣기(`navigator.clipboard.readText` → `term.paste`)·모두 선택.
+- 확인(Linux, 빌드한 앱을 CDP로 조작): `Ctrl+Shift+C`와 선택이 있을 때의 `Ctrl+C`로 복사됐다. `Ctrl+V`·`Ctrl+Shift+V`·메뉴 붙여넣기는 한 번씩만 입력됐다. 선택이 없을 때 `Ctrl+C`는 `sleep 30`을 멈췄다.
+- 글꼴: 기본 고정폭 글꼴 뒤에 흔한 Nerd Font 이름들을 둔다(`TERMINAL_FONTS`). 기본 글꼴에 없는 아이콘(사설 영역, `eza --icons`·starship 등)이 설치된 Nerd Font로 그려진다. 일반 글자는 예전 글꼴 그대로다.
+  - 확인(Linux, MesloLGS Nerd Font 설치): `\uf313`·`\ue7a8`·`\uf07b`·`\uf15b`와 프롬프트의 화살표가 네모 대신 아이콘으로 보였다.
 
 ## 5. 상세 설계 포인트
 
