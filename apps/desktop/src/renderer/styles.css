@@ -2739,3 +2739,31 @@ details > summary.settings-section {
   font-size: 12px;
   box-sizing: border-box;
 }
+
+.activity-tabs {
+  width: fit-content;
+  margin: 2px 2px 6px;
+}
+
+.action-log li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.action-log li.failed .action-log-summary {
+  color: var(--danger, #d33);
+}
+
+.action-log-detail {
+  font-size: 11px;
+  word-break: break-all;
+  color: var(--muted);
+}
+
+.action-log-error {
+  font-size: 12px;
+  color: var(--danger, #d33);
+}
