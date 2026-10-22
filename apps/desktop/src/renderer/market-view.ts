@@ -78,3 +78,41 @@ export function splitFrontmatter(text: string): { meta?: string; body: string } 
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
   return match ? { meta: match[1]!, body: text.slice(match[0].length) } : { body: text };
 }
+
+export type PackageResourceKind = "extensions" | "skills" | "prompts" | "themes";
+const RESOURCE_KINDS: PackageResourceKind[] = ["extensions", "skills", "prompts", "themes"];
+
+/** 설치할 때 뺄 종류를 패키지 필터로: 그 종류는 []("하나도 불러오지 않음") */
+export function excludeKindsFilter(kinds: readonly PackageResourceKind[]): Partial<Record<PackageResourceKind, string[]>> {
+  return Object.fromEntries(kinds.map((k) => [k, [] as string[]]));
+}
+
+/** settings.json 값에서 그 소스의 패키지 필터(종류별 배열). 문자열 항목이거나 필터가 없으면 undefined */
+export function packageFilterOf(settings: Record<string, unknown>, source: string): Partial<Record<PackageResourceKind, string[]>> | undefined {
+  const packages = Array.isArray(settings.packages) ? (settings.packages as unknown[]) : [];
+  const entry = packages.find((p) => typeof p === "object" && p !== null && (p as { source?: unknown }).source === source) as
+    | Record<string, unknown>
+    | undefined;
+  if (!entry) return undefined;
+  const filter: Partial<Record<PackageResourceKind, string[]>> = {};
+  for (const kind of RESOURCE_KINDS) {
+    const value = entry[kind];
+    if (Array.isArray(value)) filter[kind] = value.filter((v): v is string => typeof v === "string");
+  }
+  return Object.keys(filter).length > 0 ? filter : undefined;
+}
+
+/**
+ * 다른 호스트로 옮길 필터. Pi가 하나씩 켜고 끄며 적은 +경로·-경로는 그 호스트의 경로 구분자를 쓰므로
+ * 대상 OS 구분자로 바꾼다(Windows는 \, 그 밖은 /). 손으로 쓴 glob 패턴은 그대로 둔다.
+ */
+export function filterForPlatform(
+  filter: Partial<Record<PackageResourceKind, string[]>>,
+  platform: string | undefined,
+): Partial<Record<PackageResourceKind, string[]>> {
+  const convert = (entry: string) => {
+    if (!platform || !(entry.startsWith("+") || entry.startsWith("-"))) return entry;
+    return platform === "win32" ? entry.replace(/\//g, "\\") : entry.replace(/\\/g, "/");
+  };
+  return Object.fromEntries(Object.entries(filter).map(([kind, entries]) => [kind, (entries ?? []).map(convert)]));
+}

@@ -59,10 +59,14 @@ export const LOGGED: Record<string, Describer> = {
   "pi:auth-set-api-key": { describe: ([hostId, provider]) => ({ hostId: str(hostId), summary: `API 키 저장: ${str(provider)}` }) },
   "pi:auth-remove": { describe: ([hostId, provider]) => ({ hostId: str(hostId), summary: `자격 증명 삭제: ${str(provider)}` }) },
   "pi:set-package-filter": {
-    describe: ([hostId, , source, scope, changes, reset]) => ({
-      hostId: str(hostId),
-      summary: `패키지 필터: ${str(source)} (${scope === "project" ? "프로젝트" : "사용자"}, ${reset ? "모두 켜기" : `${(changes as unknown[]).length}개 바꿈`})`,
-    }),
+    describe: ([hostId, , source, scope, changes, reset, set]) => {
+      const what = set
+        ? `필터 적용: ${Object.entries(set as Record<string, string[]>).map(([k, v]) => (v.length === 0 ? `${k} 빼기` : `${k} ${v.length}개`)).join(", ")}`
+        : reset
+          ? "모두 켜기"
+          : `${(changes as unknown[]).length}개 바꿈`;
+      return { hostId: str(hostId), summary: `패키지 필터: ${str(source)} (${scope === "project" ? "프로젝트" : "사용자"}, ${what})` };
+    },
   },
   "pi:settings-merge": {
     describe: ([hostId, values, remove, target]) => {

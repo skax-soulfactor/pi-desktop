@@ -413,6 +413,8 @@ export interface PiDesktopApi {
     scope: "user" | "project",
     changes: PackageFilterChange[],
     reset: boolean,
+    /** 종류별 배열을 통째로 적는다 (설치할 때 종류 빼기, 다른 호스트의 필터 옮기기) */
+    set?: Partial<Record<"extensions" | "skills" | "prompts" | "themes", string[]>>,
   ): Promise<void>;
   /** 그 호스트의 settings.json (target이 없으면 사용자 범위) */
   settingsRead(hostId: string, target?: SettingsTarget): Promise<SettingsReadResult>;
