@@ -49,6 +49,9 @@ export const Methods = {
   packagesResources: "packages.resources",
   /** 패키지 리소스를 켜고 끈다 (settings.json의 패키지 필터) */
   packagesSetFilter: "packages.setFilter",
+  /** 파일·폴더 트리를 감시한다 (Extension Dev Mode). 바뀌면 files.changed로 알린다 */
+  filesWatchTree: "files.watchTree",
+  filesUnwatchTree: "files.unwatchTree",
   /** 사용자 settings.json의 최상위 값 */
   settingsRead: "settings.read",
   /** 설치된 Pi가 함께 배포한 settings.json의 JSON Schema (없으면 null) */
@@ -132,6 +135,8 @@ export const Notifications = {
   piUpdateOutput: "pi.updateOutput",
   /** 감시 중인 저장 세션 파일이 바뀌었다 (다른 프로그램이 쓰는 중) */
   storedChanged: "stored.changed",
+  /** files.watchTree로 감시하는 파일이 바뀌었다 */
+  filesChanged: "files.changed",
 } as const;
 
 export interface HostInfo {
@@ -857,6 +862,19 @@ export interface StoredReadResult {
 }
 
 /** stored.changed 알림 */
+export interface FilesWatchTreeParams {
+  /** 앱이 정한 감시 ID. 같은 ID로 다시 부르면 뿌리를 바꾼다 */
+  watchId: string;
+  /** 감시할 파일·폴더 (호스트 기준). 폴더는 아래를 모두 보되 node_modules·.git은 건너뛴다 */
+  roots: string[];
+}
+
+export interface FilesChangedNotification {
+  watchId: string;
+  /** 생기거나 바뀌거나 사라진 파일 */
+  paths: string[];
+}
+
 export interface StoredChangedNotification {
   path: string;
   size: number;
