@@ -15,6 +15,16 @@ export function updateMode(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): U
   return "notify";
 }
 
+/**
+ * 저장소의 package.json 버전 그대로인 로컬 빌드(npm run dist). 릴리스 워크플로는 태그 버전으로 바꿔서 만든다.
+ * 로컬 빌드가 릴리스로 업데이트되면 시험하던 빌드가 바뀌어 버리므로 확인하지 않는다 (업데이트 시험용 PI_DESKTOP_UPDATE_URL은 예외).
+ */
+export const LOCAL_BUILD_VERSION = "0.0.1";
+
+export function isLocalBuild(version: string, env: NodeJS.ProcessEnv): boolean {
+  return version === LOCAL_BUILD_VERSION && !env.PI_DESKTOP_UPDATE_URL;
+}
+
 /** 그 버전의 GitHub 릴리스 페이지 */
 export function releaseUrl(owner: string, repo: string, version: string): string {
   return `https://github.com/${owner}/${repo}/releases/tag/v${version.replace(/^v/, "")}`;
