@@ -50,6 +50,9 @@ import {
   type ModelsExportResult,
   type ModelsImportParams,
   type SettingsMergeParams,
+  type PackageResourceItem,
+  type PackageResourcesParams,
+  type PackageSetFilterParams,
   type SettingsReadResult,
   type ModelsSaveParams,
   type PiUpdateParams,
@@ -88,6 +91,7 @@ import {
   storedApiKey,
 } from "./models-store";
 import { mergeSettings, readSettings } from "./settings-store";
+import { listPackageResources, setPackageFilter, type PackageFilterSdk } from "./package-filters";
 import { isUpdateTarget, runPiUpdate } from "./pi-update";
 import { ensureBridge } from "./bridge";
 import { listDirectories } from "./dir-list";
@@ -369,6 +373,25 @@ export class AgentDaemon {
       await importProvider(agentDirOf(this.env), p.id, p.provider, p.replace === true).catch((e: unknown) => {
         throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
       });
+      return null;
+    });
+
+    const packageParams = (params: unknown): PackageResourcesParams => {
+      const p = requireStrings(params, ["cwd", "source", "scope"]) as unknown as PackageResourcesParams;
+      if (p.scope !== "user" && p.scope !== "project") throw new JsonRpcError(ErrorCodes.InvalidParams, "scope는 user·project여야 합니다");
+      return p;
+    };
+    const filterSdk = async () => (await loadPiSdk(await locatePi({ env: this.env }))) as unknown as PackageFilterSdk;
+
+    peer.handle(Methods.packagesResources, async (params): Promise<PackageResourceItem[]> => {
+      const p = packageParams(params);
+      return listPackageResources(await filterSdk(), p.cwd, agentDirOf(this.env), p.source, p.scope).catch(asInvalid);
+    });
+
+    peer.handle(Methods.packagesSetFilter, async (params) => {
+      const p = packageParams(params) as PackageSetFilterParams;
+      if (!Array.isArray(p.changes)) throw new JsonRpcError(ErrorCodes.InvalidParams, "changes는 배열이어야 합니다");
+      await setPackageFilter(await filterSdk(), p.cwd, agentDirOf(this.env), p).catch(asInvalid);
       return null;
     });
 
