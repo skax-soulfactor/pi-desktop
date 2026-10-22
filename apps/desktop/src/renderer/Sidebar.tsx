@@ -23,7 +23,7 @@ interface Props {
   onRename?: (name: string) => Promise<void>;
   /** 값이 바뀌면 기록을 다시 읽는다 (이름 변경 뒤 등) */
   refreshKey?: number;
-  /** 이 호스트에 Pi가 없으면 기록 오류 대신 설치 안내를 보인다 */
+  /** 이 호스트에 Pi가 없으면(true) 기록 오류 대신 설치 안내를 보인다. 기록은 있다고 확인된 뒤(false)에만 읽는다 (없으면 아직 모름) */
   piMissing?: boolean;
   /** Pi 설치 화면(Pi 관리 → 상태)을 연다 */
   onInstallPi?: () => void;
@@ -59,7 +59,8 @@ export function Sidebar(props: Props) {
   const folder = scope === "folder" ? current?.cwd : undefined;
 
   const load = useCallback(async () => {
-    if (!connected) return;
+    // Pi가 있다고 확인된 뒤에만 읽는다. 없거나 아직 모르면 데몬이 오류를 낸다. 설치되어 false가 되면 다시 읽는다.
+    if (!connected || piMissing !== false) return;
     setLoading(true);
     try {
       const list = await window.piDesktop.listHistory(hostId, folder);
@@ -78,7 +79,7 @@ export function Sidebar(props: Props) {
     } finally {
       setLoading(false);
     }
-  }, [connected, hostId, folder]);
+  }, [connected, hostId, folder, piMissing]);
 
   // 다른 호스트의 기록이 잠깐이라도 보이지 않게 호스트가 바뀔 때만 비운다.
   // 세션을 바꿀 때마다 비우면 목록이 깜박인다.
@@ -86,6 +87,11 @@ export function Sidebar(props: Props) {
     setHistory([]);
     setTitles(new Map());
   }, [hostId]);
+
+  // Pi를 지우면 남아 있던 기록 목록을 치운다 (설치 안내만 보인다).
+  useEffect(() => {
+    if (piMissing) setHistory([]);
+  }, [piMissing]);
 
   useEffect(() => {
     void load();
@@ -249,7 +255,7 @@ export function Sidebar(props: Props) {
         ) : (
           error && <p className="sidebar-error">{error}</p>
         )}
-        {!piMissing && !error && !loading && shownHistory.length === 0 && (
+        {piMissing === false && !error && !loading && shownHistory.length === 0 && (
           <p className="sidebar-empty">{query && history.length > 0 ? "검색 결과가 없습니다." : "저장된 세션이 없습니다."}</p>
         )}
         {shownHistory.map((h) => {
