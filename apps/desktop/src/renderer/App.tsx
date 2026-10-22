@@ -169,13 +169,7 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [newTab, close, activate]);
 
-  return (
-    <div className="app-shell">
-      <nav className="tabbar" role="tablist" aria-label="워크스페이스">
-        {tabs.ids.map((id, index) => {
-          const status = statuses[id];
-          const mark = attention[id];
-          // 메뉴바 명령: 앱 수준(탭·업데이트·활동)은 여기서, 나머지는 지금 탭의 Workspace가 처리한다 (MENU_EVENT).
+  // 메뉴바 명령: 앱 수준(탭·업데이트·활동)은 여기서, 나머지는 지금 탭의 Workspace가 처리한다 (MENU_EVENT).
   const appCommandsRef = useRef(appCommands);
   appCommandsRef.current = appCommands;
   useEffect(
@@ -196,6 +190,12 @@ export function App() {
   );
 
   return (
+    <div className="app-shell">
+      <nav className="tabbar" role="tablist" aria-label="워크스페이스">
+        {tabs.ids.map((id, index) => {
+          const status = statuses[id];
+          const mark = attention[id];
+          return (
             <div
               key={id}
               role="tab"
