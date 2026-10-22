@@ -184,3 +184,14 @@ export function settingText(value: unknown): string {
   if (value === undefined) return "기본값";
   return typeof value === "string" ? value : JSON.stringify(value);
 }
+
+/** JSON 편집 글의 문제 (최상위가 객체인 JSON이어야 한다). 없으면 undefined */
+export function jsonProblem(text: string): string | undefined {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "최상위는 { } 객체여야 합니다.";
+    return undefined;
+  } catch (e) {
+    return `JSON이 올바르지 않습니다: ${e instanceof Error ? e.message : String(e)}`;
+  }
+}

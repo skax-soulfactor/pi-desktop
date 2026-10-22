@@ -21,6 +21,7 @@ import type {
   PackageFilterChange,
   PackageResourceItem,
   SettingsReadResult,
+  SettingsTarget,
   ResourceImportParams,
   ResourceImportResult,
   FsSearchResult,
@@ -401,10 +402,12 @@ export interface PiDesktopApi {
     changes: PackageFilterChange[],
     reset: boolean,
   ): Promise<void>;
-  /** 그 호스트의 사용자 settings.json 최상위 값 */
-  settingsRead(hostId: string): Promise<SettingsReadResult>;
+  /** 그 호스트의 settings.json (target이 없으면 사용자 범위) */
+  settingsRead(hostId: string, target?: SettingsTarget): Promise<SettingsReadResult>;
+  /** settings.json 원본 글을 쓴다 (JSON 편집). 읽은 뒤 바뀌었으면 거부. baseMtime null은 새 파일 */
+  settingsWrite(hostId: string, content: string, baseMtime: number | null, target?: SettingsTarget): Promise<{ mtimeMs: number }>;
   /** 그 호스트의 사용자 settings.json에서 받은 최상위 키만 바꾸고 remove의 키는 지운다 (설계 §4.8·§5.9) */
-  settingsMerge(hostId: string, values: Record<string, unknown>, remove?: string[]): Promise<void>;
+  settingsMerge(hostId: string, values: Record<string, unknown>, remove?: string[], target?: SettingsTarget): Promise<void>;
   /** 그 호스트에 설치된 Pi의 settings.json JSON Schema. 없는 Pi면 null */
   settingsSchema(hostId: string): Promise<Record<string, unknown> | null>;
   /** 받은 스킬·프롬프트 파일을 그 호스트의 범위에 쓴다 (replace면 이전 것을 백업하고 바꾼다) */
@@ -487,6 +490,7 @@ export const IpcChannels = {
   setPackageFilter: "pi:set-package-filter",
   settingsMerge: "pi:settings-merge",
   settingsSchema: "pi:settings-schema",
+  settingsWrite: "pi:settings-write",
   importResourceFiles: "pi:import-resource-files",
   importStatus: "pi:import-status",
   recordCopy: "pi:record-copy",

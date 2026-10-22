@@ -16,6 +16,7 @@ import {
   type ResourceExportResult,
   type ModelsExportResult,
   type SettingsReadResult,
+  type SettingsTarget,
   type PackageFilterChange,
   type PackageResourceItem,
   type ResourceImportParams,
@@ -334,12 +335,20 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       await conn(hostId).request(Methods.packagesSetFilter, { cwd, source, scope, changes, ...(reset ? { reset: true } : {}) }, 60_000);
     },
   );
-  ipcMain.handle(IpcChannels.settingsRead, (_event, hostId: string) =>
-    conn(hostId).request<SettingsReadResult>(Methods.settingsRead, {}),
+  ipcMain.handle(IpcChannels.settingsRead, (_event, hostId: string, target?: SettingsTarget) =>
+    conn(hostId).request<SettingsReadResult>(Methods.settingsRead, { ...target }),
   );
-  ipcMain.handle(IpcChannels.settingsMerge, async (_event, hostId: string, values: Record<string, unknown>, remove?: string[]) => {
-    await conn(hostId).request(Methods.settingsMerge, { values, ...(remove && remove.length > 0 ? { remove } : {}) });
-  });
+  ipcMain.handle(
+    IpcChannels.settingsWrite,
+    (_event, hostId: string, content: string, baseMtime: number | null, target?: SettingsTarget) =>
+      conn(hostId).request<{ mtimeMs: number }>(Methods.settingsWrite, { ...target, content, baseMtime }),
+  );
+  ipcMain.handle(
+    IpcChannels.settingsMerge,
+    async (_event, hostId: string, values: Record<string, unknown>, remove?: string[], target?: SettingsTarget) => {
+      await conn(hostId).request(Methods.settingsMerge, { ...target, values, ...(remove && remove.length > 0 ? { remove } : {}) });
+    },
+  );
   ipcMain.handle(IpcChannels.settingsSchema, (_event, hostId: string) =>
     conn(hostId).request<Record<string, unknown> | null>(Methods.settingsSchema),
   );

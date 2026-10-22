@@ -50,9 +50,12 @@ export function PiManager({
   onChanged,
   onOAuthLogin,
   onRunInTerminal,
+  projectCwd,
 }: {
   hosts: HostDescriptor[];
   initialHostId: string;
+  /** 지금 탭의 작업 폴더 (설정의 프로젝트 범위 기본값) */
+  projectCwd?: string;
   onClose: () => void;
   /** 업데이트 등으로 상태가 바뀌었을 수 있다 (상단 바 표시를 다시 읽게) */
   onChanged?: () => void;
@@ -141,7 +144,9 @@ export function PiManager({
                 다른 호스트로 복사
               </button>
             </div>
-            {settingsMode === "edit" ? <SettingsFormPanel hostId={hostId} /> : <SettingsCopyPanel hostId={hostId} hosts={hosts} />}
+            {settingsMode === "edit" ? (
+              <SettingsFormPanel hostId={hostId} {...(projectCwd && hostId === initialHostId ? { projectCwd } : {})} />
+            ) : <SettingsCopyPanel hostId={hostId} hosts={hosts} />}
           </>
         )}
         {tab === "compare" && <HostComparePanel hostId={hostId} hosts={hosts} />}
