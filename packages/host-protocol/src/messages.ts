@@ -41,6 +41,10 @@ export const Methods = {
   modelsExportProvider: "models.exportProvider",
   /** 다른 호스트에서 받은 프로바이더를 쓴다 */
   modelsImportProvider: "models.importProvider",
+  /** 설정에 적힌 패키지 하나가 내놓는 리소스와 켜짐 여부 */
+  packagesResources: "packages.resources",
+  /** 패키지 리소스를 켜고 끈다 (settings.json의 패키지 필터) */
+  packagesSetFilter: "packages.setFilter",
   /** 사용자 settings.json의 최상위 값 */
   settingsRead: "settings.read",
   /** 사용자 settings.json의 고른 최상위 키만 바꾼다 (다른 호스트에서 복사할 때) */
@@ -310,6 +314,36 @@ export interface ModelsImportParams {
   provider: Record<string, unknown>;
   /** 이미 있으면 바꾼다. 받은 쪽에 없는 apiKey·헤더는 대상의 것을 남긴다 */
   replace?: boolean;
+}
+
+export type PackageResourceType = "extensions" | "skills" | "prompts" | "themes";
+
+export interface PackageResourcesParams {
+  cwd: string;
+  /** 설정에 적힌 그대로의 소스 */
+  source: string;
+  scope: "user" | "project";
+}
+
+export interface PackageResourceItem {
+  type: PackageResourceType;
+  /** 파일 경로 (호스트 기준) */
+  path: string;
+  /** 필터에 적을 경로: 패키지 리소스 기준 폴더에서의 상대 경로 */
+  pattern: string;
+  enabled: boolean;
+}
+
+export interface PackageFilterChange {
+  type: PackageResourceType;
+  pattern: string;
+  enabled: boolean;
+}
+
+export interface PackageSetFilterParams extends PackageResourcesParams {
+  changes: PackageFilterChange[];
+  /** 먼저 필터를 모두 지운다 (패키지가 내놓는 것을 모두 불러옴) */
+  reset?: boolean;
 }
 
 export interface SettingsReadResult {

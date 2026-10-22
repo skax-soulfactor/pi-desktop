@@ -6,6 +6,8 @@ import {
   formatSize,
   hasReloadCommand,
   isEditable,
+  packageFilterChanges,
+  packageResourceKey,
   shortPath,
   sourceLabel,
   tabCount,
@@ -102,5 +104,23 @@ describe("hasReloadCommand", () => {
   it("세션 명령 목록에 bridge의 desktop:reload가 있어야 한다", () => {
     expect(hasReloadCommand([{ name: "review" }, { name: "desktop:reload" }])).toBe(true);
     expect(hasReloadCommand([{ name: "review" }])).toBe(false);
+  });
+});
+
+describe("packageFilterChanges", () => {
+  it("처음과 달라진 것만 바꿀 값으로 돌려준다", () => {
+    const items = [
+      { type: "skills" as const, pattern: "skills/a/SKILL.md", enabled: true },
+      { type: "skills" as const, pattern: "skills/b/SKILL.md", enabled: false },
+      { type: "prompts" as const, pattern: "prompts/p.md", enabled: true },
+    ];
+    const checked = new Map(items.map((i) => [packageResourceKey(i), i.enabled]));
+    expect(packageFilterChanges(items, checked)).toEqual([]);
+    checked.set("skills:skills/a/SKILL.md", false);
+    checked.set("skills:skills/b/SKILL.md", true);
+    expect(packageFilterChanges(items, checked)).toEqual([
+      { type: "skills", pattern: "skills/a/SKILL.md", enabled: false },
+      { type: "skills", pattern: "skills/b/SKILL.md", enabled: true },
+    ]);
   });
 });

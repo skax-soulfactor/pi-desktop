@@ -18,6 +18,8 @@ import type {
   ResourceWriteResult,
   ResourceExportResult,
   ModelsExportResult,
+  PackageFilterChange,
+  PackageResourceItem,
   SettingsReadResult,
   ResourceImportParams,
   ResourceImportResult,
@@ -388,6 +390,17 @@ export interface PiDesktopApi {
   modelsExport(hostId: string, id: string): Promise<ModelsExportResult>;
   /** 받은 프로바이더를 그 호스트의 models.json에 쓴다. replace면 이미 있는 것을 바꾼다 (대상 키는 남김) */
   modelsImport(hostId: string, id: string, provider: Record<string, unknown>, replace: boolean): Promise<void>;
+  /** 설정에 적힌 패키지 하나가 내놓는 리소스와 켜짐 여부 */
+  packageResources(hostId: string, cwd: string, source: string, scope: "user" | "project"): Promise<PackageResourceItem[]>;
+  /** 패키지 리소스를 켜고 끈다 (그 범위 settings.json의 패키지 필터). reset이면 필터를 먼저 지운다 */
+  setPackageFilter(
+    hostId: string,
+    cwd: string,
+    source: string,
+    scope: "user" | "project",
+    changes: PackageFilterChange[],
+    reset: boolean,
+  ): Promise<void>;
   /** 그 호스트의 사용자 settings.json 최상위 값 */
   settingsRead(hostId: string): Promise<SettingsReadResult>;
   /** 그 호스트의 사용자 settings.json에서 받은 최상위 키만 바꾼다 (설계 §5.9) */
@@ -468,6 +481,8 @@ export const IpcChannels = {
   modelsExport: "pi:models-export",
   modelsImport: "pi:models-import",
   settingsRead: "pi:settings-read",
+  packageResources: "pi:package-resources",
+  setPackageFilter: "pi:set-package-filter",
   settingsMerge: "pi:settings-merge",
   importResourceFiles: "pi:import-resource-files",
   importStatus: "pi:import-status",

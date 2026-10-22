@@ -10,6 +10,7 @@ import type { HostDescriptor } from "../shared/api";
 import { copyNote } from "./copy-view";
 import { errorText } from "./folder-browser";
 import { ResourceEditor } from "./ResourceEditor";
+import { PackageFilterEditor } from "./PackageFilterEditor";
 import { projectBadge, projectResourcesSkipped, trustStatusText } from "./project-trust";
 import { isPinned, removeArgs, updateArgs } from "./market-view";
 import {
@@ -265,6 +266,8 @@ export function ResourcesPanel({
             {tab === "packages" && (
               <PackageList
                 view={view}
+                hostId={hostId}
+                onChanged={() => void load()}
                 {...(onRunPi
                   ? {
                       onRun: (args: string[], title: string, projectCwd?: string) => {
@@ -425,11 +428,16 @@ function ItemList({
 
 function PackageList({
   view,
+  hostId,
+  onChanged,
   onRun,
   onOpenMarketplace,
   onCopy,
 }: {
   view: ResourcesView;
+  hostId: string;
+  /** 패키지 필터를 바꾼 뒤 목록을 다시 읽는다 */
+  onChanged: () => void;
   onRun?: (args: string[], title: string, projectCwd?: string) => void;
   onOpenMarketplace?: () => void;
   /** 다른 호스트에 같은 소스로 설치 */
@@ -437,6 +445,8 @@ function PackageList({
 }) {
   /** 제거를 한 번 더 누르라고 묻는 중인 패키지 */
   const [confirmRemove, setConfirmRemove] = useState<string | undefined>();
+  /** 리소스를 고르고 있는 패키지 (범위:소스) */
+  const [filtering, setFiltering] = useState<string | undefined>();
   const find = onOpenMarketplace && (
     <button type="button" className="small" onClick={onOpenMarketplace}>
       Marketplace에서 패키지 찾기…
@@ -455,7 +465,7 @@ function PackageList({
     {find}
     <ul className="resource-list">
       {view.packages.map((p) => (
-        <li key={`${p.scope}:${p.source}`}>
+        <li key={`${p.scope}:${p.source}`} className={filtering === `${p.scope}:${p.source}` ? "package-filtering" : undefined}>
           <div className="resource-main">
             <span className="resource-name">
               {p.source}
@@ -469,6 +479,16 @@ function PackageList({
               </span>
             )}
           </div>
+          {p.installedPath && filtering !== `${p.scope}:${p.source}` && (
+            <button
+              type="button"
+              className="small"
+              onClick={() => setFiltering(`${p.scope}:${p.source}`)}
+              title="이 패키지의 확장·스킬·프롬프트·테마를 하나씩 켜고 끕니다"
+            >
+              리소스 고르기
+            </button>
+          )}
           {onCopy && (
             <button type="button" className="small" onClick={() => onCopy(p)} title="다른 호스트에서 같은 소스로 pi install을 실행합니다">
               다른 호스트에 설치
@@ -499,6 +519,9 @@ function PackageList({
                 </button>
               )}
             </>
+          )}
+          {filtering === `${p.scope}:${p.source}` && (
+            <PackageFilterEditor hostId={hostId} cwd={view.cwd} pkg={p} onSaved={onChanged} onClose={() => setFiltering(undefined)} />
           )}
         </li>
       ))}

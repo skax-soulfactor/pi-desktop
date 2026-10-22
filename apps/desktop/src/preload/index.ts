@@ -69,6 +69,9 @@ const api: PiDesktopApi = {
   modelsExport: (hostId, id) => ipcRenderer.invoke(IpcChannels.modelsExport, hostId, id),
   modelsImport: (hostId, id, provider, replace) => ipcRenderer.invoke(IpcChannels.modelsImport, hostId, id, provider, replace),
   settingsRead: (hostId) => ipcRenderer.invoke(IpcChannels.settingsRead, hostId),
+  packageResources: (hostId, cwd, source, scope) => ipcRenderer.invoke(IpcChannels.packageResources, hostId, cwd, source, scope),
+  setPackageFilter: (hostId, cwd, source, scope, changes, reset) =>
+    ipcRenderer.invoke(IpcChannels.setPackageFilter, hostId, cwd, source, scope, changes, reset),
   settingsMerge: (hostId, values) => ipcRenderer.invoke(IpcChannels.settingsMerge, hostId, values),
   importResourceFiles: (hostId, params) => ipcRenderer.invoke(IpcChannels.importResourceFiles, hostId, params),
   importStatus: (hostId) => ipcRenderer.invoke(IpcChannels.importStatus, hostId),
