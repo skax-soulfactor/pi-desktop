@@ -15,6 +15,7 @@ import {
   type ImportedInspectResult,
   type ResourceExportResult,
   type ModelsExportResult,
+  type ModelsExportModelResult,
   type SettingsReadResult,
   type SettingsTarget,
   type PackageFilterChange,
@@ -374,6 +375,12 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   handle(IpcChannels.settingsSchema, (_event, hostId: string) =>
     conn(hostId).request<Record<string, unknown> | null>(Methods.settingsSchema),
   );
+  handle(IpcChannels.modelsExportModel, (_event, hostId: string, providerId: string, modelId: string) =>
+    conn(hostId).request<ModelsExportModelResult>(Methods.modelsExportModel, { providerId, modelId }),
+  );
+  handle(IpcChannels.modelsImportModel, async (_event, hostId: string, providerId: string, model: Record<string, unknown>, replace: boolean) => {
+    await conn(hostId).request(Methods.modelsImportModel, { providerId, model, ...(replace ? { replace: true } : {}) });
+  });
   handle(IpcChannels.exportResource, (_event, hostId: string, kind: "skill" | "prompt" | "extension", path: string) =>
     conn(hostId).request<ResourceExportResult>(Methods.resourcesExport, { kind, path }, 120_000),
   );

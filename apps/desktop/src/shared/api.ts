@@ -18,6 +18,7 @@ import type {
   ResourceWriteResult,
   ResourceExportResult,
   ModelsExportResult,
+  ModelsExportModelResult,
   PackageFilterChange,
   PackageResourceItem,
   SettingsReadResult,
@@ -401,6 +402,10 @@ export interface PiDesktopApi {
   exportResource(hostId: string, kind: "skill" | "prompt" | "extension", path: string): Promise<ResourceExportResult>;
   /** 다른 호스트로 옮길 models.json 프로바이더 (그대로 키 값인 apiKey·헤더는 뺀다) */
   modelsExport(hostId: string, id: string): Promise<ModelsExportResult>;
+  /** 다른 호스트로 옮길 모델 하나 (그대로 값인 헤더는 뺀다) */
+  modelsExportModel(hostId: string, providerId: string, modelId: string): Promise<ModelsExportModelResult>;
+  /** 받은 모델을 그 호스트의 같은 이름 프로바이더에 넣는다. replace면 같은 ID를 바꾼다 */
+  modelsImportModel(hostId: string, providerId: string, model: Record<string, unknown>, replace: boolean): Promise<void>;
   /** 받은 프로바이더를 그 호스트의 models.json에 쓴다. replace면 이미 있는 것을 바꾼다 (대상 키는 남김) */
   modelsImport(hostId: string, id: string, provider: Record<string, unknown>, replace: boolean): Promise<void>;
   /** 설정에 적힌 패키지 하나가 내놓는 리소스와 켜짐 여부 */
@@ -505,6 +510,8 @@ export const IpcChannels = {
   exportResource: "pi:export-resource",
   modelsExport: "pi:models-export",
   modelsImport: "pi:models-import",
+  modelsExportModel: "pi:models-export-model",
+  modelsImportModel: "pi:models-import-model",
   settingsRead: "pi:settings-read",
   packageResources: "pi:package-resources",
   setPackageFilter: "pi:set-package-filter",

@@ -52,6 +52,12 @@ export const LOGGED: Record<string, Describer> = {
   "pi:models-import": {
     describe: ([hostId, id, , replace]) => ({ hostId: str(hostId), summary: `models.json 프로바이더 받기: ${str(id)}${replace ? " (바꾸기)" : ""}` }),
   },
+  "pi:models-import-model": {
+    describe: ([hostId, providerId, model, replace]) => ({
+      hostId: str(hostId),
+      summary: `models.json 모델 받기: ${str(providerId)}/${str((model as { id?: unknown }).id)}${replace ? " (바꾸기)" : ""}`,
+    }),
+  },
   "pi:models-save-provider": {
     describe: ([hostId, form]) => ({ hostId: str(hostId), summary: `models.json 프로바이더 저장: ${str((form as { id?: unknown }).id)}` }),
   },
