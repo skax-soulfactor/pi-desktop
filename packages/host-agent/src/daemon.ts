@@ -52,6 +52,7 @@ import {
   type ModelsExportModelResult,
   type ModelsImportModelParams,
   type SettingsMergeParams,
+  type FilesWatchTreeParams,
   type SettingsTarget,
   type SettingsWriteParams,
   type PackageResourceItem,
@@ -109,6 +110,7 @@ import { inspectImported, moveToBackup, readImported } from "./import-manage";
 import { exportResource } from "./resource-export";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
+import { watchTree } from "./tree-watcher";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
 import { AgentSession } from "./session";
 import { AGENT_VERSION } from "./version";
@@ -554,6 +556,27 @@ export class AgentDaemon {
       if (!client.watches.has(path)) {
         client.watches.set(path, this.files.watch(path, (change) => peer.notify(Notifications.storedChanged, change)));
       }
+      return null;
+    });
+
+    // Extension Dev Mode: 확장 파일·폴더를 감시한다. 앱이 끊기면 함께 멈춘다 (client.watches에 tree:<id>로 둔다).
+    peer.handle(Methods.filesWatchTree, (params) => {
+      const p = (params ?? {}) as Partial<FilesWatchTreeParams>;
+      if (typeof p.watchId !== "string" || !p.watchId || !Array.isArray(p.roots) || p.roots.some((r) => typeof r !== "string")) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "watchId와 roots(문자열 배열)가 필요합니다");
+      }
+      const key = `tree:${p.watchId}`;
+      client.watches.get(key)?.();
+      const watchId = p.watchId;
+      client.watches.set(key, watchTree(p.roots, (paths) => peer.notify(Notifications.filesChanged, { watchId, paths })));
+      return null;
+    });
+
+    peer.handle(Methods.filesUnwatchTree, (params) => {
+      const watchId = (params as { watchId?: unknown } | undefined)?.watchId;
+      if (typeof watchId !== "string") throw new JsonRpcError(ErrorCodes.InvalidParams, "watchId가 필요합니다");
+      client.watches.get(`tree:${watchId}`)?.();
+      client.watches.delete(`tree:${watchId}`);
       return null;
     });
 

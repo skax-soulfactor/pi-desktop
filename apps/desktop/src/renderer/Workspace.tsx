@@ -20,6 +20,7 @@ import { modelAcceptsImages, rpcImages, type ImageAttachment } from "./attachmen
 import type { ParsedInput, PiCommand } from "./composer-input";
 import { terminalActionDetail } from "./activity-view";
 import { EventInspector } from "./EventInspector";
+import { useExtensionDevMode } from "./use-dev-mode";
 import { baseName, formatRelative } from "./format";
 import { tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
@@ -215,6 +216,17 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     setCommands(undefined);
   }, [hostId, sessionId, chat.running]);
 
+  // Extension Dev Mode: 확장 파일을 저장하면 이 세션에 바로 반영한다 (입력 권한이 있을 때만).
+  const devMode = useExtensionDevMode({
+    tabId,
+    hostId,
+    sessionId: session && !lost && !readOnly ? session.sessionId : undefined,
+    cwd: session?.cwd,
+    connected,
+    running: chat.running,
+    reload: reloadSessionResources,
+  });
+
   // 입력창 @ 파일 피커: 데몬이 세션 작업 폴더에서 찾는다 (WSL이면 WSL 안의 파일).
   const sessionCwd = session?.cwd;
   const searchFiles = useCallback(
@@ -404,6 +416,14 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         run: () => openTerminal({ hostId, kind: "shell", ...(session ? { cwd: session.cwd } : {}) }),
       },
     );
+    list.push({
+      id: "extension-dev-mode",
+      group: "개발자 도구",
+      title: devMode.on ? "Extension Dev Mode 끄기" : "Extension Dev Mode 켜기 (확장을 저장하면 바로 반영)",
+      keywords: "extension dev mode reload watch hot 확장 개발 자동 반영 리로드",
+      disabled: !session || Boolean(lost) || readOnly || !connected,
+      run: devMode.toggle,
+    });
     list.push({
       id: "event-inspector",
       group: "개발자 도구",
@@ -611,6 +631,16 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           <div className="session-meta" title={session.sessionFile}>
             Pi {session.piVersion} · {session.cwd}
           </div>
+        )}
+        {devMode.on && (
+          <button
+            type="button"
+            className={`dev-mode-chip${devMode.status?.error ? " error" : ""}`}
+            onClick={devMode.toggle}
+            title={`Extension Dev Mode: 확장 파일을 저장하면 이 세션에 바로 반영합니다. 눌러서 끕니다.${devMode.status ? `\n${devMode.status.text}` : ""}`}
+          >
+            Dev Mode{devMode.waiting ? " · 반영 대기" : devMode.status ? ` · ${devMode.status.error ? "실패" : devMode.status.text}` : " · 감시 중"}
+          </button>
         )}
         {connected && resourcesCwd && (
           <button type="button" onClick={() => setResourcesOpen(true)} title="이 폴더에서 Pi가 불러오는 AGENTS.md·프롬프트·스킬·확장">

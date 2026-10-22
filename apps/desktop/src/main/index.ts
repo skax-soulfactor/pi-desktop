@@ -200,6 +200,12 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   handle(IpcChannels.watchStored, async (_event, hostId: string, path: string) => {
     await conn(hostId).request(Methods.storedWatch, { path });
   });
+  handle(IpcChannels.watchTree, async (_event, hostId: string, watchId: string, roots: string[]) => {
+    await conn(hostId).request(Methods.filesWatchTree, { watchId, roots });
+  });
+  handle(IpcChannels.unwatchTree, async (_event, hostId: string, watchId: string) => {
+    await conn(hostId).request(Methods.filesUnwatchTree, { watchId });
+  });
   handle(IpcChannels.unwatchStored, async (_event, hostId: string, path: string) => {
     await conn(hostId).request(Methods.storedUnwatch, { path });
   });
@@ -551,6 +557,7 @@ app.whenReady().then(() => {
     onStoredChanged: (hostId, n) => sendToRenderer(IpcChannels.storedChanged, hostId, n),
     onExternalWrite: (hostId, n) => sendToRenderer(IpcChannels.externalWrite, hostId, n),
     onWriterChanged: (hostId, n) => sendToRenderer(IpcChannels.writerChanged, hostId, n),
+    onFilesChanged: (hostId, n) => sendToRenderer(IpcChannels.filesChanged, hostId, n),
     onPiUpdateOutput: (hostId, n) => sendToRenderer(IpcChannels.piUpdateOutput, hostId, n),
   });
   registerIpc(
