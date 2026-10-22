@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   authProviderNames,
   compareVersions,
+  firstSuccess,
   latestPiVersion,
   piStatus,
   piVersions,
@@ -115,6 +116,18 @@ describe("piStatus", () => {
   });
 });
 
+describe("firstSuccess", () => {
+  it("npm이 실패하면 다음 방법(레지스트리)으로 묻고, 모두 실패하면 오류를 모은다", async () => {
+    const fail = (message: string) => async (): Promise<string> => {
+      throw new Error(message);
+    };
+    expect(await firstSuccess([["npm", fail("Command failed: npm view")], ["레지스트리", async () => "1.4.0"]])).toBe("1.4.0");
+    await expect(firstSuccess([["npm", fail("not found\nstack")], ["레지스트리", fail("HTTP 503")]])).rejects.toThrow(
+      "npm: not found / 레지스트리: HTTP 503",
+    );
+  });
+});
+
 describe("latestPiVersion", () => {
   beforeEach(() => resetLatestCache());
 
@@ -137,6 +150,9 @@ describe("latestPiVersion", () => {
       throw new Error("network down\nstack...");
     }, () => 5);
     expect(failed).toEqual({ error: "network down", checkedAt: 5 });
+    // 실패는 1분만 기억하고 다시 묻는다
+    expect(await latestPiVersion(false, view, () => 30_000)).toEqual(failed);
+    expect(await latestPiVersion(false, view, () => 5 + 60_000)).toEqual({ version: "1.4.0", checkedAt: 60_005 });
   });
 });
 

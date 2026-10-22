@@ -186,6 +186,8 @@ async function isDir(path: string): Promise<boolean> {
 
 /** 최신 버전 조회 결과 캐시 (1시간). npm 레지스트리에 자주 묻지 않기 위해서다 */
 const LATEST_TTL_MS = 60 * 60 * 1000;
+/** 조회에 실패했으면 이만큼만 기억한다 */
+const LATEST_ERROR_TTL_MS = 60 * 1000;
 let latestCache: { at: number; value: PiLatest } | undefined;
 
 /**
@@ -197,7 +199,9 @@ export async function latestPiVersion(
   view: () => Promise<string> = npmViewVersion,
   now: () => number = Date.now,
 ): Promise<PiLatest> {
-  if (!force && latestCache && now() - latestCache.at < LATEST_TTL_MS) return latestCache.value;
+  // 실패(네트워크가 아직 안 붙은 WSL 시작 직후 등)는 잠깐만 기억해, 업데이트 표시가 한 시간씩 막히지 않게 한다.
+  const ttl = latestCache?.value.error ? LATEST_ERROR_TTL_MS : LATEST_TTL_MS;
+  if (!force && latestCache && now() - latestCache.at < ttl) return latestCache.value;
   let value: PiLatest;
   try {
     value = { version: await view(), checkedAt: now() };
@@ -213,14 +217,71 @@ export function resetLatestCache(): void {
   latestCache = undefined;
 }
 
-async function npmViewVersion(): Promise<string> {
-  const { stdout } = await execFileAsync("npm", ["view", PI_PACKAGE_NAME, "version"], {
-    // Windows에서 npm은 npm.cmd라 셸을 거쳐야 실행된다.
-    shell: process.platform === "win32",
-    timeout: 20_000,
-    windowsHide: true,
+/**
+ * 앞의 방법이 실패하면 다음 방법으로 묻는다. 모두 실패하면 각 방법의 오류 첫 줄을 모아 던진다.
+ * 최신 버전 조회는 npm 명령을 먼저 쓰고(사용자 npm 설정·프록시를 따른다), npm이 없거나 실패하면
+ * (공식 설치기로 깐 WSL 등) npm 레지스트리에 HTTPS로 직접 묻는다.
+ */
+export async function firstSuccess<T>(attempts: ReadonlyArray<readonly [label: string, run: () => Promise<T>]>): Promise<T> {
+  const errors: string[] = [];
+  for (const [label, run] of attempts) {
+    try {
+      return await run();
+    } catch (error) {
+      errors.push(`${label}: ${(error instanceof Error ? error.message : String(error)).split("\n")[0]}`);
+    }
+  }
+  throw new Error(errors.join(" / "));
+}
+
+/** npm 명령을 실행한다. 실패하면 "Command failed: …" 대신 npm이 남긴 마지막 오류 줄을 오류 메시지로 쓴다 */
+async function runNpm(args: string[], maxBuffer?: number): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("npm", args, {
+      // Windows에서 npm은 npm.cmd라 셸을 거쳐야 실행된다.
+      shell: process.platform === "win32",
+      timeout: 20_000,
+      windowsHide: true,
+      ...(maxBuffer ? { maxBuffer } : {}),
+    });
+    return stdout;
+  } catch (error) {
+    const stderr = String((error as { stderr?: unknown }).stderr ?? "");
+    const last = stderr
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .at(-1);
+    throw new Error(last ?? (error instanceof Error ? error.message : String(error)));
+  }
+}
+
+/** npm 레지스트리의 Pi 패키지 정보 (설치용 축약본: dist-tags와 버전 목록만 쓴다) */
+async function registryPackument(): Promise<{ "dist-tags"?: { latest?: unknown }; versions?: Record<string, unknown> }> {
+  const response = await fetch(`https://registry.npmjs.org/${PI_PACKAGE_NAME.replace("/", "%2f")}`, {
+    headers: { accept: "application/vnd.npm.install-v1+json" },
+    signal: AbortSignal.timeout(20_000),
   });
-  const version = stdout.trim();
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return (await response.json()) as { "dist-tags"?: { latest?: unknown }; versions?: Record<string, unknown> };
+}
+
+async function npmViewVersion(): Promise<string> {
+  return firstSuccess([
+    ["npm", npmCliVersion],
+    [
+      "레지스트리",
+      async () => {
+        const latest = (await registryPackument())["dist-tags"]?.latest;
+        if (typeof latest !== "string" || !/^\d+\.\d+\.\d+/.test(latest)) throw new Error("latest 태그가 없습니다");
+        return latest;
+      },
+    ],
+  ]);
+}
+
+async function npmCliVersion(): Promise<string> {
+  const version = (await runNpm(["view", PI_PACKAGE_NAME, "version"])).trim();
   if (!/^\d+\.\d+\.\d+/.test(version)) throw new Error(`알 수 없는 응답: ${version.slice(0, 80)}`);
   return version;
 }
@@ -249,13 +310,14 @@ export function resetVersionsCache(): void {
 }
 
 async function npmViewVersions(): Promise<string[]> {
-  const { stdout } = await execFileAsync("npm", ["view", PI_PACKAGE_NAME, "versions", "--json"], {
-    shell: process.platform === "win32",
-    timeout: 20_000,
-    windowsHide: true,
-    maxBuffer: 4 * 1024 * 1024,
-  });
-  const parsed = JSON.parse(stdout) as unknown;
+  return firstSuccess([
+    ["npm", npmCliVersions],
+    ["레지스트리", async () => Object.keys((await registryPackument()).versions ?? {})],
+  ]);
+}
+
+async function npmCliVersions(): Promise<string[]> {
+  const parsed = JSON.parse(await runNpm(["view", PI_PACKAGE_NAME, "versions", "--json"], 4 * 1024 * 1024)) as unknown;
   const list = Array.isArray(parsed) ? parsed : [parsed];
   return list.filter((v): v is string => typeof v === "string");
 }
