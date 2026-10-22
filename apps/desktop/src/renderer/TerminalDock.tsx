@@ -8,6 +8,8 @@ export interface DockTerminal {
   /** 연 쪽이 정한 제목 (설치·로그인). 있으면 실행 정보로 덮어쓰지 않는다 */
   fixedTitle?: boolean;
   exited?: number;
+  /** 코드 0으로 끝나면 한 번 부른다 (설치 뒤 패키지 필터 적용 등) */
+  onSuccess?: () => void;
 }
 
 /**
@@ -64,7 +66,10 @@ export function TerminalDock({
             onOpened={(title) => {
               if (!t.fixedTitle) onUpdate(t.key, { title });
             }}
-            onExit={(exitCode) => onUpdate(t.key, { exited: exitCode })}
+            onExit={(exitCode) => {
+              if (exitCode === 0 && t.exited === undefined) t.onSuccess?.();
+              onUpdate(t.key, { exited: exitCode });
+            }}
           />
         ))}
       </div>

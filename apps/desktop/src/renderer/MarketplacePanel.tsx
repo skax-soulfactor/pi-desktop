@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import type { MarketDetail, MarketPackage } from "../shared/api";
 import { errorText } from "./folder-browser";
 import { formatRelative } from "./format";
-import { formatCount, installArgs, kindLabel, npmNameOfSource, type PackageScope } from "./market-view";
+import {
+  excludeKindsFilter,
+  formatCount,
+  installArgs,
+  kindLabel,
+  npmNameOfSource,
+  type PackageResourceKind,
+  type PackageScope,
+} from "./market-view";
 import { Markdown } from "./markdown/Markdown";
 import { GithubImport } from "./GithubImport";
 
@@ -11,8 +19,11 @@ interface Props {
   hostLabel: string;
   /** 프로젝트 범위 설치와 "설치됨" 표시의 기준 폴더. 없으면 사용자 범위만 */
   cwd?: string;
-  /** 그 호스트의 pi를 내장 터미널에서 이 인자로 실행한다. projectCwd가 있으면 그 폴더에서 (프로젝트 범위) */
-  onRunPi: (args: string[], title: string, projectCwd?: string) => void;
+  /**
+   * 그 호스트의 pi를 내장 터미널에서 이 인자로 실행한다. projectCwd가 있으면 그 폴더에서 (프로젝트 범위).
+   * onSuccess는 코드 0으로 끝난 뒤에 부른다 (설치 뒤 패키지 필터 적용)
+   */
+  onRunPi: (args: string[], title: string, projectCwd?: string, onSuccess?: () => void) => void;
   onClose: () => void;
 }
 
@@ -121,8 +132,17 @@ export function MarketplacePanel({ hostId, hostLabel, cwd, onRunPi, onClose }: P
             detail={detail}
             installedScope={installed.get(detail.name)}
             {...(cwd ? { cwd } : {})}
-            onInstall={(args, scope) => {
-              onRunPi(args, `설치: ${detail.name}`, scope === "project" ? cwd : undefined);
+            onInstall={(args, scope, excluded) => {
+              // 뺄 종류가 있으면 설치가 끝난 뒤 그 종류를 패키지 필터에 []로 적는다 (설치 전에는 settings에 항목이 없다).
+              const source = args[1]!;
+              const onSuccess =
+                excluded.length > 0
+                  ? () =>
+                      void window.piDesktop
+                        .setPackageFilter(hostId, scope === "project" ? cwd ?? "" : "", source, scope, [], false, excludeKindsFilter(excluded))
+                        .catch(() => {})
+                  : undefined;
+              onRunPi(args, `설치: ${detail.name}`, scope === "project" ? cwd : undefined, onSuccess);
               onClose();
             }}
           />
@@ -187,9 +207,11 @@ function PackageDetail({
   detail: MarketDetail;
   installedScope: string | undefined;
   cwd?: string;
-  onInstall: (args: string[], scope: PackageScope) => void;
+  onInstall: (args: string[], scope: PackageScope, excluded: PackageResourceKind[]) => void;
 }) {
   const [version, setVersion] = useState("");
+  /** 설치할 때 뺄 리소스 종류 (매니페스트에 선언된 것만 고를 수 있다) */
+  const [excluded, setExcluded] = useState<Set<PackageResourceKind>>(new Set());
   const [scope, setScope] = useState<PackageScope>("user");
   const [error, setError] = useState<string | undefined>();
   const risky = detail.mayRunCode || detail.installScripts.length > 0;
@@ -268,7 +290,7 @@ function PackageDetail({
           className="primary"
           onClick={() => {
             try {
-              onInstall(installArgs(detail.name, version || undefined, scope), scope);
+              onInstall(installArgs(detail.name, version || undefined, scope), scope, [...excluded]);
             } catch (e) {
               setError(errorText(e));
             }
@@ -277,6 +299,33 @@ function PackageDetail({
           터미널에서 설치
         </button>
       </div>
+      {detail.manifest === "declared" && detail.kinds.length > 1 && (
+        <div className="market-kinds">
+          <span>포함할 리소스</span>
+          {detail.kinds.map((kind) => (
+            <label key={kind}>
+              <input
+                type="checkbox"
+                checked={!excluded.has(kind)}
+                onChange={(e) =>
+                  setExcluded((prev) => {
+                    const next = new Set(prev);
+                    if (e.target.checked) next.delete(kind);
+                    else next.add(kind);
+                    return next;
+                  })
+                }
+              />
+              {kindLabel(kind)}
+            </label>
+          ))}
+          {excluded.size > 0 && (
+            <span className="muted">
+              설치가 끝나면 뺀 종류를 패키지 필터에 적습니다. 나중에 리소스 창 패키지 탭의 "리소스 고르기"로 바꿀 수 있습니다.
+            </span>
+          )}
+        </div>
+      )}
       <p className="muted">
         그 호스트의 pi install을 내장 터미널에서 실행합니다. 설치한 뒤에는 새 세션부터 쓰이며, 열려 있는 세션은 리소스 창의
         "지금 세션에 반영"으로 반영합니다. 프로젝트 범위는 그 폴더를 신뢰해야 불러옵니다.

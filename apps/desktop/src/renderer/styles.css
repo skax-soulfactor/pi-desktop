@@ -2767,3 +2767,23 @@ details > summary.settings-section {
   font-size: 12px;
   color: var(--danger, #d33);
 }
+
+.market-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.market-kinds label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.package-copy-filter {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}

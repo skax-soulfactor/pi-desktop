@@ -323,6 +323,7 @@ export interface ModelsImportParams {
 export type PackageResourceType = "extensions" | "skills" | "prompts" | "themes";
 
 export interface PackageResourcesParams {
+  /** 프로젝트 범위의 작업 폴더. 사용자 범위면 비워도 된다 */
   cwd: string;
   /** 설정에 적힌 그대로의 소스 */
   source: string;
@@ -348,6 +349,8 @@ export interface PackageSetFilterParams extends PackageResourcesParams {
   changes: PackageFilterChange[];
   /** 먼저 필터를 모두 지운다 (패키지가 내놓는 것을 모두 불러옴) */
   reset?: boolean;
+  /** 종류별 필터 배열을 통째로 적는다. [] 는 그 종류를 하나도 불러오지 않음 */
+  set?: Partial<Record<PackageResourceType, string[]>>;
 }
 
 /** 어느 settings.json인지. 없으면 사용자 범위 */

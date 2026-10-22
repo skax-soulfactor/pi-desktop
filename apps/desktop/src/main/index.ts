@@ -18,6 +18,7 @@ import {
   type SettingsReadResult,
   type SettingsTarget,
   type PackageFilterChange,
+  type PackageSetFilterParams,
   type PackageResourceItem,
   type ResourceImportParams,
   type ProjectTrustInfo,
@@ -338,8 +339,21 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   );
   handle(
     IpcChannels.setPackageFilter,
-    async (_event, hostId: string, cwd: string, source: string, scope: "user" | "project", changes: PackageFilterChange[], reset: boolean) => {
-      await conn(hostId).request(Methods.packagesSetFilter, { cwd, source, scope, changes, ...(reset ? { reset: true } : {}) }, 60_000);
+    async (
+      _event,
+      hostId: string,
+      cwd: string,
+      source: string,
+      scope: "user" | "project",
+      changes: PackageFilterChange[],
+      reset: boolean,
+      set?: PackageSetFilterParams["set"],
+    ) => {
+      await conn(hostId).request(
+        Methods.packagesSetFilter,
+        { cwd, source, scope, changes, ...(reset ? { reset: true } : {}), ...(set ? { set } : {}) },
+        60_000,
+      );
     },
   );
   handle(IpcChannels.settingsRead, (_event, hostId: string, target?: SettingsTarget) =>

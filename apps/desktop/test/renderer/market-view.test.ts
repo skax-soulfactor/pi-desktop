@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  excludeKindsFilter,
+  filterForPlatform,
+  packageFilterOf,
   formatCount,
   importName,
   installArgs,
@@ -71,5 +74,26 @@ describe("splitFrontmatter", () => {
   it("앞머리를 떼어 내고, 없으면 그대로", () => {
     expect(splitFrontmatter("---\nname: pdf\ndescription: x\n---\n# 본문\n")).toEqual({ meta: "name: pdf\ndescription: x", body: "# 본문\n" });
     expect(splitFrontmatter("# 본문")).toEqual({ body: "# 본문" });
+  });
+});
+
+describe("excludeKindsFilter·packageFilterOf·filterForPlatform", () => {
+  it("뺄 종류는 빈 배열로", () => {
+    expect(excludeKindsFilter(["extensions", "themes"])).toEqual({ extensions: [], themes: [] });
+    expect(excludeKindsFilter([])).toEqual({});
+  });
+
+  it("설정에서 그 소스의 필터만 꺼낸다", () => {
+    const settings = { packages: ["npm:a", { source: "npm:b", skills: ["-skills/x/SKILL.md"], themes: [], autoload: false }] };
+    expect(packageFilterOf(settings, "npm:b")).toEqual({ skills: ["-skills/x/SKILL.md"], themes: [] });
+    expect(packageFilterOf(settings, "npm:a")).toBeUndefined();
+    expect(packageFilterOf({}, "npm:a")).toBeUndefined();
+  });
+
+  it("+·- 경로만 대상 OS 구분자로 바꾸고 glob은 둔다", () => {
+    const filter = { skills: ["-skills\\beta\\SKILL.md", "skills/*/SKILL.md"], prompts: ["+prompts/p.md"] };
+    expect(filterForPlatform(filter, "linux")).toEqual({ skills: ["-skills/beta/SKILL.md", "skills/*/SKILL.md"], prompts: ["+prompts/p.md"] });
+    expect(filterForPlatform(filter, "win32")).toEqual({ skills: ["-skills\\beta\\SKILL.md", "skills/*/SKILL.md"], prompts: ["+prompts\\p.md"] });
+    expect(filterForPlatform(filter, undefined)).toEqual(filter);
   });
 });

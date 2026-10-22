@@ -379,8 +379,13 @@ export class AgentDaemon {
     });
 
     const packageParams = (params: unknown): PackageResourcesParams => {
-      const p = requireStrings(params, ["cwd", "source", "scope"]) as unknown as PackageResourcesParams;
+      const p = requireStrings(params, ["source", "scope"]) as unknown as PackageResourcesParams;
       if (p.scope !== "user" && p.scope !== "project") throw new JsonRpcError(ErrorCodes.InvalidParams, "scope는 user·project여야 합니다");
+      // 사용자 범위는 작업 폴더가 없어도 된다 (데이터 폴더를 쓴다). 프로젝트 범위는 있어야 한다.
+      if (typeof p.cwd !== "string" || !p.cwd) {
+        if (p.scope === "project") throw new JsonRpcError(ErrorCodes.InvalidParams, "프로젝트 범위에는 cwd가 필요합니다");
+        return { ...p, cwd: agentDirOf(this.env) };
+      }
       return p;
     };
     const filterSdk = async () => (await loadPiSdk(await locatePi({ env: this.env }))) as unknown as PackageFilterSdk;
@@ -393,6 +398,10 @@ export class AgentDaemon {
     peer.handle(Methods.packagesSetFilter, async (params) => {
       const p = packageParams(params) as PackageSetFilterParams;
       if (!Array.isArray(p.changes)) throw new JsonRpcError(ErrorCodes.InvalidParams, "changes는 배열이어야 합니다");
+      const set = (params as Partial<PackageSetFilterParams>).set;
+      if (set !== undefined && (typeof set !== "object" || Object.values(set).some((v) => !Array.isArray(v) || v.some((e) => typeof e !== "string")))) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "set은 종류별 문자열 배열이어야 합니다");
+      }
       await setPackageFilter(await filterSdk(), p.cwd, agentDirOf(this.env), p).catch(asInvalid);
       return null;
     });

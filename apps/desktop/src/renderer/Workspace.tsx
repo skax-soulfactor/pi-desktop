@@ -121,21 +121,22 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [dockTerminals, setDockTerminals] = useState<DockTerminal[]>([]);
   const [activeTerminal, setActiveTerminal] = useState<string | undefined>();
   /** title을 주면 그 제목을 유지하고, 없으면 열린 뒤 실행 정보(예: "셸 (WSL: Ubuntu)")로 채운다 */
-  const openTerminal = (spec: TerminalSpec, title?: string) => {
+  const openTerminal = (spec: TerminalSpec, title?: string, onSuccess?: () => void) => {
     // 설치·제거·업데이트처럼 대신 실행하는 명령은 작업 기록에 남긴다 (결과는 터미널 출력에서 본다).
     const detail = terminalActionDetail(spec);
     if (detail) void window.piDesktop.logAction({ hostId: spec.hostId, summary: `터미널에서 실행: ${title ?? "명령"}`, detail }).catch(() => {});
     const key = crypto.randomUUID();
-    setDockTerminals((prev) => [...prev, { key, spec, title: title ?? "터미널", fixedTitle: title !== undefined }]);
+    setDockTerminals((prev) => [...prev, { key, spec, title: title ?? "터미널", fixedTitle: title !== undefined, ...(onSuccess ? { onSuccess } : {}) }]);
     setActiveTerminal(key);
   };
   /**
    * 그 호스트의 pi를 이 인자로 내장 터미널에서 실행한다 (패키지 설치·제거·업데이트).
    * 프로젝트 범위 명령만 그 폴더에서, 사용자 범위는 홈에서 연다. 프로젝트 폴더에서 열면 Pi가 그 폴더의 신뢰를 묻기 때문이다.
    */
-  const runPiOn = (target: string, args: string[], title: string, projectCwd?: string) =>
-    openTerminal({ hostId: target, kind: "pi", args, ...(projectCwd ? { cwd: projectCwd } : {}) }, title);
-  const runPi = (args: string[], title: string, projectCwd?: string) => runPiOn(hostId, args, title, projectCwd);
+  const runPiOn = (target: string, args: string[], title: string, projectCwd?: string, onSuccess?: () => void) =>
+    openTerminal({ hostId: target, kind: "pi", args, ...(projectCwd ? { cwd: projectCwd } : {}) }, title, onSuccess);
+  const runPi = (args: string[], title: string, projectCwd?: string, onSuccess?: () => void) =>
+    runPiOn(hostId, args, title, projectCwd, onSuccess);
   const closeTerminal = (key: string) => {
     setDockTerminals((prev) => {
       const next = prev.filter((t) => t.key !== key);
@@ -960,7 +961,14 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         <ContextCopyDialog hosts={hosts} fromHostId={hostId} path={copyContextPath} onClose={() => setCopyContextPath(undefined)} />
       )}
       {active && copyPackage && (
-        <PackageCopyDialog hosts={hosts} fromHostId={hostId} pkg={copyPackage} onRunPi={runPiOn} onClose={() => setCopyPackage(undefined)} />
+        <PackageCopyDialog
+          hosts={hosts}
+          fromHostId={hostId}
+          pkg={copyPackage}
+          fromCwd={resourcesCwd}
+          onRunPi={runPiOn}
+          onClose={() => setCopyPackage(undefined)}
+        />
       )}
       {active && marketOpen && (
         <MarketplacePanel
