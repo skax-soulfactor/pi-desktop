@@ -403,8 +403,10 @@ export interface PiDesktopApi {
   ): Promise<void>;
   /** 그 호스트의 사용자 settings.json 최상위 값 */
   settingsRead(hostId: string): Promise<SettingsReadResult>;
-  /** 그 호스트의 사용자 settings.json에서 받은 최상위 키만 바꾼다 (설계 §5.9) */
-  settingsMerge(hostId: string, values: Record<string, unknown>): Promise<void>;
+  /** 그 호스트의 사용자 settings.json에서 받은 최상위 키만 바꾸고 remove의 키는 지운다 (설계 §4.8·§5.9) */
+  settingsMerge(hostId: string, values: Record<string, unknown>, remove?: string[]): Promise<void>;
+  /** 그 호스트에 설치된 Pi의 settings.json JSON Schema. 없는 Pi면 null */
+  settingsSchema(hostId: string): Promise<Record<string, unknown> | null>;
   /** 받은 스킬·프롬프트 파일을 그 호스트의 범위에 쓴다 (replace면 이전 것을 백업하고 바꾼다) */
   importResourceFiles(hostId: string, params: ResourceImportParams): Promise<ResourceImportResult>;
   /** 가져온 항목들의 로컬 수정·원본 업데이트를 확인한다 (저장소마다 GitHub를 한 번씩 조회) */
@@ -484,6 +486,7 @@ export const IpcChannels = {
   packageResources: "pi:package-resources",
   setPackageFilter: "pi:set-package-filter",
   settingsMerge: "pi:settings-merge",
+  settingsSchema: "pi:settings-schema",
   importResourceFiles: "pi:import-resource-files",
   importStatus: "pi:import-status",
   recordCopy: "pi:record-copy",

@@ -2664,3 +2664,58 @@ button.toggled {
   gap: 6px;
   padding: 2px 0;
 }
+
+.settings-mode {
+  align-self: flex-start;
+  width: fit-content;
+  margin-bottom: 8px;
+}
+
+.settings-section {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 12px 0 4px;
+  cursor: default;
+}
+
+details > summary.settings-section {
+  cursor: pointer;
+}
+
+.settings-field {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 6px 4px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-field.changed {
+  background: color-mix(in srgb, var(--ok) 8%, transparent);
+}
+
+.settings-field-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-field-label .resource-badge {
+  margin-left: 6px;
+}
+
+.settings-field-control {
+  flex: 0 0 240px;
+}
+
+.settings-field-control select,
+.settings-field-control input {
+  width: 100%;
+}
+
+.settings-field-control input.invalid {
+  border-color: var(--danger, #d33);
+}
+
+.settings-preview {
+  margin-top: 8px;
+}

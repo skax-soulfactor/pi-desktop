@@ -72,7 +72,8 @@ const api: PiDesktopApi = {
   packageResources: (hostId, cwd, source, scope) => ipcRenderer.invoke(IpcChannels.packageResources, hostId, cwd, source, scope),
   setPackageFilter: (hostId, cwd, source, scope, changes, reset) =>
     ipcRenderer.invoke(IpcChannels.setPackageFilter, hostId, cwd, source, scope, changes, reset),
-  settingsMerge: (hostId, values) => ipcRenderer.invoke(IpcChannels.settingsMerge, hostId, values),
+  settingsMerge: (hostId, values, remove) => ipcRenderer.invoke(IpcChannels.settingsMerge, hostId, values, remove),
+  settingsSchema: (hostId) => ipcRenderer.invoke(IpcChannels.settingsSchema, hostId),
   importResourceFiles: (hostId, params) => ipcRenderer.invoke(IpcChannels.importResourceFiles, hostId, params),
   importStatus: (hostId) => ipcRenderer.invoke(IpcChannels.importStatus, hostId),
   recordCopy: (input) => ipcRenderer.invoke(IpcChannels.recordCopy, input),

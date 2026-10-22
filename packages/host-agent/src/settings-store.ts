@@ -1,6 +1,6 @@
 import { copyFile, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SettingsReadResult } from "@pi-desktop/host-protocol";
+import type { PiLocation, SettingsReadResult } from "@pi-desktop/host-protocol";
 
 /**
  * 사용자 settings.json 읽기와 항목 단위 쓰기 (설계 §5.9 "settings.json은 항목 단위로 골라서 복사").
@@ -38,16 +38,31 @@ export async function readSettings(agentDir: string): Promise<SettingsReadResult
   }
 }
 
-/** 받은 최상위 키만 바꾼다. 나머지 키는 그대로 둔다 */
-export async function mergeSettings(agentDir: string, values: Json): Promise<void> {
+/** 받은 최상위 키만 바꾸고 remove의 키는 지운다. 나머지 키는 그대로 둔다 */
+export async function mergeSettings(agentDir: string, values: Json, remove: readonly string[] = []): Promise<void> {
   const keys = Object.keys(values);
-  if (keys.length === 0) throw new Error("바꿀 항목이 없습니다");
+  if (keys.length === 0 && remove.length === 0) throw new Error("바꿀 항목이 없습니다");
   const path = settingsPath(agentDir);
   const { exists, data } = await readSettingsFile(path);
   const next: Json = { ...data };
   for (const key of keys) next[key] = values[key];
+  for (const key of remove) delete next[key];
   if (exists) await copyFile(path, `${path}.bak`);
   const temp = `${path}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(temp, `${JSON.stringify(next, null, 2)}\n`, "utf8");
   await rename(temp, path);
+}
+
+/**
+ * 설치된 Pi가 함께 배포한 settings.json의 JSON Schema (<Pi 패키지>/schemas/settings.schema.json).
+ * 앱은 이것으로 설정 폼을 만든다. 그 Pi 버전의 항목을 그대로 따르므로 Pi가 항목을 늘려도 앱을 고칠 필요가 없다.
+ * 이 파일이 없는 Pi면 null이다.
+ */
+export async function readSettingsSchema(pi: PiLocation): Promise<Json | null> {
+  try {
+    const parsed = JSON.parse(await readFile(join(pi.packageDir, "schemas", "settings.schema.json"), "utf8")) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Json) : null;
+  } catch {
+    return null;
+  }
 }

@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Methods, type SettingsReadResult } from "@pi-desktop/host-protocol";
-import { mergeSettings, readSettings } from "../src/settings-store";
+import { mergeSettings, readSettings, readSettingsSchema } from "../src/settings-store";
+import { PI_PACKAGE_DIR } from "./helpers/real-pi";
 import { isolatedEnv, TestClient } from "./helpers/agent-client";
 
 function agentWith(settings: string | undefined): string {
@@ -36,6 +37,22 @@ describe("readSettings·mergeSettings", () => {
     expect((await readSettings(dir)).error).toContain("읽지 못했습니다");
     await expect(mergeSettings(dir, { theme: "x" })).rejects.toThrow();
     expect(readFileSync(join(dir, "settings.json"), "utf8")).toBe("{ broken");
+  });
+});
+
+describe("remove·readSettingsSchema", () => {
+  it("remove의 키는 지우고, 지울 것만 있어도 쓴다", async () => {
+    const dir = agentWith(JSON.stringify({ theme: "dark", retry: { enabled: false }, x: 1 }));
+    await mergeSettings(dir, { theme: "light" }, ["retry"]);
+    expect(read(dir)).toEqual({ theme: "light", x: 1 });
+    await mergeSettings(dir, {}, ["x"]);
+    expect(read(dir)).toEqual({ theme: "light" });
+  });
+
+  it("설치된 Pi의 스키마를 읽고, 없으면 null", async () => {
+    const schema = await readSettingsSchema({ packageDir: PI_PACKAGE_DIR, version: "x" } as never);
+    expect((schema?.properties as Record<string, unknown>).defaultThinkingLevel).toBeDefined();
+    expect(await readSettingsSchema({ packageDir: agentWith(undefined), version: "x" } as never)).toBeNull();
   });
 });
 
