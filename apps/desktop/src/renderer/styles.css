@@ -2632,8 +2632,8 @@ button.toggled {
   margin-left: 4px;
 }
 
-.host-compare-table td:first-child,
-.host-compare-table td:nth-child(3) {
+.host-compare-table td:nth-child(2),
+.host-compare-table td:nth-child(4) {
   white-space: nowrap;
 }
 
@@ -2786,4 +2786,25 @@ details > summary.settings-section {
   display: flex;
   gap: 6px;
   align-items: flex-start;
+}
+
+.host-compare-bulk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.host-compare-bulk-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.host-compare-changes details {
+  margin: 4px 0;
+}
+
+.host-compare-changes summary {
+  cursor: pointer;
 }

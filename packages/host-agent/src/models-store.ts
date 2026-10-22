@@ -248,3 +248,58 @@ export async function importProvider(agentDir: string, id: string, provider: Jso
   providers[id] = next;
   await writeModels(path, { ...data, providers }, exists);
 }
+
+/** 모델 항목에서 비밀일 수 있는 헤더 값을 뺀다 (환경 변수·명령 참조는 남김) */
+function dropSecretHeaders(entry: Json, prefix: string, dropped: string[]): void {
+  const headers = entry.headers;
+  if (!headers || typeof headers !== "object" || Array.isArray(headers)) return;
+  const kept: Json = {};
+  for (const [name, value] of Object.entries(headers as Json)) {
+    if (isReference(value)) kept[name] = value;
+    else dropped.push(`${prefix}headers.${name}`);
+  }
+  if (Object.keys(kept).length > 0) entry.headers = kept;
+  else delete entry.headers;
+}
+
+/** 다른 호스트로 옮길 모델 하나 (설계 §5.9 "프로바이더·모델 항목 단위로"). 그대로 값인 헤더는 뺀다 */
+export async function exportModel(agentDir: string, providerId: string, modelId: string): Promise<{ model: Json; dropped: string[] }> {
+  const { data } = await readJson(modelsPath(agentDir));
+  const provider = providersOf(data)[providerId];
+  if (!provider) throw new Error(`models.json에 없는 프로바이더입니다: ${providerId}`);
+  const models = Array.isArray(provider.models) ? (provider.models as Json[]) : [];
+  const original = models.find((m) => m.id === modelId);
+  if (!original) throw new Error(`${providerId}에 없는 모델입니다: ${modelId}`);
+  const model = JSON.parse(JSON.stringify(original)) as Json;
+  const dropped: string[] = [];
+  dropSecretHeaders(model, "", dropped);
+  return { model, dropped };
+}
+
+/**
+ * 다른 호스트에서 받은 모델을 같은 이름의 프로바이더에 넣는다. 프로바이더가 없으면 거부한다(프로바이더째 옮기게).
+ * 같은 ID가 있으면 replace일 때만 바꾸고, 대상 모델의 헤더 값은 남긴다.
+ */
+export async function importModel(agentDir: string, providerId: string, model: Json, replace: boolean): Promise<void> {
+  if (!model || typeof model !== "object" || Array.isArray(model) || typeof model.id !== "string" || !model.id.trim()) {
+    throw new Error("모델에 id가 필요합니다");
+  }
+  const path = modelsPath(agentDir);
+  const { exists, data } = await readJson(path);
+  const providers = { ...providersOf(data) };
+  const provider = providers[providerId];
+  if (!provider) throw new Error(`대상 models.json에 ${providerId} 프로바이더가 없습니다. 프로바이더째 옮기세요`);
+  const models = Array.isArray(provider.models) ? [...(provider.models as Json[])] : [];
+  const index = models.findIndex((m) => m.id === model.id);
+  const next: Json = { ...model };
+  if (index >= 0) {
+    if (!replace) throw new Error(`이미 있는 모델입니다: ${providerId}/${String(model.id)}`);
+    const theirs = models[index]!.headers;
+    if (theirs && typeof theirs === "object") next.headers = { ...(theirs as Json), ...((next.headers as Json | undefined) ?? {}) };
+    models[index] = next;
+  } else {
+    models.push(next);
+  }
+  providers[providerId] = { ...provider, models };
+  await writeModels(path, { ...data, providers }, exists);
+}

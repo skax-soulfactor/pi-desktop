@@ -41,6 +41,10 @@ export const Methods = {
   modelsExportProvider: "models.exportProvider",
   /** 다른 호스트에서 받은 프로바이더를 쓴다 */
   modelsImportProvider: "models.importProvider",
+  /** 다른 호스트로 옮길 모델 하나 (비밀일 수 있는 헤더 값은 뺀다) */
+  modelsExportModel: "models.exportModel",
+  /** 다른 호스트에서 받은 모델을 같은 이름의 프로바이더에 넣는다 */
+  modelsImportModel: "models.importModel",
   /** 설정에 적힌 패키지 하나가 내놓는 리소스와 켜짐 여부 */
   packagesResources: "packages.resources",
   /** 패키지 리소스를 켜고 끈다 (settings.json의 패키지 필터) */
@@ -313,6 +317,19 @@ export interface ModelsExportResult {
   dropped: string[];
 }
 
+export interface ModelsExportModelResult {
+  model: Record<string, unknown>;
+  /** 비밀일 수 있어 뺀 필드 (headers.<이름>) */
+  dropped: string[];
+}
+
+export interface ModelsImportModelParams {
+  providerId: string;
+  model: Record<string, unknown>;
+  /** 같은 ID가 있으면 바꾼다 (대상의 헤더 값은 남김) */
+  replace?: boolean;
+}
+
 export interface ModelsImportParams {
   id: string;
   provider: Record<string, unknown>;
@@ -328,6 +345,8 @@ export interface PackageResourcesParams {
   /** 설정에 적힌 그대로의 소스 */
   source: string;
   scope: "user" | "project";
+  /** 사용자 패키지를 이 프로젝트(cwd)에서만 고르는 덧씌우기 (프로젝트 settings의 autoload: false 항목) */
+  overlay?: boolean;
 }
 
 export interface PackageResourceItem {

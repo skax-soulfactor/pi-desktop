@@ -160,7 +160,14 @@ export function ModelsPanel({
                   </button>
                 </div>
                 {copying === p.id && (
-                  <ProviderCopyPanel hosts={hosts} fromHostId={hostId} providerId={p.id} baseUrl={p.baseUrl} onClose={() => setCopying(undefined)} />
+                  <ProviderCopyPanel
+                    hosts={hosts}
+                    fromHostId={hostId}
+                    providerId={p.id}
+                    baseUrl={p.baseUrl}
+                    models={p.models.map((m) => m.id)}
+                    onClose={() => setCopying(undefined)}
+                  />
                 )}
                 {removing === p.id && (
                   <div className="banner warn">

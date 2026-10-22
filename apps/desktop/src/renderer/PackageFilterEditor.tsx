@@ -8,6 +8,8 @@ interface Props {
   /** 리소스 창의 작업 폴더 (프로젝트 범위 패키지는 이 폴더의 .pi/settings.json) */
   cwd: string;
   pkg: ConfiguredPackageInfo;
+  /** 사용자 패키지를 이 프로젝트(cwd)에서만 고른다 (프로젝트 settings의 autoload: false 덧씌우기) */
+  overlay?: boolean;
   /** 저장한 뒤 리소스 목록을 다시 읽는다 */
   onSaved: () => void;
   onClose: () => void;
@@ -17,7 +19,7 @@ interface Props {
  * 패키지에 든 리소스를 골라 켜고 끄기 (설계 §4.5 "패키지 필터 편집").
  * 설정의 패키지 항목에 +경로·-경로로 적는다 (pi config와 같은 규칙). 패키지 파일은 건드리지 않는다.
  */
-export function PackageFilterEditor({ hostId, cwd, pkg, onSaved, onClose }: Props) {
+export function PackageFilterEditor({ hostId, cwd, pkg, overlay = false, onSaved, onClose }: Props) {
   const [items, setItems] = useState<PackageResourceItem[] | undefined>();
   const [checked, setChecked] = useState<Map<string, boolean>>(new Map());
   const [busy, setBusy] = useState(false);
@@ -26,7 +28,7 @@ export function PackageFilterEditor({ hostId, cwd, pkg, onSaved, onClose }: Prop
 
   async function load() {
     try {
-      const next = await window.piDesktop.packageResources(hostId, cwd, pkg.source, pkg.scope);
+      const next = await window.piDesktop.packageResources(hostId, cwd, pkg.source, pkg.scope, overlay);
       setItems(next);
       setChecked(new Map(next.map((i) => [packageResourceKey(i), i.enabled])));
     } catch (e) {
@@ -36,7 +38,7 @@ export function PackageFilterEditor({ hostId, cwd, pkg, onSaved, onClose }: Prop
 
   useEffect(() => {
     void load();
-  }, [hostId, cwd, pkg.source, pkg.scope]);
+  }, [hostId, cwd, pkg.source, pkg.scope, overlay]);
 
   const changes = items ? packageFilterChanges(items, checked) : [];
 
@@ -44,10 +46,10 @@ export function PackageFilterEditor({ hostId, cwd, pkg, onSaved, onClose }: Prop
     setBusy(true);
     setError(undefined);
     try {
-      await window.piDesktop.setPackageFilter(hostId, cwd, pkg.source, pkg.scope, reset ? [] : changes, reset);
-      setNotice(
-        `${reset ? "필터를 지우고 모두 켰습니다" : "저장했습니다"} (${pkg.scope === "user" ? "사용자" : "프로젝트"} settings.json). 새로 여는 세션부터 쓰이고, 열린 세션은 "지금 세션에 반영"이나 다시 열기로 반영합니다.`,
-      );
+      await window.piDesktop.setPackageFilter(hostId, cwd, pkg.source, pkg.scope, reset ? [] : changes, reset, undefined, overlay);
+      const where = overlay ? "이 프로젝트의 .pi/settings.json" : `${pkg.scope === "user" ? "사용자" : "프로젝트"} settings.json`;
+      const what = overlay && reset ? "덧씌우기를 지워 사용자 설정을 따릅니다" : reset ? "필터를 지우고 모두 켰습니다" : "저장했습니다";
+      setNotice(`${what} (${where}). 새로 여는 세션부터 쓰이고, 열린 세션은 "지금 세션에 반영"이나 다시 열기로 반영합니다.`);
       await load();
       onSaved();
     } catch (e) {
@@ -63,6 +65,12 @@ export function PackageFilterEditor({ hostId, cwd, pkg, onSaved, onClose }: Prop
 
   return (
     <div className="package-filter">
+      {overlay && (
+        <p className="muted">
+          이 프로젝트에서만 고릅니다. 사용자 설정은 바꾸지 않고 이 폴더의 .pi/settings.json에 덧씌우기(autoload: false)로 적습니다.
+          Pi는 그 폴더를 신뢰해야 프로젝트 설정을 씁니다.
+        </p>
+      )}
       {error && <div className="banner error">{error}</div>}
       {notice && <div className="banner ok">{notice}</div>}
       {!items && !error && <p className="muted">패키지의 리소스를 읽는 중…</p>}
@@ -91,10 +99,16 @@ export function PackageFilterEditor({ hostId, cwd, pkg, onSaved, onClose }: Prop
         <button type="button" onClick={onClose}>
           닫기
         </button>
-        {pkg.filtered && (
-          <button type="button" disabled={busy} onClick={() => void save(true)} title="이 패키지 항목의 필터를 모두 지웁니다">
-            필터 지우고 모두 켜기
+        {overlay ? (
+          <button type="button" disabled={busy} onClick={() => void save(true)} title="이 프로젝트의 덧씌우기 항목을 지웁니다">
+            덧씌우기 지우기
           </button>
+        ) : (
+          pkg.filtered && (
+            <button type="button" disabled={busy} onClick={() => void save(true)} title="이 패키지 항목의 필터를 모두 지웁니다">
+              필터 지우고 모두 켜기
+            </button>
+          )
         )}
         <button type="button" className="primary" disabled={busy || changes.length === 0} onClick={() => void save(false)}>
           {busy ? "저장 중…" : changes.length > 0 ? `${changes.length}개 바꾸기` : "바꾼 것 없음"}

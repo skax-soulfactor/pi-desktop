@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Methods, type ModelsExportResult } from "@pi-desktop/host-protocol";
-import { exportProvider, importProvider } from "../src/models-store";
+import { exportModel, exportProvider, importModel, importProvider } from "../src/models-store";
 import { isolatedEnv, TestClient } from "./helpers/agent-client";
 
 function agentWith(providers: Record<string, unknown>): string {
@@ -65,6 +65,29 @@ describe("importProvider", () => {
     const dir = mkdtempSync(join(tmpdir(), "pi-models-copy-empty-"));
     await importProvider(dir, "a", { baseUrl: "https://x" }, false);
     expect(read(dir).providers.a).toEqual({ baseUrl: "https://x" });
+  });
+});
+
+describe("exportModel·importModel", () => {
+  it("모델 하나를 옮기고, 그대로 값인 헤더는 뺀다", async () => {
+    const from = agentWith({ ollama: { baseUrl: "http://x", models: [{ id: "q", name: "Q", headers: { A: "secret", B: "$B" } }, { id: "r" }] } });
+    const { model, dropped } = await exportModel(from, "ollama", "q");
+    expect(model).toEqual({ id: "q", name: "Q", headers: { B: "$B" } });
+    expect(dropped).toEqual(["headers.A"]);
+    await expect(exportModel(from, "ollama", "zz")).rejects.toThrow("없는 모델");
+    await expect(exportModel(from, "none", "q")).rejects.toThrow("없는 프로바이더");
+  });
+
+  it("같은 이름의 프로바이더에 넣고, 같은 ID는 replace일 때만 바꾸며 대상 헤더 값은 남긴다", async () => {
+    const to = agentWith({ ollama: { baseUrl: "http://y", apiKey: "k", models: [{ id: "q", headers: { A: "mine" } }] } });
+    await importModel(to, "ollama", { id: "new", name: "N" }, false);
+    expect(read(to).providers.ollama!.models).toEqual([{ id: "q", headers: { A: "mine" } }, { id: "new", name: "N" }]);
+    await expect(importModel(to, "ollama", { id: "q", name: "Q" }, false)).rejects.toThrow("이미 있는 모델");
+    await importModel(to, "ollama", { id: "q", name: "Q", headers: { B: "$B" } }, true);
+    expect((read(to).providers.ollama!.models as unknown[])[0]).toEqual({ id: "q", name: "Q", headers: { A: "mine", B: "$B" } });
+    expect(read(to).providers.ollama!.apiKey).toBe("k");
+    await expect(importModel(to, "other", { id: "x" }, false)).rejects.toThrow("프로바이더째");
+    await expect(importModel(to, "ollama", { name: "no id" }, false)).rejects.toThrow("id가 필요");
   });
 });
 

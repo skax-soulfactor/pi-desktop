@@ -10,6 +10,9 @@ import type { PackageFilterChange, PackageResourceItem, PackageResourceType } fr
  * - 같은 경로를 가리키던 이전 항목(+, -, !, 그대로)은 지우고 새로 붙인다
  * - 필터가 하나도 없으면 문자열 소스로 되돌린다. 빈 배열([])은 "그 종류는 하나도 불러오지 않음"이라 지우지 않는다
  * - set은 종류별 배열을 통째로 적는다 (설치할 때 종류를 빼거나, 다른 호스트의 필터를 옮길 때)
+ * - overlay는 사용자 패키지를 이 프로젝트에서만 고르는 덧씌우기다. 프로젝트 settings에 { source, autoload: false }
+ *   항목을 두면 Pi는 그것을 사용자 패키지 위의 필터로 본다(+는 켬, -는 끔, 없으면 사용자 설정을 따름).
+ *   덧씌울 것이 없어지면 그 항목을 지운다.
  * 쓰기는 Pi의 SettingsManager로 한다 (Pi와 같은 잠금·병합).
  */
 
@@ -51,10 +54,15 @@ export function applyPackageFilter(
   changes: readonly PackageFilterChange[],
   reset = false,
   set: Partial<Record<PackageResourceType, string[]>> = {},
+  overlay = false,
 ): PackageSource[] {
   const next = [...packages];
-  const index = next.findIndex((p) => (typeof p === "string" ? p : p.source) === source);
-  if (index === -1) throw new Error(`설정에 없는 패키지입니다: ${source}`);
+  let index = next.findIndex((p) => (typeof p === "string" ? p : p.source) === source);
+  if (index === -1) {
+    if (!overlay) throw new Error(`설정에 없는 패키지입니다: ${source}`);
+    next.push({ source, autoload: false });
+    index = next.length - 1;
+  }
   const current = next[index]!;
   const pkg: Exclude<PackageSource, string> = typeof current === "string" ? { source: current } : { ...current };
   if (reset) for (const type of RESOURCE_TYPES) delete pkg[type];
@@ -67,6 +75,11 @@ export function applyPackageFilter(
   const hasFilters = RESOURCE_TYPES.some((type) => pkg[type] !== undefined);
   // 필터가 없으면 문자열로 되돌린다. autoload 같은 다른 키가 있으면 객체로 둔다.
   const otherKeys = Object.keys(pkg).filter((k) => k !== "source" && !RESOURCE_TYPES.includes(k as PackageResourceType));
+  if (overlay && pkg.autoload === false && !hasFilters) {
+    // 덧씌울 것이 없으면 항목을 지워 사용자 설정을 그대로 따르게 한다.
+    next.splice(index, 1);
+    return next;
+  }
   next[index] = hasFilters || otherKeys.length > 0 ? pkg : pkg.source;
   return next;
 }
@@ -78,13 +91,16 @@ export async function listPackageResources(
   agentDir: string,
   source: string,
   scope: "user" | "project",
+  /** 사용자 패키지를 이 프로젝트 덧씌우기까지 반영해 본다 (켜짐 여부가 프로젝트 기준) */
+  overlay = false,
 ): Promise<PackageResourceItem[]> {
-  const settingsManager = sdk.SettingsManager.create(cwd, agentDir, { projectTrusted: scope === "project" });
+  const settingsManager = sdk.SettingsManager.create(cwd, agentDir, { projectTrusted: scope === "project" || overlay });
   const resolved = await new sdk.DefaultPackageManager({ cwd, agentDir, settingsManager }).resolve(async () => "skip");
   const items: PackageResourceItem[] = [];
   for (const type of RESOURCE_TYPES) {
     for (const r of resolved[type] ?? []) {
-      if (r.metadata.origin !== "package" || r.metadata.source !== source || r.metadata.scope !== scope) continue;
+      // 덧씌우기가 있으면 Pi는 그 패키지를 project 범위로 보고하므로 범위는 따지지 않는다.
+      if (r.metadata.origin !== "package" || r.metadata.source !== source || (!overlay && r.metadata.scope !== scope)) continue;
       items.push({ type, path: r.path, pattern: relative(r.metadata.baseDir ?? dirname(r.path), r.path), enabled: r.enabled });
     }
   }
@@ -102,12 +118,15 @@ export async function setPackageFilter(
     changes: PackageFilterChange[];
     reset?: boolean;
     set?: Partial<Record<PackageResourceType, string[]>>;
+    /** 사용자 패키지를 이 프로젝트에서만 고른다 (프로젝트 settings의 autoload: false 항목) */
+    overlay?: boolean;
   },
 ): Promise<void> {
-  const settings = sdk.SettingsManager.create(cwd, agentDir, { projectTrusted: params.scope === "project" });
-  const current = params.scope === "project" ? settings.getProjectSettings() : settings.getGlobalSettings();
-  const next = applyPackageFilter(current.packages ?? [], params.source, params.changes, params.reset === true, params.set);
-  if (params.scope === "project") settings.setProjectPackages(next);
+  const project = params.scope === "project" || params.overlay === true;
+  const settings = sdk.SettingsManager.create(cwd, agentDir, { projectTrusted: project });
+  const current = project ? settings.getProjectSettings() : settings.getGlobalSettings();
+  const next = applyPackageFilter(current.packages ?? [], params.source, params.changes, params.reset === true, params.set, params.overlay === true);
+  if (project) settings.setProjectPackages(next);
   else settings.setPackages(next);
   await settings.flush();
   const [error] = settings.drainErrors();

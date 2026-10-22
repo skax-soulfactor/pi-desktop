@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HostInventory, InventoryItem } from "../../src/shared/api";
-import { compareRows, compareSummary, stateText } from "../../src/renderer/host-compare-view";
+import { bulkCopyable, compareRows, compareSummary, fileChanges, stateText } from "../../src/renderer/host-compare-view";
 
 const item = (kind: InventoryItem["kind"], name: string, digest?: string): InventoryItem => ({
   kind,
@@ -35,5 +35,33 @@ describe("compareRows", () => {
     expect(stateText("onlyA", "로컬", "WSL")).toBe("로컬에만");
     expect(stateText("onlyB", "로컬", "WSL")).toBe("WSL에만");
     expect(stateText("different", "a", "b")).toBe("내용 다름");
+  });
+});
+
+describe("fileChanges·bulkCopyable", () => {
+  const f = (path: string, text: string) => ({ path, contentBase64: btoa(String.fromCharCode(...new TextEncoder().encode(text))) });
+
+  it("새로 생김·바뀜·사라짐을 가리고 같은 파일은 뺀다", () => {
+    const from = [f("SKILL.md", "새 내용"), f("a.py", "same"), f("new.sh", "x")];
+    const to = [f("SKILL.md", "옛 내용"), f("a.py", "same"), f("old.txt", "y")];
+    // 경로 순서 (대소문자 구별 없이)
+    expect(fileChanges(from, to)).toEqual([
+      { path: "new.sh", change: "added", after: "x" },
+      { path: "old.txt", change: "removed", before: "y" },
+      { path: "SKILL.md", change: "changed", before: "옛 내용", after: "새 내용" },
+    ]);
+  });
+
+  it("파일 하나씩이면 이름이 달라도 짝짓고, 0바이트가 든 파일은 글로 보이지 않는다", () => {
+    expect(fileChanges([f("review.md", "b")], [f("other.md", "a")])).toEqual([{ path: "review.md", change: "changed", before: "a", after: "b" }]);
+    expect(fileChanges([{ path: "x.bin", contentBase64: btoa("a\0b") }], [])).toEqual([{ path: "x.bin", change: "added" }]);
+  });
+
+  it("방향에 맞게 옮길 수 있는 줄만 고른다", () => {
+    const a = inv("local", [item("skill", "only-a", "1"), item("skill", "same", "2"), item("prompt", "diff", "3"), item("extension", "x")]);
+    const b = inv("wsl", [item("skill", "same", "2"), item("prompt", "diff", "4"), item("skill", "only-b", "5"), item("extension", "x", "9")]);
+    const rows = compareRows(a, b);
+    expect(bulkCopyable(rows, "toB").map((r) => r.name)).toEqual(["only-a", "diff"]);
+    expect(bulkCopyable(rows, "toA").map((r) => r.name)).toEqual(["only-b", "diff"]);
   });
 });

@@ -49,6 +49,8 @@ import {
   type ModelsProbeResult,
   type ModelsExportResult,
   type ModelsImportParams,
+  type ModelsExportModelResult,
+  type ModelsImportModelParams,
   type SettingsMergeParams,
   type SettingsTarget,
   type SettingsWriteParams,
@@ -84,7 +86,9 @@ import { latestPiVersion, piStatus, piVersions } from "./pi-status";
 import { backupAgentDir, deleteAgentDir } from "./agent-data";
 import { agentDirOf, checkAuth, isProviderId, listProviders, removeCredential, setApiKey } from "./auth-store";
 import {
+  exportModel,
   exportProvider,
+  importModel,
   importProvider,
   probeEndpoint,
   readModelsFile,
@@ -367,6 +371,24 @@ export class AgentDaemon {
       }),
     );
 
+    peer.handle(Methods.modelsExportModel, (params): Promise<ModelsExportModelResult> => {
+      const p = requireStrings(params, ["providerId", "modelId"]) as { providerId: string; modelId: string };
+      return exportModel(agentDirOf(this.env), p.providerId, p.modelId).catch((e: unknown) => {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+      });
+    });
+
+    peer.handle(Methods.modelsImportModel, async (params) => {
+      const p = (params ?? {}) as Partial<ModelsImportModelParams>;
+      if (typeof p.providerId !== "string" || !p.model || typeof p.model !== "object") {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "providerId와 model이 필요합니다");
+      }
+      await importModel(agentDirOf(this.env), p.providerId, p.model, p.replace === true).catch((e: unknown) => {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+      });
+      return null;
+    });
+
     peer.handle(Methods.modelsImportProvider, async (params) => {
       const p = (params ?? {}) as Partial<ModelsImportParams>;
       if (typeof p.id !== "string" || !p.provider || typeof p.provider !== "object") {
@@ -383,7 +405,7 @@ export class AgentDaemon {
       if (p.scope !== "user" && p.scope !== "project") throw new JsonRpcError(ErrorCodes.InvalidParams, "scope는 user·project여야 합니다");
       // 사용자 범위는 작업 폴더가 없어도 된다 (데이터 폴더를 쓴다). 프로젝트 범위는 있어야 한다.
       if (typeof p.cwd !== "string" || !p.cwd) {
-        if (p.scope === "project") throw new JsonRpcError(ErrorCodes.InvalidParams, "프로젝트 범위에는 cwd가 필요합니다");
+        if (p.scope === "project" || p.overlay === true) throw new JsonRpcError(ErrorCodes.InvalidParams, "프로젝트 범위에는 cwd가 필요합니다");
         return { ...p, cwd: agentDirOf(this.env) };
       }
       return p;
@@ -392,7 +414,7 @@ export class AgentDaemon {
 
     peer.handle(Methods.packagesResources, async (params): Promise<PackageResourceItem[]> => {
       const p = packageParams(params);
-      return listPackageResources(await filterSdk(), p.cwd, agentDirOf(this.env), p.source, p.scope).catch(asInvalid);
+      return listPackageResources(await filterSdk(), p.cwd, agentDirOf(this.env), p.source, p.scope, p.overlay === true).catch(asInvalid);
     });
 
     peer.handle(Methods.packagesSetFilter, async (params) => {

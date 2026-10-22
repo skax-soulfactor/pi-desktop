@@ -15,6 +15,7 @@ import {
   type ImportedInspectResult,
   type ResourceExportResult,
   type ModelsExportResult,
+  type ModelsExportModelResult,
   type SettingsReadResult,
   type SettingsTarget,
   type PackageFilterChange,
@@ -334,8 +335,8 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       await conn(hostId).request(Methods.modelsImportProvider, { id, provider, ...(replace ? { replace: true } : {}) });
     },
   );
-  handle(IpcChannels.packageResources, (_event, hostId: string, cwd: string, source: string, scope: "user" | "project") =>
-    conn(hostId).request<PackageResourceItem[]>(Methods.packagesResources, { cwd, source, scope }, 120_000),
+  handle(IpcChannels.packageResources, (_event, hostId: string, cwd: string, source: string, scope: "user" | "project", overlay?: boolean) =>
+    conn(hostId).request<PackageResourceItem[]>(Methods.packagesResources, { cwd, source, scope, ...(overlay ? { overlay: true } : {}) }, 120_000),
   );
   handle(
     IpcChannels.setPackageFilter,
@@ -348,10 +349,11 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
       changes: PackageFilterChange[],
       reset: boolean,
       set?: PackageSetFilterParams["set"],
+      overlay?: boolean,
     ) => {
       await conn(hostId).request(
         Methods.packagesSetFilter,
-        { cwd, source, scope, changes, ...(reset ? { reset: true } : {}), ...(set ? { set } : {}) },
+        { cwd, source, scope, changes, ...(reset ? { reset: true } : {}), ...(set ? { set } : {}), ...(overlay ? { overlay: true } : {}) },
         60_000,
       );
     },
@@ -373,6 +375,12 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   handle(IpcChannels.settingsSchema, (_event, hostId: string) =>
     conn(hostId).request<Record<string, unknown> | null>(Methods.settingsSchema),
   );
+  handle(IpcChannels.modelsExportModel, (_event, hostId: string, providerId: string, modelId: string) =>
+    conn(hostId).request<ModelsExportModelResult>(Methods.modelsExportModel, { providerId, modelId }),
+  );
+  handle(IpcChannels.modelsImportModel, async (_event, hostId: string, providerId: string, model: Record<string, unknown>, replace: boolean) => {
+    await conn(hostId).request(Methods.modelsImportModel, { providerId, model, ...(replace ? { replace: true } : {}) });
+  });
   handle(IpcChannels.exportResource, (_event, hostId: string, kind: "skill" | "prompt" | "extension", path: string) =>
     conn(hostId).request<ResourceExportResult>(Methods.resourcesExport, { kind, path }, 120_000),
   );

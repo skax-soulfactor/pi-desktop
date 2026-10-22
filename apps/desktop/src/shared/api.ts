@@ -18,6 +18,7 @@ import type {
   ResourceWriteResult,
   ResourceExportResult,
   ModelsExportResult,
+  ModelsExportModelResult,
   PackageFilterChange,
   PackageResourceItem,
   SettingsReadResult,
@@ -401,10 +402,14 @@ export interface PiDesktopApi {
   exportResource(hostId: string, kind: "skill" | "prompt" | "extension", path: string): Promise<ResourceExportResult>;
   /** 다른 호스트로 옮길 models.json 프로바이더 (그대로 키 값인 apiKey·헤더는 뺀다) */
   modelsExport(hostId: string, id: string): Promise<ModelsExportResult>;
+  /** 다른 호스트로 옮길 모델 하나 (그대로 값인 헤더는 뺀다) */
+  modelsExportModel(hostId: string, providerId: string, modelId: string): Promise<ModelsExportModelResult>;
+  /** 받은 모델을 그 호스트의 같은 이름 프로바이더에 넣는다. replace면 같은 ID를 바꾼다 */
+  modelsImportModel(hostId: string, providerId: string, model: Record<string, unknown>, replace: boolean): Promise<void>;
   /** 받은 프로바이더를 그 호스트의 models.json에 쓴다. replace면 이미 있는 것을 바꾼다 (대상 키는 남김) */
   modelsImport(hostId: string, id: string, provider: Record<string, unknown>, replace: boolean): Promise<void>;
   /** 설정에 적힌 패키지 하나가 내놓는 리소스와 켜짐 여부 */
-  packageResources(hostId: string, cwd: string, source: string, scope: "user" | "project"): Promise<PackageResourceItem[]>;
+  packageResources(hostId: string, cwd: string, source: string, scope: "user" | "project", overlay?: boolean): Promise<PackageResourceItem[]>;
   /** 패키지 리소스를 켜고 끈다 (그 범위 settings.json의 패키지 필터). reset이면 필터를 먼저 지운다 */
   setPackageFilter(
     hostId: string,
@@ -415,6 +420,8 @@ export interface PiDesktopApi {
     reset: boolean,
     /** 종류별 배열을 통째로 적는다 (설치할 때 종류 빼기, 다른 호스트의 필터 옮기기) */
     set?: Partial<Record<"extensions" | "skills" | "prompts" | "themes", string[]>>,
+    /** 사용자 패키지를 이 프로젝트(cwd)에서만 고른다 (프로젝트 settings의 autoload: false 항목) */
+    overlay?: boolean,
   ): Promise<void>;
   /** 그 호스트의 settings.json (target이 없으면 사용자 범위) */
   settingsRead(hostId: string, target?: SettingsTarget): Promise<SettingsReadResult>;
@@ -503,6 +510,8 @@ export const IpcChannels = {
   exportResource: "pi:export-resource",
   modelsExport: "pi:models-export",
   modelsImport: "pi:models-import",
+  modelsExportModel: "pi:models-export-model",
+  modelsImportModel: "pi:models-import-model",
   settingsRead: "pi:settings-read",
   packageResources: "pi:package-resources",
   setPackageFilter: "pi:set-package-filter",
