@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.56)
+# Pi Desktop — 설계 문서 (v0.57)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -628,7 +628,7 @@ v0.1과 같다. Playground 스크립트도 Host Agent를 통해 **대상 호스�
   - macOS는 Gatekeeper 경고가 나고 자동 설치가 거부된다(Squirrel.Mac이 서명을 요구).
 - 자동 업데이트(앱 main `updater.ts`, electron-updater)
   - 배포처: GitHub Releases(`publish: github`, 공개 저장소라 토큰 없음). `publish`를 바꾸면 generic URL·S3 등도 쓸 수 있다.
-  - 확인 시점: 시작 15초 뒤, 6시간마다, 명령 팔레트 "업데이트 확인". 설치한 앱에서만 돌고, 개발 실행은 disabled다.
+  - 확인 시점: 시작 15초 뒤, 6시간마다, 명령 팔레트 "업데이트 확인". 설치한 앱에서만 돌고, 개발 실행과 로컬 빌드(버전 0.0.1)는 disabled다.
   - OS별 동작(`update-policy.ts`)
     - Windows·AppImage: 내려받아 두었다가 탭 바 배지 "다시 시작해 <버전> 설치"로 바꾼다. 앱을 끌 때도 설치한다.
     - 서명 없는 macOS·deb: "새 버전 <버전>"을 알리고 누르면 릴리스 페이지를 연다.
@@ -687,12 +687,32 @@ v0.1과 같다. Playground 스크립트도 Host Agent를 통해 **대상 호스�
   - Pi가 없는 상태로 띄운 개발 앱(`PI_DESKTOP_PI_CLI` 없이, 빈 `PI_CODING_AGENT_DIR`)에서 안내가 나왔다. 버튼을 누르자 설치 화면이 열렸고, 머리줄은 한 줄이었다.
   - WSL에서 "다시 확인" 뒤 "1.4.0 사용 가능", 상단 바에 "↑ 새 버전"이 나왔다.
 
+**구현 메모: v0.1.3 Linux 첫 사용 피드백 반영 (v0.57)**
+- Pi 설치 스크립트가 `execvp(3) failed`로 바로 끝나던 문제
+  - 원인: 로컬 셸이 OS와 상관없이 `powershell.exe`였다.
+  - `terminal-command.ts`: Windows는 PowerShell, macOS·Linux는 사용자의 로그인 셸(`$SHELL -l`, 없으면 `/bin/sh`)로 띄운다.
+- 제목줄·작업 표시줄에 앱 아이콘이 안 나오던 문제(KDE Wayland, AppImage)
+  - 원인: 설치본은 창 아이콘을 주지 않았다. Linux 실행 파일에는 아이콘이 없고, AppImage는 .desktop 파일도 없다.
+  - Linux 설치본도 `resources/icon.png`(extraResources)를 창 아이콘으로 준다. X11은 `_NET_WM_ICON`, Wayland는 xdg-toplevel-icon으로 전달된다.
+  - deb는 `desktopName: pi-desktop.desktop`과 `linux.syncDesktopName`으로 .desktop 파일 이름·`StartupWMClass`를 창의 app_id와 맞춘다.
+- 설치한 뒤에도 "Pi 없음"이 남던 문제
+  - 원인: 설치 명령은 셸 안에서 돌아 끝나도 터미널이 닫히지 않는다. 그래서 종료 코드로 끝을 알 수 없었고, 화면은 연결할 때 한 번만 Pi 상태를 읽었다.
+  - `Workspace.tsx`: Pi 관리에서 설치·업데이트·제거 명령을 보내면 3초마다 Pi 상태를 다시 읽는다. Pi 위치·버전이 바뀌면 상단 바를 갱신하고 멈춘다. 터미널을 닫으면 한 번 더 읽고 멈추며, 30분이 지나도 멈춘다.
+  - 사이드바: 기록은 Pi가 있다고 확인된 뒤에만 읽는다. 상태를 아직 모를 때(시작 직후, 제거 직후) 읽으면 데몬이 "설치된 Pi를 찾지 못했습니다"를 낸다. Pi를 지우면 남은 기록 목록을 치운다.
+- 로컬 빌드가 릴리스로 자동 업데이트되던 문제
+  - 원인: `npm run dist`로 만든 0.0.1 AppImage가 0.1.3을 내려받아, 끌 때 시험하던 빌드를 바꿔 버렸다.
+  - `update-policy.ts`(`isLocalBuild`): 저장소 버전(0.0.1) 그대로인 빌드는 업데이트를 확인하지 않는다. 릴리스 워크플로는 태그 버전으로 바꿔 만들므로 영향이 없다. `PI_DESKTOP_UPDATE_URL`로 시험할 때는 예외다.
+- 확인(CachyOS, KDE Wayland, AppImage)
+  - 제목줄과 작업 표시줄에 앱 아이콘이 나왔다.
+  - 설치 스크립트를 내려받아 보고 실행해 Pi를 설치했다. 제거한 뒤 다시 설치하자 상단 바가 "Pi 없음"에서 버전으로 저절로 바뀌고 기록이 나왔다.
+  - 실행 로그에 `pi:list-history` 오류와 업데이트 다운로드가 없었다.
+
 ### 4.12 내장 터미널 (신규, 공통 인프라)
 xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인, TUI 전용 확장 폴백, 사용자가 원할 때 진짜 `pi` TUI 열기다.
 
 **구현 메모 (M2, v0.23)**: 사용자 결정에 따라 터미널은 **Electron main에서 node-pty로** 띄운다. 데몬의 `pty.*`는 두지 않는다.
 - node-pty 1.1.0은 N-API라 Electron용으로 다시 빌드할 필요가 없고, Windows 사전 빌드를 포함한다.
-- 로컬은 찾은 Pi의 node와 cli.js로 직접(pi.cmd shim 없이), 셸은 PowerShell로 띄운다.
+- 로컬은 찾은 Pi의 node와 cli.js로 직접(pi.cmd shim 없이) 띄운다. 셸은 Windows면 PowerShell, macOS·Linux면 로그인 셸(`$SHELL -l`)이다(v0.57).
 - WSL은 `wsl.exe -d <배포판> --cd <폴더>`로 실행한다. Windows ConPTY가 WSL까지 감싸므로 크기 조정이 리눅스까지 전달된다(데몬 쪽 `script` 방식은 크기 조정이 안 된다).
 - 원격(SSH)은 M3에서 같은 방식(`ssh -t`)으로 붙인다.
 - 화면은 작업 영역 아래 도크(여러 탭, 접기)다. 열기는 명령 팔레트의 "터미널: pi 열기·셸 열기"다.
