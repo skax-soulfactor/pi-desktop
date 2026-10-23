@@ -104,7 +104,9 @@ function agentVersion(script: string): string {
 }
 
 // 개발·E2E 검증용: 지정한 포트로 Chrome DevTools Protocol을 연다. 일반 실행에서는 열지 않는다.
-if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT) {
+// 설치본은 환경 변수로 열지 않는다(보안 검토). CDP는 앱을 마음대로 조작할 수 있어서, 환경 변수 하나로
+// 몰래 열리지 않게 한다. 설치본을 검증할 때는 실행 인자 --remote-debugging-port=<포트>를 직접 준다.
+if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
   app.commandLine.appendSwitch("remote-debugging-port", process.env.PI_DESKTOP_REMOTE_DEBUG_PORT);
 }
 
@@ -151,7 +153,8 @@ function createWindow(): void {
     if (url !== mainWindow?.webContents.getURL()) event.preventDefault();
   });
 
-  if (process.env.ELECTRON_RENDERER_URL) {
+  // 개발 서버 주소는 개발 실행에서만 쓴다. 설치본이 환경 변수의 주소를 열면 그 페이지가 preload의 앱 API(명령 실행 등)를 갖게 된다.
+  if (process.env.ELECTRON_RENDERER_URL && !app.isPackaged) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
     void mainWindow.loadFile(join(here, "../renderer/index.html"));

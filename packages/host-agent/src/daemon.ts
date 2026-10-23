@@ -118,6 +118,7 @@ import { watchTree } from "./tree-watcher";
 import { Playground } from "./playground";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
 import { listPiModels } from "./pi-models";
+import { createToken, serverHandshake, writeToken } from "./handshake";
 import { AgentSession } from "./session";
 import { AGENT_VERSION } from "./version";
 
@@ -169,6 +170,8 @@ export class AgentDaemon {
   private updating = false;
   private readonly env: NodeJS.ProcessEnv;
   private readonly idleShutdownMs: number;
+  /** 연결 인증 토큰. listen에서 파일로 쓴 뒤 채워진다 */
+  private tokenReady: Promise<string> = new Promise(() => {});
 
   constructor(private readonly options: DaemonOptions = {}) {
     this.env = options.env ?? process.env;
@@ -186,6 +189,9 @@ export class AgentDaemon {
     mkdirSync(runDir(this.env), { recursive: true, mode: 0o700 });
     if (process.platform !== "win32") chmodSync(runDir(this.env), 0o700);
 
+    // 연결 인증 토큰 (handshake.ts). 소켓을 연 뒤에 파일로 쓰므로, 그 사이에 온 연결은 쓸 때까지 기다린다.
+    let tokenWritten: (token: string) => void = () => {};
+    this.tokenReady = new Promise((resolve) => (tokenWritten = resolve));
     const server = createServer((socket) => this.acceptClient(socket));
     const result = await tryListen(server, path);
     if (result === "in-use") {
@@ -199,6 +205,10 @@ export class AgentDaemon {
       }
     }
     this.server = server;
+    // 다른 데몬이 듣고 있을 때는 그 데몬의 토큰을 덮어쓰지 않도록, 소켓을 연 뒤에만 쓴다.
+    const token = createToken();
+    await writeToken(token, this.env);
+    tokenWritten(token);
     this.log(`데몬 시작 pid=${process.pid} socket=${path}`);
     this.scheduleIdleCheck();
     return true;
@@ -230,7 +240,29 @@ export class AgentDaemon {
     };
   }
 
+  /**
+   * 새 연결: 먼저 토큰으로 서로를 확인하고(handshake.ts), 통과하면 JSON-RPC 클라이언트로 받는다.
+   * 인증 없는 예전 연결기는 같은 사용자만 닿는 POSIX 소켓에서만 받는다.
+   */
   private acceptClient(socket: Socket): void {
+    socket.on("error", () => {});
+    void this.tokenReady
+      .then((token) => serverHandshake(socket, token, process.platform !== "win32"))
+      .then(
+        ({ rest, legacy }) => {
+          if (legacy) this.log("인증하지 않는 예전 연결기가 붙었습니다");
+          this.startClient(socket, rest);
+        },
+        (error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          // 살아 있는지만 보고 바로 끊는 연결(isAlive)은 남기지 않는다.
+          if (!message.includes("끊겼습니다")) this.log(`연결 거절: ${message}`);
+          socket.destroy();
+        },
+      );
+  }
+
+  private startClient(socket: Socket, rest: Buffer): void {
     const client: Client = {
       id: this.nextClientId++,
       socket,
@@ -243,7 +275,6 @@ export class AgentDaemon {
 
     const reader = createJsonlReader((record) => client.peer.receive(record));
     socket.on("data", (chunk: Buffer) => reader.push(chunk));
-    socket.on("error", () => {});
     socket.on("close", () => {
       client.peer.close();
       for (const off of client.watches.values()) off();
@@ -257,6 +288,9 @@ export class AgentDaemon {
     });
 
     this.registerHandlers(client);
+    // 인증 줄 뒤에 붙어 온 기록부터 처리하고, 인증하며 멈춰 둔 소켓을 다시 흐르게 한다.
+    if (rest.length > 0) reader.push(rest);
+    socket.resume();
   }
 
   private registerHandlers(client: Client): void {

@@ -152,6 +152,21 @@ GUI ──ssh──▶ host-agent connect ──unix socket──▶ host-agentd
 | `host-agent connect` (연결기) | SSH stdio와 데몬의 unix socket을 이어주기만 함. 데몬이 없으면 띄운 뒤 연결 | SSH 세션과 같이 죽음 |
 
 - 소켓 위치: `~/.pi-desktop/run/agentd.sock`, 권한 `0600`. 같은 사용자만 접근할 수 있다.
+- **구현 메모: 연결 상호 인증 (보안 검토, v0.60)**
+  - 문제: Windows의 이름 있는 파이프(`pi-desktop-agentd-<사용자>-<해시>`)는 이름을 짐작할 수 있고 0700 같은 폴더 보호가 없다. 같은 PC의 다른 사용자가 데몬보다 먼저 같은 이름의 파이프를 만들면, 앱이 그쪽에 붙어 API 키 저장 같은 요청을 보낼 수 있었다.
+  - 데몬은 소켓을 연 뒤 `run/agentd.token`(사용자만 읽음, POSIX 0600)에 무작위 토큰을 쓴다. 다른 데몬이 듣고 있으면 덮어쓰지 않는다.
+  - 연결 순서(`handshake.ts`, JSON-RPC 앞에 한 줄씩): 데몬 nonce → 연결기 nonce와 HMAC(토큰, "client:"+데몬 nonce) → 데몬 HMAC(토큰, "server:"+연결기 nonce).
+  - 연결기는 데몬이 증명하기 전에는 앱의 요청(stdin)을 넘기지 않는다. 증명이 틀리면 연결하지 않는다.
+  - 호환: POSIX에서는 인증 없는 예전 연결기·데몬도 받는다(0700 폴더라 같은 사용자뿐).
+  - Windows에서 인사가 없는 데몬이면 연결기가 `connector.unverified`를 먼저 앱에 쓴다. 앱은 `daemon.shutdown`만 보내 예전 데몬을 바꾼다(실행 중인 세션은 끝난다).
+  - 바꾼 뒤에도 확인되지 않으면 연결하지 않고 이유를 보인다. 이전 버전 앱은 Windows의 새 데몬에 붙지 못하므로 함께 업데이트해야 한다.
+  - 확인(dev:mock, Windows)
+    - 새 데몬과 인증해 연결됐다.
+    - 같은 이름의 파이프를 먼저 차지한 가짜 프로그램에는 `host.info`·`daemon.shutdown`만 갔고, 그 뒤로는 연결하지 않고 이유를 보였다.
+    - 가짜를 끄자 새 데몬으로 다시 붙었다.
+- 설치본에서는 개발용 환경 변수(`PI_DESKTOP_REMOTE_DEBUG_PORT`, `ELECTRON_RENDERER_URL`)를 쓰지 않는다(보안 검토, v0.60).
+  - CDP는 앱을 마음대로 조작할 수 있고, 개발 서버 주소의 페이지는 preload의 앱 API를 갖기 때문이다.
+  - 설치본을 검증할 때는 실행 인자 `--remote-debugging-port=<포트>`를 직접 준다.
 - 데몬은 호스트당 1개, 사용자당 1개다. 이미 떠 있으면 연결기는 그 데몬에 붙는다.
 - Windows에서는 연결기가 데몬을 **WMI(`Win32_Process.Create`)로** 띄운다. 직접 spawn이나 `cmd start`로 띄우면 앱(Electron)의 상속 가능한 핸들이 데몬까지 넘어가, 앱을 닫아도 그 자원이 풀리지 않는 것을 실험으로 확인했다(v0.6). WMI는 환경 변수를 통째로 대체하므로 연결기 환경 전체를 표준 입력으로 넘긴다.
 - 데몬 버전이 새 GUI와 맞지 않으면, 실행 중인 세션이 없을 때만 교체한다. 세션이 있으면 기존 데몬을 유지하고 GUI에 "작업이 끝나면 업데이트" 배지를 띄운다.
