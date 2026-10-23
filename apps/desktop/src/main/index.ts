@@ -27,6 +27,9 @@ import {
   type ProjectTrustInfo,
   type ResourceFile,
   type ResourceKind,
+  type ExtensionTemplate,
+  type PackageCreateParams,
+  type PackageCreateResult,
   type ResourceWriteResult,
   type FsSearchResult,
   type ProviderInfo,
@@ -563,8 +566,11 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   );
   handle(
     IpcChannels.createResource,
-    (_event, hostId: string, cwd: string, kind: ResourceKind, scope: "user" | "project", name: string) =>
-      conn(hostId).request<ResourceFile>(Methods.resourcesCreate, { cwd, kind, scope, name }),
+    (_event, hostId: string, cwd: string, kind: ResourceKind, scope: "user" | "project", name: string, template?: ExtensionTemplate) =>
+      conn(hostId).request<ResourceFile>(Methods.resourcesCreate, { cwd, kind, scope, name, ...(template ? { template } : {}) }),
+  );
+  handle(IpcChannels.createPackage, (_event, hostId: string, params: PackageCreateParams) =>
+    conn(hostId).request<PackageCreateResult>(Methods.resourcesCreatePackage, params),
   );
   handle(IpcChannels.deleteResource, (_event, hostId: string, path: string, kind: "prompt" | "skill" | "extension") =>
     conn(hostId).request<{ backup: string }>(Methods.resourcesDelete, { path, kind }),

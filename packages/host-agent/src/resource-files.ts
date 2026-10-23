@@ -1,15 +1,19 @@
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
-import type { ResourceFile, ResourceKind, ResourceWriteResult } from "@pi-desktop/host-protocol";
+import { homedir } from "node:os";
+import type { ExtensionTemplate, ResourceFile, ResourceKind, ResourceWriteResult } from "@pi-desktop/host-protocol";
+import { extensionSource } from "./extension-templates";
 
 /**
  * 리소스 파일 읽기·쓰기·만들기 (설계 §4.2~4.5, §5.7 ConfigService).
  *
- * 앱이 아무 파일이나 쓰지 못하도록, Pi가 리소스로 읽는 마크다운 파일만 다룬다.
+ * 앱이 아무 파일이나 쓰지 못하도록, Pi가 리소스로 읽는 파일만 다룬다.
  * - 데이터 폴더(~/.pi/agent) 안의 .md (프롬프트·스킬·AGENTS.md·SYSTEM.md 등). auth.json 같은 설정은 .md가 아니라 막힌다
  * - 작업 폴더나 그 상위 폴더의 .pi/ 안의 .md
  * - 작업 폴더나 그 상위 폴더에 바로 있는 AGENTS.md·CLAUDE.md
+ * - 확장 코드(.ts·.js 등): 데이터 폴더나 .pi/의 extensions/ 안
+ * - 앱이 만든 패키지 폴더(~/pi-packages) 안의 .md·코드·.json
  * 쓰기는 임시 파일에 쓴 뒤 바꿔치기하고, 덮어쓰기 전 내용을 파일마다 .bak 하나로 남긴다.
  * 백업은 사용자 저장소를 어지럽히지 않도록 앱 홈(~/.pi-desktop/resource-backups/)에 둔다.
  * 앱이 연 뒤에 파일이 바뀌었으면(수정 시각 비교) 덮어쓰지 않는다.
@@ -19,6 +23,12 @@ import type { ResourceFile, ResourceKind, ResourceWriteResult } from "@pi-deskto
 export const MAX_RESOURCE_BYTES = 512 * 1024;
 
 const CONTEXT_FILE_NAMES = new Set(["agents.md", "claude.md"]);
+const CODE_EXTENSIONS = new Set([".ts", ".js", ".mts", ".mjs", ".cts", ".cjs"]);
+
+/** 앱이 새 패키지를 만드는 폴더 (패키지 탭 "새 패키지") */
+export function defaultPackagesRoot(home: string = homedir()): string {
+  return join(home, "pi-packages");
+}
 
 function inside(child: string, parent: string): boolean {
   const rel = relative(resolve(parent), resolve(child));
@@ -38,9 +48,21 @@ function ancestors(cwd: string): string[] {
 }
 
 /** 이 경로를 리소스 파일로 다뤄도 되는지. 안 되면 이유 */
-export function resourcePathProblem(path: string, cwd: string, agentDir: string): string | undefined {
+export function resourcePathProblem(
+  path: string,
+  cwd: string,
+  agentDir: string,
+  packagesRoot: string = defaultPackagesRoot(),
+): string | undefined {
   const target = resolve(path);
-  if (extname(target).toLowerCase() !== ".md") return "마크다운(.md) 리소스 파일만 다룰 수 있습니다";
+  const ext = extname(target).toLowerCase();
+  if (inside(target, packagesRoot) && (ext === ".md" || ext === ".json" || CODE_EXTENSIONS.has(ext))) return undefined;
+  if (CODE_EXTENSIONS.has(ext)) {
+    if (inside(target, join(agentDir, "extensions"))) return undefined;
+    if (ancestors(cwd).some((dir) => inside(target, join(dir, ".pi", "extensions")))) return undefined;
+    return "확장 코드는 데이터 폴더나 .pi/의 extensions/ 안에서만 다룰 수 있습니다";
+  }
+  if (ext !== ".md") return "마크다운(.md) 리소스 파일과 확장 코드만 다룰 수 있습니다";
   if (inside(target, agentDir)) return undefined;
   for (const dir of ancestors(cwd)) {
     if (inside(target, join(dir, ".pi"))) return undefined;
@@ -119,9 +141,12 @@ export function newResource(
   name: string,
   cwd: string,
   agentDir: string,
+  template: ExtensionTemplate = "command",
 ): { path: string; content: string } {
   const base = scope === "user" ? agentDir : join(cwd, ".pi");
   switch (kind) {
+    case "extension":
+      return { path: join(base, "extensions", `${name}.ts`), content: extensionSource(name, template) };
     case "prompt":
       return {
         path: join(base, "prompts", `${name}.md`),
@@ -147,12 +172,13 @@ export async function createResourceFile(
   name: string,
   cwd: string,
   agentDir: string,
+  template?: ExtensionTemplate,
 ): Promise<ResourceFile> {
   if (kind !== "agents") {
     const problem = resourceNameProblem(name);
     if (problem) throw new Error(problem);
   }
-  const { path, content } = newResource(kind, scope, name, cwd, agentDir);
+  const { path, content } = newResource(kind, scope, name, cwd, agentDir, template);
   const written = await writeResourceFile(path, content, undefined, cwd, agentDir);
   return { path: written.path, content, mtimeMs: written.mtimeMs };
 }

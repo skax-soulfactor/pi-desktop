@@ -21,6 +21,8 @@ import {
   type ProjectTrustInfo,
   type TrustSetParams,
   type ResourceCreateParams,
+  type PackageCreateParams,
+  type PackageCreateResult,
   type ResourceImportParams,
   type ResourceImportResult,
   type ImportedInspectResult,
@@ -108,7 +110,7 @@ import { ensureBridge } from "./bridge";
 import { listDirectories, makeDirectory } from "./dir-list";
 import { listResources, type ResourceSdk } from "./resources";
 import { projectTrust, setProjectTrust, trustArgs, type TrustSdk } from "./trust";
-import { createResourceFile, readResourceFile, writeResourceFile } from "./resource-files";
+import { createResourceFile, defaultPackagesRoot, readResourceFile, writeResourceFile } from "./resource-files";
 import { importResource } from "./resource-import";
 import { deleteResource, inspectImported, moveToBackup, readImported, type DeletableKind } from "./import-manage";
 import { exportResource } from "./resource-export";
@@ -118,6 +120,8 @@ import { watchTree } from "./tree-watcher";
 import { Playground } from "./playground";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
 import { listPiModels } from "./pi-models";
+import { EXTENSION_TEMPLATES } from "./extension-templates";
+import { createPackage } from "./package-scaffold";
 import { createToken, serverHandshake, writeToken } from "./handshake";
 import { AgentSession } from "./session";
 import { AGENT_VERSION } from "./version";
@@ -834,12 +838,28 @@ export class AgentDaemon {
       return writeResourceFile(p.path, p.content, base, p.cwd, agentDirOf(this.env), backups).catch(asInvalid);
     });
 
+    peer.handle(Methods.resourcesCreatePackage, (params): Promise<PackageCreateResult> => {
+      const p = (params ?? {}) as Partial<PackageCreateParams>;
+      const include = Array.isArray(p.include) ? p.include : [];
+      const valid =
+        typeof p.name === "string" &&
+        (p.extensionTemplate === undefined || Object.hasOwn(EXTENSION_TEMPLATES, p.extensionTemplate)) &&
+        include.every((i) => typeof i?.path === "string" && ["prompt", "skill", "extension"].includes(i?.kind));
+      if (!valid) throw new JsonRpcError(ErrorCodes.InvalidParams, "name, extensionTemplate, include(path·kind)가 올바르지 않습니다");
+      return createPackage(
+        { name: p.name!.trim(), ...(p.description ? { description: p.description } : {}), ...(p.extensionTemplate ? { extensionTemplate: p.extensionTemplate } : {}), include },
+        agentDirOf(this.env),
+        defaultPackagesRoot(),
+      ).catch(asInvalid);
+    });
+
     peer.handle(Methods.resourcesCreate, (params): Promise<ResourceFile> => {
       const p = requireStrings(params, ["cwd", "kind", "scope"]) as unknown as ResourceCreateParams;
-      if (!["prompt", "skill", "agents"].includes(p.kind) || !["user", "project"].includes(p.scope)) {
-        throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 prompt·skill·agents, scope는 user·project여야 합니다");
+      if (!["prompt", "skill", "agents", "extension"].includes(p.kind) || !["user", "project"].includes(p.scope)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "kind는 prompt·skill·agents·extension, scope는 user·project여야 합니다");
       }
-      return createResourceFile(p.kind, p.scope, typeof p.name === "string" ? p.name.trim() : "", p.cwd, agentDirOf(this.env)).catch(
+      const template = p.template && Object.hasOwn(EXTENSION_TEMPLATES, p.template) ? p.template : undefined;
+      return createResourceFile(p.kind, p.scope, typeof p.name === "string" ? p.name.trim() : "", p.cwd, agentDirOf(this.env), template).catch(
         asInvalid,
       );
     });

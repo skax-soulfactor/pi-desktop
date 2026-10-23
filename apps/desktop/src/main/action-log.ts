@@ -96,6 +96,7 @@ export const LOGGED: Record<string, Describer> = {
     describe: ([hostId, , kind, scope, name]) => ({ hostId: str(hostId), summary: `리소스 만들기: ${str(kind)} ${str(name)} (${scope === "project" ? "프로젝트" : "사용자"})` }),
   },
   "pi:delete-resource": { describe: ([hostId, path]) => ({ hostId: str(hostId), summary: `리소스 삭제(백업으로 옮김): ${str(path)}` }) },
+  "pi:create-package": { describe: ([hostId, params]) => ({ hostId: str(hostId), summary: `새 패키지: ${str((params as { name?: unknown } | undefined)?.name)}` }) },
   "pi:data-backup": { describe: ([hostId]) => ({ hostId: str(hostId), summary: "Pi 데이터 백업" }) },
   "pi:data-delete": { describe: ([hostId]) => ({ hostId: str(hostId), summary: "Pi 데이터 삭제" }) },
   "pi:pi-update": {

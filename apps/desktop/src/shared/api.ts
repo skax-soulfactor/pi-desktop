@@ -15,6 +15,9 @@ import type {
   ProjectTrustInfo,
   ResourceFile,
   ResourceKind,
+  ExtensionTemplate,
+  PackageCreateParams,
+  PackageCreateResult,
   ResourceWriteResult,
   ResourceExportResult,
   ModelsExportResult,
@@ -504,7 +507,9 @@ export interface PiDesktopApi {
   readResource(hostId: string, cwd: string, path: string): Promise<ResourceFile>;
   /** baseMtime: 읽었을 때의 수정 시각. 그 뒤 바뀌었으면 거부된다. 없으면 새 파일이어야 한다 */
   writeResource(hostId: string, cwd: string, path: string, content: string, baseMtime?: number): Promise<ResourceWriteResult>;
-  createResource(hostId: string, cwd: string, kind: ResourceKind, scope: "user" | "project", name: string): Promise<ResourceFile>;
+  createResource(hostId: string, cwd: string, kind: ResourceKind, scope: "user" | "project", name: string, template?: ExtensionTemplate): Promise<ResourceFile>;
+  /** ~/pi-packages/<이름>에 새 Pi 패키지를 만든다 */
+  createPackage(hostId: string, params: PackageCreateParams): Promise<PackageCreateResult>;
   /** 프롬프트·스킬·확장을 지운다. 바로 지우지 않고 백업 폴더로 옮기며 그 위치를 돌려준다 */
   deleteResource(hostId: string, path: string, kind: "prompt" | "skill" | "extension"): Promise<{ backup: string }>;
 
@@ -594,6 +599,7 @@ export const IpcChannels = {
   readResource: "pi:read-resource",
   writeResource: "pi:write-resource",
   createResource: "pi:create-resource",
+  createPackage: "pi:create-package",
   deleteResource: "pi:delete-resource",
   piStatus: "pi:pi-status",
   piLatest: "pi:pi-latest",

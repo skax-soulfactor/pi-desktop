@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.61)
+# Pi Desktop — 설계 문서 (v0.62)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -773,6 +773,24 @@ xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인
   - 프로젝트 프롬프트를 만들어 "삭제 → 정말 삭제"하자 목록에서 빠지고 백업 폴더로 옮겨졌다.
   - pi-web-access README의 `<p><img></p>` 배너가 대체 글로 바뀌었다.
   - Pi 제거 뒤 세션 정리는 실제 제거로 확인하지 않았다.
+
+**구현 메모: 확장·패키지 만들기 (v0.62)**
+- 확장 템플릿(`extension-templates.ts`): 명령·툴·확인·빈 확장. Pi 문서·예제(hello.ts, permission-gate.ts)의 형태를 따른다.
+  - Pi가 넣어 주는 패키지(`@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`)만 import해, 설치·빌드 없이 jiti로 바로 읽힌다.
+  - `resources.create`에 `extension` 종류와 `template`을 더했다. 위치는 `<데이터 폴더 또는 .pi>/extensions/<이름>.ts`다.
+- 패키지 만들기(`resources.createPackage`, `package-scaffold.ts`): `~/pi-packages/<이름>`에 다음을 만든다.
+  - package.json: keywords `pi-package`, `files`, Pi 제공 패키지는 `peerDependencies: "*"`(docs/packages.md 권고)
+  - README(설치·게시 방법), .gitignore, 템플릿 확장
+  - 고른 리소스의 복사본(`resourceDeleteTarget`으로 파일·폴더를 정함). 복사할 것을 먼저 모두 확인해, 반쯤 만든 패키지가 남지 않게 한다.
+- 편집 허용 범위(`resourcePathProblem`): extensions/ 안의 확장 코드와 `~/pi-packages` 안의 .md·코드·.json을 더했다. auth.json 같은 설정은 여전히 막힌다.
+- 화면
+  - 확장 탭 "새 확장"(템플릿 선택). 직접 둔 확장 코드에 "편집"이 보인다.
+  - 패키지 탭 "새 패키지 만들기"(이름·설명·템플릿·넣을 리소스). 만든 뒤 편집·위치 열기·"이 호스트에 설치"(`pi install <폴더>`)를 할 수 있다.
+  - 만든 결과는 리소스 창 상태에 두어, 편집기를 열었다 돌아와도 남는다.
+- 확인(dev:mock, CDP)
+  - 명령 템플릿 확장을 만들고 /reload 뒤 `/이름`을 실행하자 알림이 떴다.
+  - 툴 템플릿은 dev:mock이 `--tools`로 툴을 정해 두어 세션에서는 켜지지 않는다. 같은 mock 모델로 `pi -p`에서 호출해 결과를 확인했다.
+  - 패키지를 만들어 확장을 편집하고 "이 호스트에 설치"로 설치했다. /reload 뒤 패키지의 명령이 실행됐다. 시험 패키지와 설정은 지웠다.
 
 ## 5. 상세 설계 포인트
 

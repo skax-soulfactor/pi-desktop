@@ -94,6 +94,8 @@ export const Methods = {
   resourcesRead: "resources.read",
   resourcesWrite: "resources.write",
   resourcesCreate: "resources.create",
+  /** ~/pi-packages/<이름>에 새 Pi 패키지를 만든다 (package.json·확장·고른 리소스 복사) */
+  resourcesCreatePackage: "resources.createPackage",
   /** 받은 스킬 폴더·프롬프트 파일을 사용자·프로젝트 범위에 쓴다 (개별 가져오기) */
   resourcesImport: "resources.import",
   /** 다른 호스트로 복사할 스킬 폴더·프롬프트 파일을 읽는다 */
@@ -720,7 +722,28 @@ export interface ResourceWriteResult {
   mtimeMs: number;
 }
 
-export type ResourceKind = "prompt" | "skill" | "agents";
+export type ResourceKind = "prompt" | "skill" | "agents" | "extension";
+
+/** 새 확장의 처음 코드 종류 (extension-templates.ts) */
+export type ExtensionTemplate = "command" | "tool" | "guard" | "blank";
+
+/** 새 패키지 만들기 (리소스 창 패키지 탭) */
+export interface PackageCreateParams {
+  /** 패키지 이름 = 폴더 이름 = npm 이름 (소문자·숫자·하이픈) */
+  name: string;
+  description?: string;
+  /** 넣을 확장의 처음 코드. 없으면 확장 없이 만든다 */
+  extensionTemplate?: ExtensionTemplate;
+  /** 함께 넣을 기존 리소스 (복사한다. 원본은 그대로) */
+  include: Array<{ path: string; kind: "prompt" | "skill" | "extension" }>;
+}
+
+export interface PackageCreateResult {
+  /** 만든 패키지 폴더 (~/pi-packages/<이름>) */
+  dir: string;
+  /** 만든 파일들 (폴더 기준 상대 경로) */
+  files: string[];
+}
 
 export interface ResourceImportParams {
   cwd: string;
@@ -774,8 +797,10 @@ export interface ResourceCreateParams {
   kind: ResourceKind;
   /** user: 데이터 폴더, project: 작업 폴더의 .pi/ (AGENTS.md는 작업 폴더) */
   scope: "user" | "project";
-  /** 프롬프트·스킬 이름 (소문자·숫자·하이픈). AGENTS.md는 쓰지 않는다 */
+  /** 프롬프트·스킬·확장 이름 (소문자·숫자·하이픈). AGENTS.md는 쓰지 않는다 */
   name: string;
+  /** 확장의 처음 코드 (기본: command) */
+  template?: ExtensionTemplate;
 }
 
 /** 리소스가 어디서 왔는지 */
