@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.58)
+# Pi Desktop — 설계 문서 (v0.59)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -728,6 +728,22 @@ xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인
 - 확인(Linux, 빌드한 앱을 CDP로 조작): `Ctrl+Shift+C`와 선택이 있을 때의 `Ctrl+C`로 복사됐다. `Ctrl+V`·`Ctrl+Shift+V`·메뉴 붙여넣기는 한 번씩만 입력됐다. 선택이 없을 때 `Ctrl+C`는 `sleep 30`을 멈췄다.
 - 글꼴: 기본 고정폭 글꼴 뒤에 흔한 Nerd Font 이름들을 둔다(`TERMINAL_FONTS`). 기본 글꼴에 없는 아이콘(사설 영역, `eza --icons`·starship 등)이 설치된 Nerd Font로 그려진다. 일반 글자는 예전 글꼴 그대로다.
   - 확인(Linux, MesloLGS Nerd Font 설치): `\uf313`·`\ue7a8`·`\uf07b`·`\uf15b`와 프롬프트의 화살표가 네모 대신 아이콘으로 보였다.
+
+**구현 메모: 설정 폼의 모델 선택과 세션 새로고침 (v0.59)**
+- 모델 목록(`pi.models`, `pi-models.ts`): 데몬이 `pi --list-models` 표를 읽어 프로바이더·모델 ID를 돌려준다.
+  - 인증이 있는 프로바이더의 모델과 models.json의 사용자 정의 프로바이더가 들어간다.
+  - SDK의 ModelRegistry는 내부 런타임(ModelRuntime)을 만들어야 해서 CLI 출력을 쓴다.
+- 설정 폼: `defaultProvider`·`defaultModel`을 선택 목록으로 보인다(`modelChoices`). 모델은 고른 프로바이더의 것만 나온다.
+  - 목록에 없는 값은 "(목록에 없음)"으로 남는다. "직접 입력…"으로 글자 칸을 쓸 수 있다.
+  - 목록을 못 읽으면(예전 데몬, 인증 없음) 이유를 보이고 글자 칸을 쓴다.
+- 세션 새로고침: Pi는 세션을 시작할 때 모델 스냅샷을 만들고, RPC `get_available_models`는 그것만 준다(`modelRuntime.getAvailableSnapshot()`).
+  - RPC에 다시 읽는 명령이 없고, Pi의 reload(`/desktop:reload`)도 설정·리소스·확장만 다시 읽는다.
+  - 그래서 세션을 연 뒤 로그인하면 `/model`에 예전 모델만 보였다.
+  - 확인(`session-refresh.ts`): auth.json에 자격 증명이 있는데 세션 모델에 없는 프로바이더가 있으면 배너를 띄운다. 세션 시작, 창 포커스, Pi 관리를 닫을 때, 30초마다 본다.
+  - "세션 새로고침"(`restartSession`): Pi를 끄고 같은 세션 파일로 다시 띄운 뒤 대화를 다시 그린다. 파일이 아직 없으면 같은 폴더에 새 세션을 연다.
+- 확인(dev:mock, CDP)
+  - WSL 설정 폼에 anthropic·openrouter와 그 모델이 나왔고, 프로바이더를 바꾸면 모델 목록이 바뀌었다. 로컬은 mock 목록이 나왔다.
+  - 로컬 mock 세션에서 시험 키로 openai를 등록하자 배너가 떴다. 새로고침 뒤 세션 모델에 openai가 들어가고 대화가 이어졌다. 시험 키는 지웠다.
 
 ## 5. 상세 설계 포인트
 
