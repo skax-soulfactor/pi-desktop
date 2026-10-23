@@ -60,6 +60,9 @@ const STALE_CHECK_MS = 30_000;
  * WSL이면 wsl.exe를 거쳐 띄운다. 연결기는 앱과 함께 죽지만 데몬과 Pi 세션은 남는다.
  * 연결기가 끊기면 지수 백오프로 다시 붙는다.
  */
+/** 신원을 확인하지 못한 데몬에 끄기를 요청하고 기다리는 시간 */
+const UNVERIFIED_SHUTDOWN_MS = 5000;
+
 export class HostConnection {
   private child: ChildProcessWithoutNullStreams | undefined;
   private peer: JsonRpcPeer | undefined;
@@ -74,6 +77,13 @@ export class HostConnection {
   /** 교체를 시도한 번들의 빌드 식별자 (되풀이 방지) */
   private replaceTriedFor: string | undefined;
   private staleTimer: ReturnType<typeof setInterval> | undefined;
+  /**
+   * 신원을 확인하지 못한 데몬(Windows의 인증 없는 예전 데몬)을 끄려고 이미 한 번 시도했는지.
+   * 끈 뒤에도 또 확인되지 않으면 다른 프로그램이 파이프 이름을 차지한 것일 수 있어 연결하지 않는다.
+   */
+  private unverifiedShutdownTried = false;
+  /** 연결하지 않기로 한 이유 (신원 확인 실패). 다시 붙을 때까지 연결 상태에 보인다 */
+  private blockedReason: string | undefined;
 
   constructor(private readonly options: HostConnectionOptions) {}
 
@@ -143,6 +153,13 @@ export class HostConnection {
       defaultTimeoutMs: 120_000,
     });
     this.peer = peer;
+    // 연결기가 데몬의 신원을 확인하지 못했다고 알리면(handshake.ts), 이 연결로는 끄기 요청 말고는 보내지 않는다.
+    // 가짜 데몬은 응답하지 않을 수 있으므로 host.info 응답을 기다리지 않고 곧바로 처리한다.
+    let unverified = false;
+    peer.on(Notifications.connectorUnverified, () => {
+      unverified = true;
+      void this.handleUnverified(peer, child);
+    });
     peer.on(Notifications.sessionEvent, (p) => this.options.onSessionEvent(p as SessionEventNotification));
     peer.on(Notifications.sessionExit, (p) => this.options.onSessionExit(p as SessionExitNotification));
     peer.on(Notifications.sessionUiResolved, (p) => this.options.onUiResolved(p as SessionUiResolvedNotification));
@@ -173,13 +190,17 @@ export class HostConnection {
         this.scheduleReconnect();
         return;
       }
-      this.setState({ status: "disconnected", reason: lastLines(stderr) || `연결기 종료 (code ${code})` });
+      const reason = this.blockedReason ?? (lastLines(stderr) || `연결기 종료 (code ${code})`);
+      this.blockedReason = undefined;
+      this.setState({ status: "disconnected", reason });
       this.scheduleReconnect();
     });
 
     peer
       .request<HostInfo>(Methods.hostInfo, undefined, 60_000)
       .then(async (host) => {
+        if (unverified) return;
+        this.unverifiedShutdownTried = false;
         const agentUpdate = await this.checkAgent(peer, spec.agentBuild, host);
         if (agentUpdate === "replacing") return;
         this.retryDelay = RECONNECT_MIN_MS;
@@ -190,6 +211,24 @@ export class HostConnection {
         for (const resolve of waiters) resolve();
       })
       .catch(() => child.kill());
+  }
+
+  /**
+   * 신원을 확인하지 못한 데몬: 인증을 모르는 예전 데몬이면 끄고 새 번들로 다시 띄운다(실행 중인 세션도 끝난다).
+   * 이미 한 번 껐는데도 또 그렇다면, 다른 사용자의 프로그램이 같은 이름의 파이프를 쓰고 있을 수 있으므로 연결하지 않는다.
+   */
+  private async handleUnverified(peer: JsonRpcPeer, child: ChildProcessWithoutNullStreams): Promise<void> {
+    if (this.unverifiedShutdownTried) {
+      this.blockedReason =
+        "Host Agent 데몬의 신원을 확인할 수 없어 연결하지 않았습니다. 다른 사용자나 프로그램이 같은 이름의 파이프를 쓰고 있을 수 있습니다. PC를 다시 시작한 뒤 다시 열어 보세요.";
+      child.kill();
+      return;
+    }
+    this.unverifiedShutdownTried = true;
+    this.replacing = true;
+    await peer.request(Methods.daemonShutdown, undefined, UNVERIFIED_SHUTDOWN_MS).catch(() => {});
+    // 예전 데몬이면 꺼지면서 연결기도 끝난다. 응답이 없으면 직접 끊고 다시 붙는다.
+    if (this.child === child) child.kill();
   }
 
   /**
