@@ -18,6 +18,7 @@ import type {
   ExtensionTemplate,
   PackageCreateParams,
   PackageCreateResult,
+  MyPackageInfo,
   ResourceWriteResult,
   ResourceExportResult,
   ModelsExportResult,
@@ -510,6 +511,10 @@ export interface PiDesktopApi {
   createResource(hostId: string, cwd: string, kind: ResourceKind, scope: "user" | "project", name: string, template?: ExtensionTemplate): Promise<ResourceFile>;
   /** ~/pi-packages/<이름>에 새 Pi 패키지를 만든다 */
   createPackage(hostId: string, params: PackageCreateParams): Promise<PackageCreateResult>;
+  /** ~/pi-packages의 내 패키지 목록 */
+  listMyPackages(hostId: string): Promise<MyPackageInfo[]>;
+  /** 내 패키지를 지운다 (백업 폴더로 옮기고 그 위치를 돌려준다) */
+  deleteMyPackage(hostId: string, folder: string): Promise<{ backup: string }>;
   /** 프롬프트·스킬·확장을 지운다. 바로 지우지 않고 백업 폴더로 옮기며 그 위치를 돌려준다 */
   deleteResource(hostId: string, path: string, kind: "prompt" | "skill" | "extension"): Promise<{ backup: string }>;
 
@@ -600,6 +605,8 @@ export const IpcChannels = {
   writeResource: "pi:write-resource",
   createResource: "pi:create-resource",
   createPackage: "pi:create-package",
+  listMyPackages: "pi:list-my-packages",
+  deleteMyPackage: "pi:delete-my-package",
   deleteResource: "pi:delete-resource",
   piStatus: "pi:pi-status",
   piLatest: "pi:pi-latest",

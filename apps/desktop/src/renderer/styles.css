@@ -3201,3 +3201,18 @@ details > summary.settings-section {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* 내가 만든 패키지 (리소스 창 패키지 탭) */
+.my-packages {
+  margin-bottom: 12px;
+}
+
+.my-package-edit {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.my-package-edit select {
+  max-width: 200px;
+}

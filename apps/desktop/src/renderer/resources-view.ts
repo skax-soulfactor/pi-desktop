@@ -99,6 +99,23 @@ export const EXTENSION_TEMPLATE_LABELS: ReadonlyArray<readonly [ExtensionTemplat
   ["blank", "빈 확장"],
 ];
 
+/** 비교용 경로: 구분자를 /로, 끝의 /를 빼고, Windows 경로(드라이브 문자)는 대소문자를 무시한다 */
+function samePathKey(path: string): string {
+  const unified = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  return /^[A-Za-z]:\//.test(unified) ? unified.toLowerCase() : unified;
+}
+
+/** 내 패키지 폴더가 설정에 설치되어 있으면 그 패키지 (로컬 경로 설치는 installedPath가 그 폴더다) */
+export function installedPackageFor<T extends { installedPath?: string }>(dir: string, packages: readonly T[]): T | undefined {
+  const key = samePathKey(dir);
+  return packages.find((p) => p.installedPath !== undefined && samePathKey(p.installedPath) === key);
+}
+
+/** 내 패키지에서 앱으로 열어 고칠 수 있는 파일 */
+export function editablePackageFiles(files: readonly string[]): string[] {
+  return files.filter((f) => /\.(md|json|ts|js|mts|mjs|cts|cjs)$/i.test(f));
+}
+
 /** 폴더 경로에 이름을 붙인다. 그 경로가 쓰는 구분자(Windows면 \)를 따른다 */
 export function joinPath(dir: string, ...parts: string[]): string {
   const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/";
