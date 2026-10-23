@@ -19,7 +19,18 @@ export function installArgs(name: string, version: string | undefined, scope: Pa
   return ["install", `npm:${name}${version ? `@${version}` : ""}`, ...(scope === "project" ? ["-l"] : [])];
 }
 
-/** 설치된 패키지 소스 (설정에 적힌 그대로) 제거·업데이트 인자 */
+/**
+ * pi remove·update에 넘길 패키지 소스.
+ * 로컬 경로로 설치한 패키지는 설정 파일 기준 상대 경로(예: ..\..\pi-packages\x)로 저장되는데,
+ * pi는 명령으로 받은 상대 경로를 지금 폴더 기준으로 풀어 "No matching package found"가 된다.
+ * 그래서 로컬 경로 소스는 설치된 절대 경로를 넘긴다. npm·git·URL 소스는 그대로 둔다.
+ */
+export function commandSource(pkg: { source: string; installedPath?: string }): string {
+  const remote = /^(npm:|git:|git\+|https?:|ssh:|git@)/i.test(pkg.source);
+  return !remote && pkg.installedPath ? pkg.installedPath : pkg.source;
+}
+
+/** 설치된 패키지 소스 (commandSource로 고른 것) 제거·업데이트 인자 */
 export function removeArgs(source: string, scope: PackageScope): string[] {
   return ["remove", source, ...(scope === "project" ? ["-l"] : [])];
 }
