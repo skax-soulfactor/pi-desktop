@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.65)
+# Pi Desktop — 설계 문서 (v0.66)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -823,6 +823,18 @@ xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인
   - CLI: 저장된 상대 경로로는 "No matching"이었고, 절대 경로로는 지워졌다.
   - 앱: 다른 작업 폴더의 세션에서 "내가 만든 패키지"의 설치 해제와 설정 목록의 "정말 제거"가 모두 설정에서 패키지를 뺐다.
 - 내가 만든 패키지 줄: 파일 고르기·편집·설치·위치 열기·삭제를 한 줄(`my-package-actions`, 가운데 맞춤)에 둔다.
+
+**구현 메모: Windows bash 출력 한글 깨짐 (v0.66)**
+- 원인: Pi는 bash 출력을 UTF-8(`TextDecoder`)로 읽는다. 그런데 한국어 Windows의 기본 명령(findstr·tasklist 등)은 콘솔 코드 페이지(CP949)로 출력해 글자가 깨졌다.
+- Pi 설정 `shellCommandPrefix`에 `chcp.com 65001`을 넣으면 고쳐진다. 사용자 설정 파일은 고치지 않고 bridge 확장이 같은 일을 한다(`bridge.ts`).
+  - 모델의 bash 툴: `tool_call`에서 실행할 명령 앞에 `chcp.com 65001 > /dev/null 2>&1`을 붙인다.
+  - 입력창의 `!명령`(RPC `bash`): `user_bash`에서 접두사를 붙이는 실행기(`createLocalBashOperations`를 감쌈)를 넘긴다.
+  - 대화에 남는 명령은 원래 것이다.
+  - 조건: Windows이고 `pi.getSettings().shellCommandPrefix`가 비어 있을 때만 붙인다.
+- 명령마다 새 콘솔(`windowsHide`)에서 돌기 때문에, Pi 프로세스에서 chcp를 한 번 실행해서는 바뀌지 않았다(실험으로 확인).
+- 확인
+  - dev:mock에서 bash 툴과 `!명령`으로 `findstr`·`tasklist`를 실행했다. 출력이 깨지지 않았고(안내 문구는 영어), 툴 카드에는 원래 명령이 보였다.
+  - 실제 Pi 테스트(`real-pi-bridge.test.ts`, Windows만): `!명령` 출력에 깨진 글자(U+FFFD)가 없다.
 
 ## 5. 상세 설계 포인트
 

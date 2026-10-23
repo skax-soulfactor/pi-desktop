@@ -10,14 +10,45 @@ import { join } from "node:path";
  * 그래서 데몬이 Pi를 띄울 때 이 작은 확장을 `-e`로 넣는다. 사용자 설정에는 기록하지 않는다.
  * 앱은 리소스를 저장한 뒤 `/desktop:reload`를 prompt로 보내 실행 중인 세션에 반영한다.
  *
- * 확장은 그 호스트의 Pi가 jiti로 불러오므로, 다른 모듈을 import하지 않는 TypeScript 한 파일로 둔다.
+ * 확장은 그 호스트의 Pi가 jiti로 불러오므로, Pi가 넣어 주는 패키지 말고는 import하지 않는 TypeScript 한 파일로 둔다.
+ *
+ * Windows 한글 출력: Pi는 bash 출력을 UTF-8로 읽는데, 한국어 Windows의 기본 명령(findstr·tasklist 등)은
+ * CP949로 출력해 글자가 깨진다. 사용자가 shellCommandPrefix를 정하지 않았으면 bash 명령마다 앞에
+ * `chcp.com 65001`을 붙인다. 명령마다 새 콘솔에서 돌아 한 번만 바꿔서는 안 된다.
+ * - 모델의 bash 툴: tool_call에서 입력 명령을 바꾼다
+ * - 입력창의 !명령(RPC bash): user_bash에서 같은 일을 하는 실행기를 넘긴다 (기록되는 명령은 원래 것)
  */
 
 /** 앱이 보내는 명령 이름 (/desktop:reload) */
 export const RELOAD_COMMAND = "desktop:reload";
 
+/** Windows bash 명령 앞에 붙여 콘솔 출력을 UTF-8로 바꾸는 줄. 실행에만 붙고, 대화에 남는 명령(툴 인자·!명령)은 원래 것이다 */
+export const UTF8_PREFIX = "chcp.com 65001 > /dev/null 2>&1";
+
 export const BRIDGE_SOURCE = `// Pi Desktop이 Pi를 띄울 때 -e로 넣는 확장입니다. 직접 고치지 마세요 (앱이 다시 씁니다).
+const UTF8_PREFIX = ${JSON.stringify(UTF8_PREFIX)};
+
 export default function (pi: any) {
+  // Windows에서 사용자가 shellCommandPrefix를 정하지 않았으면 bash 출력을 UTF-8로 받는다 (한글 깨짐 방지).
+  const useUtf8 = () => process.platform === "win32" && !pi.getSettings?.()?.shellCommandPrefix;
+
+  pi.on("tool_call", async (event: any) => {
+    if (event.toolName !== "bash" || !useUtf8()) return undefined;
+    const command = String(event.input?.command ?? "");
+    if (!command.startsWith(UTF8_PREFIX)) event.input.command = UTF8_PREFIX + "\\n" + command;
+    return undefined;
+  });
+
+  pi.on("user_bash", async () => {
+    if (!useUtf8()) return undefined;
+    const sdk: any = await import("@earendil-works/pi-coding-agent").catch(() => undefined);
+    if (!sdk?.createLocalBashOperations) return undefined;
+    const local = sdk.createLocalBashOperations({ shellPath: pi.getSettings?.()?.shellPath });
+    return {
+      operations: { exec: (command: string, cwd: string, options: any) => local.exec(UTF8_PREFIX + "\\n" + command, cwd, options) },
+    };
+  });
+
   pi.registerCommand("${RELOAD_COMMAND}", {
     description: "Pi Desktop: AGENTS.md·프롬프트·스킬·확장을 다시 불러옵니다",
     handler: async (_args: string, ctx: any) => {

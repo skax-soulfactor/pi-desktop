@@ -64,4 +64,12 @@ describe("bridge 확장 (실제 Pi)", () => {
     expect(await commandNames()).toContain("fresh");
     expect(fixture.llm.requests.length).toBe(requestsBefore);
   });
+
+  // 한국어 Windows의 기본 명령은 CP949로 출력해 UTF-8로 읽으면 깨진다. bridge가 chcp 65001을 붙인다.
+  it.skipIf(process.platform !== "win32")("Windows에서 !명령(RPC bash)의 기본 명령 출력이 깨지지 않는다", async () => {
+    const response = await send<{ success: boolean; data?: { output?: string } }>({ type: "bash", command: "findstr; echo 한글" });
+    expect(response.success).toBe(true);
+    expect(response.data?.output ?? "").toContain("한글");
+    expect(response.data?.output ?? "").not.toContain("�");
+  });
 });
