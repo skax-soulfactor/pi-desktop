@@ -110,7 +110,7 @@ import { listResources, type ResourceSdk } from "./resources";
 import { projectTrust, setProjectTrust, trustArgs, type TrustSdk } from "./trust";
 import { createResourceFile, readResourceFile, writeResourceFile } from "./resource-files";
 import { importResource } from "./resource-import";
-import { inspectImported, moveToBackup, readImported } from "./import-manage";
+import { deleteResource, inspectImported, moveToBackup, readImported, type DeletableKind } from "./import-manage";
 import { exportResource } from "./resource-export";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
@@ -791,6 +791,15 @@ export class AgentDaemon {
       const p = importedTarget(params);
       const path = (params as { path?: unknown }).path;
       return readImported(p.target, p.kind, typeof path === "string" ? path : "", agentDirOf(this.env)).catch(asInvalid);
+    });
+
+    peer.handle(Methods.resourcesDelete, async (params): Promise<{ backup: string }> => {
+      const { path, kind } = (params ?? {}) as { path?: unknown; kind?: unknown };
+      if (typeof path !== "string" || (kind !== "prompt" && kind !== "skill" && kind !== "extension")) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "path와 kind(prompt|skill|extension)가 필요합니다");
+      }
+      const backups = join(agentHome(this.env), "resource-backups", "deleted");
+      return { backup: await deleteResource(path, kind as DeletableKind, agentDirOf(this.env), backups).catch(asInvalid) };
     });
 
     peer.handle(Methods.resourcesRemoveImported, async (params): Promise<{ backup: string }> => {

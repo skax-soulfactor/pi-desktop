@@ -114,6 +114,7 @@ const api: PiDesktopApi = {
   writeResource: (hostId, cwd, path, content, baseMtime) =>
     ipcRenderer.invoke(IpcChannels.writeResource, hostId, cwd, path, content, baseMtime),
   createResource: (hostId, cwd, kind, scope, name) => ipcRenderer.invoke(IpcChannels.createResource, hostId, cwd, kind, scope, name),
+  deleteResource: (hostId, path, kind) => ipcRenderer.invoke(IpcChannels.deleteResource, hostId, path, kind),
   onConnection: (listener) => subscribe(IpcChannels.connectionChanged, listener),
   onSessionEvent: (listener) => subscribe(IpcChannels.sessionEvent, listener),
   onSessionExit: (listener) => subscribe(IpcChannels.sessionExit, listener),

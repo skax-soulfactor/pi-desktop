@@ -12,6 +12,7 @@ import {
   type PackageScope,
 } from "./market-view";
 import { Markdown } from "./markdown/Markdown";
+import { readmeForDisplay } from "./readme-view";
 import { GithubImport } from "./GithubImport";
 
 interface Props {
@@ -331,7 +332,7 @@ function PackageDetail({
         "지금 세션에 반영"으로 반영합니다. 프로젝트 범위는 그 폴더를 신뢰해야 불러옵니다.
       </p>
       {error && <div className="banner error">{error}</div>}
-      <div className="market-readme">{detail.readme ? <Markdown text={detail.readme} /> : <p className="muted">README가 없습니다.</p>}</div>
+      <div className="market-readme">{detail.readme ? <Markdown text={readmeForDisplay(detail.readme)} /> : <p className="muted">README가 없습니다.</p>}</div>
     </div>
   );
 }

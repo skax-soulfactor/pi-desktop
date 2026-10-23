@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.60)
+# Pi Desktop — 설계 문서 (v0.61)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -759,6 +759,20 @@ xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인
 - 확인(dev:mock, CDP)
   - WSL 설정 폼에 anthropic·openrouter와 그 모델이 나왔고, 프로바이더를 바꾸면 모델 목록이 바뀌었다. 로컬은 mock 목록이 나왔다.
   - 로컬 mock 세션에서 시험 키로 openai를 등록하자 배너가 떴다. 새로고침 뒤 세션 모델에 openai가 들어가고 대화가 이어졌다. 시험 키는 지웠다.
+
+**구현 메모: 리소스 삭제·Marketplace README·Pi 제거 뒤 세션 정리 (v0.61)**
+- 리소스 삭제(`resources.delete`, `import-manage.ts`의 `resourceDeleteTarget`)
+  - 지울 대상: 프롬프트는 `prompts/` 바로 아래 .md, 스킬은 `skills/<이름>/SKILL.md`의 폴더(또는 `skills/` 바로 아래 .md), 확장은 `extensions/` 바로 아래 파일·폴더(또는 `extensions/<이름>/index.ts`의 폴더).
+  - 데이터 폴더나 프로젝트 `.pi` 안의 것만 받는다. 바로 지우지 않고 `~/.pi-desktop/resource-backups/deleted`로 옮긴다.
+  - 화면은 사용자·프로젝트 범위의 직접 둔 것만 "삭제"를 보이고(`isDeletable`), 한 번 더 눌러야 지운다.
+- Marketplace README(`readme-view.ts`): 마크다운 화면은 원문 HTML을 그리지 않아 태그가 글자로 보였다.
+  - 보여 주기 전에 `<a>`는 링크, `<br>`은 줄바꿈, `<h1~6>`은 제목으로 바꾼다.
+  - 이미지는 대체 글만 남기고, 나머지 태그·주석은 지운다. 코드 블록과 인라인 코드는 그대로 둔다.
+- Pi 제거 뒤 세션 정리: Pi 상태가 "Pi 없음"인데 실행 중인 세션이 있으면 모두 닫는다(`closeAllSessions`). 지워진 설치본의 Pi 프로세스가 계속 돌지 않게 하기 위해서다.
+- 확인(dev:mock, CDP)
+  - 프로젝트 프롬프트를 만들어 "삭제 → 정말 삭제"하자 목록에서 빠지고 백업 폴더로 옮겨졌다.
+  - pi-web-access README의 `<p><img></p>` 배너가 대체 글로 바뀌었다.
+  - Pi 제거 뒤 세션 정리는 실제 제거로 확인하지 않았다.
 
 ## 5. 상세 설계 포인트
 
