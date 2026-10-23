@@ -534,6 +534,24 @@ export function useSession(tabId: string = MAIN_TAB) {
   }, [openWithTrust, refreshSessions, switchTo]);
 
   /**
+   * 이 호스트에서 실행 중인 세션을 모두 닫는다 (Pi를 제거한 뒤 남은 Pi 프로세스 정리). 닫은 수를 돌려준다.
+   * 대화는 세션 파일에 남으므로 Pi를 다시 설치하면 기록에서 다시 열 수 있다.
+   */
+  const closeAllSessions = useCallback(async (): Promise<number> => {
+    const running = (await refreshSessions()).filter((s) => s.state === "running");
+    const results = await Promise.allSettled(running.map((s) => api().closeSession(hostRef.current, s.sessionId)));
+    if (sessionRef.current && running.some((s) => s.sessionId === sessionRef.current?.sessionId)) {
+      sessionRef.current = undefined;
+      setSession(undefined);
+      setLost(undefined);
+      dispatch({ type: "reset" });
+      dispatchUi({ type: "reset" });
+    }
+    await refreshSessions();
+    return results.filter((r) => r.status === "fulfilled").length;
+  }, [refreshSessions]);
+
+  /**
    * fork·clone처럼 같은 Pi 프로세스가 새 세션 파일로 옮겨 가는 명령을 보낸다.
    * 성공하면 세션 요약(파일 경로)을 다시 읽고 대화 화면을 스냅샷으로 다시 그린다.
    * @returns Pi 응답의 data (fork는 분기한 메시지 원문 text를 준다). 확장이 취소했으면 undefined
@@ -719,6 +737,7 @@ export function useSession(tabId: string = MAIN_TAB) {
     stopFollow,
     handOffToTui,
     closeSession,
+    closeAllSessions,
     restartSession,
     resumeFollowed,
     continueFollowedAsFork,

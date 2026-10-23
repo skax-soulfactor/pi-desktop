@@ -108,6 +108,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     stopFollow,
     handOffToTui,
     closeSession,
+    closeAllSessions,
     restartSession,
     resumeFollowed,
     continueFollowedAsFork,
@@ -251,6 +252,17 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     }, PI_WATCH_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [piWatch, hostId, dockTerminals, reloadPi]);
+  // Pi가 제거됐는데(상태가 "Pi 없음") 실행 중인 세션이 남아 있으면 모두 닫는다.
+  // 지워진 설치본의 Pi 프로세스가 계속 돌며 쓰지 못하게 하기 위해서다. 대화는 세션 파일에 남는다.
+  const piMissing = Boolean(piState.status && !piState.status.pi);
+  const hasRunning = sessions.some((s) => s.state === "running");
+  useEffect(() => {
+    if (!piMissing || !hasRunning || !connected) return;
+    void closeAllSessions().then(
+      (closed) => closed > 0 && setInfo(`Pi가 제거되어 실행 중이던 세션 ${closed}개를 닫았습니다. 대화는 기록에 남아 Pi를 다시 설치하면 이어서 열 수 있습니다.`),
+      () => {},
+    );
+  }, [piMissing, hasRunning, connected, closeAllSessions]);
   // 이 앱의 Pi가 쓰는 세션 파일에 다른 프로그램이 썼다 (TUI 등). 같은 파일에 함께 쓰면 기록이 꼬이므로 입력을 잠근다.
   const externalWrite = session?.externalWriteAt !== undefined && !lost;
   // 다른 앱(다른 PC 등)이 이 세션의 입력 권한을 가지고 있다. 실시간으로 보기만 한다 (설계 §3.4).
