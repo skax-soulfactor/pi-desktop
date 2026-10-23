@@ -104,6 +104,8 @@ export const Methods = {
   resourcesReadImported: "resources.readImported",
   /** 가져온 스킬·프롬프트를 백업 폴더로 옮겨 없앤다 */
   resourcesRemoveImported: "resources.removeImported",
+  /** 프롬프트·스킬·확장을 지운다 (백업 폴더로 옮긴다). 패키지에 든 것은 지우지 않는다 */
+  resourcesDelete: "resources.delete",
   /** 한 폴더의 하위 폴더 목록 (폴더 탐색 창) */
   fsListDir: "fs.listDir",
   /** 세션을 시작할 새 폴더를 만든다 */

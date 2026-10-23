@@ -99,3 +99,44 @@ export async function movePath(from: string, to: string): Promise<void> {
     await rm(from, { recursive: true, force: true });
   }
 }
+
+/** 리소스 탭에서 지울 수 있는 종류 */
+export type DeletableKind = "prompt" | "skill" | "extension";
+
+const KIND_DIR: Record<DeletableKind, string> = { prompt: "prompts", skill: "skills", extension: "extensions" };
+
+/**
+ * 리소스 목록의 경로에서 실제로 지울 대상(파일 또는 폴더)을 정한다. 지울 수 없는 위치면 이유를 던진다.
+ * - 프롬프트: prompts/ 바로 아래의 .md 파일
+ * - 스킬: skills/<이름>/SKILL.md면 그 폴더, skills/ 바로 아래의 .md 파일이면 그 파일
+ * - 확장: extensions/ 바로 아래의 파일·폴더, extensions/<이름>/index.ts면 그 폴더
+ * 데이터 폴더(agentDir)나 프로젝트의 .pi 폴더 안이어야 한다. 패키지에 든 리소스는 Marketplace에서 제거한다.
+ */
+export function resourceDeleteTarget(path: string, kind: DeletableKind, agentDir: string): string {
+  const file = resolve(path);
+  const dirName = KIND_DIR[kind];
+  const inScope = (kindDir: string) =>
+    basename(kindDir) === dirName && (resolve(dirname(kindDir)) === resolve(agentDir) || basename(dirname(kindDir)) === ".pi");
+  let target: string | undefined;
+  if (kind === "prompt") {
+    if (extname(file).toLowerCase() === ".md" && inScope(dirname(file))) target = file;
+  } else if (kind === "skill") {
+    if (basename(file) === "SKILL.md" && inScope(dirname(dirname(file)))) target = dirname(file);
+    else if (extname(file).toLowerCase() === ".md" && inScope(dirname(file))) target = file;
+  } else {
+    if (inScope(dirname(file))) target = file;
+    else if (inScope(dirname(dirname(file)))) target = dirname(file);
+  }
+  if (!target) throw new Error(`지울 수 있는 ${kind === "prompt" ? "프롬프트" : kind === "skill" ? "스킬" : "확장"} 위치가 아닙니다: ${path}`);
+  return target;
+}
+
+/** 리소스를 지운다: 바로 지우지 않고 백업 폴더로 옮긴다. 옮긴 곳을 돌려준다 */
+export async function deleteResource(path: string, kind: DeletableKind, agentDir: string, backupDir: string): Promise<string> {
+  const target = resourceDeleteTarget(path, kind, agentDir);
+  if (!(await stat(target).catch(() => undefined))) throw new Error(`이미 없습니다: ${target}`);
+  await mkdir(backupDir, { recursive: true });
+  const backup = backupLocation(target, backupDir);
+  await movePath(target, backup);
+  return backup;
+}
