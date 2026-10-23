@@ -36,6 +36,7 @@ import {
   type HostInfo,
   type PiLatest,
   type PiLatestParams,
+  type PiModelsResult,
   type PiLocateParams,
   type PiStatus,
   type PiVersions,
@@ -116,6 +117,7 @@ import { FileWatcher } from "./file-watcher";
 import { watchTree } from "./tree-watcher";
 import { Playground } from "./playground";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
+import { listPiModels } from "./pi-models";
 import { AgentSession } from "./session";
 import { AGENT_VERSION } from "./version";
 
@@ -282,6 +284,12 @@ export class AgentDaemon {
     );
 
     peer.handle(Methods.piVersions, (): Promise<PiVersions> => piVersions());
+
+    peer.handle(Methods.piModels, async (): Promise<PiModelsResult> => {
+      const pi = await locatePi({ env: this.env }).catch(() => undefined);
+      if (!pi) return { models: [], error: "설치된 Pi를 찾지 못했습니다" };
+      return listPiModels(pi, this.env);
+    });
 
     peer.handle(Methods.dataBackup, (): Promise<DataBackupResult> =>
       backupAgentDir(agentDirOf(this.env), join(agentHome(this.env), "backups")),

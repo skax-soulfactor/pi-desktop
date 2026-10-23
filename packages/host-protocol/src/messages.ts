@@ -18,6 +18,8 @@ export const Methods = {
   piLatest: "pi.latest",
   /** npm 레지스트리에 배포된 Pi 버전 목록 (1시간 캐시) */
   piVersions: "pi.versions",
+  /** 이 호스트의 Pi가 쓸 수 있는 모델 (`pi --list-models`, 설정 폼의 선택지) */
+  piModels: "pi.models",
   /** Pi 데이터 폴더(~/.pi/agent)를 tar.gz로 백업 */
   dataBackup: "data.backup",
   /** Pi 데이터 폴더 삭제 (Pi를 제거한 뒤에만, 되돌릴 수 없음) */
@@ -220,6 +222,18 @@ export interface PiLatest {
   version?: string;
   error?: string;
   checkedAt: number;
+}
+
+/** 모델 하나 (프로바이더와 모델 ID) */
+export interface PiModelRef {
+  provider: string;
+  id: string;
+}
+
+/** `pi --list-models` 결과. 인증이 있는 프로바이더의 모델만 들어 있다. 읽지 못했으면 error */
+export interface PiModelsResult {
+  models: PiModelRef[];
+  error?: string;
 }
 
 /** pi update 대상: Pi 자체, 설치한 패키지, 둘 다, 모델 카탈로그 */
