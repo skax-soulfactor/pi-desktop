@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ConfiguredPackageInfo,
+  ExtensionTemplate,
+  PackageCreateResult,
   ResourceDiagnosticInfo,
   ResourceFile,
   ResourceItem,
@@ -16,9 +18,11 @@ import { isPinned, removeArgs, updateArgs } from "./market-view";
 import {
   creatableKind,
   diagnosticsByPath,
+  EXTENSION_TEMPLATE_LABELS,
   formatSize,
   isDeletable,
   isEditable,
+  joinPath,
   RESOURCE_TABS,
   shortPath,
   sourceLabel,
@@ -98,6 +102,8 @@ export function ResourcesPanel({
 
   // 다른 호스트에서 복사해 온 기록과 그 뒤 바뀐 것 (설계 §5.9 "출처 기록"). 원본 호스트를 읽느라 늦을 수 있어 따로 채운다.
   const [copied, setCopied] = useState<CopiedNotes>(new Map());
+  /** 방금 만든 패키지 (편집기를 열었다 돌아와도 설치 버튼이 남도록 여기에 둔다) */
+  const [createdPackage, setCreatedPackage] = useState<CreatedPackage | undefined>();
   /** 방금 지운 리소스 안내 */
   const [deleted, setDeleted] = useState<string | undefined>();
   useEffect(() => {
@@ -227,8 +233,8 @@ export function ResourcesPanel({
         {view && !editing && creatableKind(tab) && (
           <NewResourceForm
             kind={creatableKind(tab)!}
-            onCreate={async (scope, name) => {
-              const file = await window.piDesktop.createResource(hostId, cwd, creatableKind(tab)!, scope, name);
+            onCreate={async (scope, name, template) => {
+              const file = await window.piDesktop.createResource(hostId, cwd, creatableKind(tab)!, scope, name, template);
               await load();
               setEditing(file);
             }}
@@ -277,8 +283,27 @@ export function ResourcesPanel({
                 empty="확장이 없습니다."
                 title={(x) => x.name}
                 onReveal={onReveal}
+                onEdit={(p) => void open(p)}
                 {...(onCopy ? { onCopy: (item: ResourceItem) => onCopy(item, "extension") } : {})}
                 onDelete={(item) => void remove(item, "extension")}
+              />
+            )}
+            {tab === "packages" && (
+              <NewPackageForm
+                view={view}
+                hostId={hostId}
+                result={createdPackage}
+                onResult={setCreatedPackage}
+                onEdit={(p) => void open(p)}
+                {...(onReveal ? { onReveal } : {})}
+                {...(onRunPi
+                  ? {
+                      onInstall: (dir: string, name: string) => {
+                        onRunPi(["install", dir], `패키지 설치: ${name}`);
+                        onClose();
+                      },
+                    }
+                  : {})}
               />
             )}
             {tab === "packages" && (
@@ -591,18 +616,19 @@ function PackageList({
   );
 }
 
-const KIND_LABEL = { prompt: "프롬프트", skill: "스킬", agents: "AGENTS.md" } as const;
+const KIND_LABEL = { prompt: "프롬프트", skill: "스킬", agents: "AGENTS.md", extension: "확장" } as const;
 
-/** 새 프롬프트·스킬·AGENTS.md 만들기. 만들면 바로 편집기로 연다 */
+/** 새 프롬프트·스킬·AGENTS.md·확장 만들기. 만들면 바로 편집기로 연다. 확장은 템플릿을 고른다 */
 function NewResourceForm({
   kind,
   onCreate,
 }: {
-  kind: "prompt" | "skill" | "agents";
-  onCreate: (scope: "user" | "project", name: string) => Promise<void>;
+  kind: "prompt" | "skill" | "agents" | "extension";
+  onCreate: (scope: "user" | "project", name: string, template?: ExtensionTemplate) => Promise<void>;
 }) {
   const [scope, setScope] = useState<"user" | "project">("project");
   const [name, setName] = useState("");
+  const [template, setTemplate] = useState<ExtensionTemplate>("command");
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
@@ -610,7 +636,7 @@ function NewResourceForm({
     setBusy(true);
     setError(undefined);
     try {
-      await onCreate(scope, name.trim());
+      await onCreate(scope, name.trim(), kind === "extension" ? template : undefined);
       setName("");
     } catch (e) {
       setError(errorText(e));
@@ -635,10 +661,198 @@ function NewResourceForm({
       {kind !== "agents" && (
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름 (소문자·숫자·하이픈)" aria-label="이름" spellCheck={false} />
       )}
+      {kind === "extension" && (
+        <select value={template} onChange={(e) => setTemplate(e.target.value as ExtensionTemplate)} aria-label="템플릿" title="처음 코드의 종류">
+          {EXTENSION_TEMPLATE_LABELS.map(([id, label]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
+      )}
       <button type="submit" disabled={busy || (kind !== "agents" && !name.trim())}>
         만들기
       </button>
       {error && <span className="resource-problem error">{error}</span>}
+    </form>
+  );
+}
+
+/**
+ * 새 Pi 패키지 만들기 (패키지 탭). ~/pi-packages/<이름>에 package.json·README와 고른 템플릿의 확장을 만들고,
+ * 사용자·프로젝트에 둔 프롬프트·스킬·확장 중 고른 것을 복사해 넣는다. 만든 뒤 바로 편집하거나 이 호스트에 설치한다.
+ */
+/** 방금 만든 패키지 */
+interface CreatedPackage {
+  name: string;
+  created: PackageCreateResult;
+  /** 템플릿으로 만든 확장 파일 */
+  extension?: string;
+}
+
+function NewPackageForm({
+  view,
+  hostId,
+  result,
+  onResult,
+  onEdit,
+  onReveal,
+  onInstall,
+}: {
+  view: ResourcesView;
+  hostId: string;
+  result: CreatedPackage | undefined;
+  onResult: (result: CreatedPackage | undefined) => void;
+  onEdit: (path: string) => void;
+  onReveal?: (path: string) => void;
+  /** pi install <폴더>를 내장 터미널에서 실행한다 */
+  onInstall?: (dir: string, name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [template, setTemplate] = useState<ExtensionTemplate | "">("command");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  // 함께 넣을 수 있는 것: 사용자·프로젝트 폴더에 직접 둔 리소스
+  const candidates = [
+    ...view.prompts.map((item) => ({ item, kind: "prompt" as const, label: `/${item.name}` })),
+    ...view.skills.map((item) => ({ item, kind: "skill" as const, label: `스킬 ${item.name}` })),
+    ...view.extensions.map((item) => ({ item, kind: "extension" as const, label: `확장 ${item.name}` })),
+  ].filter((c) => isDeletable(c.item));
+
+  async function create() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const trimmed = name.trim();
+      const created = await window.piDesktop.createPackage(hostId, {
+        name: trimmed,
+        ...(description.trim() ? { description: description.trim() } : {}),
+        ...(template ? { extensionTemplate: template } : {}),
+        include: candidates.filter((c) => selected.has(c.item.path)).map((c) => ({ path: c.item.path, kind: c.kind })),
+      });
+      onResult({ name: trimmed, created, ...(template ? { extension: joinPath(created.dir, "extensions", `${trimmed}.ts`) } : {}) });
+      setName("");
+      setDescription("");
+      setSelected(new Set());
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (result) {
+    const { created } = result;
+    return (
+      <div className="banner ok package-created">
+        <div>
+          <strong>{result.name}</strong> 패키지를 만들었습니다: <code>{created.dir}</code>
+        </div>
+        <div className="muted">들어간 파일: {created.files.join(", ")}</div>
+        <div className="muted">
+          설치하면 이 폴더를 그대로 읽으므로 고친 내용이 바로 쓰입니다(열린 세션은 "지금 세션에 반영"). 넣은 원본 리소스는 그대로 있으니, 설치한 뒤 이름이 겹치면 원본을 지우세요.
+          다른 사람과 나누려면 그 폴더에서 git 저장소에 올리거나 npm publish 하세요(README.md 참고).
+        </div>
+        <div className="package-created-actions">
+          {onInstall && (
+            <button type="button" className="small primary" onClick={() => onInstall(created.dir, result.name)}>
+              이 호스트에 설치 (pi install)
+            </button>
+          )}
+          {result.extension && (
+            <button type="button" className="small" onClick={() => onEdit(result.extension!)}>
+              확장 편집
+            </button>
+          )}
+          <button type="button" className="small" onClick={() => onEdit(joinPath(created.dir, "package.json"))}>
+            package.json 편집
+          </button>
+          <button type="button" className="small" onClick={() => onEdit(joinPath(created.dir, "README.md"))}>
+            README 편집
+          </button>
+          {onReveal && (
+            <button type="button" className="small" onClick={() => onReveal(joinPath(created.dir, "package.json"))}>
+              위치 열기
+            </button>
+          )}
+          <button type="button" className="small" onClick={() => onResult(undefined)}>
+            닫기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <div className="resource-new">
+        <button type="button" onClick={() => setOpen(true)} title="내 확장·스킬·프롬프트를 묶어 다른 호스트나 다른 사람과 나눌 수 있는 Pi 패키지로 만듭니다">
+          새 패키지 만들기…
+        </button>
+        <span className="muted">확장·스킬·프롬프트를 묶어 설치하고 나눌 수 있는 패키지로 만듭니다.</span>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="package-new"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void create();
+      }}
+    >
+      <div className="package-new-row">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="패키지 이름 (소문자·숫자·하이픈)" aria-label="패키지 이름" spellCheck={false} />
+        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="설명 (선택)" aria-label="설명" />
+      </div>
+      <label className="package-new-row">
+        <span className="muted">확장</span>
+        <select value={template} onChange={(e) => setTemplate(e.target.value as ExtensionTemplate | "")} aria-label="확장 템플릿">
+          {EXTENSION_TEMPLATE_LABELS.map(([id, label]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+          <option value="">넣지 않기</option>
+        </select>
+      </label>
+      {candidates.length > 0 && (
+        <fieldset className="package-new-include">
+          <legend className="muted">함께 넣을 리소스 (복사합니다)</legend>
+          {candidates.map((c) => (
+            <label key={c.item.path} title={c.item.path}>
+              <input
+                type="checkbox"
+                checked={selected.has(c.item.path)}
+                onChange={(e) =>
+                  setSelected((prev) => {
+                    const next = new Set(prev);
+                    if (e.target.checked) next.add(c.item.path);
+                    else next.delete(c.item.path);
+                    return next;
+                  })
+                }
+              />
+              {c.label} <span className="resource-badge">{sourceLabel(c.item)}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+      <p className="muted">~/pi-packages/{name.trim() || "<이름>"}에 package.json·README와 위 항목을 만듭니다.</p>
+      <div className="package-new-row">
+        <button type="submit" className="primary" disabled={busy || !name.trim()}>
+          {busy ? "만드는 중…" : "만들기"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)}>
+          취소
+        </button>
+        {error && <span className="resource-problem error">{error}</span>}
+      </div>
     </form>
   );
 }

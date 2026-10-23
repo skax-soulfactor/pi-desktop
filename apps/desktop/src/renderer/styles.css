@@ -3147,3 +3147,57 @@ details > summary.settings-section {
   margin: 0 0 8px;
   color: var(--muted);
 }
+
+/* 새 패키지 만들기 (리소스 창 패키지 탭) */
+.package-new {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.package-new-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.package-new-row input {
+  flex: 1;
+  min-width: 160px;
+}
+
+.package-new-include {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.package-new-include label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.package-created {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.package-created-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

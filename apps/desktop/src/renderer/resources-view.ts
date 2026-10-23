@@ -1,4 +1,4 @@
-import type { ResourceDiagnosticInfo, ResourceSource, ResourcesView } from "@pi-desktop/host-protocol/messages";
+import type { ExtensionTemplate, ResourceDiagnosticInfo, ResourceSource, ResourcesView } from "@pi-desktop/host-protocol/messages";
 
 /**
  * 리소스 창의 순수 함수들 (설계 §4.2~4.5, M4 첫 단계: 읽기 전용).
@@ -81,13 +81,28 @@ export function formatSize(bytes: number): string {
 }
 
 /** 탭에서 새로 만들 수 있는 리소스 종류. 없으면 그 탭에서는 만들지 않는다 */
-export function creatableKind(tab: ResourceTab): "prompt" | "skill" | "agents" | undefined {
+export function creatableKind(tab: ResourceTab): "prompt" | "skill" | "agents" | "extension" | undefined {
+  if (tab === "extensions") return "extension";
   return tab === "prompts" ? "prompt" : tab === "skills" ? "skill" : tab === "context" ? "agents" : undefined;
 }
 
-/** 앱에서 고칠 수 있는 리소스: 패키지에 든 것이 아닌 마크다운 파일 (확장 코드는 다루지 않는다) */
+/** 앱에서 고칠 수 있는 리소스: 패키지에 든 것이 아닌 마크다운 파일과 확장 코드 (.ts·.js 등) */
 export function isEditable(item: { path: string; fromPackage?: boolean }): boolean {
-  return !item.fromPackage && /\.md$/i.test(item.path);
+  return !item.fromPackage && /\.(md|ts|js|mts|mjs|cts|cjs)$/i.test(item.path);
+}
+
+/** 확장 템플릿 선택지 (데몬 extension-templates.ts와 같은 종류) */
+export const EXTENSION_TEMPLATE_LABELS: ReadonlyArray<readonly [ExtensionTemplate, string]> = [
+  ["command", "명령 (/이름) — 입력창에서 부르는 기능"],
+  ["tool", "툴 — 모델이 필요할 때 부르는 기능"],
+  ["guard", "확인 — 위험한 bash 명령 전에 묻기"],
+  ["blank", "빈 확장"],
+];
+
+/** 폴더 경로에 이름을 붙인다. 그 경로가 쓰는 구분자(Windows면 \)를 따른다 */
+export function joinPath(dir: string, ...parts: string[]): string {
+  const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/";
+  return [dir.replace(/[\\/]+$/, ""), ...parts].join(sep);
 }
 
 /** 리소스 탭에서 지울 수 있는 것: 사용자·프로젝트 폴더에 직접 둔 것 (패키지·내장·임시는 아님) */

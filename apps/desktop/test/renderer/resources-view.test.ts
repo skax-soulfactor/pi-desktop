@@ -7,6 +7,7 @@ import {
   hasReloadCommand,
   isDeletable,
   isEditable,
+  joinPath,
   packageFilterChanges,
   packageResourceKey,
   shortPath,
@@ -87,17 +88,16 @@ describe("formatSize", () => {
 });
 
 describe("creatableKind·isEditable", () => {
-  it("컨텍스트·프롬프트·스킬 탭에서만 만들 수 있다", () => {
+  it("패키지 탭 말고는 모두 새로 만들 수 있다 (패키지는 따로 만든다)", () => {
     expect(creatableKind("context")).toBe("agents");
     expect(creatableKind("prompts")).toBe("prompt");
     expect(creatableKind("skills")).toBe("skill");
-    expect(creatableKind("extensions")).toBeUndefined();
+    expect(creatableKind("packages")).toBeUndefined();
   });
 
-  it("패키지에 든 것과 마크다운이 아닌 파일은 고치지 않는다", () => {
+  it("패키지에 든 것과 마크다운·코드가 아닌 파일은 고치지 않는다", () => {
     expect(isEditable({ path: "/a/prompts/x.md" })).toBe(true);
     expect(isEditable({ path: "/a/prompts/x.md", fromPackage: true })).toBe(false);
-    expect(isEditable({ path: "/a/extensions/x.ts" })).toBe(false);
   });
 });
 
@@ -133,5 +133,19 @@ describe("isDeletable", () => {
     expect(isDeletable({ path: "/a/npm/x/prompts/y.md", scope: "user", fromPackage: true })).toBe(false);
     expect(isDeletable({ path: "builtin:skill", scope: "user" })).toBe(false);
     expect(isDeletable({ path: "/tmp/x.ts", scope: "temporary" })).toBe(false);
+  });
+});
+
+describe("확장 만들기·편집", () => {
+  it("확장 탭에서 만들 수 있고, 직접 둔 확장 코드는 고칠 수 있다", () => {
+    expect(creatableKind("extensions")).toBe("extension");
+    expect(isEditable({ path: "/a/extensions/x.ts" })).toBe(true);
+    expect(isEditable({ path: "/a/npm/p/extensions/x.ts", fromPackage: true })).toBe(false);
+    expect(isEditable({ path: "/a/themes/x.json" })).toBe(false);
+  });
+
+  it("joinPath는 그 경로의 구분자를 따른다", () => {
+    expect(joinPath("C:\\Users\\me\\pi-packages\\p", "extensions", "p.ts")).toBe("C:\\Users\\me\\pi-packages\\p\\extensions\\p.ts");
+    expect(joinPath("/home/me/pi-packages/p/", "package.json")).toBe("/home/me/pi-packages/p/package.json");
   });
 });
