@@ -958,59 +958,62 @@ function MyPackageList({
                   {pkg.dir}
                 </span>
               </div>
-              {files.length > 0 && (
-                <span className="my-package-edit">
-                  <select
-                    value={chosen}
-                    onChange={(e) => setFileChoice((prev) => new Map(prev).set(pkg.dir, e.target.value))}
-                    aria-label="고칠 파일"
-                  >
-                    {files.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="button" className="small" disabled={!chosen} onClick={() => chosen && onEdit(joinPath(pkg.dir, ...chosen.split("/")))}>
-                    편집
+              {/* 파일 고르기·편집과 나머지 버튼을 한 줄에 같은 높이로 둔다 */}
+              <div className="my-package-actions">
+                {files.length > 0 && (
+                  <>
+                    <select
+                      value={chosen}
+                      onChange={(e) => setFileChoice((prev) => new Map(prev).set(pkg.dir, e.target.value))}
+                      aria-label="고칠 파일"
+                    >
+                      {files.map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="small" disabled={!chosen} onClick={() => chosen && onEdit(joinPath(pkg.dir, ...chosen.split("/")))}>
+                      편집
+                    </button>
+                  </>
+                )}
+                {onRun &&
+                  (installed ? (
+                    <button
+                      type="button"
+                      className="small"
+                      onClick={() => onRun(removeArgs(commandSource(installed), installed.scope), `패키지 제거: ${pkg.name}`)}
+                      title="설정에서 이 패키지를 뺍니다 (폴더는 그대로 둡니다)"
+                    >
+                      설치 해제
+                    </button>
+                  ) : (
+                    <button type="button" className="small primary" onClick={() => onRun(["install", pkg.dir], `패키지 설치: ${pkg.name}`)}>
+                      설치
+                    </button>
+                  ))}
+                {onReveal && (
+                  <button type="button" className="small" onClick={() => onReveal(joinPath(pkg.dir, "package.json"))}>
+                    위치 열기
                   </button>
-                </span>
-              )}
-              {onRun &&
-                (installed ? (
+                )}
+                {confirming === pkg.dir ? (
+                  <button type="button" className="small danger" onClick={() => void remove(pkg)} title="폴더를 백업 폴더로 옮깁니다">
+                    정말 삭제
+                  </button>
+                ) : (
                   <button
                     type="button"
                     className="small"
-                    onClick={() => onRun(removeArgs(commandSource(installed), installed.scope), `패키지 제거: ${pkg.name}`)}
-                    title="설정에서 이 패키지를 뺍니다 (폴더는 그대로 둡니다)"
+                    disabled={Boolean(installed)}
+                    title={installed ? "설치되어 있으면 먼저 \"설치 해제\"를 하세요" : "폴더를 지웁니다 (백업 폴더로 옮김)"}
+                    onClick={() => setConfirming(pkg.dir)}
                   >
-                    설치 해제
+                    삭제
                   </button>
-                ) : (
-                  <button type="button" className="small primary" onClick={() => onRun(["install", pkg.dir], `패키지 설치: ${pkg.name}`)}>
-                    설치
-                  </button>
-                ))}
-              {onReveal && (
-                <button type="button" className="small" onClick={() => onReveal(joinPath(pkg.dir, "package.json"))}>
-                  위치 열기
-                </button>
-              )}
-              {confirming === pkg.dir ? (
-                <button type="button" className="small danger" onClick={() => void remove(pkg)} title="폴더를 백업 폴더로 옮깁니다">
-                  정말 삭제
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="small"
-                  disabled={Boolean(installed)}
-                  title={installed ? "설치되어 있으면 먼저 \"설치 해제\"를 하세요" : "폴더를 지웁니다 (백업 폴더로 옮김)"}
-                  onClick={() => setConfirming(pkg.dir)}
-                >
-                  삭제
-                </button>
-              )}
+                )}
+              </div>
             </li>
           );
         })}
