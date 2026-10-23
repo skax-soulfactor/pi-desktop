@@ -15,7 +15,7 @@ import { errorText } from "./folder-browser";
 import { ResourceEditor } from "./ResourceEditor";
 import { PackageFilterEditor } from "./PackageFilterEditor";
 import { projectBadge, projectResourcesSkipped, trustStatusText } from "./project-trust";
-import { isPinned, removeArgs, updateArgs } from "./market-view";
+import { commandSource, isPinned, removeArgs, updateArgs } from "./market-view";
 import {
   creatableKind,
   diagnosticsByPath,
@@ -600,7 +600,7 @@ function PackageList({
                 className="small"
                 disabled={isPinned(p.source)}
                 title={isPinned(p.source) ? "버전이 고정된 패키지는 pi update로 바뀌지 않습니다" : "pi update로 갱신합니다"}
-                onClick={() => onRun(updateArgs(p.source), `업데이트: ${p.source}`, p.scope === "project" ? view.cwd : undefined)}
+                onClick={() => onRun(updateArgs(commandSource(p)), `업데이트: ${p.source}`, p.scope === "project" ? view.cwd : undefined)}
               >
                 업데이트
               </button>
@@ -608,7 +608,7 @@ function PackageList({
                 <button
                   type="button"
                   className="small danger"
-                  onClick={() => onRun(removeArgs(p.source, p.scope), `제거: ${p.source}`, p.scope === "project" ? view.cwd : undefined)}
+                  onClick={() => onRun(removeArgs(commandSource(p), p.scope), `제거: ${p.source}`, p.scope === "project" ? view.cwd : undefined)}
                 >
                   정말 제거
                 </button>
@@ -981,7 +981,7 @@ function MyPackageList({
                   <button
                     type="button"
                     className="small"
-                    onClick={() => onRun(removeArgs(installed.source, installed.scope), `패키지 제거: ${pkg.name}`)}
+                    onClick={() => onRun(removeArgs(commandSource(installed), installed.scope), `패키지 제거: ${pkg.name}`)}
                     title="설정에서 이 패키지를 뺍니다 (폴더는 그대로 둡니다)"
                   >
                     설치 해제

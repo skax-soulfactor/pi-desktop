@@ -12,6 +12,7 @@ import {
   scriptFiles,
   splitFrontmatter,
   updateArgs,
+  commandSource,
 } from "../../src/renderer/market-view";
 
 describe("installArgs", () => {
@@ -95,5 +96,16 @@ describe("excludeKindsFilter·packageFilterOf·filterForPlatform", () => {
     expect(filterForPlatform(filter, "linux")).toEqual({ skills: ["-skills/beta/SKILL.md", "skills/*/SKILL.md"], prompts: ["+prompts/p.md"] });
     expect(filterForPlatform(filter, "win32")).toEqual({ skills: ["-skills\\beta\\SKILL.md", "skills/*/SKILL.md"], prompts: ["+prompts\\p.md"] });
     expect(filterForPlatform(filter, undefined)).toEqual(filter);
+  });
+});
+
+describe("commandSource", () => {
+  it("로컬 경로 소스는 설치된 절대 경로로, npm·git·URL은 그대로 넘긴다", () => {
+    expect(commandSource({ source: "..\\..\\pi-packages\\mine", installedPath: "C:\\Users\\me\\pi-packages\\mine" })).toBe("C:\\Users\\me\\pi-packages\\mine");
+    expect(commandSource({ source: "./local", installedPath: "/home/me/proj/local" })).toBe("/home/me/proj/local");
+    expect(commandSource({ source: "npm:pi-web-access", installedPath: "/x/node_modules/pi-web-access" })).toBe("npm:pi-web-access");
+    expect(commandSource({ source: "git:github.com/a/b@v1", installedPath: "/x/git/b" })).toBe("git:github.com/a/b@v1");
+    expect(commandSource({ source: "https://github.com/a/b" })).toBe("https://github.com/a/b");
+    expect(commandSource({ source: "../not-installed" })).toBe("../not-installed");
   });
 });
