@@ -90,6 +90,11 @@ export function isEditable(item: { path: string; fromPackage?: boolean }): boole
   return !item.fromPackage && /\.md$/i.test(item.path);
 }
 
+/** 리소스 탭에서 지울 수 있는 것: 사용자·프로젝트 폴더에 직접 둔 것 (패키지·내장·임시는 아님) */
+export function isDeletable(item: { path: string; fromPackage?: boolean; scope: string }): boolean {
+  return !item.fromPackage && !item.path.startsWith("builtin:") && (item.scope === "user" || item.scope === "project");
+}
+
 /** Pi Desktop bridge 확장의 다시 불러오기 명령 (데몬 bridge.ts와 같은 이름) */
 export const RELOAD_COMMAND = "desktop:reload";
 

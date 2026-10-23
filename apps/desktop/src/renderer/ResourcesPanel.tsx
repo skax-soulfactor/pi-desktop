@@ -17,6 +17,7 @@ import {
   creatableKind,
   diagnosticsByPath,
   formatSize,
+  isDeletable,
   isEditable,
   RESOURCE_TABS,
   shortPath,
@@ -97,6 +98,8 @@ export function ResourcesPanel({
 
   // 다른 호스트에서 복사해 온 기록과 그 뒤 바뀐 것 (설계 §5.9 "출처 기록"). 원본 호스트를 읽느라 늦을 수 있어 따로 채운다.
   const [copied, setCopied] = useState<CopiedNotes>(new Map());
+  /** 방금 지운 리소스 안내 */
+  const [deleted, setDeleted] = useState<string | undefined>();
   useEffect(() => {
     let alive = true;
     void window.piDesktop.copyStatus(hostId).then(
@@ -131,6 +134,17 @@ export function ResourcesPanel({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, editing]);
+
+  /** 리소스를 지운다 (데몬이 백업 폴더로 옮긴다). 열려 있는 세션은 "지금 세션에 반영"을 해야 빠진다 */
+  async function remove(item: ResourceItem, kind: "prompt" | "skill" | "extension") {
+    try {
+      const { backup } = await window.piDesktop.deleteResource(hostId, item.path, kind);
+      setDeleted(`${item.name}을(를) 지웠습니다. 백업: ${backup}. 열려 있는 세션에서 빼려면 세션을 새로고침하거나 "지금 세션에 반영"을 누르세요.`);
+      await load();
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
 
   /** 신뢰 결정을 바꾼다. 이미 열린 세션은 다시 열어야 반영된다 (Pi는 시작할 때 정한다) */
   async function changeTrust(decision: boolean | null) {
@@ -178,6 +192,7 @@ export function ResourcesPanel({
           ))}
         </div>
         {error && <div className="banner error">{error}</div>}
+        {deleted && !editing && <div className="banner ok">{deleted}</div>}
         {view && trustStatusText(view.trust) && !editing && (
           <div className={`banner ${projectResourcesSkipped(view.trust) ? "warn" : "info"}`}>
             <span>{trustStatusText(view.trust)}</span>
@@ -235,6 +250,7 @@ export function ResourcesPanel({
                 onReveal={onReveal}
                 onEdit={(p) => void open(p)}
                 {...(onCopy ? { onCopy: (item: ResourceItem) => onCopy(item, "prompt") } : {})}
+                onDelete={(item) => void remove(item, "prompt")}
               />
             )}
             {tab === "skills" && (
@@ -249,6 +265,7 @@ export function ResourcesPanel({
                 onReveal={onReveal}
                 onEdit={(p) => void open(p)}
                 {...(onCopy ? { onCopy: (item: ResourceItem) => onCopy(item, "skill") } : {})}
+                onDelete={(item) => void remove(item, "skill")}
               />
             )}
             {tab === "extensions" && (
@@ -261,6 +278,7 @@ export function ResourcesPanel({
                 title={(x) => x.name}
                 onReveal={onReveal}
                 {...(onCopy ? { onCopy: (item: ResourceItem) => onCopy(item, "extension") } : {})}
+                onDelete={(item) => void remove(item, "extension")}
               />
             )}
             {tab === "packages" && (
@@ -362,6 +380,7 @@ function ItemList({
   onReveal,
   onEdit,
   onCopy,
+  onDelete,
 }: {
   view: ResourcesView;
   copied: CopiedNotes;
@@ -375,8 +394,12 @@ function ItemList({
   onEdit?: (path: string) => void;
   /** 다른 호스트로 복사 */
   onCopy?: (item: ResourceItem) => void;
+  /** 지우기 (사용자·프로젝트 폴더에 있는 것만. 패키지에 든 것은 Marketplace에서 제거) */
+  onDelete?: (item: ResourceItem) => void;
 }) {
   const badge = projectBadge(view.trust);
+  // 한 번 더 눌러야 지운다
+  const [confirming, setConfirming] = useState<string | undefined>();
   if (items.length === 0) return <p className="muted">{empty}</p>;
   return (
     <ul className="resource-list">
@@ -419,6 +442,24 @@ function ItemList({
                 위치 열기
               </button>
             )}
+            {onDelete && isDeletable(item) &&
+              (confirming === item.path ? (
+                <button
+                  type="button"
+                  className="small danger"
+                  onClick={() => {
+                    setConfirming(undefined);
+                    onDelete(item);
+                  }}
+                  title="백업 폴더(~/.pi-desktop/resource-backups/deleted)로 옮깁니다"
+                >
+                  정말 삭제
+                </button>
+              ) : (
+                <button type="button" className="small" onClick={() => setConfirming(item.path)}>
+                  삭제
+                </button>
+              ))}
           </li>
         );
       })}

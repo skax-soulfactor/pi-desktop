@@ -563,6 +563,9 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     (_event, hostId: string, cwd: string, kind: ResourceKind, scope: "user" | "project", name: string) =>
       conn(hostId).request<ResourceFile>(Methods.resourcesCreate, { cwd, kind, scope, name }),
   );
+  handle(IpcChannels.deleteResource, (_event, hostId: string, path: string, kind: "prompt" | "skill" | "extension") =>
+    conn(hostId).request<{ backup: string }>(Methods.resourcesDelete, { path, kind }),
+  );
   handle(IpcChannels.revealFile, (_event, hostId: string, cwd: string, path: string) => {
     const target = hostPathForExplorer(hostId, cwd, path, WSL_PREFIX);
     if (!target) return false;

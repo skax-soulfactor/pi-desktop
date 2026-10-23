@@ -5,6 +5,7 @@ import {
   diagnosticsByPath,
   formatSize,
   hasReloadCommand,
+  isDeletable,
   isEditable,
   packageFilterChanges,
   packageResourceKey,
@@ -122,5 +123,15 @@ describe("packageFilterChanges", () => {
       { type: "skills", pattern: "skills/a/SKILL.md", enabled: false },
       { type: "skills", pattern: "skills/b/SKILL.md", enabled: true },
     ]);
+  });
+});
+
+describe("isDeletable", () => {
+  it("사용자·프로젝트 폴더에 직접 둔 것만 지운다 (패키지·내장·임시는 아님)", () => {
+    expect(isDeletable({ path: "/a/prompts/x.md", scope: "user" })).toBe(true);
+    expect(isDeletable({ path: "/p/.pi/extensions/x.ts", scope: "project" })).toBe(true);
+    expect(isDeletable({ path: "/a/npm/x/prompts/y.md", scope: "user", fromPackage: true })).toBe(false);
+    expect(isDeletable({ path: "builtin:skill", scope: "user" })).toBe(false);
+    expect(isDeletable({ path: "/tmp/x.ts", scope: "temporary" })).toBe(false);
   });
 });
