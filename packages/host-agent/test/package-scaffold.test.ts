@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EXTENSION_TEMPLATES, extensionSource } from "../src/extension-templates";
-import { createPackage } from "../src/package-scaffold";
+import { createPackage, deleteMyPackage, listMyPackages } from "../src/package-scaffold";
 import { createResourceFile, resourcePathProblem } from "../src/resource-files";
 
 describe("extensionSource", () => {
@@ -68,5 +68,27 @@ describe("createPackage", () => {
     expect(readFileSync(join(agent, "prompts", "review.md"), "utf8")).toBe("리뷰");
     await expect(createPackage({ name: "my-tools", include: [] }, agent, join(root, "pi-packages"))).rejects.toThrow("이미 있는 폴더");
     await expect(createPackage({ name: "Bad Name", include: [] }, agent, join(root, "pi-packages"))).rejects.toThrow();
+  });
+});
+
+describe("listMyPackages·deleteMyPackage", () => {
+  it("만든 패키지를 목록으로 보이고, 지우면 백업 폴더로 옮긴다", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pkg-list-"));
+    const packages = join(root, "pi-packages");
+    await createPackage({ name: "alpha", description: "첫째", extensionTemplate: "command", include: [] }, join(root, "agent"), packages);
+    mkdirSync(join(packages, "not-a-package"), { recursive: true });
+    mkdirSync(join(packages, "alpha", "node_modules", "x"), { recursive: true });
+    writeFileSync(join(packages, "alpha", "node_modules", "x", "index.js"), "");
+
+    const list = await listMyPackages(packages);
+    expect(list.map((p) => [p.folder, p.name, p.version, p.description])).toEqual([["alpha", "alpha", "0.1.0", "첫째"]]);
+    expect([...list[0]!.files].sort()).toEqual([".gitignore", "README.md", "extensions/alpha.ts", "package.json"].sort());
+    expect(await listMyPackages(join(root, "없음"))).toEqual([]);
+
+    const backup = await deleteMyPackage("alpha", packages, join(root, "backups"));
+    expect(await listMyPackages(packages)).toEqual([]);
+    expect(readFileSync(join(backup, "package.json"), "utf8")).toContain('"alpha"');
+    await expect(deleteMyPackage("../agent", packages, join(root, "backups"))).rejects.toThrow("이름이 아닙니다");
+    await expect(deleteMyPackage("not-a-package", packages, join(root, "backups"))).rejects.toThrow("패키지가 없습니다");
   });
 });

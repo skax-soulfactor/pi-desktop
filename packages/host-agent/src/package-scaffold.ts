@@ -1,9 +1,67 @@
-import { cp, mkdir, stat, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
-import type { PackageCreateParams, PackageCreateResult } from "@pi-desktop/host-protocol";
+import { cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { basename, join, relative, sep } from "node:path";
+import type { MyPackageInfo, PackageCreateParams, PackageCreateResult } from "@pi-desktop/host-protocol";
 import { extensionSource } from "./extension-templates";
-import { resourceDeleteTarget } from "./import-manage";
+import { backupLocation, movePath, resourceDeleteTarget } from "./import-manage";
 import { resourceNameProblem } from "./resource-files";
+
+/** 내 패키지 목록에 보일 파일 수 상한 */
+const MAX_LISTED_FILES = 200;
+/** 파일 목록에서 건너뛸 폴더 */
+const SKIP_DIRS = new Set(["node_modules", ".git"]);
+
+async function listPackageFiles(dir: string, base = dir, out: string[] = []): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (out.length >= MAX_LISTED_FILES) break;
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!SKIP_DIRS.has(entry.name)) await listPackageFiles(path, base, out);
+    } else if (entry.isFile()) out.push(relative(base, path).split(sep).join("/"));
+  }
+  return out;
+}
+
+/**
+ * 앱이 만든 패키지 폴더(~/pi-packages)의 패키지들. package.json이 있는 폴더만 보인다.
+ * 만든 뒤 바로 설치하지 않아도 나중에 편집·설치·삭제할 수 있게 한다.
+ */
+export async function listMyPackages(packagesRoot: string): Promise<MyPackageInfo[]> {
+  const entries = await readdir(packagesRoot, { withFileTypes: true }).catch(() => []);
+  const list: MyPackageInfo[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const dir = join(packagesRoot, entry.name);
+    const manifest = await readFile(join(dir, "package.json"), "utf8").catch(() => undefined);
+    if (manifest === undefined) continue;
+    let json: Record<string, unknown> = {};
+    try {
+      json = JSON.parse(manifest) as Record<string, unknown>;
+    } catch {
+      // 고치다 깨진 package.json이어도 목록에는 보여 고칠 수 있게 한다.
+    }
+    list.push({
+      folder: entry.name,
+      dir,
+      name: typeof json.name === "string" ? json.name : entry.name,
+      ...(typeof json.version === "string" ? { version: json.version } : {}),
+      ...(typeof json.description === "string" ? { description: json.description } : {}),
+      files: await listPackageFiles(dir),
+    });
+  }
+  return list.sort((a, b) => a.folder.localeCompare(b.folder));
+}
+
+/** 내 패키지를 지운다: 바로 지우지 않고 백업 폴더로 옮긴다. 옮긴 곳을 돌려준다 */
+export async function deleteMyPackage(folder: string, packagesRoot: string, backupDir: string): Promise<string> {
+  if (!folder || folder === "." || folder === ".." || /[\\/]/.test(folder)) throw new Error(`패키지 폴더 이름이 아닙니다: ${folder}`);
+  const dir = join(packagesRoot, folder);
+  if (!(await stat(join(dir, "package.json")).catch(() => undefined))) throw new Error(`패키지가 없습니다: ${dir}`);
+  await mkdir(backupDir, { recursive: true });
+  const backup = backupLocation(dir, backupDir);
+  await movePath(dir, backup);
+  return backup;
+}
 
 /**
  * 새 Pi 패키지 만들기 (리소스 창 패키지 탭, docs/packages.md의 관례 폴더 구조).
