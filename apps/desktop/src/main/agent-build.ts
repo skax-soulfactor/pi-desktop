@@ -1,3 +1,4 @@
+import { ErrorCodes, JsonRpcError } from "@pi-desktop/host-protocol";
 import { createHash } from "node:crypto";
 
 /**
@@ -27,4 +28,19 @@ export type AgentCheck =
 export function checkAgent(expected: string | undefined, running: string | undefined, liveSessions: number, triedReplace: boolean): AgentCheck {
   if (!expected || running === expected) return "ok";
   return liveSessions === 0 && !triedReplace ? "replace" : "stale";
+}
+
+/**
+ * "업데이트 대기" 중인 예전 데몬이 새 기능 요청을 모르는 메서드·잘못된 인자로 거절했을 때,
+ * 원인과 고치는 방법을 담은 오류로 바꾼다. 그 밖의 오류면 undefined (그대로 던진다).
+ * 예: 확장 만들기를 v0.1.7 데몬에 보내면 "kind는 prompt·skill·agents…"로 거절된다.
+ */
+export function staleAgentError(error: unknown): JsonRpcError | undefined {
+  if (!(error instanceof JsonRpcError)) return undefined;
+  if (error.code !== ErrorCodes.MethodNotFound && error.code !== ErrorCodes.InvalidParams) return undefined;
+  return new JsonRpcError(
+    error.code,
+    `Host Agent가 앱보다 이전 버전이라 이 기능을 처리하지 못했을 수 있습니다. 상단 바의 "Agent 업데이트 대기" → "지금 바꾸기"로 Agent를 바꾼 뒤 다시 해 보세요(실행 중인 세션은 끝나며 기록에서 다시 열 수 있습니다). 원래 오류: ${error.message}`,
+    error.data,
+  );
 }

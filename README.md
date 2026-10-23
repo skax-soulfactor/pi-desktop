@@ -366,5 +366,6 @@ npm test
 - 세션 트리에서는 분기(fork)와 복제(clone)만 됩니다. TUI의 `/tree`처럼 같은 세션 안에서 다른 갈래로 옮겨 가는 명령은 Pi RPC에 없습니다.
 - SSH는 `~/.ssh/config`의 호스트를 아직 자동으로 가져오지 않습니다. 대상에 Host 이름을 직접 적으면 그 설정을 씁니다.
 - 앱과 Host Agent 데몬은 연결할 때 사용자만 읽을 수 있는 토큰(`~/.pi-desktop/run/agentd.token`)으로 서로를 확인합니다. 그래서 이전 버전 앱은 새 데몬에 붙지 못할 수 있으니 함께 업데이트하세요. Windows에서 예전 데몬이 떠 있으면 앱이 한 번 끄고 새 데몬으로 바꿉니다. 그때 실행 중이던 세션은 끝나며, 기록에서 다시 열면 됩니다.
+- 앱을 업데이트해도 세션이 돌고 있으면 예전 Host Agent를 계속 씁니다(상단 바 "Agent 업데이트 대기"). 이때 새 기능(확장·패키지 만들기 등)이 예전 Agent에 거절되면 그 이유와 함께 "지금 바꾸기"로 Agent를 바꾸라는 안내가 나옵니다.
 - 설치본은 `PI_DESKTOP_REMOTE_DEBUG_PORT` 환경 변수를 쓰지 않습니다. 설치본을 CDP로 검증하려면 실행 인자 `--remote-debugging-port=9333`을 주세요.
 - Windows에서 데몬은 WMI로 띄웁니다 (앱 핸들 상속 방지). 문제를 조사할 때는 `PI_DESKTOP_DAEMON_SPAWN=direct`로 예전 방식을 쓸 수 있습니다.

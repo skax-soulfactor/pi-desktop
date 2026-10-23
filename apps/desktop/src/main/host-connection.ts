@@ -18,7 +18,7 @@ import {
   type PiUpdateOutputNotification,
 } from "@pi-desktop/host-protocol";
 import type { ConnectionState } from "../shared/api";
-import { checkAgent } from "./agent-build";
+import { checkAgent, staleAgentError } from "./agent-build";
 
 /** 연결기(`host-agent connect`)를 띄우는 명령. 호스트 종류(로컬·WSL·SSH)마다 다르다. */
 export interface LaunchSpec {
@@ -105,7 +105,13 @@ export class HostConnection {
     if (this.state.status !== "connected" || !this.peer) {
       await new Promise<void>((resolve) => this.readyWaiters.push(resolve));
     }
-    return this.peer!.request<T>(method, params, timeoutMs);
+    try {
+      return await this.peer!.request<T>(method, params, timeoutMs);
+    } catch (error) {
+      // 예전 데몬(업데이트 대기)이 새 기능 요청을 거절했으면 원인과 고치는 방법을 알려 준다.
+      const hinted = this.state.status === "connected" && this.state.agentUpdate ? staleAgentError(error) : undefined;
+      throw hinted ?? error;
+    }
   }
 
   /** 앱 종료 시 호출. 연결기만 끝내고 데몬·세션은 그대로 둔다 (설계 §3.4). */
