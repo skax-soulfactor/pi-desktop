@@ -17,6 +17,7 @@ const HANDLED = {
     "auto-compact",
     "abort",
     "clear-queue",
+    "session-restart",
     "pi-manager",
     "marketplace",
     "terminal-pi",

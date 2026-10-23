@@ -30,10 +30,12 @@ export interface SessionInfo {
   autoCompaction?: boolean;
   thinkingLevels: string[];
   models: ModelInfo[];
+  /** 이 세션의 모델 목록을 받았는지 (빈 목록과 아직 안 읽은 것을 가른다) */
+  modelsLoaded: boolean;
   stats?: SessionStats;
 }
 
-const EMPTY: SessionInfo = { thinkingLevels: [], models: [] };
+const EMPTY: SessionInfo = { thinkingLevels: [], models: [], modelsLoaded: false };
 
 /** 이 이벤트가 오면 모델·사용량이 바뀌었을 수 있으므로 다시 읽는다. */
 const REFRESH_ON = new Set(["agent_settled", "thinking_level_changed", "compaction_end", "message_end"]);
@@ -91,7 +93,7 @@ export function useSessionInfo(hostId: string, session: SessionSummary | undefin
     try {
       const data = await command({ type: "get_available_models" });
       if (target.current?.sessionId !== sessionId) return;
-      setInfo((prev) => ({ ...prev, models: (data?.models as ModelInfo[] | undefined) ?? [] }));
+      setInfo((prev) => ({ ...prev, models: (data?.models as ModelInfo[] | undefined) ?? [], modelsLoaded: true }));
     } catch {
       // 목록을 못 받아도 현재 모델 표시는 유지한다.
     }

@@ -37,6 +37,7 @@ import { SessionBar } from "./SessionBar";
 import { Sidebar } from "./Sidebar";
 import { TreePanel } from "./TreePanel";
 import { useSessionInfo } from "./use-session-info";
+import { staleProviders } from "./session-refresh";
 
 /** 탭 표시와 백그라운드 알림에 쓰는 워크스페이스 상태 */
 export interface WorkspaceStatus {
@@ -66,6 +67,8 @@ interface WorkspaceProps {
  */
 /** 호스트 선택 목록에서 SSH 호스트 관리 창을 여는 항목 */
 const SSH_MANAGE = "__ssh-manage__";
+/** 로그인 뒤 세션 새로고침이 필요한지 다시 보는 간격 (auth.json만 읽어 가볍다) */
+const AUTH_CHECK_MS = 30_000;
 
 /** 메뉴바 명령을 지금 탭에 전하는 창 이벤트 (detail: 명령 id) */
 export const MENU_EVENT = "pi-desktop-menu";
@@ -105,6 +108,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     stopFollow,
     handOffToTui,
     closeSession,
+    restartSession,
     resumeFollowed,
     continueFollowedAsFork,
     ignoreExternalWrite,
@@ -179,6 +183,36 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
 
   const connected = connection.status === "connected";
   const sessionInfo = useSessionInfo(hostId, session, connected && !lost);
+
+  // 로그인한 프로바이더의 모델을 이 세션이 모르는지 (session-refresh.ts). Pi는 세션을 시작할 때 모델을 읽으므로
+  // 다른 곳(Pi 관리, 터미널 /login, 다른 PC)에서 로그인하면 세션 새로고침을 권한다.
+  const [staleAuth, setStaleAuth] = useState<string[]>([]);
+  const [staleAuthDismissed, setStaleAuthDismissed] = useState("");
+  const sessionModels = sessionInfo.info.modelsLoaded ? sessionInfo.info.models : undefined;
+  const checkAuth = useCallback(async () => {
+    if (!sessionModels || !connected) {
+      setStaleAuth([]);
+      return;
+    }
+    const providers = await window.piDesktop.authProviders(hostId).catch(() => undefined);
+    setStaleAuth(providers ? staleProviders(providers, sessionModels) : []);
+  }, [hostId, connected, sessionModels]);
+  useEffect(() => {
+    void checkAuth();
+    if (!active) return;
+    // 창으로 돌아올 때(브라우저 로그인 뒤 등)와, 내장 터미널의 /login처럼 창을 떠나지 않는 경우를 위해 가끔 다시 본다.
+    const onFocus = () => void checkAuth();
+    window.addEventListener("focus", onFocus);
+    const timer = setInterval(() => void checkAuth(), AUTH_CHECK_MS);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      clearInterval(timer);
+    };
+  }, [active, checkAuth]);
+  useEffect(() => {
+    if (!piManagerOpen) void checkAuth();
+  }, [piManagerOpen, checkAuth]);
+  const staleAuthKey = staleAuth.join(", ");
   // 상단 바의 Pi 버전·업데이트 표시 (연결되면 한 번 읽는다. 최신 버전은 데몬이 캐시)
   const piState = usePiStatus(hostId, connected);
   const piUpdate = updateState(piState.status?.pi?.version, piState.latest);
@@ -561,6 +595,14 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         run: () => setTreeOpen((v) => !v),
       },
       { id: "export", group: "세션", title: "HTML로 내보내기", keywords: "export html", disabled: !ready, run: () => void guard(exportHtml) },
+      {
+        id: "session-restart",
+        group: "세션",
+        title: "세션 새로고침 (Pi를 다시 띄워 모델·인증을 새로 읽기)",
+        keywords: "restart refresh reload login model auth",
+        disabled: !ready || chat.running || readOnly,
+        run: () => void guard(restartSession),
+      },
       {
         id: "tui",
         group: "세션",
@@ -1033,6 +1075,26 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           <span>{info}</span>
           <button type="button" className="small" onClick={() => setInfo(undefined)} aria-label="알림 닫기">
             닫기
+          </button>
+        </div>
+      )}
+      {staleAuth.length > 0 && staleAuthKey !== staleAuthDismissed && session && !lost && (
+        <div className="banner warn">
+          <span>
+            로그인한 {staleAuthKey}의 모델이 이 세션에는 아직 없습니다. Pi는 세션을 시작할 때 모델을 읽으므로 세션을 새로고침해야 보입니다
+            (같은 세션 파일로 다시 띄워 대화는 그대로 이어집니다).
+          </span>
+          <button
+            type="button"
+            className="primary"
+            disabled={busy || chat.running || readOnly}
+            title={chat.running ? "작업이 끝난 뒤 누르세요" : undefined}
+            onClick={() => void guard(restartSession)}
+          >
+            세션 새로고침
+          </button>
+          <button type="button" onClick={() => setStaleAuthDismissed(staleAuthKey)}>
+            나중에
           </button>
         </div>
       )}

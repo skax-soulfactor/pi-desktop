@@ -505,6 +505,35 @@ export function useSession(tabId: string = MAIN_TAB) {
   );
 
   /**
+   * 세션 새로고침: 보던 세션의 Pi를 끄고 같은 세션 파일로 다시 띄운다. 대화는 파일에서 다시 읽는다.
+   * Pi는 시작할 때 모델·인증을 읽으므로, 로그인한 뒤 새 프로바이더의 모델을 쓰려면 이렇게 해야 한다(session-refresh.ts).
+   * 메시지를 주고받기 전이라 파일이 없으면 같은 폴더에 새 세션을 연다(잃을 대화가 없다).
+   */
+  const restartSession = useCallback(async () => {
+    const current = sessionRef.current;
+    if (!current) return;
+    const exists = current.sessionFile
+      ? await api()
+          .inspectStored(hostRef.current, current.sessionFile)
+          .then(
+            () => true,
+            () => false,
+          )
+      : false;
+    await api().closeSession(hostRef.current, current.sessionId);
+    const created = await openWithTrust(
+      exists && current.sessionFile ? { cwd: current.cwd, sessionFile: current.sessionFile } : { cwd: current.cwd },
+    );
+    await refreshSessions();
+    if (created) await switchTo(created);
+    else {
+      sessionRef.current = undefined;
+      setSession(undefined);
+      dispatch({ type: "reset" });
+    }
+  }, [openWithTrust, refreshSessions, switchTo]);
+
+  /**
    * fork·clone처럼 같은 Pi 프로세스가 새 세션 파일로 옮겨 가는 명령을 보낸다.
    * 성공하면 세션 요약(파일 경로)을 다시 읽고 대화 화면을 스냅샷으로 다시 그린다.
    * @returns Pi 응답의 data (fork는 분기한 메시지 원문 text를 준다). 확장이 취소했으면 undefined
@@ -690,6 +719,7 @@ export function useSession(tabId: string = MAIN_TAB) {
     stopFollow,
     handOffToTui,
     closeSession,
+    restartSession,
     resumeFollowed,
     continueFollowedAsFork,
     ignoreExternalWrite,
