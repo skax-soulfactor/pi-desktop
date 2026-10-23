@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ConfiguredPackageInfo,
   ExtensionTemplate,
+  MyPackageInfo,
   PackageCreateResult,
   ResourceDiagnosticInfo,
   ResourceFile,
@@ -18,8 +19,10 @@ import { isPinned, removeArgs, updateArgs } from "./market-view";
 import {
   creatableKind,
   diagnosticsByPath,
+  editablePackageFiles,
   EXTENSION_TEMPLATE_LABELS,
   formatSize,
+  installedPackageFor,
   isDeletable,
   isEditable,
   joinPath,
@@ -300,6 +303,24 @@ export function ResourcesPanel({
                   ? {
                       onInstall: (dir: string, name: string) => {
                         onRunPi(["install", dir], `패키지 설치: ${name}`);
+                        onClose();
+                      },
+                    }
+                  : {})}
+              />
+            )}
+            {tab === "packages" && (
+              <MyPackageList
+                view={view}
+                hostId={hostId}
+                refreshKey={createdPackage?.created.dir ?? ""}
+                onEdit={(p) => void open(p)}
+                onError={setError}
+                {...(onReveal ? { onReveal } : {})}
+                {...(onRunPi
+                  ? {
+                      onRun: (args: string[], title: string) => {
+                        onRunPi(args, title);
                         onClose();
                       },
                     }
@@ -854,6 +875,147 @@ function NewPackageForm({
         {error && <span className="resource-problem error">{error}</span>}
       </div>
     </form>
+  );
+}
+
+/**
+ * 내가 만든 패키지 (~/pi-packages). 만든 뒤 바로 설치하지 않았어도 여기서 파일을 고치고, 설치·제거하고, 지운다.
+ * 설치 여부는 설정의 패키지 중 로컬 경로(installedPath)가 그 폴더인 것으로 본다.
+ */
+function MyPackageList({
+  view,
+  hostId,
+  refreshKey,
+  onEdit,
+  onError,
+  onReveal,
+  onRun,
+}: {
+  view: ResourcesView;
+  hostId: string;
+  /** 바뀌면 목록을 다시 읽는다 (새 패키지를 만든 뒤) */
+  refreshKey: string;
+  onEdit: (path: string) => void;
+  onError: (message: string) => void;
+  onReveal?: (path: string) => void;
+  /** 그 호스트의 pi를 이 인자로 내장 터미널에서 실행한다 (설치·제거) */
+  onRun?: (args: string[], title: string) => void;
+}) {
+  const [packages, setPackages] = useState<MyPackageInfo[] | undefined>();
+  const [fileChoice, setFileChoice] = useState<Map<string, string>>(new Map());
+  const [confirming, setConfirming] = useState<string | undefined>();
+  const [notice, setNotice] = useState<string | undefined>();
+
+  const load = useCallback(async () => {
+    try {
+      setPackages(await window.piDesktop.listMyPackages(hostId));
+    } catch (e) {
+      // 예전 Agent면 이 기능이 없다. 패키지 탭의 나머지는 그대로 쓴다.
+      setPackages([]);
+      onError(errorText(e));
+    }
+  }, [hostId, onError]);
+
+  useEffect(() => {
+    void load();
+  }, [load, refreshKey]);
+
+  async function remove(pkg: MyPackageInfo) {
+    setConfirming(undefined);
+    try {
+      const { backup } = await window.piDesktop.deleteMyPackage(hostId, pkg.folder);
+      setNotice(`${pkg.name} 패키지를 지웠습니다. 백업: ${backup}`);
+      await load();
+    } catch (e) {
+      onError(errorText(e));
+    }
+  }
+
+  if (!packages || packages.length === 0) return null;
+  return (
+    <div className="my-packages">
+      <h4 className="settings-section">내가 만든 패키지 (~/pi-packages)</h4>
+      {notice && <div className="banner ok">{notice}</div>}
+      <ul className="resource-list">
+        {packages.map((pkg) => {
+          const installed = installedPackageFor(pkg.dir, view.packages);
+          const files = editablePackageFiles(pkg.files);
+          const chosen = fileChoice.get(pkg.dir) ?? files.find((f) => f.startsWith("extensions/")) ?? files[0];
+          return (
+            <li key={pkg.dir}>
+              <div className="resource-main">
+                <span className="resource-name">
+                  {pkg.name}
+                  {pkg.version && <span className="resource-badge">{pkg.version}</span>}
+                  {installed ? (
+                    <span className="resource-badge on">설치됨 ({installed.scope === "project" ? "프로젝트" : "사용자"})</span>
+                  ) : (
+                    <span className="resource-badge off">설치 안 됨</span>
+                  )}
+                </span>
+                {pkg.description && <span className="resource-desc">{pkg.description}</span>}
+                <span className="muted resource-path" title={pkg.dir}>
+                  {pkg.dir}
+                </span>
+              </div>
+              {files.length > 0 && (
+                <span className="my-package-edit">
+                  <select
+                    value={chosen}
+                    onChange={(e) => setFileChoice((prev) => new Map(prev).set(pkg.dir, e.target.value))}
+                    aria-label="고칠 파일"
+                  >
+                    {files.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className="small" disabled={!chosen} onClick={() => chosen && onEdit(joinPath(pkg.dir, ...chosen.split("/")))}>
+                    편집
+                  </button>
+                </span>
+              )}
+              {onRun &&
+                (installed ? (
+                  <button
+                    type="button"
+                    className="small"
+                    onClick={() => onRun(removeArgs(installed.source, installed.scope), `패키지 제거: ${pkg.name}`)}
+                    title="설정에서 이 패키지를 뺍니다 (폴더는 그대로 둡니다)"
+                  >
+                    설치 해제
+                  </button>
+                ) : (
+                  <button type="button" className="small primary" onClick={() => onRun(["install", pkg.dir], `패키지 설치: ${pkg.name}`)}>
+                    설치
+                  </button>
+                ))}
+              {onReveal && (
+                <button type="button" className="small" onClick={() => onReveal(joinPath(pkg.dir, "package.json"))}>
+                  위치 열기
+                </button>
+              )}
+              {confirming === pkg.dir ? (
+                <button type="button" className="small danger" onClick={() => void remove(pkg)} title="폴더를 백업 폴더로 옮깁니다">
+                  정말 삭제
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="small"
+                  disabled={Boolean(installed)}
+                  title={installed ? "설치되어 있으면 먼저 \"설치 해제\"를 하세요" : "폴더를 지웁니다 (백업 폴더로 옮김)"}
+                  onClick={() => setConfirming(pkg.dir)}
+                >
+                  삭제
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

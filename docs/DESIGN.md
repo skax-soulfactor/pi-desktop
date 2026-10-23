@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.63)
+# Pi Desktop — 설계 문서 (v0.64)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -800,6 +800,18 @@ xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인
 - 확인(dev:mock, Windows)
   - v0.1.7 소스로 빌드한 데몬에 세션을 열어 둔 채 현재 앱으로 다시 붙었다. 확장 만들기에서 안내가 나왔다.
   - "지금 바꾸기" 뒤에는 만들어졌다.
+
+**구현 메모: 내가 만든 패키지 (v0.64)**
+- 문제: 패키지를 만들고 바로 설치하지 않으면, 창을 닫은 뒤 패키지 탭에서 다시 찾을 수 없었다(설정에 적힌 패키지만 보였다).
+- `resources.listPackages`(`listMyPackages`): `~/pi-packages`에서 package.json이 있는 폴더를 이름·버전·설명·파일 목록(node_modules·.git 제외, 200개까지)과 함께 돌려준다. package.json이 깨졌어도 목록에 보여 고칠 수 있게 한다.
+- `resources.deletePackage`: 폴더를 `~/.pi-desktop/resource-backups/packages`로 옮긴다. 이름에 경로 구분자·..가 있으면 거절한다.
+- 화면: 패키지 탭 "내가 만든 패키지"
+  - 설치 여부는 설정의 패키지 중 `installedPath`가 그 폴더인 것으로 본다(`installedPackageFor`, 구분자·대소문자 무시).
+  - 동작: 파일 골라 편집, 설치(`pi install <폴더>`)·설치 해제(`pi remove <source>`), 위치 열기, 삭제(설치된 동안은 막음)
+- 확인(dev:mock, CDP)
+  - 패키지를 만들고 리소스 창을 다시 열자 목록에 "설치 안 됨"으로 나왔다.
+  - 설치하자 "설치됨 (사용자)"로 바뀌었고, 그동안 삭제는 막혔다.
+  - 파일 편집이 열렸다. 설치 해제 뒤 삭제하자 백업 폴더로 옮겨졌다.
 
 ## 5. 상세 설계 포인트
 

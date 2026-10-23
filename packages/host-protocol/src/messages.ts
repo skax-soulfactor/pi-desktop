@@ -96,6 +96,10 @@ export const Methods = {
   resourcesCreate: "resources.create",
   /** ~/pi-packages/<이름>에 새 Pi 패키지를 만든다 (package.json·확장·고른 리소스 복사) */
   resourcesCreatePackage: "resources.createPackage",
+  /** ~/pi-packages의 내 패키지 목록 */
+  resourcesListPackages: "resources.listPackages",
+  /** 내 패키지를 지운다 (백업 폴더로 옮긴다) */
+  resourcesDeletePackage: "resources.deletePackage",
   /** 받은 스킬 폴더·프롬프트 파일을 사용자·프로젝트 범위에 쓴다 (개별 가져오기) */
   resourcesImport: "resources.import",
   /** 다른 호스트로 복사할 스킬 폴더·프롬프트 파일을 읽는다 */
@@ -736,6 +740,19 @@ export interface PackageCreateParams {
   extensionTemplate?: ExtensionTemplate;
   /** 함께 넣을 기존 리소스 (복사한다. 원본은 그대로) */
   include: Array<{ path: string; kind: "prompt" | "skill" | "extension" }>;
+}
+
+/** 앱이 만든 패키지 폴더(~/pi-packages)의 패키지 하나 */
+export interface MyPackageInfo {
+  /** 폴더 이름 */
+  folder: string;
+  dir: string;
+  /** package.json의 name (없거나 깨졌으면 폴더 이름) */
+  name: string;
+  version?: string;
+  description?: string;
+  /** 폴더 안의 파일 (상대 경로, node_modules·.git 제외, 최대 200개) */
+  files: string[];
 }
 
 export interface PackageCreateResult {

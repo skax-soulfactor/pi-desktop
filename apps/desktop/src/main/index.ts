@@ -30,6 +30,7 @@ import {
   type ExtensionTemplate,
   type PackageCreateParams,
   type PackageCreateResult,
+  type MyPackageInfo,
   type ResourceWriteResult,
   type FsSearchResult,
   type ProviderInfo,
@@ -571,6 +572,10 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   );
   handle(IpcChannels.createPackage, (_event, hostId: string, params: PackageCreateParams) =>
     conn(hostId).request<PackageCreateResult>(Methods.resourcesCreatePackage, params),
+  );
+  handle(IpcChannels.listMyPackages, (_event, hostId: string) => conn(hostId).request<MyPackageInfo[]>(Methods.resourcesListPackages));
+  handle(IpcChannels.deleteMyPackage, (_event, hostId: string, folder: string) =>
+    conn(hostId).request<{ backup: string }>(Methods.resourcesDeletePackage, { folder }),
   );
   handle(IpcChannels.deleteResource, (_event, hostId: string, path: string, kind: "prompt" | "skill" | "extension") =>
     conn(hostId).request<{ backup: string }>(Methods.resourcesDelete, { path, kind }),

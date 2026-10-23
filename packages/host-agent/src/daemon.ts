@@ -23,6 +23,7 @@ import {
   type ResourceCreateParams,
   type PackageCreateParams,
   type PackageCreateResult,
+  type MyPackageInfo,
   type ResourceImportParams,
   type ResourceImportResult,
   type ImportedInspectResult,
@@ -121,7 +122,7 @@ import { Playground } from "./playground";
 import { listStoredSessions, loadPiSdk, readStoredSession } from "./pi-sdk";
 import { listPiModels } from "./pi-models";
 import { EXTENSION_TEMPLATES } from "./extension-templates";
-import { createPackage } from "./package-scaffold";
+import { createPackage, deleteMyPackage, listMyPackages } from "./package-scaffold";
 import { createToken, serverHandshake, writeToken } from "./handshake";
 import { AgentSession } from "./session";
 import { AGENT_VERSION } from "./version";
@@ -851,6 +852,14 @@ export class AgentDaemon {
         agentDirOf(this.env),
         defaultPackagesRoot(),
       ).catch(asInvalid);
+    });
+
+    peer.handle(Methods.resourcesListPackages, (): Promise<MyPackageInfo[]> => listMyPackages(defaultPackagesRoot()));
+
+    peer.handle(Methods.resourcesDeletePackage, async (params): Promise<{ backup: string }> => {
+      const { folder } = requireStrings(params, ["folder"]) as { folder: string };
+      const backups = join(agentHome(this.env), "resource-backups", "packages");
+      return { backup: await deleteMyPackage(folder, defaultPackagesRoot(), backups).catch(asInvalid) };
     });
 
     peer.handle(Methods.resourcesCreate, (params): Promise<ResourceFile> => {

@@ -3,7 +3,9 @@ import type { ResourcesView } from "@pi-desktop/host-protocol/messages";
 import {
   creatableKind,
   diagnosticsByPath,
+  editablePackageFiles,
   formatSize,
+  installedPackageFor,
   hasReloadCommand,
   isDeletable,
   isEditable,
@@ -147,5 +149,24 @@ describe("확장 만들기·편집", () => {
   it("joinPath는 그 경로의 구분자를 따른다", () => {
     expect(joinPath("C:\\Users\\me\\pi-packages\\p", "extensions", "p.ts")).toBe("C:\\Users\\me\\pi-packages\\p\\extensions\\p.ts");
     expect(joinPath("/home/me/pi-packages/p/", "package.json")).toBe("/home/me/pi-packages/p/package.json");
+  });
+});
+
+describe("내 패키지", () => {
+  it("로컬 경로로 설치된 패키지를 그 폴더로 찾는다 (구분자·대소문자 무시)", () => {
+    const packages = [
+      { source: "npm:x", scope: "user" as const, installedPath: "/home/me/.pi/agent/npm/node_modules/x" },
+      { source: "..\\..\\pi-packages\\mine", scope: "user" as const, installedPath: "C:\\Users\\Me\\pi-packages\\mine" },
+    ];
+    expect(installedPackageFor("c:/users/me/pi-packages/mine/", packages)?.source).toBe("..\\..\\pi-packages\\mine");
+    expect(installedPackageFor("C:\\Users\\Me\\pi-packages\\other", packages)).toBeUndefined();
+  });
+
+  it("고칠 수 있는 파일만 고른다", () => {
+    expect(editablePackageFiles([".gitignore", "README.md", "extensions/a.ts", "package.json", "assets/logo.png"])).toEqual([
+      "README.md",
+      "extensions/a.ts",
+      "package.json",
+    ]);
   });
 });
