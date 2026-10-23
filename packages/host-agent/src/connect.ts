@@ -1,4 +1,6 @@
 import { createConnection, type Socket } from "node:net";
+import { Notifications } from "@pi-desktop/host-protocol";
+import { clientHandshake, readToken } from "./handshake";
 import { spawnDaemon } from "./spawn-daemon";
 import { socketPath } from "./paths";
 
@@ -22,7 +24,29 @@ export async function connectToDaemon(options: ConnectOptions = {}): Promise<Soc
 
   const existing = await tryConnect(path);
   if (existing) return existing;
+  return startAndConnect(path, env, options);
+}
 
+/** 연결 결과: 소켓, 데몬 신원 확인 여부, 인증 뒤에 이미 받은 데몬 출력 */
+export interface DaemonConnection {
+  socket: Socket;
+  status: "verified" | "legacy";
+  rest: Buffer;
+}
+
+/** 데몬에 붙고 토큰으로 서로를 확인한다 (handshake.ts). 데몬이 증명하지 못하면 오류를 던진다. */
+export async function connectVerified(options: ConnectOptions = {}): Promise<DaemonConnection> {
+  const env = options.env ?? process.env;
+  const socket = await connectToDaemon(options);
+  try {
+    return { socket, ...(await clientHandshake(socket, () => readToken(env))) };
+  } catch (error) {
+    socket.destroy();
+    throw error;
+  }
+}
+
+async function startAndConnect(path: string, env: NodeJS.ProcessEnv, options: ConnectOptions): Promise<Socket> {
   const script = options.agentScript ?? process.argv[1];
   if (!script) throw new Error("Host Agent 스크립트 경로를 알 수 없습니다");
   await spawnDaemon(script, env);
@@ -39,13 +63,21 @@ export async function connectToDaemon(options: ConnectOptions = {}): Promise<Soc
 }
 
 /**
- * 연결기 본체: 표준 입출력과 데몬 소켓을 그대로 이어준다.
+ * 연결기 본체: 데몬과 서로 확인한 뒤 표준 입출력과 데몬 소켓을 그대로 이어준다.
  * 내용은 해석하지 않는다. 어느 한쪽이 닫히면 함께 끝난다.
+ * 확인 전에는 앱이 보낸 요청(stdin)을 넘기지 않는다. 가짜 데몬에 API 키 같은 요청이 가지 않게 하기 위해서다.
  */
 export async function runConnect(options: ConnectOptions = {}): Promise<void> {
-  const socket = await connectToDaemon(options);
+  const { socket, status, rest } = await connectVerified(options);
+  // Windows 파이프는 다른 사용자도 같은 이름을 만들 수 있어, 인증 없는 데몬은 믿지 않는다고 앱에 알린다.
+  // POSIX 소켓은 0700 폴더 안이라 예전 데몬도 같은 사용자의 것이다.
+  if (status === "legacy" && process.platform === "win32") {
+    process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", method: Notifications.connectorUnverified })}\n`);
+  }
+  if (rest.length > 0) process.stdout.write(rest);
   process.stdin.pipe(socket);
   socket.pipe(process.stdout);
+  socket.resume();
   await new Promise<void>((resolve) => {
     const done = () => resolve();
     socket.once("close", done);

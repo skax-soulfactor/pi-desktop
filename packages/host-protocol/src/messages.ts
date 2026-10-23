@@ -128,6 +128,11 @@ export const DaemonEvents = {
 
 /** 데몬 → 앱 알림 */
 export const Notifications = {
+  /**
+   * 연결기가 데몬의 신원을 확인하지 못했다 (Windows에서 인증을 모르는 예전 데몬, 또는 그런 척하는 다른 프로그램).
+   * 데몬이 아니라 연결기 자신이 맨 앞에 쓴다. 앱은 이 연결로 끄기 요청 말고는 보내지 않는다.
+   */
+  connectorUnverified: "connector.unverified",
   /** 세션에서 Pi 이벤트가 나왔다 (저널 순번 포함) */
   sessionEvent: "session.event",
   /** 세션의 Pi 프로세스가 끝났다 */
