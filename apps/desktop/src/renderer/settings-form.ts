@@ -195,3 +195,25 @@ export function jsonProblem(text: string): string | undefined {
     return `JSON이 올바르지 않습니다: ${e instanceof Error ? e.message : String(e)}`;
   }
 }
+
+/**
+ * defaultProvider·defaultModel 칸의 선택지 (이 호스트의 Pi가 쓸 수 있는 모델에서).
+ * 모델은 고른 프로바이더의 것만 보인다. 그 밖의 칸이거나 목록이 비면 undefined (직접 입력).
+ */
+export function modelChoices(
+  key: string,
+  models: ReadonlyArray<{ provider: string; id: string }>,
+  provider?: unknown,
+): string[] | undefined {
+  const sorted = (list: Iterable<string>) => [...new Set(list)].sort((a, b) => a.localeCompare(b));
+  if (key === "defaultProvider") {
+    const providers = sorted(models.map((m) => m.provider));
+    return providers.length > 0 ? providers : undefined;
+  }
+  if (key === "defaultModel") {
+    const own = typeof provider === "string" ? models.filter((m) => m.provider === provider) : [];
+    const ids = sorted((own.length > 0 ? own : models).map((m) => m.id));
+    return ids.length > 0 ? ids : undefined;
+  }
+  return undefined;
+}

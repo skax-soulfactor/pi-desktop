@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
-import type { SettingsTarget } from "@pi-desktop/host-protocol/messages";
+import type { PiModelsResult, SettingsTarget } from "@pi-desktop/host-protocol/messages";
 import { errorText } from "./folder-browser";
 import { SettingsJsonEditor } from "./SettingsJsonEditor";
 import {
   changedEdits,
+  modelChoices,
   parseNumberOr,
   schemaFields,
   settingsPatch,
@@ -94,6 +95,8 @@ function SettingsForm({ hostId, target }: { hostId: string; target: SettingsTarg
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | undefined>();
+  /** 이 호스트의 Pi가 쓸 수 있는 모델 (defaultProvider·defaultModel 선택지) */
+  const [models, setModels] = useState<PiModelsResult | undefined>();
 
   async function loadValues() {
     const read = await window.piDesktop.settingsRead(hostId, target);
@@ -118,6 +121,9 @@ function SettingsForm({ hostId, target }: { hostId: string; target: SettingsTarg
         setError(errorText(e));
       }
     })();
+    // 모델 목록은 Pi를 한 번 띄워 읽으므로 느릴 수 있다. 폼을 먼저 보이고 따로 채운다.
+    setModels(undefined);
+    void window.piDesktop.piModels(hostId).then(setModels, (e: unknown) => setModels({ models: [], error: errorText(e) }));
   }, [hostId]);
 
   const form = useMemo(() => (schema ? schemaFields(schema) : undefined), [schema]);
@@ -161,10 +167,24 @@ function SettingsForm({ hostId, target }: { hostId: string; target: SettingsTarg
   const matches = (f: SettingsField) => !q || f.key.toLowerCase().includes(q) || (f.description ?? "").toLowerCase().includes(q);
   const common = form.fields.filter((f) => f.common && matches(f));
   const rest = form.fields.filter((f) => !f.common && matches(f));
+  const provider = edits.has("defaultProvider") ? edits.get("defaultProvider") : valueAt(values, ["defaultProvider"]);
+  const isModelField = (f: SettingsField) => f.key === "defaultProvider" || f.key === "defaultModel";
   const row = (f: SettingsField) => (
     <FieldRow
       key={f.key}
       field={f}
+      {...(isModelField(f) && models ? { choices: modelChoices(f.key, models.models, provider) } : {})}
+      {...(isModelField(f)
+        ? {
+            hint: !models
+              ? "이 호스트의 모델 목록을 읽는 중…"
+              : models.error
+                ? `모델 목록을 읽지 못해 직접 입력합니다: ${models.error}`
+                : models.models.length === 0
+                  ? "인증된 프로바이더가 없어 고를 모델이 없습니다. 직접 입력하거나 프로바이더 탭에서 로그인하세요."
+                  : undefined,
+          }
+        : {})}
       saved={valueAt(values, f.path)}
       value={edits.has(f.key) ? edits.get(f.key) : valueAt(values, f.path)}
       draft={drafts.get(f.key)}
@@ -256,6 +276,9 @@ function SettingsForm({ hostId, target }: { hostId: string; target: SettingsTarg
   );
 }
 
+/** 선택 목록의 "직접 입력…" 항목 값 (설정값과 겹치지 않는 글자) */
+const CUSTOM = "\u0000custom";
+
 function FieldRow({
   field,
   saved,
@@ -263,6 +286,8 @@ function FieldRow({
   draft,
   onChange,
   onDraft,
+  choices,
+  hint,
 }: {
   field: SettingsField;
   saved: unknown;
@@ -270,10 +295,36 @@ function FieldRow({
   draft: string | undefined;
   onChange: (value: unknown) => void;
   onDraft: (text: string | undefined) => void;
+  /** 글자 칸을 목록에서 고르게 할 때의 선택지 (defaultProvider·defaultModel) */
+  choices?: string[] | undefined;
+  /** 칸 아래 안내 */
+  hint?: string | undefined;
 }) {
   const defaultText = field.default !== undefined ? ` (${settingText(field.default)})` : "";
+  // 목록에 없는 값을 직접 쓰는 중 (선택지가 있어도 "직접 입력…"을 고르면 글자 칸으로)
+  const [typing, setTyping] = useState(false);
   let control: ReactElement;
-  if (field.kind === "boolean" || field.kind === "enum") {
+  if (field.kind === "string" && choices && !typing) {
+    const current = typeof value === "string" ? value : undefined;
+    control = (
+      <select
+        value={current ?? ""}
+        onChange={(e) => {
+          if (e.target.value === CUSTOM) setTyping(true);
+          else onChange(e.target.value === "" ? undefined : e.target.value);
+        }}
+      >
+        <option value="">기본값{defaultText}</option>
+        {choices.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+        {current !== undefined && !choices.includes(current) && <option value={current}>{current} (목록에 없음)</option>}
+        <option value={CUSTOM}>직접 입력…</option>
+      </select>
+    );
+  } else if (field.kind === "boolean" || field.kind === "enum") {
     const options = field.kind === "boolean" ? [true, false] : field.options ?? [];
     const index = value === undefined ? -1 : options.findIndex((o) => o === value);
     control = (
@@ -328,12 +379,20 @@ function FieldRow({
     );
   } else {
     control = (
-      <input
-        value={typeof value === "string" ? value : ""}
-        placeholder={`기본값${defaultText}`}
-        spellCheck={false}
-        onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
-      />
+      <>
+        <input
+          value={typeof value === "string" ? value : ""}
+          placeholder={`기본값${defaultText}`}
+          spellCheck={false}
+          autoFocus={typing}
+          onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
+        />
+        {typing && (
+          <button type="button" className="small" onClick={() => setTyping(false)}>
+            목록에서 고르기
+          </button>
+        )}
+      </>
     );
   }
   const changed = JSON.stringify(saved) !== JSON.stringify(value);
@@ -345,7 +404,10 @@ function FieldRow({
         {changed && <span className="resource-badge on">바뀜</span>}
         {field.description && <div className="check-detail">{field.description}</div>}
       </div>
-      <div className="settings-field-control">{control}</div>
+      <div className="settings-field-control">
+        {control}
+        {hint && <div className="check-detail">{hint}</div>}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 // 저장소에 설치된 Pi가 함께 배포한 실제 스키마
 import schemaText from "../../../../node_modules/@earendil-works/pi-coding-agent/schemas/settings.schema.json?raw";
-import { changedEdits, jsonProblem, parseNumberOr, schemaFields, settingsPatch, settingText, valueAt } from "../../src/renderer/settings-form";
+import { changedEdits, jsonProblem, modelChoices, parseNumberOr, schemaFields, settingsPatch, settingText, valueAt } from "../../src/renderer/settings-form";
 
 const schema = JSON.parse(schemaText) as Record<string, unknown>;
 
@@ -70,5 +70,25 @@ describe("jsonProblem", () => {
     expect(jsonProblem("[]")).toContain("객체");
     expect(jsonProblem("null")).toContain("객체");
     expect(jsonProblem("{ x")).toContain("올바르지");
+  });
+});
+
+describe("modelChoices", () => {
+  const models = [
+    { provider: "openai", id: "gpt-x" },
+    { provider: "anthropic", id: "claude-b" },
+    { provider: "anthropic", id: "claude-a" },
+  ];
+
+  it("프로바이더 칸은 프로바이더 목록, 모델 칸은 고른 프로바이더의 모델", () => {
+    expect(modelChoices("defaultProvider", models)).toEqual(["anthropic", "openai"]);
+    expect(modelChoices("defaultModel", models, "anthropic")).toEqual(["claude-a", "claude-b"]);
+  });
+
+  it("프로바이더를 안 골랐거나 목록에 없으면 모든 모델, 다른 칸이나 빈 목록은 직접 입력", () => {
+    expect(modelChoices("defaultModel", models)).toEqual(["claude-a", "claude-b", "gpt-x"]);
+    expect(modelChoices("defaultModel", models, "custom")).toEqual(["claude-a", "claude-b", "gpt-x"]);
+    expect(modelChoices("shellPath", models)).toBeUndefined();
+    expect(modelChoices("defaultProvider", [])).toBeUndefined();
   });
 });
