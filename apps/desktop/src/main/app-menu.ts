@@ -97,6 +97,7 @@ export function appMenuTemplate(platform: NodeJS.Platform, actions: MenuActions)
         { type: "separator" },
         item("abort", "중단"),
         item("clear-queue", "대기 중인 메시지를 입력창으로"),
+        item("session-restart", "세션 새로고침 (로그인 뒤 모델 다시 읽기)"),
         { type: "separator" },
         item("model", "모델 고르기…"),
         item("thinking", "Thinking 수준…"),

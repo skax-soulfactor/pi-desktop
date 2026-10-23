@@ -31,6 +31,7 @@ import {
   type FsSearchResult,
   type ProviderInfo,
   type PiLatest,
+  type PiModelsResult,
   type PiStatus,
   type PiVersions,
   type PiUpdateResult,
@@ -302,6 +303,7 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   handle(IpcChannels.piLatest, (_event, hostId: string, force: boolean) =>
     conn(hostId).request<PiLatest>(Methods.piLatest, { force }),
   );
+  handle(IpcChannels.piModels, (_event, hostId: string) => conn(hostId).request<PiModelsResult>(Methods.piModels));
   handle(IpcChannels.piUpdate, (_event, hostId: string, target: PiUpdateTarget, taskId: string, force: boolean) =>
     // 업데이트는 몇 분 걸릴 수 있어 응답 시간 제한을 두지 않는다 (데몬이 15분에서 멈춘다).
     conn(hostId).request<PiUpdateResult>(Methods.piUpdate, { target, taskId, force }, 0),

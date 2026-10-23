@@ -28,6 +28,7 @@ import type {
   FsSearchResult,
   ProviderInfo,
   PiLatest,
+  PiModelsResult,
   PiStatus,
   PiVersions,
   PiUpdateOutputNotification,
@@ -382,6 +383,8 @@ export interface PiDesktopApi {
   piVersions(hostId: string): Promise<PiVersions>;
   /** Pi 최신 버전 (데몬이 1시간 캐시, force면 다시 묻는다) */
   piLatest(hostId: string, force?: boolean): Promise<PiLatest>;
+  /** 이 호스트의 Pi가 쓸 수 있는 모델 (pi --list-models). 설정 폼의 프로바이더·모델 선택지 */
+  piModels(hostId: string): Promise<PiModelsResult>;
   /**
    * Pi 업데이트 (pi update). 끝날 때까지 기다린다. 진행 출력은 onPiUpdateOutput으로 taskId와 함께 온다.
    */
@@ -591,6 +594,7 @@ export const IpcChannels = {
   createResource: "pi:create-resource",
   piStatus: "pi:pi-status",
   piLatest: "pi:pi-latest",
+  piModels: "pi:pi-models",
   piVersions: "pi:pi-versions",
   dataBackup: "pi:data-backup",
   dataDelete: "pi:data-delete",

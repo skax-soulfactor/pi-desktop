@@ -60,6 +60,7 @@ const api: PiDesktopApi = {
   dataDelete: (hostId, confirm) => ipcRenderer.invoke(IpcChannels.dataDelete, hostId, confirm),
   piVersions: (hostId) => ipcRenderer.invoke(IpcChannels.piVersions, hostId),
   piLatest: (hostId, force) => ipcRenderer.invoke(IpcChannels.piLatest, hostId, force === true),
+  piModels: (hostId) => ipcRenderer.invoke(IpcChannels.piModels, hostId),
   searchFiles: (hostId, cwd, query) => ipcRenderer.invoke(IpcChannels.searchFiles, hostId, cwd, query),
   listDir: (hostId, path) => ipcRenderer.invoke(IpcChannels.listDir, hostId, path),
   makeDir: (hostId, parent, name) => ipcRenderer.invoke(IpcChannels.makeDir, hostId, parent, name),
