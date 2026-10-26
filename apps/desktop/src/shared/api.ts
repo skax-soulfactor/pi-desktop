@@ -478,7 +478,10 @@ export interface PiDesktopApi {
   recordCopy(input: CopyRecordInput): Promise<void>;
   /** 앱 자동 업데이트 상태와 조작 (M5) */
   updateState(): Promise<UpdateState>;
-  checkForUpdates(): Promise<UpdateState>;
+  /** 업데이트를 확인한다. interactive면 결과를 창으로 알리고, 새 버전이 있으면 업데이트할지 묻는다 */
+  checkForUpdates(interactive?: boolean): Promise<UpdateState>;
+  /** 찾은 새 버전을 받을지 묻고, 고르면 내려받는다 (알리기만 하는 곳은 릴리스 페이지를 연다) */
+  confirmUpdate(): Promise<void>;
   /** 내려받은 업데이트를 설치하며 다시 시작한다 */
   installUpdate(): Promise<void>;
   /** 새 버전의 릴리스 페이지를 연다 (알리기만 하는 곳) */
@@ -591,6 +594,7 @@ export const IpcChannels = {
   listActionLog: "pi:list-action-log",
   updateState: "pi:update-state",
   checkForUpdates: "pi:check-for-updates",
+  confirmUpdate: "pi:confirm-update",
   installUpdate: "pi:install-update",
   openRelease: "pi:open-release",
   updateStateChanged: "pi:update-state-changed",

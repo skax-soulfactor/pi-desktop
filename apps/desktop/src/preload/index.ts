@@ -91,7 +91,8 @@ const api: PiDesktopApi = {
   hostInventory: (hostId) => ipcRenderer.invoke(IpcChannels.hostInventory, hostId),
   listActionLog: (limit) => ipcRenderer.invoke(IpcChannels.listActionLog, limit),
   updateState: () => ipcRenderer.invoke(IpcChannels.updateState),
-  checkForUpdates: () => ipcRenderer.invoke(IpcChannels.checkForUpdates),
+  checkForUpdates: (interactive) => ipcRenderer.invoke(IpcChannels.checkForUpdates, interactive === true),
+  confirmUpdate: () => ipcRenderer.invoke(IpcChannels.confirmUpdate),
   installUpdate: () => ipcRenderer.invoke(IpcChannels.installUpdate),
   openRelease: () => ipcRenderer.invoke(IpcChannels.openRelease),
   onMenuCommand: (listener) => {
