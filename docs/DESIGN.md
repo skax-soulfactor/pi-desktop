@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.67)
+# Pi Desktop — 설계 문서 (v0.68)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -841,6 +841,20 @@ xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인
   - Linux에서는 탭을 하나만 썼기 때문에 한 개로 보였다.
 - `loadTabs`: 첫 탭과, 보던 세션이 기억된 탭(`pi-desktop.tab.<id>.lastSession.<호스트>`가 null이 아님)만 되살린다(`restorableTabIds`). 되살리지 않는 탭의 저장값은 지운다.
 - 확인(dev:mock): 빈 새 탭을 만든 뒤 새로 고침하자 사라졌다. 세션을 연 둘째 탭은 남았다.
+
+**구현 메모: 업데이트를 묻고 진행 (v0.68)**
+- 그전에는 auto 모드(Windows·AppImage)에서 `autoDownload`로 묻지 않고 내려받고, `autoInstallOnAppQuit`로 끌 때 설치했다. 직접 확인했는데 업데이트가 없으면 아무 말이 없었다.
+- 이제 `autoDownload`와 `autoInstallOnAppQuit`를 끈 채로 시작한다.
+  - 새 버전을 찾으면 `available` 상태로 배지만 보인다.
+  - 배지·"업데이트 확인"(`checkForUpdates(true)`)·`confirmUpdate`가 main의 `dialog.showMessageBox`로 묻는다.
+  - 업데이트를 고르면 `downloadUpdate` 하고 `autoInstallOnAppQuit`를 켠다. `update-downloaded` 뒤에 지금 다시 시작해 설치할지 묻는다.
+  - 창 문구는 `update-policy.ts`의 `availablePrompt`·`restartPrompt`·`resultPrompt`로 테스트한다.
+- 직접 확인(interactive): 결과가 none이면 "최신 버전입니다", error면 이유와 VPN·프록시 안내, 개발·로컬 빌드면 확인하지 않는 실행이라고 알린다. 주기적 확인은 배지만 바꾼다.
+- 확인(Windows, 빌드한 설치본을 따로 둔 데이터 폴더로 실행, `PI_DESKTOP_UPDATE_URL`의 로컬 피드, 창은 UI Automation으로 읽고 누름)
+  - 피드가 같은 버전이면 15초 뒤 확인은 조용했고, 직접 확인은 "최신 버전입니다"를 띄웠다.
+  - 피드를 0.0.2로 바꾸자 업데이트할지 물었다. 나중에를 고르자 latest.yml만 받고 설치 파일은 받지 않았으며, 배지가 "새 버전 0.0.2 업데이트…"였다.
+  - 배지를 눌러 업데이트를 고르자 내려받은 뒤 다시 시작할지 물었다. 나중에를 고르자 배지가 "다시 시작해 0.0.2 설치"가 됐다.
+  - 시험 앱은 강제로 끝내 설치하지 않았다. 시험 내려받기(updater 캐시의 pending)는 지웠다.
 
 ## 5. 상세 설계 포인트
 
