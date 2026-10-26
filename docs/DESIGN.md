@@ -1,4 +1,4 @@
-# Pi Desktop — 설계 문서 (v0.66)
+# Pi Desktop — 설계 문서 (v0.67)
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
@@ -835,6 +835,12 @@ xterm.js와 `pty.*`를 쓴다. 쓰임새는 대화형 설치기, OAuth 로그인
 - 확인
   - dev:mock에서 bash 툴과 `!명령`으로 `findstr`·`tasklist`를 실행했다. 출력이 깨지지 않았고(안내 문구는 영어), 툴 카드에는 원래 명령이 보였다.
   - 실제 Pi 테스트(`real-pi-bridge.test.ts`, Windows만): `!명령` 출력에 깨진 글자(U+FFFD)가 없다.
+
+**구현 메모: 빈 탭 되살리지 않기 (v0.67)**
+- 문제: Windows에서 실행할 때마다 탭이 두 개 나왔다. 저장된 탭 목록(`pi-desktop.tabs`)에 예전에 열어 둔 빈 탭이 남아 있었고, 앱은 그 탭까지 되살렸다.
+  - Linux에서는 탭을 하나만 썼기 때문에 한 개로 보였다.
+- `loadTabs`: 첫 탭과, 보던 세션이 기억된 탭(`pi-desktop.tab.<id>.lastSession.<호스트>`가 null이 아님)만 되살린다(`restorableTabIds`). 되살리지 않는 탭의 저장값은 지운다.
+- 확인(dev:mock): 빈 새 탭을 만든 뒤 새로 고침하자 사라졌다. 세션을 연 둘째 탭은 남았다.
 
 ## 5. 상세 설계 포인트
 
