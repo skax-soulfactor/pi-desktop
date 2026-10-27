@@ -11,6 +11,7 @@ function subscribe<T>(channel: string, listener: (hostId: string, payload: T) =>
 const api: PiDesktopApi = {
   listHosts: () => ipcRenderer.invoke(IpcChannels.listHosts),
   connectHost: (hostId) => ipcRenderer.invoke(IpcChannels.connectHost, hostId),
+  reconnectHost: (hostId) => ipcRenderer.invoke(IpcChannels.reconnectHost, hostId),
   listSshHosts: () => ipcRenderer.invoke(IpcChannels.listSshHosts),
   saveSshHost: (host, previousName) => ipcRenderer.invoke(IpcChannels.saveSshHost, host, previousName),
   removeSshHost: (name) => ipcRenderer.invoke(IpcChannels.removeSshHost, name),
