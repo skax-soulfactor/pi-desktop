@@ -36,6 +36,8 @@ export const IpcChannels = {
   listMemories: "agent:list-memories",
   addMemory: "agent:add-memory",
   forgetMemory: "agent:forget-memory",
+  getAutoLearn: "agent:get-auto-learn",
+  setAutoLearn: "agent:set-auto-learn",
   listRules: "agent:list-rules",
   removeRule: "agent:remove-rule",
   listAudit: "agent:list-audit",
@@ -83,6 +85,9 @@ export interface MemoryView {
   kind: "preference" | "fact" | "lesson";
   created: string;
   text: string;
+  /** 대화가 끝난 뒤 자동으로 뽑은 기억이면 "auto" */
+  source?: "auto";
+  updated?: string;
 }
 
 /** 승인 규칙 (agent-kit permissions/rules의 Rule) */
@@ -133,6 +138,9 @@ export interface AgentApi {
   listMemories(): Promise<MemoryView[]>;
   addMemory(kind: MemoryView["kind"], text: string): Promise<void>;
   forgetMemory(id: string): Promise<void>;
+  /** 대화가 끝난 뒤 자동으로 기억을 뽑는가 */
+  getAutoLearn(): Promise<boolean>;
+  setAutoLearn(on: boolean): Promise<void>;
   listRules(): Promise<RuleView[]>;
   removeRule(rule: RuleView): Promise<void>;
   listAudit(): Promise<AuditView[]>;

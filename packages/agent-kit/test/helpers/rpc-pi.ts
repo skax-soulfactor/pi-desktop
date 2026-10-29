@@ -149,6 +149,8 @@ export async function startPi(llmBaseUrl = "http://127.0.0.1:9/v1", options: Sta
       PI_CODING_AGENT_DIR: piAgentDir,
       PI_CODING_AGENT_SESSION_DIR: join(piAgentDir, "sessions"),
       PI_DESKTOP_AGENT_DATA: dataDir,
+      // 턴 뒤 기억 추출은 기본으로 끈다. 추출 요청이 다른 테스트의 스크립트 단계를 가로채지 않게 한다
+      PI_DESKTOP_AGENT_LEARN: "0",
       ...options.env,
     },
   });

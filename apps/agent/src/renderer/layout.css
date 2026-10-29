@@ -516,3 +516,18 @@ code.copy {
 .nav-sessions > li.nav-group {
   display: block;
 }
+
+/* 체크박스 한 줄 (기억 화면의 자동 기억 등) */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+.tag.auto {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+}

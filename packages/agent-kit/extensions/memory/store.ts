@@ -16,6 +16,10 @@ export interface Memory {
   kind: MemoryKind;
   created: string;
   text: string;
+  /** 턴이 끝난 뒤 자동으로 뽑은 기억이면 "auto" */
+  source?: "auto";
+  /** 마지막으로 고친 때 */
+  updated?: string;
 }
 
 export function memoryDir(dataDir: string): string {
@@ -42,11 +46,32 @@ export async function loadMemories(dir: string): Promise<Memory[]> {
   return memories.sort((a, b) => a.created.localeCompare(b.created) || a.id.localeCompare(b.id));
 }
 
-export async function saveMemory(dir: string, kind: MemoryKind, text: string, now = new Date()): Promise<Memory> {
-  const memory: Memory = { id: newId(now), kind, created: now.toISOString(), text: text.trim() };
+export async function saveMemory(dir: string, kind: MemoryKind, text: string, now = new Date(), source?: "auto"): Promise<Memory> {
+  const memory: Memory = { id: newId(now), kind, created: now.toISOString(), text: text.trim(), ...(source ? { source } : {}) };
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, `${memory.id}.md`), formatMemory(memory), "utf8");
   return memory;
+}
+
+/** 기억을 고친다 (만든 때와 출처는 그대로). 없으면 undefined */
+export async function updateMemory(
+  dir: string,
+  id: string,
+  patch: { kind?: MemoryKind; text: string },
+  now = new Date(),
+): Promise<Memory | undefined> {
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) return undefined;
+  const file = join(dir, `${id}.md`);
+  let current: Memory | undefined;
+  try {
+    current = parseMemory(id, await readFile(file, "utf8"));
+  } catch {
+    return undefined;
+  }
+  if (!current) return undefined;
+  const next: Memory = { ...current, kind: patch.kind ?? current.kind, text: patch.text.trim(), updated: now.toISOString() };
+  await writeFile(file, formatMemory(next), "utf8");
+  return next;
 }
 
 /** 기억을 잊는다. 파일은 forgotten/으로 옮겨 되돌릴 수 있게 한다. 없으면 false */
@@ -62,7 +87,8 @@ export async function forgetMemory(dir: string, id: string): Promise<boolean> {
 }
 
 export function formatMemory(memory: Memory): string {
-  return `---\nkind: ${memory.kind}\ncreated: ${memory.created}\n---\n${memory.text}\n`;
+  const extra = `${memory.source ? `source: ${memory.source}\n` : ""}${memory.updated ? `updated: ${memory.updated}\n` : ""}`;
+  return `---\nkind: ${memory.kind}\ncreated: ${memory.created}\n${extra}---\n${memory.text}\n`;
 }
 
 export function parseMemory(id: string, content: string): Memory | undefined {
@@ -75,11 +101,39 @@ export function parseMemory(id: string, content: string): Memory | undefined {
   }
   const kind = MEMORY_KINDS.includes(fields.kind as MemoryKind) ? (fields.kind as MemoryKind) : "fact";
   const text = match[2]!.trim();
-  return text ? { id, kind, created: fields.created ?? "", text } : undefined;
+  if (!text) return undefined;
+  return {
+    id,
+    kind,
+    created: fields.created ?? "",
+    text,
+    ...(fields.source === "auto" ? { source: "auto" as const } : {}),
+    ...(fields.updated ? { updated: fields.updated } : {}),
+  };
 }
 
 /** 시간이 드러나는 짧은 id (예: 20261029-134210-a1b2) */
 function newId(now: Date): string {
   const stamp = now.toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
   return `${stamp}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** 기억 설정 파일 (사람이 고칠 수 있는 JSON). 지금은 자동 기억 켜기·끄기만 있다 */
+export function memorySettingsFile(dir: string): string {
+  return join(dir, "settings.json");
+}
+
+/** 턴이 끝난 뒤 자동으로 기억을 뽑는가. 파일이 없거나 읽지 못하면 켠 것으로 본다 */
+export async function loadAutoLearn(dir: string): Promise<boolean> {
+  try {
+    const settings = JSON.parse(await readFile(memorySettingsFile(dir), "utf8")) as { autoLearn?: unknown };
+    return settings.autoLearn !== false;
+  } catch {
+    return true;
+  }
+}
+
+export async function saveAutoLearn(dir: string, on: boolean): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  await writeFile(memorySettingsFile(dir), `${JSON.stringify({ autoLearn: on }, null, 2)}\n`, "utf8");
 }
