@@ -44,6 +44,11 @@ function kitDir(): string {
   return resolve(app.getAppPath(), "../../packages/agent-kit");
 }
 
+// 개발·E2E 검증용 Chrome DevTools Protocol. 설치본은 환경 변수로 열지 않는다 (Pi Desktop과 같은 이유).
+if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
+  app.commandLine.appendSwitch("remote-debugging-port", process.env.PI_DESKTOP_REMOTE_DEBUG_PORT);
+}
+
 let mainWindow: BrowserWindow | undefined;
 const replays = new ReplayCollector<SessionEventNotification>();
 
