@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AutostartView, Overview, PiSetupView } from "../shared/api";
-import { ModelOptions } from "./PiSetup";
+import { ModelSelect } from "./PiSetup";
 import type { Act } from "./App";
 import { relativeTime } from "./mate-view";
 
@@ -40,16 +40,15 @@ export function SettingsView({
       </label>
       <label>
         기본 모델
-        <input list="config-models" value={model} onChange={(e) => setModel(e.target.value)} placeholder="provider/model-id" />
-        <ModelOptions id="config-models" setup={setup} />
+        <ModelSelect
+          value={model}
+          onChange={setModel}
+          setup={setup}
+          inheritLabel={`Pi 기본 모델 따르기${setup?.piDefaultModel ? ` (지금: ${setup.piDefaultModel})` : ""}`}
+        />
         <span className="muted small-text">
-          임무에서 따로 정하지 않으면 이 모델을 씁니다. 칸을 누르면 Pi에서 쓸 수 있는 모델({setup?.models.length ?? "…"}개)이 나옵니다.
-          {setup?.piDefaultModel && (
-            <>
-              {" "}
-              Pi 기본 모델: <button className="link" onClick={() => setModel(setup.piDefaultModel!)}>{setup.piDefaultModel}</button>
-            </>
-          )}
+          임무에서 따로 정하지 않으면 이 모델을 씁니다. "Pi 기본 모델 따르기"를 고르면 Pi Desktop에서 바꾼 기본 모델을 그대로 씁니다. 목록은
+          로그인한 프로바이더의 모델({setup?.models.length ?? "…"}개)입니다.
         </span>
       </label>
       <label>
@@ -64,7 +63,7 @@ export function SettingsView({
       <div className="row end">
         <button
           className="primary"
-          disabled={!dirty || !model.trim() || !(Number(limit) >= 0) || !(Number(maxCost) >= 0)}
+          disabled={!dirty || !(Number(limit) >= 0) || !(Number(maxCost) >= 0)}
           onClick={() =>
             void act(() =>
               window.mate.saveConfig({ model: model.trim(), dailyRunLimit: Math.floor(Number(limit)), maxCostUsd: Number(maxCost) }),
