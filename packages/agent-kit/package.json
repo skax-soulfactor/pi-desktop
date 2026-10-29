@@ -22,7 +22,8 @@
       "./extensions/ask-user/index.ts",
       "./extensions/web/index.ts",
       "./extensions/memory/index.ts",
-      "./extensions/documents/index.ts"
+      "./extensions/documents/index.ts",
+      "./extensions/tasks/index.ts"
     ]
   },
   "scripts": {

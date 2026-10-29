@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { approvalOptions, decisionOf, formatApprovalTitle } from "../../src/approval";
+import { attended } from "../../src/runtime";
 import { classify, evaluate, hardBlockReason, type Rule } from "./rules";
 import { addRule, appendAudit, dataDir, loadRules, type AuditRecord } from "./store";
 
@@ -60,7 +61,7 @@ export default function permissions(pi: ExtensionAPI): void {
     }
 
     // 예약 실행·피어 요청처럼 사람이 지켜보지 않는 실행에서는 묻지 못하므로 거부한다 (설계 §1).
-    if (!ctx.hasUI) return deny("unattended", "사람이 확인할 수 없는 실행이라 쓰기·실행 도구를 쓸 수 없다.");
+    if (!attended(ctx.hasUI)) return deny("unattended", "사람이 확인할 수 없는 실행이라 쓰기·실행 도구를 쓸 수 없다.");
 
     const key = `${request.toolName}\n${request.target}`;
     if (deniedThisRun.has(key)) {
