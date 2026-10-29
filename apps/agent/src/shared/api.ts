@@ -6,6 +6,8 @@ import type {
   SessionSummary,
   SessionUiResolvedNotification,
 } from "@pi-desktop/host-protocol/messages";
+import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
+import type { Schedule } from "@pi-desktop/agent-kit/schedule-plan";
 import type { ConnectionState } from "../vendor/shared/api";
 
 /**
@@ -21,6 +23,10 @@ export const IpcChannels = {
   listKeys: "agent:list-keys",
   setKey: "agent:set-key",
   removeKey: "agent:remove-key",
+  listTasks: "agent:list-tasks",
+  listSchedules: "agent:list-schedules",
+  setScheduleEnabled: "agent:set-schedule-enabled",
+  removeSchedule: "agent:remove-schedule",
   openSession: "agent:open-session",
   attachSession: "agent:attach-session",
   sendCommand: "agent:send-command",
@@ -30,9 +36,10 @@ export const IpcChannels = {
   sessionEvent: "agent:session-event",
   sessionExit: "agent:session-exit",
   uiResolved: "agent:ui-resolved",
+  tasksChanged: "agent:tasks-changed",
 } as const;
 
-export type { ConnectionState };
+export type { ConnectionState, Schedule, TaskRecord };
 
 /** attach 결과. attach 도중 알림으로 온 이벤트도 함께 담는다 (Pi Desktop의 AttachResult와 같음) */
 export interface AttachResult extends SessionAttachResult {
@@ -50,6 +57,11 @@ export interface AgentApi {
   listKeys(): Promise<string[]>;
   setKey(name: string, value: string): Promise<void>;
   removeKey(name: string): Promise<void>;
+  /** 최근 작업 (대화에서 맡긴 것·예약 실행). 최근 것부터 */
+  listTasks(): Promise<TaskRecord[]>;
+  listSchedules(): Promise<Schedule[]>;
+  setScheduleEnabled(id: string, enabled: boolean): Promise<void>;
+  removeSchedule(id: string): Promise<void>;
   /** agent-kit 확장을 올린 새 Pi 세션을 연다 */
   openSession(cwd: string): Promise<SessionSummary>;
   attachSession(sessionId: string, lastSeq: number): Promise<AttachResult>;
@@ -61,4 +73,6 @@ export interface AgentApi {
   onSessionEvent(listener: (notification: SessionEventNotification) => void): () => void;
   onSessionExit(listener: (notification: SessionExitNotification) => void): () => void;
   onUiResolved(listener: (notification: SessionUiResolvedNotification) => void): () => void;
+  /** 작업 기록이 바뀌었다 (새 작업·끝난 작업) */
+  onTasksChanged(listener: () => void): () => void;
 }

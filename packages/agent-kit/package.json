@@ -11,7 +11,11 @@
   "exports": {
     ".": "./src/index.ts",
     "./constants": "./src/constants.ts",
-    "./approval": "./src/approval.ts"
+    "./approval": "./src/approval.ts",
+    "./tasks": "./extensions/tasks/store.ts",
+    "./task-types": "./extensions/tasks/types.ts",
+    "./schedules": "./extensions/schedule/store.ts",
+    "./schedule-plan": "./extensions/schedule/plan.ts"
   },
   "pi": {
     "extensions": [

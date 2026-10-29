@@ -1,26 +1,13 @@
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { TaskRecord } from "./types";
+
+export type { TaskRecord, TaskStatus } from "./types";
 
 /**
  * 작업 기록 (설계 DESIGN-AGENT.md §3, §4). 작업 하나 = tasks/<id>.json.
  * 앱의 작업 목록과 예약 실행 결과도 이 파일을 읽는다.
  */
-
-export type TaskStatus = "running" | "done" | "failed" | "cancelled";
-
-export interface TaskRecord {
-  id: string;
-  title: string;
-  instruction: string;
-  /** delegate: 대화에서 맡김, schedule: 예약 실행 */
-  origin: "delegate" | "schedule";
-  status: TaskStatus;
-  cwd: string;
-  startedAt: string;
-  finishedAt?: string;
-  result?: string;
-  error?: string;
-}
 
 export function tasksDir(dataDir: string): string {
   return join(dataDir, "tasks");
