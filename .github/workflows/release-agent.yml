@@ -6,7 +6,8 @@
 # Pi Desktop(release.yml, v* 태그)·Pi Desktop Mate(mate-release.yml, mate-v* 태그)와 섞이지 않게 한다:
 # - 태그 이름이 달라 서로의 워크플로를 깨우지 않는다 ("v*"는 agent-v…와 맞지 않음)
 # - Agent 릴리스는 "Latest"로 표시하지 않는다. Pi Desktop의 자동 업데이트는 Latest 릴리스의 latest.yml을 보기 때문이다
-# - Agent는 아직 자동 업데이트가 없어 latest*.yml을 올리지 않는다
+# - Agent 자동 업데이트용 latest.yml·latest-linux.yml과 blockmap을 함께 올린다. 앱은 릴리스 목록에서 가장 높은 agent-v*를 찾아
+#   그 릴리스의 내려받기 주소에서 읽으므로, Pi Desktop의 latest.yml(Latest 릴리스)과 섞이지 않는다 (Mate와 같은 방식)
 # 코드 서명은 하지 않는다.
 name: Release Agent
 
@@ -59,6 +60,8 @@ jobs:
             apps/agent/release/*.dmg
             apps/agent/release/*.AppImage
             apps/agent/release/*.deb
+            apps/agent/release/*.blockmap
+            apps/agent/release/latest*.yml
 
   publish:
     name: GitHub Releases에 올리기
@@ -79,5 +82,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "Pi Desktop Agent ${GITHUB_REF_NAME#agent-}" \
-            --notes "Pi Desktop Agent 설치 파일입니다. Pi Desktop과 별도 앱이며 자동 업데이트는 아직 없습니다. 설치된 Pi가 필요합니다. 설명: apps/agent/README.md" \
+            --notes "Pi Desktop Agent 설치 파일입니다. Pi Desktop과 별도 앱입니다. v0.1.2부터 앱 안에서 자동 업데이트됩니다(Windows·AppImage, macOS는 새 버전을 알림). 설치된 Pi가 필요하고, Pi 관리는 Pi Desktop에서 합니다. 설명: apps/agent/README.md" \
             --latest=false

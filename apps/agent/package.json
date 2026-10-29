@@ -18,6 +18,9 @@
     "test": "vitest run",
     "dist": "npm run build -w @pi-desktop/host-agent && electron-vite build && electron-builder --config electron-builder.yml --publish never"
   },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
   "devDependencies": {
     "@pi-desktop/agent-kit": "*",
     "@pi-desktop/host-protocol": "*",
