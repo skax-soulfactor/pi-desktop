@@ -23,7 +23,8 @@
       "./extensions/web/index.ts",
       "./extensions/memory/index.ts",
       "./extensions/documents/index.ts",
-      "./extensions/tasks/index.ts"
+      "./extensions/tasks/index.ts",
+      "./extensions/schedule/index.ts"
     ]
   },
   "scripts": {

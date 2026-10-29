@@ -20,3 +20,11 @@ export function attended(hasUI: boolean, env: NodeJS.ProcessEnv = process.env): 
 export function isWorker(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[WORKER_ENV] === "1";
 }
+
+/** 앱이 데몬에 띄워 두는 스케줄러 세션에 주는 환경 변수 */
+export const SCHEDULER_ENV = "PI_DESKTOP_AGENT_SCHEDULER";
+
+/** 예약을 돌리는 상주 스케줄러 세션인가 */
+export function isScheduler(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env[SCHEDULER_ENV] === "1";
+}
