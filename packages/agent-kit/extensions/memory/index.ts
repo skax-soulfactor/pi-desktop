@@ -4,6 +4,7 @@ import { Type } from "typebox";
 import { isLocalBaseUrl } from "../local-model/budget";
 import { dataDir } from "../permissions/store";
 import { attended, isScheduler, isWorker, learning } from "../../src/runtime";
+import { recordUsage } from "../../src/usage";
 import { digestRun, EXTRACT_SYSTEM, extractPrompt, parseOps, UNVERIFIED_RULE, type RunDigest } from "./extract";
 import { memorySection, selectMemories } from "./recall";
 import { forgetMemory, loadAutoLearn, loadMemories, MEMORY_KINDS, memoryDir, saveMemory, updateMemory } from "./store";
@@ -54,6 +55,8 @@ export default function memory(pi: ExtensionAPI): void {
         systemPrompt: digest.verified ? EXTRACT_SYSTEM : EXTRACT_SYSTEM + UNVERIFIED_RULE,
         messages: [{ role: "user", content: extractPrompt(existing, digest, extractBudgetChars(ctx)), timestamp: Date.now() }],
       });
+      // 이 호출은 세션에 남지 않으므로 사용량을 따로 적는다
+      await recordUsage(dataDir(), "memory", model, reply.usage);
       if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new Error(reply.errorMessage ?? "모델 호출이 실패했다");
       const text = reply.content.map((part) => (part.type === "text" ? part.text : "")).join("");
       const ops = parseOps(text, new Set(existing.map((m) => m.id)));

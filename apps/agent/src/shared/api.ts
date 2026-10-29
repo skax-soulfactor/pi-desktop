@@ -7,6 +7,9 @@ import type {
   SessionUiResolvedNotification,
 } from "@pi-desktop/host-protocol/messages";
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
+import type { UsageRange, UsageSummary } from "@pi-desktop/agent-kit/usage-types";
+
+export type { UsageRange, UsageSource, UsageSummary, UsageTotals } from "@pi-desktop/agent-kit/usage-types";
 import type { Schedule } from "@pi-desktop/agent-kit/schedule-plan";
 import type { ConnectionState } from "../vendor/shared/api";
 import type { PiSetupView } from "./pi-setup";
@@ -41,6 +44,7 @@ export const IpcChannels = {
   listRules: "agent:list-rules",
   removeRule: "agent:remove-rule",
   listAudit: "agent:list-audit",
+  usageSummary: "agent:usage-summary",
   openSession: "agent:open-session",
   attachSession: "agent:attach-session",
   sendCommand: "agent:send-command",
@@ -144,6 +148,8 @@ export interface AgentApi {
   listRules(): Promise<RuleView[]>;
   removeRule(rule: RuleView): Promise<void>;
   listAudit(): Promise<AuditView[]>;
+  /** 기간의 사용량 (Pi 세션 파일 + 세션 밖 호출) */
+  usageSummary(range: UsageRange): Promise<UsageSummary>;
   /** agent-kit 확장을 올린 새 Pi 세션을 연다 */
   /** 새 세션을 연다. forkFrom(세션 파일)을 주면 그 대화를 이어 가는 분기 세션으로 연다 */
   openSession(cwd: string, forkFrom?: string): Promise<SessionSummary>;

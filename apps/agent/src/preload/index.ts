@@ -35,6 +35,7 @@ const api: AgentApi = {
   listRules: () => ipcRenderer.invoke(IpcChannels.listRules),
   removeRule: (rule) => ipcRenderer.invoke(IpcChannels.removeRule, rule),
   listAudit: () => ipcRenderer.invoke(IpcChannels.listAudit),
+  usageSummary: (range) => ipcRenderer.invoke(IpcChannels.usageSummary, range),
   openSession: (cwd, forkFrom) => ipcRenderer.invoke(IpcChannels.openSession, cwd, forkFrom),
   attachSession: (sessionId, lastSeq) => ipcRenderer.invoke(IpcChannels.attachSession, sessionId, lastSeq),
   sendCommand: (sessionId, command) => ipcRenderer.invoke(IpcChannels.sendCommand, sessionId, command),

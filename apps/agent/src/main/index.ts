@@ -18,6 +18,7 @@ import { extensionArgs, extensionEntries } from "@pi-desktop/agent-kit";
 import { loadTasks, tasksDir } from "@pi-desktop/agent-kit/tasks";
 import { loadSchedules, schedulesPath, updateSchedules } from "@pi-desktop/agent-kit/schedules";
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
+import { readSessionUsage, readUsageLog, summarizeUsage, rangeBuckets, type UsageRange } from "@pi-desktop/agent-kit/usage";
 import { forgetMemory, loadAutoLearn, loadMemories, memoryDir, saveAutoLearn, saveMemory } from "@pi-desktop/agent-kit/memory";
 import { loadAudit, loadRules, removeRule } from "@pi-desktop/agent-kit/permissions";
 import { agentBuildId } from "../vendor/main/agent-build";
@@ -65,6 +66,11 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
 /**
  * agent-kit 상태 폴더 (agent-kit permissions/store.ts의 dataDir와 같은 규칙). 지금은 로컬 호스트만 다루므로 앱이 직접 읽는다.
  */
+/** Pi 세션 폴더 (Pi의 getSessionsDir와 같은 규칙. 데몬이 띄운 Pi도 이 환경을 물려받는다) */
+function piSessionsDir(): string {
+  return process.env.PI_CODING_AGENT_SESSION_DIR || join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "sessions");
+}
+
 function agentDataDir(): string {
   if (process.env.PI_DESKTOP_AGENT_DATA) return process.env.PI_DESKTOP_AGENT_DATA;
   return join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "pi-desktop-agent");
@@ -186,6 +192,12 @@ function registerIpc(connection: HostConnection): void {
   ipcMain.handle(IpcChannels.listRules, () => loadRules(agentDataDir()));
   ipcMain.handle(IpcChannels.removeRule, (_event, rule: RuleView) => removeRule(agentDataDir(), rule));
   ipcMain.handle(IpcChannels.listAudit, () => loadAudit(agentDataDir(), 100));
+  ipcMain.handle(IpcChannels.usageSummary, async (_event, range: UsageRange) => {
+    const now = new Date();
+    const { from } = rangeBuckets(range, now);
+    const [sessions, offSession] = await Promise.all([readSessionUsage(piSessionsDir(), from), readUsageLog(agentDataDir(), from)]);
+    return summarizeUsage([...sessions, ...offSession], range, now);
+  });
   ipcMain.handle(IpcChannels.listSessions, async (): Promise<ChatSummary[]> => {
     const sessions = await connection.request<SessionSummary[]>(Methods.sessionList);
     const chats = sessions.filter((s) => s.state === "running" && s.cwd !== schedulerDir()).sort((a, b) => b.startedAt - a.startedAt);

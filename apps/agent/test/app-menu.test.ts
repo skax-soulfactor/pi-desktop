@@ -13,7 +13,7 @@ describe("앱 메뉴", () => {
   it("Windows: 파일·편집·보기·도움말, 기능 화면은 보기 메뉴에", () => {
     const menu = appMenuTemplate("win32", true, handlers);
     expect(labels(menu)).toEqual(["파일", "편집", "보기", "도움말"]);
-    expect(labels(sub(menu, "보기")).slice(0, 5)).toEqual(["대화", "작업·예약", "기억", "승인", "설정"]);
+    expect(labels(sub(menu, "보기")).slice(0, 6)).toEqual(["대화", "작업·예약", "기억", "승인", "사용량", "설정"]);
     // 설치본에는 개발 도구가 없다
     expect(sub(menu, "보기").some((i) => i.role === "toggleDevTools")).toBe(false);
   });
