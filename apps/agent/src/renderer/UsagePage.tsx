@@ -14,6 +14,7 @@ const SOURCE_LABEL: Record<UsageSource, string> = {
   worker: "백그라운드 작업",
   memory: "기억 추출",
   document: "문서 처리",
+  peer: "피어 질문에 답하기",
 };
 
 const tokens = (t: UsageTotals) => t.input + t.output + t.cacheRead + t.cacheWrite;

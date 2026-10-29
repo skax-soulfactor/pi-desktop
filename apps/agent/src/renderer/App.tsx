@@ -12,13 +12,14 @@ import { RulesPage } from "./RulesPage";
 import { UsagePage } from "./UsagePage";
 import { HistoryPage } from "./HistoryPage";
 import { McpPage } from "./McpPage";
+import { NetworkPage } from "./NetworkPage";
 import { SettingsPage } from "./SettingsPage";
 import { TasksPanel } from "./TasksPanel";
 import { folderName, lastFolder, recentFolders, rememberFolder } from "./recent-folders";
 import { useAgentSession } from "./use-agent-session";
 
 /** 화면. 대화 말고는 메뉴바(보기)에서 연다 (main/app-menu.ts) */
-type Page = "chat" | "tasks" | "memory" | "rules" | "usage" | "history" | "mcp" | "settings";
+type Page = "chat" | "tasks" | "memory" | "rules" | "usage" | "history" | "mcp" | "network" | "settings";
 
 /** 사이드바·대화 머리에 보일 이름: Pi 세션 이름, 없으면 폴더 이름 */
 export function chatTitle(chat: Pick<ChatSummary, "name" | "cwd">): string {
@@ -235,7 +236,7 @@ export function App() {
             <button className="small" onClick={() => setPage("chat")}>
               ← 대화로
             </button>
-            <span className="muted small-text">기능 화면(작업·기억·승인·사용량·지난 대화·웹 검색·설정)은 메뉴바의 "보기"에서 엽니다</span>
+            <span className="muted small-text">기능 화면(작업·기억·승인·사용량·지난 대화·웹 검색·네트워크·설정)은 메뉴바의 "보기"에서 엽니다</span>
           </div>
         )}
         {page === "chat" && (
@@ -269,6 +270,7 @@ export function App() {
         {page === "rules" && <RulesPage onError={onError} />}
         {page === "usage" && <UsagePage onError={onError} />}
         {page === "mcp" && <McpPage onError={onError} />}
+        {page === "network" && <NetworkPage onError={onError} />}
         {page === "history" && (
           <HistoryPage
             openFiles={new Set(sessions.flatMap((s) => (s.sessionFile ? [s.sessionFile] : [])))}

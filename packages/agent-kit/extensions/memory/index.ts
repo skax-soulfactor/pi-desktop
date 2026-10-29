@@ -3,7 +3,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { isLocalBaseUrl } from "../local-model/budget";
 import { dataDir } from "../permissions/store";
-import { attended, isScheduler, isWorker, learning } from "../../src/runtime";
+import { attended, isPeerAnswer, isScheduler, isWorker, learning } from "../../src/runtime";
 import { recordUsage } from "../../src/usage";
 import { digestRun, EXTRACT_SYSTEM, extractPrompt, parseOps, UNVERIFIED_RULE, type RunDigest } from "./extract";
 import { memorySection, selectMemories } from "./recall";
@@ -78,7 +78,9 @@ export default function memory(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", async (event, ctx) => {
     const prompt = event.messageType === "user" ? event.prompt : "";
-    const section = memorySection(selectMemories(await loadMemories(dir), prompt, budgetChars(ctx)));
+    // 피어 질문에 답하는 워커에는 선호(사용자 개인의 규칙)를 싣지 않는다. 사실·교훈도 관련 있는 것만 실린다
+    const memories = (await loadMemories(dir)).filter((m) => !isPeerAnswer() || m.kind !== "preference");
+    const section = memorySection(selectMemories(memories, prompt, budgetChars(ctx)));
     const sections = event.systemPromptOptions.sections;
     if (section) sections[MEMORY_SECTION] = section;
     else delete sections[MEMORY_SECTION];

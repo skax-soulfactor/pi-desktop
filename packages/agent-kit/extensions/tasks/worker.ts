@@ -33,6 +33,10 @@ export interface WorkerOptions {
   env?: NodeJS.ProcessEnv;
   /** 지금 Pi 프로세스의 실행 인자 (agent-kit 확장 -e를 물려준다). 기본은 process.argv */
   argv?: string[];
+  /** pi에 더 줄 인자 (예: 피어 답변 워커의 --no-tools) */
+  extraArgs?: string[];
+  /** 사용량을 적을 때의 쓰임새. 기본 worker */
+  usageSource?: "worker" | "peer";
 }
 
 export interface WorkerResult {
@@ -75,6 +79,7 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
     "--no-session",
     ...(options.provider && options.model ? ["--provider", options.provider, "--model", options.model] : []),
     ...extensionArgsOf(argv),
+    ...(options.extraArgs ?? []),
   ];
   const env = { ...(options.env ?? process.env), [WORKER_ENV]: "1", ...(options.ui ? {} : { [UNATTENDED_ENV]: "1" }) };
   const child = spawn(pi.command, args, { cwd: options.cwd, env, shell: pi.command === "pi" && process.platform === "win32", windowsHide: true });
@@ -161,7 +166,7 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
           | undefined;
         // 워커는 --no-session이라 세션 파일에 남지 않는다. 응답마다 사용량을 따로 적는다
         if (message?.role === "assistant" && message.usage)
-          void recordUsage(dataDir(), "worker", { provider: message.provider ?? "?", id: message.model ?? "?" }, message.usage);
+          void recordUsage(dataDir(), options.usageSource ?? "worker", { provider: message.provider ?? "?", id: message.model ?? "?" }, message.usage);
         if (message?.role === "assistant" && Array.isArray(message.content)) {
           const text = message.content.filter((p) => p.type === "text").map((p) => p.text ?? "").join("").trim();
           if (text) {
