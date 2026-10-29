@@ -18,7 +18,9 @@
       "./extensions/agent-core/index.ts",
       "./extensions/permissions/index.ts",
       "./extensions/loop-guard/index.ts",
-      "./extensions/local-model/index.ts"
+      "./extensions/local-model/index.ts",
+      "./extensions/ask-user/index.ts",
+      "./extensions/web/index.ts"
     ]
   },
   "scripts": {
