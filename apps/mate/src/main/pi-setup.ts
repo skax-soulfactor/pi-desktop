@@ -2,6 +2,7 @@ import { app, dialog, net, shell, type BrowserWindow } from "electron";
 import { createWriteStream } from "node:fs";
 import { chmod, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { focusRunningApp } from "./focus-window";
 import { findPiDesktop, PI_DESKTOP_REPO, pickPiDesktopAsset, type ReleaseAsset } from "./pi-desktop-install";
 
 export interface PiDesktopInfo {
@@ -14,8 +15,12 @@ export async function piDesktopInfo(): Promise<PiDesktopInfo> {
   return installedPath ? { installedPath } : {};
 }
 
-/** 설치된 Pi Desktop을 연다. 없으면 false */
+/**
+ * Pi Desktop을 연다. 이미 떠 있으면 새로 띄우지 않고 그 창으로 포커스를 옮긴다
+ * (Pi Desktop은 단일 인스턴스 처리가 없어 다시 열면 두 번째 창이 뜬다). 설치된 것을 찾지 못하면 false
+ */
 export async function openPiDesktop(): Promise<boolean> {
+  if (await focusRunningApp("Pi Desktop", "pi-desktop")) return true;
   const path = await findPiDesktop();
   if (!path) return false;
   const error = await shell.openPath(path);
