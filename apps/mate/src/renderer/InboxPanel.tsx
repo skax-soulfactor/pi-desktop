@@ -6,10 +6,12 @@ import type { Act } from "./App";
 import { relativeTime, splitInbox } from "./mate-view";
 
 const SEVERITY_LABELS: Record<InboxView["severity"], string> = { info: "참고", warn: "확인 필요", action: "할 일" };
+const STATUS_TEXT: Record<NonNullable<InboxView["status"]>, string> = { accepted: "확인함", dismissed: "버림", applied: "적용함" };
 
 /**
  * 인박스: 실행기가 돌며 남긴 제안·결과 (설계 DESIGN-MATE.md §5).
- * 앱이 꺼져 있던 동안 쌓인 것도 여기서 본다. M1의 "확인함"은 표시만 하고, 실제 적용은 M3(act)부터.
+ * 앱이 꺼져 있던 동안 쌓인 것도 여기서 본다. 제안의 "확인함"은 표시만 하고,
+ * 고치기(act) 변경은 "적용"을 눌러야 내 작업 폴더에 들어온다 (승인 대기).
  */
 export function InboxPanel({ overview, now, act }: { overview: Overview; now: number; act: Act }) {
   const [showHandled, setShowHandled] = useState(false);
@@ -27,8 +29,11 @@ export function InboxPanel({ overview, now, act }: { overview: Overview; now: nu
             처리함 {handled.length}
           </button>
         </div>
-        {!showHandled && fresh.length > 1 && (
-          <button onClick={() => void act(() => window.mate.setInbox(fresh.map((i) => i.id), "accepted"))}>모두 확인함</button>
+        {/* 고친 변경(act)은 적용·버리기를 하나씩 정해야 하므로 "모두 확인함"에서 뺀다 */}
+        {!showHandled && fresh.filter((i) => !i.change).length > 1 && (
+          <button onClick={() => void act(() => window.mate.setInbox(fresh.filter((i) => !i.change).map((i) => i.id), "accepted"))}>
+            모두 확인함
+          </button>
         )}
       </div>
       {list.length === 0 && (
@@ -75,13 +80,39 @@ function InboxCard({ item, now, act }: { item: InboxView; now: number; act: Act 
           )}
         </>
       )}
+      {item.change && (
+        <div className="muted small-text path" title={item.change.files.join("\n")}>
+          {item.change.repo} · {item.change.files.slice(0, 5).join(", ")}
+          {item.change.files.length > 5 ? ` 외 ${item.change.files.length - 5}개` : ""}
+        </div>
+      )}
       <div className="card-actions">
         {item.status ? (
           <>
-            <span className="muted">{item.status === "accepted" ? "확인함" : "버림"}</span>
-            <button className="small" onClick={() => void act(() => window.mate.setInbox([item.id], undefined))}>
-              새 제안으로 되돌리기
+            <span className="muted">{STATUS_TEXT[item.status]}</span>
+            {/* 고친 변경은 적용하거나 버리면 작업 공간이 지워져 되돌릴 수 없다 */}
+            {!item.change && (
+              <button className="small" onClick={() => void act(() => window.mate.setInbox([item.id], undefined))}>
+                새 제안으로 되돌리기
+              </button>
+            )}
+          </>
+        ) : item.change ? (
+          <>
+            <button
+              className="primary small"
+              onClick={() => {
+                if (confirm(`${item.change!.repo}에 이 변경을 적용할까요?\n커밋하지 않은 변경으로 들어가며, 커밋은 직접 합니다.`)) {
+                  void act(() => window.mate.applyChange(item.id));
+                }
+              }}
+            >
+              적용
             </button>
+            <button className="small" onClick={() => void act(() => window.mate.discardChange(item.id))}>
+              버리기
+            </button>
+            <span className="muted small-text">적용 전까지 내 작업 폴더는 그대로입니다</span>
           </>
         ) : (
           <>

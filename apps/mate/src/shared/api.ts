@@ -14,6 +14,8 @@ export const IpcChannels = {
   restartRunner: "mate:restart-runner",
   revealHome: "mate:reveal-home",
   readSession: "mate:read-session",
+  applyChange: "mate:apply-change",
+  discardChange: "mate:discard-change",
   changed: "mate:changed",
 } as const;
 
@@ -74,6 +76,10 @@ export interface MateApi {
   revealHome(): Promise<void>;
   /** 실행 기록의 Pi 세션을 대화 형태로 읽는다 */
   readSession(runId: string): Promise<TranscriptItem[]>;
+  /** act 변경을 내 작업 폴더에 적용한다 (커밋하지 않은 변경으로) */
+  applyChange(itemId: string): Promise<void>;
+  /** act 변경과 그 작업 공간을 버린다 */
+  discardChange(itemId: string): Promise<void>;
   /** Mate 홈의 파일이 바뀌면 불린다. 해제 함수를 돌려준다 */
   onChanged(listener: () => void): () => void;
 }

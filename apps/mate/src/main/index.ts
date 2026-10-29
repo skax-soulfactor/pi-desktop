@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { readInbox } from "@pi-desktop/mate-kit";
 import {
   addRequest,
+  applyInboxChange,
+  discardInboxChange,
   deleteDuty,
   dutyIdFrom,
   findSessionFile,
@@ -156,6 +158,8 @@ function registerIpc(): void {
     return runnerView();
   });
   ipcMain.handle(IpcChannels.revealHome, () => shell.openPath(paths.home));
+  ipcMain.handle(IpcChannels.applyChange, (_e, itemId: string) => applyInboxChange(paths, String(itemId)));
+  ipcMain.handle(IpcChannels.discardChange, (_e, itemId: string) => discardInboxChange(paths, String(itemId)));
   ipcMain.handle(IpcChannels.readSession, async (_e, runId: string) => {
     const run = (await listRuns(paths, 1000)).find((r) => r.id === runId);
     // 실행 기록에 적힌 경로라도 Mate 홈의 sessions/ 밖은 읽지 않는다

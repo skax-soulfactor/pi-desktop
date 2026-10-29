@@ -178,7 +178,7 @@ function DutyForm({
             <strong>{PROFILE_LABELS[p].name}</strong> <span className="muted">{PROFILE_LABELS[p].hint}</span>
           </label>
         ))}
-        <div className="muted small-text">어느 쪽이든 파일을 바꾸거나 쓰기 명령을 실행하지 않습니다 (bash는 읽기 명령만 통과).</div>
+        <div className="muted small-text">보고·제안은 파일을 바꾸지 않습니다. 고치기도 내 작업 폴더는 적용 전까지 그대로입니다. bash는 어느 단계든 읽기 명령만 통과합니다.</div>
       </fieldset>
       <fieldset>
         <legend>언제</legend>
