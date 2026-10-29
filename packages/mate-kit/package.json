@@ -9,7 +9,8 @@
     "pi-package"
   ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./shared": "./src/shared.ts"
   },
   "pi": {
     "extensions": [

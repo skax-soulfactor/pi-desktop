@@ -6,7 +6,8 @@
   "description": "Pi Desktop Mate의 상주 실행기: 임무 시간표를 지키고 실행마다 pi --mode json을 띄운다",
   "license": "MIT",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts"
   },
   "scripts": {
     "build": "node scripts/build.mjs",

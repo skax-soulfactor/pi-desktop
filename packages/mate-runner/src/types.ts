@@ -1,4 +1,4 @@
-import type { MateProfile } from "@pi-desktop/mate-kit";
+import type { MateProfile } from "@pi-desktop/mate-kit/shared";
 
 /** 언제 돌릴지 (설계 DESIGN-MATE.md §3). 파일·git·폴링 계기는 M2 */
 export type Trigger =
