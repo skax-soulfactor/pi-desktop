@@ -5,6 +5,8 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { chunkChars, defaultOutputPath, inferMode, splitIntoChunks, type DocumentMode } from "./chunks";
 import { docxText } from "./docx";
+import { recordUsage } from "../../src/usage";
+import { dataDir } from "../permissions/store";
 
 /**
  * 큰 문서 처리 (설계 DESIGN-AGENT.md §4 "큰 입력 처리", "docx 첨부 변환").
@@ -90,6 +92,8 @@ async function ask(ctx: ExtensionToolContext, signal: AbortSignal | undefined, s
     { systemPrompt, messages: [{ role: "user", content: prompt, timestamp: Date.now() }] },
     signal ? { signal } : undefined,
   );
+  // 조각 처리 호출은 세션에 남지 않으므로 사용량을 따로 적는다
+  await recordUsage(dataDir(), "document", model, reply.usage);
   if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new Error(reply.errorMessage ?? "모델 호출이 실패했다");
   return reply.content
     .map((part) => (part.type === "text" ? part.text : ""))

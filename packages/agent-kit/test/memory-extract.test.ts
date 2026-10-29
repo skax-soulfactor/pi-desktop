@@ -147,6 +147,8 @@ describe("턴 뒤 기억 추출 (실제 Pi)", () => {
     const files = readdirSync(join(dataDir, "memory")).filter((n) => n.endsWith(".md"));
     expect(files).toHaveLength(1);
     expect(readFileSync(join(dataDir, "memory", files[0]!), "utf8")).toContain("source: auto");
+    // 추출 호출은 세션에 남지 않으므로 usage.jsonl에 따로 적힌다
+    expect(readFileSync(join(dataDir, "usage.jsonl"), "utf8")).toContain('"source":"memory"');
 
     const request = llm.requests.find((r) => isExtract(JSON.stringify(r.messages)));
     const sent = JSON.stringify(request?.messages);

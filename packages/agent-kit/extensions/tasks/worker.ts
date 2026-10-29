@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { APPROVAL_MARKER } from "../../src/approval";
 import { UNATTENDED_ENV, WORKER_ENV } from "../../src/runtime";
+import { recordUsage, type PiUsage } from "../../src/usage";
+import { dataDir } from "../permissions/store";
 
 /**
  * 워커 실행기 (설계 DESIGN-AGENT.md §4 "메인/워커 분리").
@@ -147,8 +149,19 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
       if (record.type === "extension_ui_request") void answer(record);
       else if (record.type === "message_end") {
         const message = record.message as
-          | { role?: string; content?: Array<{ type?: string; text?: string }>; stopReason?: string; errorMessage?: string }
+          | {
+              role?: string;
+              content?: Array<{ type?: string; text?: string }>;
+              stopReason?: string;
+              errorMessage?: string;
+              provider?: string;
+              model?: string;
+              usage?: PiUsage;
+            }
           | undefined;
+        // 워커는 --no-session이라 세션 파일에 남지 않는다. 응답마다 사용량을 따로 적는다
+        if (message?.role === "assistant" && message.usage)
+          void recordUsage(dataDir(), "worker", { provider: message.provider ?? "?", id: message.model ?? "?" }, message.usage);
         if (message?.role === "assistant" && Array.isArray(message.content)) {
           const text = message.content.filter((p) => p.type === "text").map((p) => p.text ?? "").join("").trim();
           if (text) {
