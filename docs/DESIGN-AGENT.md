@@ -124,6 +124,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | 단계 | 범위 | 완료 기준 |
 |---|---|---|
 | **P0 골격** | `agent-kit` 패키지와 `agent-core` 확장(`/agent:status`), `apps/agent`가 분리된 데몬에 붙어 agent-kit을 올린 로컬 세션으로 채팅, 확장 다이얼로그 응답, mock LLM 개발 실행 | `npm run dev:mock -w @pi-desktop/agent`로 대화하고, 실제 Pi 계약 테스트로 agent-kit이 올라가는 것을 확인 |
+| | **구현 메모 (P0 완료)**: 실제 Pi 1.3.0 계약 테스트(`packages/agent-kit/test/real-pi.test.ts`)와 dev:mock 앱에서 데몬 연결 → agent-kit 확인 → `/agent:status` 알림 → 스트리밍 응답 → read 도구 카드까지 확인. 프로젝트 신뢰는 묻지 않으므로(RPC) 처음 연 폴더의 `.pi/` 리소스는 건너뛴다. 설치본 묶음(extraResources의 agent-kit·host-agent)은 아직 없음 | |
 | P1 승인 | `permissions` 확장, 앱 승인 모달, 공통 코드 `packages/desktop-core`·`chat-ui`로 이동 | 승인 없이는 쓰기·실행이 일어나지 않는다 |
 | P2 로컬 모델 | `local-model`, `loop-guard`, 압축 설정 | qwen3.5:9b로 desktop-agent와 같은 시나리오 비교 |
 | P3 기본 기능 | `memory`, `documents`, `attachments`, `ask-user`, `web`, 키체인 연동 | |
