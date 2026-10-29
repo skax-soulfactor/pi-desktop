@@ -28,3 +28,10 @@ export const SCHEDULER_ENV = "PI_DESKTOP_AGENT_SCHEDULER";
 export function isScheduler(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[SCHEDULER_ENV] === "1";
 }
+
+/** "0"이면 턴이 끝난 뒤 기억을 자동으로 뽑지 않는다 (모델을 한 번 더 부르므로 끌 수 있게 한다) */
+export const LEARN_ENV = "PI_DESKTOP_AGENT_LEARN";
+
+export function learning(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env[LEARN_ENV] !== "0";
+}

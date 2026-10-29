@@ -18,7 +18,7 @@ import { extensionArgs, extensionEntries } from "@pi-desktop/agent-kit";
 import { loadTasks, tasksDir } from "@pi-desktop/agent-kit/tasks";
 import { loadSchedules, schedulesPath, updateSchedules } from "@pi-desktop/agent-kit/schedules";
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
-import { forgetMemory, loadMemories, memoryDir, saveMemory } from "@pi-desktop/agent-kit/memory";
+import { forgetMemory, loadAutoLearn, loadMemories, memoryDir, saveAutoLearn, saveMemory } from "@pi-desktop/agent-kit/memory";
 import { loadAudit, loadRules, removeRule } from "@pi-desktop/agent-kit/permissions";
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
@@ -178,6 +178,8 @@ function registerIpc(connection: HostConnection): void {
     if (!text.trim()) throw new Error("기억할 내용이 비어 있습니다");
     await saveMemory(memoryDir(agentDataDir()), kind, text);
   });
+  ipcMain.handle(IpcChannels.getAutoLearn, () => loadAutoLearn(memoryDir(agentDataDir())));
+  ipcMain.handle(IpcChannels.setAutoLearn, (_event, on: boolean) => saveAutoLearn(memoryDir(agentDataDir()), on === true));
   ipcMain.handle(IpcChannels.forgetMemory, async (_event, id: string) => {
     await forgetMemory(memoryDir(agentDataDir()), id);
   });

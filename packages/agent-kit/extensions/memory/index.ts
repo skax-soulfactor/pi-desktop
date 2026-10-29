@@ -3,8 +3,10 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { isLocalBaseUrl } from "../local-model/budget";
 import { dataDir } from "../permissions/store";
+import { attended, isScheduler, isWorker, learning } from "../../src/runtime";
+import { digestRun, EXTRACT_SYSTEM, extractPrompt, parseOps, UNVERIFIED_RULE, type RunDigest } from "./extract";
 import { memorySection, selectMemories } from "./recall";
-import { forgetMemory, loadMemories, MEMORY_KINDS, memoryDir, saveMemory } from "./store";
+import { forgetMemory, loadAutoLearn, loadMemories, MEMORY_KINDS, memoryDir, saveMemory, updateMemory } from "./store";
 
 /** 시스템 프롬프트에서 기억이 들어가는 섹션 이름 (XML 태그 이름이 된다) */
 export const MEMORY_SECTION = "agent_memory";
@@ -15,11 +17,61 @@ export const MEMORY_SECTION = "agent_memory";
  * - 매 요청 전에 관련 기억을 골라 시스템 프롬프트 섹션으로 싣는다. 로컬 모델이면 창의 10%만 쓴다.
  * - 모델은 memory_save·memory_forget 도구로, 사용자는 /agent:remember·/agent:memories로 다룬다.
  * - 기억은 에이전트 자신의 상태라 승인 없이 저장하되, 저장·삭제할 때마다 알려 사용자가 알 수 있게 한다.
- *
- * desktop-agent의 "턴이 끝나면 따로 LLM을 불러 기억을 뽑는 패스"는 아직 옮기지 않았다 (설계 §5 P3 메모).
+ * - 실행이 끝나면(agent_settled) 지금 모델을 한 번 더 불러 이번 대화에서 남길 선호·사실·교훈을 뽑는다.
+ *   실패 신호(도구 오류·승인 거부)는 교훈 후보로 함께 넘긴다. 사용자 응답을 막지 않도록 기다리지 않고 돌린다.
+ *   사람이 없는 실행(워커·예약)과 중단된 실행에서는 뽑지 않는다. 기억 화면의 설정(memory/settings.json의
+ *   autoLearn: false)이나 PI_DESKTOP_AGENT_LEARN=0으로 끈다. 설정은 실행이 끝날 때마다 읽어 바로 반영된다.
  */
 export default function memory(pi: ExtensionAPI): void {
   const dir = memoryDir(dataDir());
+  /** 마지막 실행의 메시지 (agent_end에서 받아 agent_settled에서 쓴다) */
+  let lastRun: readonly unknown[] | undefined;
+  /** 추출은 하나씩 차례로 (앞 추출이 만든 기억을 다음 추출이 보고 중복을 피하게) */
+  let queue: Promise<void> = Promise.resolve();
+
+  pi.on("agent_end", (event) => {
+    lastRun = event.messages;
+    return undefined;
+  });
+
+  pi.on("agent_settled", (event, ctx) => {
+    const messages = lastRun;
+    lastRun = undefined;
+    if (event.aborted || !messages || !learning() || isWorker() || isScheduler() || !attended(ctx.hasUI)) return undefined;
+    const digest = digestRun(messages);
+    if (!digest.hasUser) return undefined;
+    queue = queue.then(() => learnFrom(ctx, digest)).catch(() => undefined);
+    return undefined;
+  });
+
+  /** 이번 실행에서 남길 기억을 뽑아 저장하고 알린다. 실패는 삼키지 않고 경고로 알린다 */
+  async function learnFrom(ctx: ExtensionContext, digest: RunDigest): Promise<void> {
+    const model = ctx.model;
+    if (!model || !(await loadAutoLearn(dir))) return;
+    try {
+      const existing = await loadMemories(dir);
+      const reply = await ctx.modelRegistry.complete(model, {
+        systemPrompt: digest.verified ? EXTRACT_SYSTEM : EXTRACT_SYSTEM + UNVERIFIED_RULE,
+        messages: [{ role: "user", content: extractPrompt(existing, digest, extractBudgetChars(ctx)), timestamp: Date.now() }],
+      });
+      if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new Error(reply.errorMessage ?? "모델 호출이 실패했다");
+      const text = reply.content.map((part) => (part.type === "text" ? part.text : "")).join("");
+      const ops = parseOps(text, new Set(existing.map((m) => m.id)));
+      for (const op of ops) {
+        if (op.op === "create") {
+          await saveMemory(dir, op.kind, op.text, new Date(), "auto");
+          notify(ctx, `자동으로 기억했습니다: ${op.text}`, "info");
+        } else if (op.op === "update") {
+          if (await updateMemory(dir, op.id, op.kind ? { kind: op.kind, text: op.text } : { text: op.text }))
+            notify(ctx, `기억을 고쳤습니다: ${op.text}`, "info");
+        } else if (await forgetMemory(dir, op.id)) {
+          notify(ctx, `맞지 않게 된 기억을 지웠습니다 (${op.id})`, "info");
+        }
+      }
+    } catch (error) {
+      notify(ctx, `기억 추출 실패: ${error instanceof Error ? error.message : String(error)}`, "warning");
+    }
+  }
 
   pi.on("before_agent_start", async (event, ctx) => {
     const prompt = event.messageType === "user" ? event.prompt : "";
@@ -89,6 +141,22 @@ export default function memory(pi: ExtensionAPI): void {
       );
     },
   });
+}
+
+/** 세션이 닫힌 뒤라 알릴 곳이 없으면 조용히 넘어간다 */
+function notify(ctx: ExtensionContext, message: string, level: "info" | "warning"): void {
+  try {
+    ctx.ui.notify(message, level);
+  } catch {
+    // 알리지 못해도 기억은 저장됐다
+  }
+}
+
+/** 추출 요청에 쓸 글자 수. 로컬 모델은 창의 40%(토큰당 2글자 어림)로 출력 자리를 남긴다 */
+function extractBudgetChars(ctx: ExtensionContext): number {
+  const model = ctx.model;
+  if (model && isLocalBaseUrl(model.baseUrl)) return Math.max(1500, Math.floor(model.contextWindow * 0.4 * 2));
+  return 16000;
 }
 
 /** 기억에 쓸 글자 수. 로컬 모델은 창의 10%(토큰당 3글자 어림), 그 밖은 넉넉히 */
