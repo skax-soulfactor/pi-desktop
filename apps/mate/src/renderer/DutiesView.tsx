@@ -2,12 +2,15 @@ import { useState } from "react";
 import type { DutyDraft, DutyView, Overview } from "../shared/api";
 import type { Act } from "./App";
 import {
+  defaultTrigger,
   DUTY_TEMPLATES,
   emptyDraft,
   nextRunLabel,
   PROFILE_LABELS,
   relativeTime,
   STATUS_LABELS,
+  TRIGGER_HINTS,
+  TRIGGER_KINDS,
   triggerLabel,
   WEEKDAY_LABELS,
 } from "./mate-view";
@@ -21,10 +24,11 @@ export function DutiesView({ overview, now, act }: { overview: Overview; now: nu
       <DutyForm
         initial={editing}
         defaultModel={overview.config.model}
+        defaultMaxCost={overview.config.maxCostUsd}
         onCancel={() => setEditing(undefined)}
         onSave={async (draft) => {
-          await act(() => window.mate.saveDuty(draft));
-          setEditing(undefined);
+          // 거부되면(예: 확인 명령이 허용 목록 밖) 고칠 수 있게 폼을 열어 둔다
+          if (await act(() => window.mate.saveDuty(draft))) setEditing(undefined);
         }}
       />
     );
@@ -106,11 +110,13 @@ function DutyCard({ duty, now, paused, act, onEdit }: { duty: DutyView; now: num
 function DutyForm({
   initial,
   defaultModel,
+  defaultMaxCost,
   onSave,
   onCancel,
 }: {
   initial: DutyDraft;
   defaultModel: string;
+  defaultMaxCost: number;
   onSave: (draft: DutyDraft) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -119,10 +125,8 @@ function DutyForm({
   const t = draft.trigger;
   const valid = draft.name.trim() && draft.cwd.trim() && draft.prompt.trim();
 
-  const setKind = (kind: DutyDraft["trigger"]["kind"]) =>
-    set({
-      trigger: kind === "manual" ? { kind } : kind === "interval" ? { kind, minutes: 60 } : { kind, time: "09:00", weekdays: [1, 2, 3, 4, 5] },
-    });
+  const setKind = (kind: DutyDraft["trigger"]["kind"]) => set({ trigger: defaultTrigger(kind) });
+  const setTrigger = (patch: Record<string, unknown>) => set({ trigger: { ...t, ...patch } as DutyDraft["trigger"] });
   const toggleDay = (day: number) => {
     if (t.kind !== "daily") return;
     const days = new Set(t.weekdays ?? [0, 1, 2, 3, 4, 5, 6]);
@@ -180,9 +184,11 @@ function DutyForm({
         <legend>언제</legend>
         <div className="row">
           <select value={t.kind} onChange={(e) => setKind(e.target.value as DutyDraft["trigger"]["kind"])}>
-            <option value="manual">직접 실행만</option>
-            <option value="interval">일정 간격</option>
-            <option value="daily">정한 시각</option>
+            {TRIGGER_KINDS.map((k) => (
+              <option key={k.kind} value={k.kind}>
+                {k.label}
+              </option>
+            ))}
           </select>
           {t.kind === "interval" && (
             <>
@@ -207,8 +213,27 @@ function DutyForm({
               ))}
             </>
           )}
+          {t.kind === "poll" && (
+            <>
+              <input className="grow" value={t.command} onChange={(e) => setTrigger({ command: e.target.value })} placeholder="gh run list --limit 5" />
+              <input type="number" min={15} step={15} value={t.minutes} onChange={(e) => setTrigger({ minutes: Number(e.target.value) })} />
+              <span className="muted">분마다 확인</span>
+            </>
+          )}
+          {t.kind === "files" && (
+            <>
+              <input type="number" min={10} value={t.quietSeconds ?? 60} onChange={(e) => setTrigger({ quietSeconds: Number(e.target.value) })} />
+              <span className="muted">초 동안 저장이 없으면</span>
+            </>
+          )}
+          {(t.kind === "git" || t.kind === "files") && (
+            <>
+              <input type="number" min={5} value={t.cooldownMinutes ?? 15} onChange={(e) => setTrigger({ cooldownMinutes: Number(e.target.value) })} />
+              <span className="muted">분 안에는 다시 돌지 않음</span>
+            </>
+          )}
         </div>
-        <div className="muted small-text">앱을 닫아도 실행기가 돌며 시간표를 지킵니다. PC가 꺼져 있던 동안 놓친 실행은 한 번만 따라잡습니다.</div>
+        <div className="muted small-text">{TRIGGER_HINTS[t.kind]}</div>
       </fieldset>
       <details>
         <summary>고급</summary>
@@ -225,6 +250,17 @@ function DutyForm({
             value={draft.timeoutSec ?? ""}
             onChange={(e) => set({ timeoutSec: e.target.value ? Number(e.target.value) : undefined })}
             placeholder="기본: 300"
+          />
+        </label>
+        <label>
+          비용 상한(USD, 실행당)
+          <input
+            type="number"
+            min={0}
+            step={0.05}
+            value={draft.maxCostUsd ?? ""}
+            onChange={(e) => set({ maxCostUsd: e.target.value ? Number(e.target.value) : undefined })}
+            placeholder={`기본: $${defaultMaxCost}`}
           />
         </label>
       </details>

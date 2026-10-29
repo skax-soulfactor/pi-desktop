@@ -12,6 +12,7 @@ type Tab = "inbox" | "duties" | "runs" | "settings";
 export function App() {
   const [overview, setOverview] = useState<Overview>();
   const [error, setError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
   const [tab, setTab] = useState<Tab>("inbox");
   const [now, setNow] = useState(Date.now());
 
@@ -40,16 +41,22 @@ export function App() {
     };
   }, [refresh]);
 
-  /** 화면 동작 뒤 바로 다시 읽고, 실패하면 위에 보인다 */
+  /**
+   * 화면 동작 뒤 바로 다시 읽고, 실패하면 위에 보인다. 성공 여부를 돌려준다 (실패하면 폼을 닫지 않도록).
+   * 동작 오류는 다시 읽기(refresh)가 지우지 않게 따로 두고, 다음 동작이 성공하면 지운다.
+   */
   const act = useCallback(
-    async (job: () => Promise<unknown>) => {
+    async (job: () => Promise<unknown>): Promise<boolean> => {
+      let ok = true;
       try {
         await job();
-        setError(undefined);
+        setActionError(undefined);
       } catch (e) {
-        setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
+        ok = false;
+        setActionError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
       }
       await refresh();
+      return ok;
     },
     [refresh],
   );
@@ -91,7 +98,7 @@ export function App() {
           )}
         </div>
       </header>
-      {(error ?? runner.error) && <div className="banner bad">{error ?? runner.error}</div>}
+      {(actionError ?? error ?? runner.error) && <div className="banner bad">{actionError ?? error ?? runner.error}</div>}
       <main className="content">
         {tab === "inbox" && <InboxPanel overview={overview} now={now} act={act} />}
         {tab === "duties" && <DutiesView overview={overview} now={now} act={act} />}
@@ -102,4 +109,4 @@ export function App() {
   );
 }
 
-export type Act = (job: () => Promise<unknown>) => Promise<void>;
+export type Act = (job: () => Promise<unknown>) => Promise<boolean>;
