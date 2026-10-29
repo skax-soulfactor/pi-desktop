@@ -21,7 +21,8 @@
       "./extensions/local-model/index.ts",
       "./extensions/ask-user/index.ts",
       "./extensions/web/index.ts",
-      "./extensions/memory/index.ts"
+      "./extensions/memory/index.ts",
+      "./extensions/documents/index.ts"
     ]
   },
   "scripts": {

@@ -12,6 +12,7 @@ const api: AgentApi = {
   connectionState: () => ipcRenderer.invoke(IpcChannels.connectionState),
   defaultCwd: () => ipcRenderer.invoke(IpcChannels.defaultCwd),
   pickDirectory: () => ipcRenderer.invoke(IpcChannels.pickDirectory),
+  pickFiles: () => ipcRenderer.invoke(IpcChannels.pickFiles),
   openSession: (cwd) => ipcRenderer.invoke(IpcChannels.openSession, cwd),
   attachSession: (sessionId, lastSeq) => ipcRenderer.invoke(IpcChannels.attachSession, sessionId, lastSeq),
   sendCommand: (sessionId, command) => ipcRenderer.invoke(IpcChannels.sendCommand, sessionId, command),

@@ -2,6 +2,7 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import { ChatView } from "../vendor/renderer/ChatView";
 import { StatusLine, Toasts, Widgets } from "../vendor/renderer/ExtensionUi";
 import { DialogHost } from "./dialog-host";
+import { withAttachments } from "./attachments";
 import { connectionLabel } from "./connection-label";
 import { useAgentSession, type KitState } from "./use-agent-session";
 
@@ -31,6 +32,11 @@ export function App() {
     if (!message || !session) return;
     setDraft("");
     guard(() => send(message));
+  };
+
+  const attach = async () => {
+    const paths = await window.piAgent.pickFiles();
+    setDraft((prev) => withAttachments(prev, paths));
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -71,6 +77,9 @@ export function App() {
         />
         <div className="actions">
           {chat.running && <button onClick={() => guard(abort)}>중지</button>}
+          <button disabled={!session} onClick={() => guard(attach)}>
+            파일 첨부
+          </button>
           <button className="primary" disabled={!session || !draft.trim()} onClick={submit}>
             보내기
           </button>

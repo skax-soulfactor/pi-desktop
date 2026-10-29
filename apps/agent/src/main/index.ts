@@ -96,6 +96,11 @@ function registerIpc(connection: HostConnection): void {
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
   });
+  ipcMain.handle(IpcChannels.pickFiles, async () => {
+    const options = { properties: ["openFile" as const, "multiSelections" as const] };
+    const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+    return result.canceled ? [] : result.filePaths;
+  });
   ipcMain.handle(IpcChannels.openSession, async (_event, cwd: string) => {
     // 개발용 덮어쓰기(저장소의 Pi, 격리된 Pi 설정, mock 프로바이더)를 먼저 깔고 agent-kit 확장을 뒤에 붙인다.
     const overrides = devSessionOverrides();

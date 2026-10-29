@@ -1,4 +1,5 @@
 import type { ApprovalRequest, Risk } from "../../src/approval";
+import { defaultOutputPath, inferMode } from "../documents/chunks";
 
 /**
  * 승인 판단의 순수 로직. 파일·프로세스·Pi에 손대지 않으므로 단위 테스트로 확인한다.
@@ -41,6 +42,13 @@ export function classify(toolName: string, input: Record<string, unknown>): Clas
         pattern: folderPattern(path),
       },
     };
+  }
+  if (toolName === "process_document") {
+    // 요약·질문(reduce)은 읽기와 같다. 번역·교정(transform)은 결과 파일을 쓰므로 그 경로로 묻는다
+    const mode = input.mode === "transform" || input.mode === "reduce" ? input.mode : inferMode(String(input.instruction ?? ""));
+    if (mode === "reduce") return { risk: "read" };
+    const output = String(input.output ?? defaultOutputPath(String(input.path ?? "")));
+    return { risk: "write", request: { toolName, risk: "write", summary: "문서 처리 결과 쓰기", target: output, pattern: folderPattern(output) } };
   }
   if (NETWORK_TOOLS.has(toolName)) {
     const url = String(input.url ?? "");
