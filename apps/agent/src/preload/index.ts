@@ -20,6 +20,17 @@ const api: AgentApi = {
   listSchedules: () => ipcRenderer.invoke(IpcChannels.listSchedules),
   setScheduleEnabled: (id, enabled) => ipcRenderer.invoke(IpcChannels.setScheduleEnabled, id, enabled),
   removeSchedule: (id) => ipcRenderer.invoke(IpcChannels.removeSchedule, id),
+  piSetup: () => ipcRenderer.invoke(IpcChannels.piSetup),
+  openPiDesktop: () => ipcRenderer.invoke(IpcChannels.openPiDesktop),
+  installPiDesktop: () => ipcRenderer.invoke(IpcChannels.installPiDesktop),
+  listSessions: () => ipcRenderer.invoke(IpcChannels.listSessions),
+  closeSession: (sessionId) => ipcRenderer.invoke(IpcChannels.closeSession, sessionId),
+  listMemories: () => ipcRenderer.invoke(IpcChannels.listMemories),
+  addMemory: (kind, text) => ipcRenderer.invoke(IpcChannels.addMemory, kind, text),
+  forgetMemory: (id) => ipcRenderer.invoke(IpcChannels.forgetMemory, id),
+  listRules: () => ipcRenderer.invoke(IpcChannels.listRules),
+  removeRule: (rule) => ipcRenderer.invoke(IpcChannels.removeRule, rule),
+  listAudit: () => ipcRenderer.invoke(IpcChannels.listAudit),
   openSession: (cwd) => ipcRenderer.invoke(IpcChannels.openSession, cwd),
   attachSession: (sessionId, lastSeq) => ipcRenderer.invoke(IpcChannels.attachSession, sessionId, lastSeq),
   sendCommand: (sessionId, command) => ipcRenderer.invoke(IpcChannels.sendCommand, sessionId, command),
@@ -29,6 +40,11 @@ const api: AgentApi = {
   onSessionExit: (listener) => subscribe(IpcChannels.sessionExit, listener),
   onUiResolved: (listener) => subscribe(IpcChannels.uiResolved, listener),
   onTasksChanged: (listener) => subscribe(IpcChannels.tasksChanged, () => listener()),
+  onInstallProgress: (listener) => {
+    const handler = (_event: IpcRendererEvent, received: number, total: number) => listener(received, total);
+    ipcRenderer.on(IpcChannels.installProgress, handler);
+    return () => ipcRenderer.removeListener(IpcChannels.installProgress, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("piAgent", api);
