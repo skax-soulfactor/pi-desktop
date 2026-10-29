@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { watch, type FSWatcher } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readInbox } from "@pi-desktop/mate-kit";
@@ -8,6 +8,7 @@ import {
   addRequest,
   deleteDuty,
   dutyIdFrom,
+  findSessionFile,
   getDuty,
   isAlive,
   isDutyId,
@@ -29,6 +30,7 @@ import {
 } from "@pi-desktop/mate-runner";
 import { IpcChannels, type DutyDraft, type Overview, type RunnerView } from "../shared/api";
 import { runnerCommand } from "./runner-process";
+import { parseTranscript } from "./session-transcript";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const paths = matePaths(mateHome());
@@ -100,12 +102,14 @@ async function overview(): Promise<Overview> {
     config,
     duties: duties.map((duty) => {
       const last = state.duties[duty.id];
-      const next = nextRunAt(duty, last?.lastRunAt, now);
+      const next = nextRunAt(duty, last?.lastRunAt, now, last?.watch);
+      const pending = last?.watch?.pending;
       return {
         ...duty,
         ...(last?.lastRunAt ? { lastRunAt: last.lastRunAt } : {}),
         ...(last?.lastStatus ? { lastStatus: last.lastStatus } : {}),
         ...(next !== undefined ? { nextRunAt: next } : {}),
+        ...(pending ? { pendingChange: { cause: pending.cause, since: pending.since } } : {}),
         queued: queued.has(duty.id),
       };
     }),
@@ -152,6 +156,13 @@ function registerIpc(): void {
     return runnerView();
   });
   ipcMain.handle(IpcChannels.revealHome, () => shell.openPath(paths.home));
+  ipcMain.handle(IpcChannels.readSession, async (_e, runId: string) => {
+    const run = (await listRuns(paths, 1000)).find((r) => r.id === runId);
+    // 실행 기록에 적힌 경로라도 Mate 홈의 sessions/ 밖은 읽지 않는다
+    const file = run?.sessionId ? await findSessionFile(paths, run.sessionId) : undefined;
+    if (!file) throw new Error("이 실행의 세션 파일을 찾지 못했습니다");
+    return parseTranscript(await readFile(file, "utf8"));
+  });
 }
 
 /** Mate 홈의 파일이 바뀌면 화면에 알린다 (실행기·확장이 쓰는 파일 포함). 잦은 변경은 묶는다 */
