@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Toasts } from "../vendor/renderer/ExtensionUi";
-import type { ChatSummary, PiSetupView, UpdateState } from "../shared/api";
+import type { ChatSummary, PiSetupView, StoredChat, UpdateState } from "../shared/api";
 import { ChatPage } from "./ChatPage";
 import { connectionLabel } from "./connection-label";
 import { groupByFolder } from "./chat-groups";
@@ -10,13 +10,14 @@ import { MemoryPage } from "./MemoryPage";
 import { PiSetupBanner } from "./PiSetupBanner";
 import { RulesPage } from "./RulesPage";
 import { UsagePage } from "./UsagePage";
+import { HistoryPage } from "./HistoryPage";
 import { SettingsPage } from "./SettingsPage";
 import { TasksPanel } from "./TasksPanel";
 import { folderName, lastFolder, recentFolders, rememberFolder } from "./recent-folders";
 import { useAgentSession } from "./use-agent-session";
 
 /** 화면. 대화 말고는 메뉴바(보기)에서 연다 (main/app-menu.ts) */
-type Page = "chat" | "tasks" | "memory" | "rules" | "usage" | "settings";
+type Page = "chat" | "tasks" | "memory" | "rules" | "usage" | "history" | "settings";
 
 /** 사이드바·대화 머리에 보일 이름: Pi 세션 이름, 없으면 폴더 이름 */
 export function chatTitle(chat: Pick<ChatSummary, "name" | "cwd">): string {
@@ -87,6 +88,19 @@ export function App() {
   const moveTo = async (folder: string) => {
     noteFolder(folder);
     await agent.moveTo(folder);
+    await refreshSessions();
+  };
+
+  /** 지난 대화를 연다. 이미 열려 있으면 그 대화로 가고, 아니면 세션 파일을 이어서 연다 */
+  const reopen = async (chat: StoredChat) => {
+    const running = sessions.find((s) => s.sessionFile === chat.path);
+    setPage("chat");
+    if (running) {
+      if (running.sessionId !== session?.sessionId) await agent.attachTo(running);
+      return;
+    }
+    noteFolder(chat.cwd);
+    await agent.open(chat.cwd, { sessionFile: chat.path });
     await refreshSessions();
   };
 
@@ -189,6 +203,9 @@ export function App() {
             </li>
           ))}
         </ul>
+        <button className="link-button muted small-text nav-history" onClick={() => setPage("history")} title="지난 대화 찾기·다시 열기 (Ctrl+Shift+O)">
+          지난 대화…
+        </button>
 
         <div className="nav-foot">
           {update && (update.status === "available" || update.status === "downloaded") && (
@@ -217,7 +234,7 @@ export function App() {
             <button className="small" onClick={() => setPage("chat")}>
               ← 대화로
             </button>
-            <span className="muted small-text">작업·예약·기억·승인·사용량·설정은 메뉴바의 "보기"에서 엽니다</span>
+            <span className="muted small-text">작업·예약·기억·승인·사용량·지난 대화·설정은 메뉴바의 "보기"에서 엽니다</span>
           </div>
         )}
         {page === "chat" && (
@@ -250,6 +267,13 @@ export function App() {
         {page === "memory" && <MemoryPage onError={onError} />}
         {page === "rules" && <RulesPage onError={onError} />}
         {page === "usage" && <UsagePage onError={onError} />}
+        {page === "history" && (
+          <HistoryPage
+            openFiles={new Set(sessions.flatMap((s) => (s.sessionFile ? [s.sessionFile] : [])))}
+            onOpen={(chat) => guard(() => reopen(chat))}
+            onError={onError}
+          />
+        )}
         {page === "settings" && <SettingsPage setup={setup} update={update} onRefresh={() => guard(refreshSetup)} onError={onError} />}
       </main>
 

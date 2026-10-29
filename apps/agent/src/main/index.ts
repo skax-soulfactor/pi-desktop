@@ -13,6 +13,7 @@ import {
   type SessionOpenParams,
   type SessionOpenResult,
   type SessionSummary,
+  type StoredSession,
 } from "@pi-desktop/host-protocol";
 import { extensionArgs, extensionEntries } from "@pi-desktop/agent-kit";
 import { loadTasks, tasksDir } from "@pi-desktop/agent-kit/tasks";
@@ -23,10 +24,11 @@ import { forgetMemory, loadAutoLearn, loadMemories, memoryDir, saveAutoLearn, sa
 import { loadAudit, loadRules, removeRule } from "@pi-desktop/agent-kit/permissions";
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
+import { searchSessions } from "./history";
 import { HostConnection } from "../vendor/main/host-connection";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";
 import { ReplayCollector } from "../vendor/main/replay-collector";
-import { IpcChannels, type AttachResult, type ChatSummary, type MemoryView, type RuleView } from "../shared/api";
+import { IpcChannels, type AttachResult, type ChatSummary, type MemoryView, type RuleView, type SessionSource } from "../shared/api";
 import { findPiDesktop, installPiDesktop, openPiDesktop } from "./pi-desktop";
 import type { PiSetupView } from "../shared/pi-setup";
 import { TaskWatcher } from "./task-watcher";
@@ -236,12 +238,25 @@ function registerIpc(connection: HostConnection): void {
   ipcMain.handle(IpcChannels.removeSchedule, async (_event, id: string) => {
     await updateSchedules(schedulesPath(agentDataDir()), (all) => all.filter((s) => s.id !== id));
   });
-  ipcMain.handle(IpcChannels.openSession, async (_event, cwd: string, forkFrom?: string) => {
+  ipcMain.handle(IpcChannels.openSession, async (_event, cwd: string, from?: SessionSource) => {
     // forkFrom: 다른 폴더로 대화를 옮길 때 지금 세션 파일에서 분기한다 (pi --fork, 원래 세션 파일은 그대로)
+    // sessionFile: 지난 대화를 그 파일 그대로 이어서 연다
     const params = await sessionParams(cwd);
-    const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, forkFrom ? { ...params, forkFrom } : params);
+    const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, { ...params, ...from });
     return result.session;
   });
+  /** 지난 대화. 세션 폴더는 Pi 설정을 따르되, 개발 실행처럼 폴더를 바꾼 경우를 위해 직접 준다 */
+  const history = async (): Promise<StoredSession[]> => {
+    const overrides = devSessionOverrides();
+    const stored = await connection.request<StoredSession[]>(
+      Methods.sessionHistory,
+      { sessionDir: piSessionsDir(), limit: 300, ...(overrides.piCliPath ? { piCliPath: overrides.piCliPath } : {}) },
+      30_000,
+    );
+    return stored.filter((s) => s.cwd !== schedulerDir());
+  };
+  ipcMain.handle(IpcChannels.listHistory, history);
+  ipcMain.handle(IpcChannels.searchHistory, async (_event, query: string) => searchSessions(await history(), query, (path) => readFile(path, "utf8")));
   ipcMain.handle(IpcChannels.attachSession, async (_event, sessionId: string, lastSeq: number) => {
     // attach 도중 알림으로 온 이벤트도 결과에 담는다. 렌더러는 순번으로 중복을 거른다 (replay-collector.ts).
     const events = replays.begin(sessionId);

@@ -12,7 +12,7 @@ import {
   type DialogRequest,
   type ExtensionUiState,
 } from "../vendor/renderer/extension-ui-state";
-import type { ConnectionState } from "../shared/api";
+import type { ConnectionState, SessionSource } from "../shared/api";
 
 /** 모델 하나 (프로바이더·ID·이름) */
 export interface ModelRef {
@@ -133,8 +133,8 @@ export function useAgentSession() {
 
   /** 새 세션을 열고 붙는다. forkFrom을 주면 그 세션 파일의 대화를 이어 가는 새 세션으로 연다 (pi --fork) */
   const open = useCallback(
-    async (cwd: string, forkFrom?: string) => {
-      const opened = await api().openSession(cwd, forkFrom);
+    async (cwd: string, from?: SessionSource) => {
+      const opened = await api().openSession(cwd, from);
       await attachTo(opened);
     },
     [attachTo],
@@ -157,7 +157,7 @@ export function useAgentSession() {
         await api().closeSession(current.sessionId);
         return;
       }
-      await open(folder, data.sessionFile);
+      await open(folder, { forkFrom: data.sessionFile });
     },
     [open],
   );
