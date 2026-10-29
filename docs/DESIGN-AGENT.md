@@ -1,4 +1,4 @@
-# Pi Desktop Agent — 설계 문서 (v0.1)
+# Pi Desktop Agent — 설계 문서 (v0.2)
 
 > 관련 문서: [Pi Desktop 설계](DESIGN.md) — 이 문서는 그 위에 올라가는 두 번째 앱을 다룬다.
 
@@ -78,11 +78,13 @@ Pi 설정과 세션(`~/.pi/agent`)은 나누지 않는다. 같은 Pi를 쓰는 �
 |---|---|---|
 | Host Agent 데몬·연결기 | `packages/host-agent` | 빌드 결과(`dist/host-agent.mjs`)를 그대로 실행 |
 | 앱 ↔ 데몬 메시지 | `packages/host-protocol` | 워크스페이스 패키지 |
-| 연결 관리, Node 런타임 찾기, 빌드 식별자 | `apps/desktop/src/main` | **P0는 별칭(`@desktop`)으로 직접 import** |
-| 채팅 상태·화면, 도구 카드, 확장 UI | `apps/desktop/src/renderer` | **P0는 별칭으로 직접 import** |
+| 연결 관리, Node 런타임 찾기, 빌드 식별자 | `apps/desktop/src/main` | **복사** (`apps/agent/src/vendor/main`) |
+| 채팅 상태·화면, 도구 카드, 확장 UI | `apps/desktop/src/renderer` | **복사** (`apps/agent/src/vendor/renderer`) |
 
-앱끼리 소스를 직접 가져다 쓰는 것은 임시 방편이다. 두 앱이 함께 쓰는 범위가 P1에서 확정되면
-`packages/desktop-core`(메인 쪽)와 `packages/chat-ui`(렌더러 쪽)로 옮긴다. 옮기는 커밋은 동작 변화 없는 `refactor`로 따로 만든다.
+P0는 `@desktop` 별칭으로 Pi Desktop 소스를 직접 가져다 썼다. 처음에는 P1에서 공용 패키지(`packages/desktop-core`·`chat-ui`)로
+옮길 계획이었지만, 그러려면 Pi Desktop을 고쳐야 해서 "Pi Desktop은 건드리지 않는다"(§0)와 맞지 않는다.
+직접 import를 그대로 두면 Pi Desktop을 고칠 때 에이전트 빌드와 Pi Desktop PR의 CI가 함께 깨진다.
+그래서 **P1에서 복사로 바꿨다** (v0.2). 출처 커밋과 다시 가져오는 규칙은 `apps/agent/src/vendor/README.md`에 있다.
 
 ## 3. 데이터 위치
 
@@ -127,7 +129,8 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 |---|---|---|
 | **P0 골격** | `agent-kit` 패키지와 `agent-core` 확장(`/agent:status`), `apps/agent`가 분리된 데몬에 붙어 agent-kit을 올린 로컬 세션으로 채팅, 확장 다이얼로그 응답, mock LLM 개발 실행 | `npm run dev:mock -w @pi-desktop/agent`로 대화하고, 실제 Pi 계약 테스트로 agent-kit이 올라가는 것을 확인 |
 | | **구현 메모 (P0 완료)**: 실제 Pi 1.3.0 계약 테스트(`packages/agent-kit/test/real-pi.test.ts`)와 dev:mock 앱에서 데몬 연결 → agent-kit 확인 → `/agent:status` 알림 → 스트리밍 응답 → read 도구 카드까지 확인. 프로젝트 신뢰는 묻지 않으므로(RPC) 처음 연 폴더의 `.pi/` 리소스는 건너뛴다. 설치본 묶음(extraResources의 agent-kit·host-agent)은 아직 없음 | |
-| P1 승인 | `permissions` 확장, 앱 승인 모달, 공통 코드 `packages/desktop-core`·`chat-ui`로 이동 | 승인 없이는 쓰기·실행이 일어나지 않는다 |
+| **P1 승인** | `permissions` 확장, 앱 승인 화면, Pi Desktop 모듈 복사(§2.3) | 승인 없이는 쓰기·실행이 일어나지 않는다 |
+| | **구현 메모 (P1 완료)**: 읽기 도구(read·grep·find·ls)는 묻지 않고, 쓰기(write·edit)·실행(bash·powershell·모르는 도구)은 `ctx.ui.select`로 묻는다. 선택지는 이번만·이 세션에서 계속·항상(규칙 저장)·거부이고, 취소와 시간 초과는 거부다. 위험 명령과 권한 상승은 묻지 않고 막는다. 규칙은 `permissions.json`, 판단은 `audit.jsonl`. 앱은 select 제목의 승인 형식(`agent-kit/approval`)을 읽어 전용 화면을 띄운다. 실제 Pi 계약 테스트(`permissions-real-pi.test.ts`)와 dev:mock 앱에서 허용·거부 흐름을 확인 | |
 | P2 로컬 모델 | `local-model`, `loop-guard`, 압축 설정 | qwen3.5:9b로 desktop-agent와 같은 시나리오 비교 |
 | P3 기본 기능 | `memory`, `documents`, `attachments`, `ask-user`, `web`, 키체인 연동 | |
 | P4 백그라운드 | `tasks`(워커 세션), 데몬 스케줄러, 알림 | 앱을 닫아도 예약 작업이 돈다 |
@@ -138,7 +141,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | 리스크 | 대응 |
 |---|---|
 | Pi 변경이 빠름 (1.x에서 주 2회 수준 릴리스) | 저장소의 Pi devDependency로 계약 테스트. agent-kit이 쓰는 이벤트만 검사한다 |
-| RPC 확장 UI의 표현력이 낮음 (문자열 선택지 수준) | 승인처럼 정보가 많은 화면은 P1에서 앱 전용 경로를 만들고, `ctx.ui`는 대체 경로로 둔다 |
-| 앱끼리 소스를 직접 import | P1에서 공용 패키지로 옮긴다 (§2.3) |
+| RPC 확장 UI의 표현력이 낮음 (문자열 선택지 수준) | P1은 승인 정보를 select 제목에 정해진 형식으로 싣고, agent-kit의 같은 함수로 만들고 읽는다. 터미널 pi에서도 그대로 읽힌다. 더 많은 정보가 필요해지면 앱 전용 경로를 검토 |
+| 복사한 Pi Desktop 모듈이 원본과 멀어짐 | 되도록 고치지 않고, 고친 곳에는 `// agent:` 주석. 다시 가져올 때 출처 커밋을 갱신 (vendor/README.md) |
 | Windows 셸 | Pi 기본 `bash`는 Git Bash가 필요하다. 회사 PC를 고려해 `powershell` 도구를 켜는 설정을 P2에서 기본값으로 검토 |
 | 9B 로컬 모델의 지시 따르기 | 엔진을 바꿔도 해결되지 않는다. `loop-guard`처럼 코드로 강제하는 장치를 유지하고 P2에서 측정한다 |
