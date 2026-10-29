@@ -20,6 +20,8 @@ Pi Desktop이 "설치된 Pi를 그대로 GUI로 쓰는 앱"이라면, Pi Desktop
 | 기능 구현 위치 | **Pi 확장·스킬**(`agent-kit`). 앱은 Pi 프런트엔드일 뿐이다 |
 | 데몬 | Pi Desktop과 **같은 Host Agent 코드, 다른 데몬 홈**(`~/.pi-desktop-agent`). 두 앱이 서로의 데몬을 교체하지 않게 한다 |
 | 제품 이름 | Pi Desktop Agent (`@pi-desktop/agent`). 단, Host Agent 실행 파일 이름이 이미 `pi-desktop-agent`이므로 문서·로그에서는 "에이전트 앱"과 "Host Agent"를 구분해 쓴다 |
+| Pi Desktop과의 분리 | `apps/desktop`과 루트 README는 고치지 않는다. 겹치는 파일은 `package-lock.json`뿐이다. 작업은 별도 worktree(`../pi-desktop-agent`)의 `feat/agent-*` 브랜치에서 한다 |
+| 릴리스 | Pi Desktop의 `v*` 태그·워크플로·GitHub Releases와 섞지 않는다. 에이전트는 `agent-v*` 태그와 별도 워크플로, 별도 배포 위치를 쓴다. 같은 Releases에 올리면 Pi Desktop의 자동 업데이트가 에이전트 릴리스를 최신 버전으로 착각할 수 있다 |
 | 기존 desktop-agent | 자동 업데이트로 배포된 상태라 그 저장소에서 갈아엎지 않는다. 기능 목록과 설계 근거를 참고하는 용도로만 남긴다 |
 
 ## 1. 핵심 원칙
