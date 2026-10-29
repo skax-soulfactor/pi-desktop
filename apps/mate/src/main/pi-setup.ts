@@ -9,14 +9,14 @@ export interface PiDesktopInfo {
   installedPath?: string;
 }
 
-export function piDesktopInfo(): PiDesktopInfo {
-  const installedPath = findPiDesktop();
+export async function piDesktopInfo(): Promise<PiDesktopInfo> {
+  const installedPath = await findPiDesktop();
   return installedPath ? { installedPath } : {};
 }
 
 /** 설치된 Pi Desktop을 연다. 없으면 false */
 export async function openPiDesktop(): Promise<boolean> {
-  const path = findPiDesktop();
+  const path = await findPiDesktop();
   if (!path) return false;
   const error = await shell.openPath(path);
   if (error) throw new Error(`Pi Desktop을 열지 못했습니다: ${error}`);

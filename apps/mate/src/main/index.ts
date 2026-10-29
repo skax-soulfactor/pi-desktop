@@ -91,14 +91,14 @@ function readiness(refresh = false): Promise<PiSetupView> {
   if (refresh || !readinessCache || Date.now() - readinessAt > 5 * 60_000) {
     readinessAt = Date.now();
     readinessCache = runnerCommand(runnerScript(), "status", runnerEnv()).then(
-      (status) => ({ ...(status as unknown as PiReadiness), ...piDesktopInfoView(), checkedAt: Date.now() }),
-      (error: Error) => ({
+      async (status) => ({ ...(status as unknown as PiReadiness), ...(await piDesktopInfoView()), checkedAt: Date.now() }),
+      async (error: Error) => ({
         stage: "no-pi" as const,
         piError: `Pi 상태를 확인하지 못했습니다: ${error.message}`,
         node: { path: "", ok: false },
         authProviders: [],
         models: [],
-        ...piDesktopInfoView(),
+        ...(await piDesktopInfoView()),
         checkedAt: Date.now(),
       }),
     );
@@ -106,8 +106,8 @@ function readiness(refresh = false): Promise<PiSetupView> {
   return readinessCache;
 }
 
-function piDesktopInfoView(): { piDesktopPath?: string } {
-  const info = piDesktopInfo();
+async function piDesktopInfoView(): Promise<{ piDesktopPath?: string }> {
+  const info = await piDesktopInfo();
   return info.installedPath ? { piDesktopPath: info.installedPath } : {};
 }
 
