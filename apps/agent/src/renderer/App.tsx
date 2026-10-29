@@ -5,6 +5,7 @@ import { DialogHost } from "./dialog-host";
 import { withAttachments } from "./attachments";
 import { connectionLabel } from "./connection-label";
 import { KeysPanel } from "./KeysPanel";
+import { TasksPanel } from "./TasksPanel";
 import { useAgentSession, type KitState } from "./use-agent-session";
 
 const KIT_LABEL: Record<KitState, { text: string; tone: "ok" | "bad" | "" }> = {
@@ -18,6 +19,7 @@ export function App() {
   const [cwd, setCwd] = useState("");
   const [draft, setDraft] = useState("");
   const [keysOpen, setKeysOpen] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(false);
   const connected = connection.status === "connected";
 
   useEffect(() => {
@@ -64,8 +66,10 @@ export function App() {
         <button className="primary" disabled={!connected || !cwd.trim()} onClick={() => guard(() => open(cwd.trim()))}>
           새 세션
         </button>
+        <button onClick={() => setTasksOpen((open) => !open)}>작업</button>
         <button onClick={() => setKeysOpen((open) => !open)}>API 키</button>
       </div>
+      {tasksOpen && <TasksPanel onError={(message) => notice("error", message)} />}
       {keysOpen && <KeysPanel onError={(message) => notice("error", message)} />}
 
       <ChatView items={chat.items} running={chat.running} onResend={setDraft} actions={{}} />

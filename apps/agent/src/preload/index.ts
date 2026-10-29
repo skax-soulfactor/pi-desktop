@@ -16,6 +16,10 @@ const api: AgentApi = {
   listKeys: () => ipcRenderer.invoke(IpcChannels.listKeys),
   setKey: (name, value) => ipcRenderer.invoke(IpcChannels.setKey, name, value),
   removeKey: (name) => ipcRenderer.invoke(IpcChannels.removeKey, name),
+  listTasks: () => ipcRenderer.invoke(IpcChannels.listTasks),
+  listSchedules: () => ipcRenderer.invoke(IpcChannels.listSchedules),
+  setScheduleEnabled: (id, enabled) => ipcRenderer.invoke(IpcChannels.setScheduleEnabled, id, enabled),
+  removeSchedule: (id) => ipcRenderer.invoke(IpcChannels.removeSchedule, id),
   openSession: (cwd) => ipcRenderer.invoke(IpcChannels.openSession, cwd),
   attachSession: (sessionId, lastSeq) => ipcRenderer.invoke(IpcChannels.attachSession, sessionId, lastSeq),
   sendCommand: (sessionId, command) => ipcRenderer.invoke(IpcChannels.sendCommand, sessionId, command),
@@ -24,6 +28,7 @@ const api: AgentApi = {
   onSessionEvent: (listener) => subscribe(IpcChannels.sessionEvent, listener),
   onSessionExit: (listener) => subscribe(IpcChannels.sessionExit, listener),
   onUiResolved: (listener) => subscribe(IpcChannels.uiResolved, listener),
+  onTasksChanged: (listener) => subscribe(IpcChannels.tasksChanged, () => listener()),
 };
 
 contextBridge.exposeInMainWorld("piAgent", api);

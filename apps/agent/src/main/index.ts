@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, shell } from "electron";
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -13,6 +13,9 @@ import {
   type SessionSummary,
 } from "@pi-desktop/host-protocol";
 import { extensionArgs, extensionEntries } from "@pi-desktop/agent-kit";
+import { loadTasks, tasksDir } from "@pi-desktop/agent-kit/tasks";
+import { loadSchedules, schedulesPath, updateSchedules } from "@pi-desktop/agent-kit/schedules";
+import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
 import { HostConnection } from "../vendor/main/host-connection";
@@ -20,6 +23,7 @@ import { resolveNodeRuntime } from "../vendor/main/node-runtime";
 import { ReplayCollector } from "../vendor/main/replay-collector";
 import { IpcChannels, type AttachResult } from "../shared/api";
 import { KeyStore } from "./key-store";
+import { TaskWatcher } from "./task-watcher";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -49,6 +53,23 @@ function kitDir(): string {
 // 개발·E2E 검증용 Chrome DevTools Protocol. 설치본은 환경 변수로 열지 않는다 (Pi Desktop과 같은 이유).
 if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
   app.commandLine.appendSwitch("remote-debugging-port", process.env.PI_DESKTOP_REMOTE_DEBUG_PORT);
+}
+
+/**
+ * agent-kit 상태 폴더 (agent-kit permissions/store.ts의 dataDir와 같은 규칙). 지금은 로컬 호스트만 다루므로 앱이 직접 읽는다.
+ */
+function agentDataDir(): string {
+  if (process.env.PI_DESKTOP_AGENT_DATA) return process.env.PI_DESKTOP_AGENT_DATA;
+  return join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "pi-desktop-agent");
+}
+
+/** 끝난 작업을 OS 알림으로 알린다. 창을 보고 있으면 목록이 바뀌는 것으로 충분하다 */
+function notifyTask(task: TaskRecord): void {
+  if (!Notification.isSupported() || mainWindow?.isFocused()) return;
+  const status = task.status === "done" ? "완료" : task.status === "failed" ? "실패" : "취소됨";
+  const origin = task.origin === "schedule" ? "예약" : "작업";
+  const body = (task.status === "failed" ? task.error : task.result)?.slice(0, 200) ?? "";
+  new Notification({ title: `${origin} ${status}: ${task.title}`, body }).show();
 }
 
 /** 데몬에 상주시키는 스케줄러 세션의 작업 폴더. 이 폴더로 연 세션이 있으면 이미 떠 있는 것으로 본다 */
@@ -137,6 +158,14 @@ function registerIpc(connection: HostConnection, keys: KeyStore): void {
   ipcMain.handle(IpcChannels.listKeys, () => keys.names());
   ipcMain.handle(IpcChannels.setKey, (_event, name: string, value: string) => keys.set(name, value));
   ipcMain.handle(IpcChannels.removeKey, (_event, name: string) => keys.remove(name));
+  ipcMain.handle(IpcChannels.listTasks, async () => (await loadTasks(tasksDir(agentDataDir()))).slice(0, 30));
+  ipcMain.handle(IpcChannels.listSchedules, () => loadSchedules(schedulesPath(agentDataDir())));
+  ipcMain.handle(IpcChannels.setScheduleEnabled, async (_event, id: string, enabled: boolean) => {
+    await updateSchedules(schedulesPath(agentDataDir()), (all) => all.map((s) => (s.id === id ? { ...s, enabled } : s)));
+  });
+  ipcMain.handle(IpcChannels.removeSchedule, async (_event, id: string) => {
+    await updateSchedules(schedulesPath(agentDataDir()), (all) => all.filter((s) => s.id !== id));
+  });
   ipcMain.handle(IpcChannels.openSession, async (_event, cwd: string) => {
     const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, await sessionParams(cwd, keys));
     return result.session;
@@ -203,6 +232,13 @@ app.whenReady().then(() => {
   });
   connection = created;
   registerIpc(connection, keys);
+  // Windows 알림에 앱 이름이 보이게 한다
+  app.setAppUserModelId("Pi Desktop Agent");
+  new TaskWatcher(
+    () => loadTasks(tasksDir(agentDataDir())),
+    notifyTask,
+    () => sendToRenderer(IpcChannels.tasksChanged, null),
+  ).start();
   createWindow();
   connection.start();
 
