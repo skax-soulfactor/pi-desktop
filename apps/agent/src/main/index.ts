@@ -12,11 +12,11 @@ import {
   type SessionOpenResult,
 } from "@pi-desktop/host-protocol";
 import { extensionArgs, extensionEntries } from "@pi-desktop/agent-kit";
-import { agentBuildId } from "@desktop/main/agent-build";
-import { devSessionOverrides } from "@desktop/main/dev-overrides";
-import { HostConnection } from "@desktop/main/host-connection";
-import { resolveNodeRuntime } from "@desktop/main/node-runtime";
-import { ReplayCollector } from "@desktop/main/replay-collector";
+import { agentBuildId } from "../vendor/main/agent-build";
+import { devSessionOverrides } from "../vendor/main/dev-overrides";
+import { HostConnection } from "../vendor/main/host-connection";
+import { resolveNodeRuntime } from "../vendor/main/node-runtime";
+import { ReplayCollector } from "../vendor/main/replay-collector";
 import { IpcChannels, type AttachResult } from "../shared/api";
 
 const here = fileURLToPath(new URL(".", import.meta.url));

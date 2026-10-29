@@ -1,6 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
-import { ChatView } from "@desktop/renderer/ChatView";
-import { ExtensionDialog, StatusLine, Toasts, Widgets } from "@desktop/renderer/ExtensionUi";
+import { ChatView } from "../vendor/renderer/ChatView";
+import { StatusLine, Toasts, Widgets } from "../vendor/renderer/ExtensionUi";
+import { DialogHost } from "./dialog-host";
 import { connectionLabel } from "./connection-label";
 import { useAgentSession, type KitState } from "./use-agent-session";
 
@@ -78,7 +79,7 @@ export function App() {
       <Widgets ui={ui} placement="belowEditor" />
       <StatusLine ui={ui} />
 
-      {ui.dialogs[0] && <ExtensionDialog dialog={ui.dialogs[0]} onAnswer={(reply) => guard(() => answer(ui.dialogs[0]!, reply))} />}
+      {ui.dialogs[0] && <DialogHost dialog={ui.dialogs[0]} onAnswer={(reply) => guard(() => answer(ui.dialogs[0]!, reply))} />}
       <Toasts toasts={ui.toasts} onDismiss={dismiss} />
     </div>
   );
