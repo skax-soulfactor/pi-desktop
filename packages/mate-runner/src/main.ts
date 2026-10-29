@@ -82,7 +82,7 @@ async function stop(): Promise<void> {
 async function runOnce(id: string | undefined): Promise<void> {
   const duty = id ? await getDuty(paths, id) : undefined;
   if (!duty) throw new Error(`임무를 찾지 못했습니다: ${id ?? "(없음)"}`);
-  console.log(JSON.stringify(await runDuty(await options(), duty, "manual"), null, 2));
+  console.log(JSON.stringify(await runDuty(await options(), duty, { reason: "manual" }), null, 2));
 }
 
 const [command, arg] = process.argv.slice(2);

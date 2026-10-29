@@ -35,6 +35,21 @@ describe("mate-view", () => {
     expect(nextRunLabel({ ...duty, enabled: false }, now, false)).toBe("꺼짐");
   });
 
+  it("변화 계기: 지켜보는 중 / 감지한 변화와 실행 시각", () => {
+    const now = at(29, 12);
+    const git = {
+      id: "g", name: "g", enabled: true, cwd: ".", prompt: "p", profile: "propose", createdAt: 0,
+      trigger: { kind: "git", cooldownMinutes: 15 }, queued: false,
+    } as DutyView;
+    expect(triggerLabel(git.trigger)).toBe("새 커밋이 생기면");
+    expect(triggerLabel({ kind: "poll", command: "gh run list", minutes: 30 })).toBe('"gh run list" 결과가 바뀌면 (30분마다 확인)');
+    expect(nextRunLabel(git, now, false)).toBe("변화를 지켜보는 중");
+    const pending = { ...git, pendingChange: { cause: "커밋 b2 (main)", since: now }, nextRunAt: now + 10 * 60_000 };
+    expect(nextRunLabel(pending, now, false)).toBe("커밋 b2 (main) · 10분 뒤 실행");
+    expect(nextRunLabel({ ...pending, nextRunAt: now }, now, false)).toBe("커밋 b2 (main) · 곧 실행");
+    expect(nextRunLabel(pending, now, true)).toBe("변화 감지됨 · 일시 정지됨");
+  });
+
   it("새 제안과 처리한 제안을 나누고 비용을 짧게", () => {
     const item = (id: string, status?: InboxView["status"]) => ({ id, status }) as InboxView;
     const { fresh, handled } = splitInbox([item("a"), item("b", "accepted"), item("c", "dismissed")]);

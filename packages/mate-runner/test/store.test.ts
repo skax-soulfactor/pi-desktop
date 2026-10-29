@@ -34,7 +34,7 @@ const raw = { id: "brief", name: "아침 브리핑", cwd: "C:/p", prompt: "요�
 
 describe("store", () => {
   it("설정이 없으면 기본 모델은 haiku 5.5, 바꾼 값은 남는다", async () => {
-    expect(await loadConfig(paths)).toEqual({ model: "anthropic/claude-haiku-5-5", paused: false, dailyRunLimit: 20 });
+    expect(await loadConfig(paths)).toEqual({ model: "anthropic/claude-haiku-5-5", paused: false, dailyRunLimit: 20, maxCostUsd: 0.5 });
     expect((await saveConfig(paths, { paused: true })).paused).toBe(true);
     expect((await loadConfig(paths)).model).toBe("anthropic/claude-haiku-5-5");
   });
@@ -51,6 +51,19 @@ describe("store", () => {
     expect((await listDuties(paths)).map((d) => d.id)).toEqual(["brief"]);
     await deleteDuty(paths, "brief");
     expect(await listDuties(paths)).toEqual([]);
+  });
+
+  it("변화 계기는 기본값을 채우고, 확인 명령은 읽기 명령 하나만 받는다", () => {
+    expect(normalizeDuty({ ...raw, trigger: { kind: "git" } })).toMatchObject({ trigger: { kind: "git", cooldownMinutes: 15 } });
+    expect(normalizeDuty({ ...raw, trigger: { kind: "files", cooldownMinutes: 1 } })).toMatchObject({
+      trigger: { kind: "files", quietSeconds: 60, cooldownMinutes: 5 },
+    });
+    expect(normalizeDuty({ ...raw, trigger: { kind: "poll", command: " gh run list ", minutes: 5 } })).toMatchObject({
+      trigger: { kind: "poll", command: "gh run list", minutes: 15 },
+    });
+    expect(normalizeDuty({ ...raw, trigger: { kind: "poll", command: "rm -rf .", minutes: 30 } })).toMatch(/확인 명령: rm/);
+    expect(normalizeDuty({ ...raw, maxCostUsd: 0.2 })).toMatchObject({ maxCostUsd: 0.2 });
+    expect(normalizeDuty({ ...raw, maxCostUsd: -1 })).not.toHaveProperty("maxCostUsd");
   });
 
   it("이름에서 겹치지 않는 id를 만든다", () => {

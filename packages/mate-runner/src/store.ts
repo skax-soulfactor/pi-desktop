@@ -4,7 +4,11 @@ import { dirname, join } from "node:path";
 import { isProfile } from "@pi-desktop/mate-kit";
 import type { MatePaths } from "./paths";
 import { parseTime } from "./schedule";
+import { pollCommandError } from "./watchers";
 import {
+  DEFAULT_COOLDOWN_MINUTES,
+  DEFAULT_QUIET_SECONDS,
+  MIN_COOLDOWN_MINUTES,
   DEFAULT_CONFIG,
   MIN_INTERVAL_MINUTES,
   type Duty,
@@ -59,6 +63,7 @@ export async function loadConfig(paths: MatePaths): Promise<MateConfig> {
     paused: raw.paused === true,
     dailyRunLimit:
       typeof raw.dailyRunLimit === "number" && raw.dailyRunLimit >= 0 ? Math.floor(raw.dailyRunLimit) : DEFAULT_CONFIG.dailyRunLimit,
+    maxCostUsd: typeof raw.maxCostUsd === "number" && raw.maxCostUsd >= 0 ? raw.maxCostUsd : DEFAULT_CONFIG.maxCostUsd,
   };
 }
 
@@ -85,9 +90,26 @@ export function dutyIdFrom(name: string, taken: Iterable<string>): string {
   return id;
 }
 
-function normalizeTrigger(raw: unknown): Trigger | undefined {
+const minutesOr = (value: unknown, fallback: number, min: number) =>
+  typeof value === "number" && Number.isFinite(value) ? Math.max(min, Math.round(value)) : fallback;
+
+/** 잘못된 계기는 이유(문자열)를 돌려준다 */
+function normalizeTrigger(raw: unknown): Trigger | string {
   const t = raw as Partial<Record<string, unknown>> | undefined;
-  if (!t || typeof t !== "object") return undefined;
+  if (!t || typeof t !== "object") return "실행 시점이 잘못되었습니다";
+  if (t.kind === "git" || t.kind === "files") {
+    const cooldownMinutes = minutesOr(t.cooldownMinutes, DEFAULT_COOLDOWN_MINUTES, MIN_COOLDOWN_MINUTES);
+    if (t.kind === "git") return { kind: "git", cooldownMinutes };
+    const quietSeconds = minutesOr(t.quietSeconds, DEFAULT_QUIET_SECONDS, 10);
+    return { kind: "files", quietSeconds, cooldownMinutes };
+  }
+  if (t.kind === "poll") {
+    const command = typeof t.command === "string" ? t.command.trim() : "";
+    if (!command) return "확인할 명령이 필요합니다";
+    const error = pollCommandError(command);
+    if (error) return `확인 명령: ${error}`;
+    return { kind: "poll", command, minutes: minutesOr(t.minutes, 60, MIN_INTERVAL_MINUTES) };
+  }
   if (t.kind === "manual") return { kind: "manual" };
   if (t.kind === "interval" && typeof t.minutes === "number" && Number.isFinite(t.minutes)) {
     return { kind: "interval", minutes: Math.max(MIN_INTERVAL_MINUTES, Math.round(t.minutes)) };
@@ -98,7 +120,7 @@ function normalizeTrigger(raw: unknown): Trigger | undefined {
       : [];
     return weekdays.length > 0 && weekdays.length < 7 ? { kind: "daily", time: t.time, weekdays } : { kind: "daily", time: t.time };
   }
-  return undefined;
+  return "실행 시점이 잘못되었습니다";
 }
 
 /** 파일·화면에서 온 값을 검사해 임무로 만든다. 잘못되면 이유를 돌려준다 */
@@ -111,7 +133,7 @@ export function normalizeDuty(raw: unknown): Duty | string {
   if (typeof d.prompt !== "string" || !d.prompt.trim()) return "지시가 필요합니다";
   if (!isProfile(d.profile)) return "권한 단계가 잘못되었습니다";
   const trigger = normalizeTrigger(d.trigger);
-  if (!trigger) return "실행 시점이 잘못되었습니다";
+  if (typeof trigger === "string") return trigger;
   const duty: Duty = {
     id: d.id,
     name: d.name.trim(),
@@ -124,6 +146,7 @@ export function normalizeDuty(raw: unknown): Duty | string {
   };
   if (typeof d.model === "string" && d.model.trim()) duty.model = d.model.trim();
   if (typeof d.timeoutSec === "number" && d.timeoutSec > 0) duty.timeoutSec = Math.min(3600, Math.round(d.timeoutSec));
+  if (typeof d.maxCostUsd === "number" && d.maxCostUsd > 0) duty.maxCostUsd = d.maxCostUsd;
   if (typeof d.updatedAt === "number") duty.updatedAt = d.updatedAt;
   return duty;
 }

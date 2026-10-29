@@ -16,6 +16,8 @@ export interface PiLaunch {
 
 export interface RunInput {
   duty: Duty;
+  /** 변화 감지로 돌 때 무엇이 바뀌었는지 (모델에 알린다) */
+  cause?: string;
   runId: string;
   model: string;
   /** mate-kit 확장 진입 파일들 */
@@ -23,10 +25,12 @@ export interface RunInput {
   inboxPath: string;
   sessionsDir: string;
   timeoutSec: number;
+  /** 실행당 비용 상한(USD). 0이면 없음. 넘으면 프로세스를 끝낸다 (메시지 단위로 확인하므로 한 메시지만큼 넘을 수 있음) */
+  maxCostUsd: number;
 }
 
 export interface RunOutcome {
-  status: "done" | "failed" | "timeout";
+  status: "done" | "failed" | "timeout" | "budget";
   summary?: string;
   error?: string;
   costUsd: number;
@@ -36,7 +40,7 @@ export interface RunOutcome {
 }
 
 /** 모든 실행의 시스템 프롬프트 뒤에 붙이는 안내 */
-export function mateSystemPrompt(duty: Duty): string {
+export function mateSystemPrompt(duty: Duty, cause?: string): string {
   const lines = [
     `너는 Pi Desktop Mate의 백그라운드 임무 "${duty.name}"를 수행하고 있다. 사용자는 지금 화면을 보고 있지 않다.`,
     "- 읽기만 할 수 있다. 파일을 바꾸거나 쓰기 명령을 실행하지 마라 (막혀 있다). bash는 읽기 전용 명령만 통과한다.",
@@ -47,6 +51,7 @@ export function mateSystemPrompt(duty: Duty): string {
       `- 사용자에게 알릴 발견이나 제안할 일이 있으면 ${PROPOSE_TOOL} 도구로 남겨라. 주제마다 한 번씩, 알릴 것이 없으면 남기지 마라.`,
     );
   }
+  if (cause) lines.push(`- 이번 실행은 변화를 감지해 시작했다: ${cause}. 바뀐 부분을 중심으로 살펴라.`);
   lines.push("- 마지막에 결과를 한국어로 두세 문장 요약하라.");
   return lines.join("\n");
 }
@@ -59,7 +64,7 @@ export function piArgs(input: RunInput): string[] {
     ...input.extensions.flatMap((e) => ["-e", e]),
     "--tools", profileTools(duty.profile).join(","),
     "--model", input.model,
-    "--append-system-prompt", mateSystemPrompt(duty),
+    "--append-system-prompt", mateSystemPrompt(duty, input.cause),
     duty.prompt,
   ];
 }
@@ -126,6 +131,7 @@ export function runPi(launch: PiLaunch, input: RunInput, signal?: AbortSignal): 
     let stderr = "";
     let buffer = "";
     let timedOut = false;
+    let overBudget = false;
     const child = spawn(launch.nodePath ?? process.execPath, [launch.cliPath, ...piArgs(input)], {
       cwd: input.duty.cwd,
       env: { ...process.env, ...launch.env, ...piEnv(input, input.duty.profile) },
@@ -146,6 +152,10 @@ export function runPi(launch: PiLaunch, input: RunInput, signal?: AbortSignal): 
       let at = buffer.indexOf("\n");
       while (at >= 0) {
         summary.push(buffer.slice(0, at).replace(/\r$/, ""));
+        if (input.maxCostUsd > 0 && summary.costUsd > input.maxCostUsd && !overBudget) {
+          overBudget = true;
+          killTree(child.pid);
+        }
         buffer = buffer.slice(at + 1);
         at = buffer.indexOf("\n");
       }
@@ -166,7 +176,9 @@ export function runPi(launch: PiLaunch, input: RunInput, signal?: AbortSignal): 
         ...(summary.sessionId ? { sessionId: summary.sessionId } : {}),
         ...(summary.lastText ? { summary: summary.lastText.slice(0, SUMMARY_LIMIT) } : {}),
       };
-      if (timedOut) resolve({ ...base, status: "timeout", error: `${input.timeoutSec}초 안에 끝나지 않아 멈췄습니다` });
+      if (overBudget) {
+        resolve({ ...base, status: "budget", error: `비용 상한 $${input.maxCostUsd}를 넘어 멈췄습니다 ($${summary.costUsd.toFixed(4)})` });
+      } else if (timedOut) resolve({ ...base, status: "timeout", error: `${input.timeoutSec}초 안에 끝나지 않아 멈췄습니다` });
       else if (spawnError) resolve({ ...base, status: "failed", error: `Pi를 실행하지 못했습니다: ${spawnError.message}` });
       else if (summary.errorMessage) resolve({ ...base, status: "failed", error: summary.errorMessage });
       else if (code !== 0 || !summary.settled) {

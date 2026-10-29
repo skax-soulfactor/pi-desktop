@@ -13,6 +13,7 @@ export const IpcChannels = {
   pickDirectory: "mate:pick-directory",
   restartRunner: "mate:restart-runner",
   revealHome: "mate:reveal-home",
+  readSession: "mate:read-session",
   changed: "mate:changed",
 } as const;
 
@@ -22,7 +23,16 @@ export interface DutyView extends Duty {
   nextRunAt?: number;
   /** "지금 실행"을 눌러 실행기를 기다리는 중 */
   queued: boolean;
+  /** 변화 계기: 감지해서 실행을 기다리는 변화 */
+  pendingChange?: { cause: string; since: number };
 }
+
+/** 실행 세션을 읽기 전용으로 보여 줄 때의 한 줄 */
+export type TranscriptItem =
+  | { kind: "user"; text: string }
+  | { kind: "assistant"; text: string }
+  | { kind: "tool"; name: string; args: string; result?: string; isError?: boolean }
+  | { kind: "note"; text: string };
 
 export interface InboxView extends InboxItem {
   /** 없으면 새 제안 */
@@ -62,6 +72,8 @@ export interface MateApi {
   pickDirectory(): Promise<string | undefined>;
   restartRunner(): Promise<RunnerView>;
   revealHome(): Promise<void>;
+  /** 실행 기록의 Pi 세션을 대화 형태로 읽는다 */
+  readSession(runId: string): Promise<TranscriptItem[]>;
   /** Mate 홈의 파일이 바뀌면 불린다. 해제 함수를 돌려준다 */
   onChanged(listener: () => void): () => void;
 }

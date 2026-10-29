@@ -2,5 +2,6 @@
 export { mateHome, matePaths, type MatePaths } from "./paths";
 export * from "./types";
 export * from "./store";
-export { isDue, nextRunAt, parseTime } from "./schedule";
-export { isAlive, readPid } from "./daemon";
+export { changeReadyAt, isDue, nextRunAt, parseTime } from "./schedule";
+export { findSessionFile, isAlive, readPid } from "./daemon";
+export { pollCommandError } from "./watchers";

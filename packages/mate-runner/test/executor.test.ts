@@ -20,6 +20,7 @@ const input = {
   inboxPath: "/h/inbox.jsonl",
   sessionsDir: "/h/sessions",
   timeoutSec: 60,
+  maxCostUsd: 0,
 };
 
 describe("piArgs", () => {

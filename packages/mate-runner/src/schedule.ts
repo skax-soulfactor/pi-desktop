@@ -1,4 +1,11 @@
-import type { Duty } from "./types";
+import {
+  DEFAULT_COOLDOWN_MINUTES,
+  DEFAULT_QUIET_SECONDS,
+  isChangeTrigger,
+  type ChangeTrigger,
+  type Duty,
+  type WatchState,
+} from "./types";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -8,11 +15,16 @@ const DAY = 24 * 60 * 60 * 1000;
  * - interval: 마지막 실행(없으면 만든 시각)에서 N분이 지났으면.
  * - daily: 지금 이전의 가장 최근 시간표가 마지막 실행·만든 시각 뒤면. 실행기가 꺼져 있던 동안
  *   여러 번을 놓쳤어도 가장 최근 것 하나만 따라잡는다.
+ * - 변화 계기(git·files·poll): 기다리는 변화가 있고 쉬는 시간(·파일은 잠잠한 시간)이 지났으면.
  */
-export function isDue(duty: Duty, lastRunAt: number | undefined, now: number): boolean {
+export function isDue(duty: Duty, lastRunAt: number | undefined, now: number, watch?: WatchState): boolean {
   if (!duty.enabled) return false;
   const base = Math.max(lastRunAt ?? 0, duty.createdAt);
   const t = duty.trigger;
+  if (isChangeTrigger(t)) {
+    const readyAt = changeReadyAt(t, lastRunAt, watch);
+    return readyAt !== undefined && readyAt <= now;
+  }
   switch (t.kind) {
     case "manual":
       return false;
@@ -25,11 +37,24 @@ export function isDue(duty: Duty, lastRunAt: number | undefined, now: number): b
   }
 }
 
-/** 화면에 보일 다음 실행 시각. 지금 돌아야 하면 now, 시간표가 없으면 undefined */
-export function nextRunAt(duty: Duty, lastRunAt: number | undefined, now: number): number | undefined {
+/**
+ * 기다리는 변화가 실행될 수 있는 시각. 변화가 없으면 undefined.
+ * 쉬는 시간: 마지막 실행 뒤 cooldown(poll은 간격이 곧 쉬는 시간이라 없음). 파일은 마지막 변경 뒤 quiet초.
+ */
+export function changeReadyAt(trigger: ChangeTrigger, lastRunAt: number | undefined, watch: WatchState | undefined): number | undefined {
+  const pending = watch?.pending;
+  if (!pending) return undefined;
+  const cooldown = trigger.kind === "poll" ? 0 : (trigger.cooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES) * 60_000;
+  const quiet = trigger.kind === "files" ? (trigger.quietSeconds ?? DEFAULT_QUIET_SECONDS) * 1000 : 0;
+  return Math.max(lastRunAt === undefined ? 0 : lastRunAt + cooldown, pending.lastAt + quiet);
+}
+
+/** 화면에 보일 다음 실행 시각. 지금 돌아야 하면 now, 정해진 때가 없으면 undefined */
+export function nextRunAt(duty: Duty, lastRunAt: number | undefined, now: number, watch?: WatchState): number | undefined {
   if (!duty.enabled) return undefined;
-  if (isDue(duty, lastRunAt, now)) return now;
+  if (isDue(duty, lastRunAt, now, watch)) return now;
   const t = duty.trigger;
+  if (isChangeTrigger(t)) return changeReadyAt(t, lastRunAt, watch);
   switch (t.kind) {
     case "manual":
       return undefined;

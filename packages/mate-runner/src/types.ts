@@ -1,11 +1,23 @@
 import type { MateProfile } from "@pi-desktop/mate-kit/shared";
 
-/** 언제 돌릴지 (설계 DESIGN-MATE.md §3). 파일·git·폴링 계기는 M2 */
+/** 언제 돌릴지 (설계 DESIGN-MATE.md §3) */
 export type Trigger =
   | { kind: "manual" }
   | { kind: "interval"; minutes: number }
   /** time: "HH:MM"(로컬 시각), weekdays: 0(일)~6(토), 없으면 매일 */
-  | { kind: "daily"; time: string; weekdays?: number[] };
+  | { kind: "daily"; time: string; weekdays?: number[] }
+  /** 저장소 변화: 새 커밋이나 브랜치 바뀜 (M2) */
+  | { kind: "git"; cooldownMinutes?: number }
+  /** 작업 폴더 파일 변화: 저장이 잠잠해진 뒤 한 번 (M2) */
+  | { kind: "files"; quietSeconds?: number; cooldownMinutes?: number }
+  /** 읽기 명령을 주기적으로 돌려 결과가 바뀌면 (M2). 명령은 mate-guard의 읽기 허용 목록을 통과해야 한다 */
+  | { kind: "poll"; command: string; minutes: number };
+
+export type ChangeTrigger = Extract<Trigger, { kind: "git" | "files" | "poll" }>;
+
+export function isChangeTrigger(trigger: Trigger): trigger is ChangeTrigger {
+  return trigger.kind === "git" || trigger.kind === "files" || trigger.kind === "poll";
+}
 
 export interface Duty {
   id: string;
@@ -20,6 +32,8 @@ export interface Duty {
   /** 없으면 Mate 설정의 기본 모델 */
   model?: string;
   timeoutSec?: number;
+  /** 없으면 Mate 설정의 실행당 비용 상한 */
+  maxCostUsd?: number;
   createdAt: number;
   updatedAt?: number;
 }
@@ -27,29 +41,40 @@ export interface Duty {
 export interface MateConfig {
   /** provider/id 형식 */
   model: string;
-  /** 켜면 시간표 실행을 하지 않는다 ("지금 실행"은 함) */
+  /** 켜면 시간표·변화 실행을 하지 않는다 ("지금 실행"은 함) */
   paused: boolean;
-  /** 하루 시간표 실행 상한 (모든 임무 합계) */
+  /** 하루 자동 실행 상한 (모든 임무 합계) */
   dailyRunLimit: number;
+  /** 실행당 비용 상한(USD). 넘으면 그 실행을 멈춘다. 0이면 없음 */
+  maxCostUsd: number;
 }
 
 export const DEFAULT_CONFIG: MateConfig = {
   model: "anthropic/claude-haiku-5-5",
   paused: false,
   dailyRunLimit: 20,
+  maxCostUsd: 0.5,
 };
 
 export const DEFAULT_TIMEOUT_SEC = 300;
-/** interval 계기의 최소 간격 (비용·소음 방지) */
+/** interval·poll 계기의 최소 간격 (비용·소음 방지) */
 export const MIN_INTERVAL_MINUTES = 15;
+/** 변화 계기: 한 번 돈 뒤 다음 실행까지 기본 쉬는 시간 */
+export const DEFAULT_COOLDOWN_MINUTES = 15;
+export const MIN_COOLDOWN_MINUTES = 5;
+/** 파일 계기: 마지막 변경 뒤 이만큼 잠잠해야 실행 (저장이 몰릴 때 한 번만) */
+export const DEFAULT_QUIET_SECONDS = 60;
 
-export type RunStatus = "running" | "done" | "failed" | "timeout";
+export type RunStatus = "running" | "done" | "failed" | "timeout" | "budget";
 
 export interface RunRecord {
   id: string;
   dutyId: string;
   dutyName: string;
-  reason: "schedule" | "manual";
+  /** schedule: 시간표, change: 변화 감지, manual: 지금 실행 */
+  reason: "schedule" | "change" | "manual";
+  /** 변화 감지로 돌았을 때 무엇이 바뀌었는지 */
+  cause?: string;
   status: RunStatus;
   startedAt: number;
   endedAt?: number;
@@ -63,6 +88,27 @@ export interface RunRecord {
   /** 이 실행에서 인박스에 새로 남긴 제안 수 */
   proposals?: number;
   sessionId?: string;
+  /** Mate 홈 sessions/ 안의 Pi 세션 파일 */
+  sessionFile?: string;
+}
+
+/** 변화 계기가 본 것과, 실행을 기다리는 변화 */
+export interface WatchState {
+  /** 무엇을 지켜보는지 (계기 종류·폴더·명령). 바뀌면 기준을 다시 잡는다 */
+  key: string;
+  /** git: "브랜치@커밋", poll: 출력 해시. 처음 본 값은 기준으로만 삼고 실행하지 않는다 */
+  signature?: string;
+  /** poll: 마지막으로 명령을 돌린 시각 */
+  polledAt?: number;
+  /** 실행을 기다리는 변화 */
+  pending?: {
+    since: number;
+    lastAt: number;
+    cause: string;
+    count: number;
+    /** files: 바뀐 파일 (중복 없이, 앞의 20개까지). 저장 한 번에 이벤트가 여러 번 와도 한 번으로 센다 */
+    files?: string[];
+  };
 }
 
 export interface RunnerState {
@@ -71,9 +117,9 @@ export interface RunnerState {
   build?: string;
   startedAt?: number;
   heartbeatAt?: number;
-  duties: Record<string, { lastRunAt?: number; lastStatus?: RunStatus }>;
-  /** 오늘(로컬 날짜) 시간표 실행 수 */
-  today: { date: string; count: number };
+  duties: Record<string, { lastRunAt?: number; lastStatus?: RunStatus; watch?: WatchState }>;
+  /** 오늘(로컬 날짜) 자동 실행 수와 비용 (지금 실행 포함한 비용) */
+  today: { date: string; count: number; costUsd?: number };
   current?: { runId: string; dutyId: string; startedAt: number };
 }
 

@@ -8,18 +8,20 @@ export function SettingsView({ overview, act }: { overview: Overview; act: Act }
   const { config, runner } = overview;
   const [model, setModel] = useState(config.model);
   const [limit, setLimit] = useState(String(config.dailyRunLimit));
+  const [maxCost, setMaxCost] = useState(String(config.maxCostUsd));
   useEffect(() => {
     setModel(config.model);
     setLimit(String(config.dailyRunLimit));
-  }, [config.model, config.dailyRunLimit]);
-  const dirty = model.trim() !== config.model || Number(limit) !== config.dailyRunLimit;
+    setMaxCost(String(config.maxCostUsd));
+  }, [config.model, config.dailyRunLimit, config.maxCostUsd]);
+  const dirty = model.trim() !== config.model || Number(limit) !== config.dailyRunLimit || Number(maxCost) !== config.maxCostUsd;
 
   return (
     <section className="form">
       <h2>실행</h2>
       <label className="radio">
         <input type="checkbox" checked={config.paused} onChange={() => void act(() => window.mate.saveConfig({ paused: !config.paused }))} />
-        <strong>일시 정지</strong> <span className="muted">시간표 실행을 멈춥니다. "지금 실행"은 그대로 됩니다.</span>
+        <strong>일시 정지</strong> <span className="muted">시간표·변화 감지 실행을 멈춥니다. "지금 실행"은 그대로 됩니다.</span>
       </label>
       <label>
         기본 모델
@@ -27,14 +29,23 @@ export function SettingsView({ overview, act }: { overview: Overview; act: Act }
         <span className="muted small-text">임무에서 따로 정하지 않으면 이 모델을 씁니다. Pi에 로그인된 프로바이더여야 합니다.</span>
       </label>
       <label>
-        하루 시간표 실행 상한 (모든 임무 합계)
+        하루 자동 실행 상한 (시간표·변화 감지, 모든 임무 합계)
         <input type="number" min={0} value={limit} onChange={(e) => setLimit(e.target.value)} />
+      </label>
+      <label>
+        실행당 비용 상한 (USD)
+        <input type="number" min={0} step={0.05} value={maxCost} onChange={(e) => setMaxCost(e.target.value)} />
+        <span className="muted small-text">한 실행이 이 비용을 넘으면 멈춥니다. 0이면 상한 없음. 임무마다 따로 정할 수 있습니다.</span>
       </label>
       <div className="row end">
         <button
           className="primary"
-          disabled={!dirty || !model.trim() || !(Number(limit) >= 0)}
-          onClick={() => void act(() => window.mate.saveConfig({ model: model.trim(), dailyRunLimit: Math.floor(Number(limit)) }))}
+          disabled={!dirty || !model.trim() || !(Number(limit) >= 0) || !(Number(maxCost) >= 0)}
+          onClick={() =>
+            void act(() =>
+              window.mate.saveConfig({ model: model.trim(), dailyRunLimit: Math.floor(Number(limit)), maxCostUsd: Number(maxCost) }),
+            )
+          }
         >
           저장
         </button>
