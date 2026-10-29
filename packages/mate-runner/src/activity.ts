@@ -98,7 +98,9 @@ export function applySessionLine(aggregate: SessionAggregate | undefined, line: 
         }
       }
       if (message.stopReason === "error" && message.errorMessage) {
-        next.modelErrors = [...next.modelErrors, short(String(message.errorMessage))].slice(-5);
+        // 자동 재시도로 같은 오류가 이어지면 한 번만 남긴다
+        const error = short(String(message.errorMessage));
+        if (next.modelErrors.at(-1) !== error) next.modelErrors = [...next.modelErrors, error].slice(-5);
       }
       break;
     case "toolResult": {

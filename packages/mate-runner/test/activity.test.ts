@@ -50,6 +50,12 @@ describe("세션 요약", () => {
     expect(agg.modelErrors).toEqual(["Connection error."]);
   });
 
+  it("자동 재시도로 이어진 같은 모델 오류는 한 번만 남긴다", () => {
+    const lines = sessionLines("/repo", 0, { modelError: "529 overloaded" });
+    const again = lines.at(-1)!;
+    expect(aggregateOf([...lines, again, again]).modelErrors).toEqual(["529 overloaded"]);
+  });
+
   it("비밀값 패턴과 테스트 명령을 알아본다", () => {
     expect(redact("key sk-ant-abcdefghijklmnop and ghp_abcdefghijklmnopqrst Bearer abcdefghijklmnop")).toBe("key [가림] and [가림] Bearer [가림]");
     expect(isTestCommand("npx vitest run src")).toBe(true);
