@@ -1,13 +1,13 @@
 # Pi Desktop Agent 릴리스 (설계 DESIGN-AGENT.md §0 "릴리스").
-# agent-v로 시작하는 태그(예: agent-v0.1.0)를 올리면 Windows·macOS·Linux 설치 파일을 만들어
-# 에이전트 전용 배포 저장소(apps/agent/electron-builder.yml의 publish)에 v<버전> 릴리스로 올린다.
-#   git tag agent-v0.1.0 && git push origin agent-v0.1.0
-# Pi Desktop의 릴리스(release.yml, v* 태그)와는 태그도 올리는 곳도 나눈다. 같은 Releases에 올리면
-# Pi Desktop의 자동 업데이트가 에이전트 릴리스를 최신 버전으로 착각하기 때문이다.
-# Actions 탭에서 손으로 돌리면(workflow_dispatch) 만들기만 하고 올리지 않는다 (릴리스 전 미리 확인).
+# agent-v로 시작하는 태그(예: agent-v0.1.0)를 올리면 Windows·macOS·Linux 설치 파일을 만들어 이 저장소의 GitHub Releases에 올린다.
+#   git tag -a agent-v0.1.0 -m "Pi Desktop Agent v0.1.0" && git push origin agent-v0.1.0
+# Actions 탭에서 손으로 돌리면(workflow_dispatch) 세 OS에서 만들기만 하고 올리지 않는다 (릴리스 전 미리 확인).
 #
-# 올리려면 배포 저장소에 쓸 수 있는 토큰이 저장소 시크릿 AGENT_RELEASE_TOKEN에 있어야 한다
-# (이 저장소의 GITHUB_TOKEN은 다른 저장소에 쓸 수 없다).
+# Pi Desktop(release.yml, v* 태그)·Pi Desktop Mate(mate-release.yml, mate-v* 태그)와 섞이지 않게 한다:
+# - 태그 이름이 달라 서로의 워크플로를 깨우지 않는다 ("v*"는 agent-v…와 맞지 않음)
+# - Agent 릴리스는 "Latest"로 표시하지 않는다. Pi Desktop의 자동 업데이트는 Latest 릴리스의 latest.yml을 보기 때문이다
+# - Agent는 아직 자동 업데이트가 없어 latest*.yml을 올리지 않는다
+# 코드 서명은 하지 않는다.
 name: Release Agent
 
 on:
@@ -16,11 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-
-env:
-  # 배포 저장소. electron-builder.yml의 publish와 같아야 앱의 자동 업데이트가 같은 곳을 본다
-  RELEASE_REPO: skax-soulfactor/pi-desktop-agent
+  contents: write
 
 jobs:
   build:
@@ -61,14 +57,11 @@ jobs:
           path: |
             apps/agent/release/*.exe
             apps/agent/release/*.dmg
-            apps/agent/release/*.zip
             apps/agent/release/*.AppImage
             apps/agent/release/*.deb
-            apps/agent/release/*.blockmap
-            apps/agent/release/latest*.yml
 
   publish:
-    name: 배포 저장소에 올리기
+    name: GitHub Releases에 올리기
     needs: build
     if: startsWith(github.ref, 'refs/tags/agent-v')
     runs-on: ubuntu-latest
@@ -78,17 +71,13 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: 릴리스 만들기
+      - name: 릴리스 만들기 (Latest로 표시하지 않음)
         env:
-          GH_TOKEN: ${{ secrets.AGENT_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::시크릿 AGENT_RELEASE_TOKEN이 없습니다. $RELEASE_REPO에 쓸 수 있는 토큰을 저장소 시크릿에 넣으세요."
-            exit 1
-          fi
-          VERSION="v${GITHUB_REF_NAME#agent-v}"
           ls -la dist
-          gh release create "$VERSION" dist/* \
-            --repo "$RELEASE_REPO" \
-            --title "Pi Desktop Agent $VERSION" \
-            --notes "skax-soulfactor/pi-desktop@${GITHUB_SHA::7} ($GITHUB_REF_NAME)에서 만들었습니다."
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Pi Desktop Agent ${GITHUB_REF_NAME#agent-}" \
+            --notes "Pi Desktop Agent 설치 파일입니다. Pi Desktop과 별도 앱이며 자동 업데이트는 아직 없습니다. 설치된 Pi가 필요합니다. 설명: apps/agent/README.md" \
+            --latest=false
