@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from "electron";
+import { execFile } from "node:child_process";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
@@ -25,6 +26,8 @@ import { loadAudit, loadRules, removeRule } from "@pi-desktop/agent-kit/permissi
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
 import { searchSessions } from "./history";
+import { readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "./mcp-config";
+import { WEB_SEARCH_PRESETS, type McpCheckResult } from "../shared/mcp";
 import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
 import { HostConnection } from "../vendor/main/host-connection";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";
@@ -70,8 +73,18 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
  * agent-kit 상태 폴더 (agent-kit permissions/store.ts의 dataDir와 같은 규칙). 지금은 로컬 호스트만 다루므로 앱이 직접 읽는다.
  */
 /** Pi 세션 폴더 (Pi의 getSessionsDir와 같은 규칙. 데몬이 띄운 Pi도 이 환경을 물려받는다) */
+/** Pi 설정 폴더 (PI_CODING_AGENT_DIR, 없으면 ~/.pi/agent) */
+function piAgentDir(): string {
+  return process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
+}
+
 function piSessionsDir(): string {
-  return process.env.PI_CODING_AGENT_SESSION_DIR || join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "sessions");
+  return process.env.PI_CODING_AGENT_SESSION_DIR || join(piAgentDir(), "sessions");
+}
+
+/** Pi 사용자 MCP 설정 (Pi docs/mcp.md) */
+function mcpFile(): string {
+  return join(piAgentDir(), "mcp.json");
 }
 
 function agentDataDir(): string {
@@ -195,6 +208,35 @@ function registerIpc(connection: HostConnection): void {
   ipcMain.handle(IpcChannels.listRules, () => loadRules(agentDataDir()));
   ipcMain.handle(IpcChannels.removeRule, (_event, rule: RuleView) => removeRule(agentDataDir(), rule));
   ipcMain.handle(IpcChannels.listAudit, () => loadAudit(agentDataDir(), 100));
+  ipcMain.handle(IpcChannels.listMcp, async () => serverViews(await readMcpFile(mcpFile())));
+  ipcMain.handle(IpcChannels.addMcpPreset, (_event, id: string, key?: string) => {
+    const preset = WEB_SEARCH_PRESETS.find((p) => p.id === id);
+    if (!preset) throw new Error(`모르는 서버입니다: ${id}`);
+    return updateMcpFile(mcpFile(), (file) => withPreset(file, preset, key));
+  });
+  ipcMain.handle(IpcChannels.setMcpEnabled, (_event, name: string, enabled: boolean) => updateMcpFile(mcpFile(), (file) => withEnabled(file, name, enabled === true)));
+  ipcMain.handle(IpcChannels.removeMcp, (_event, name: string) => updateMcpFile(mcpFile(), (file) => withoutServer(file, name)));
+  ipcMain.handle(IpcChannels.openMcpFile, async () => {
+    const path = mcpFile();
+    // 없으면 빈 설정을 만들어 연다
+    await updateMcpFile(path, (file) => ({ mcpServers: {}, ...file }));
+    const error = await shell.openPath(path);
+    if (error) throw new Error(error);
+  });
+  ipcMain.handle(IpcChannels.checkMcp, async (): Promise<McpCheckResult> => {
+    // pi mcp list: 켜진 서버마다 연결해 상태·도구·오류를 찍고, 연결 안 된 것이 있으면 1로 끝난다 (세션 없이 돈다)
+    const status = await connection.request<PiStatus>(Methods.piStatus);
+    if (!status.pi) throw new Error(status.piError ?? "Pi를 찾지 못했습니다");
+    const node = status.pi.nodePath ?? status.node.path;
+    return new Promise((resolve) => {
+      execFile(
+        node,
+        [status.pi!.cliPath, "mcp", "list"],
+        { env: { ...process.env, ...status.pi!.env, ...devSessionOverrides().env }, timeout: 120_000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+        (error, stdout, stderr) => resolve({ ok: !error, output: `${stdout}${stderr ? `\n${stderr}` : ""}` }),
+      );
+    });
+  });
   ipcMain.handle(IpcChannels.usageSummary, async (_event, range: UsageRange) => {
     const now = new Date();
     const { from } = rangeBuckets(range, now);
