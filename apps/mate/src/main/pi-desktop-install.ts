@@ -18,10 +18,10 @@ export interface ReleaseAsset {
 
 /**
  * Pi Desktop Latest 릴리스에서 이 OS용 설치 파일을 고른다.
- * 같은 저장소에 Mate 릴리스(Pi-Desktop-Mate-…)도 있으므로 Mate 파일은 고르지 않는다.
+ * 같은 저장소에 Mate·Agent 릴리스(Pi-Desktop-Mate-…, Pi-Desktop-Agent-…)도 있으므로 그 파일은 고르지 않는다.
  */
 export function pickPiDesktopAsset(assets: ReleaseAsset[], platform: NodeJS.Platform, arch: string): ReleaseAsset | undefined {
-  const desktop = assets.filter((a) => /^Pi-Desktop-/.test(a.name) && !/^Pi-Desktop-Mate-/.test(a.name));
+  const desktop = assets.filter((a) => /^Pi-Desktop-/.test(a.name) && !/^Pi-Desktop-(Mate|Agent)-/.test(a.name));
   const find = (re: RegExp) => desktop.find((a) => re.test(a.name));
   switch (platform) {
     case "win32":

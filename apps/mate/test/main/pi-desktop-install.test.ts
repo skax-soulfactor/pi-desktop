@@ -22,5 +22,6 @@ describe("pickPiDesktopAsset", () => {
     expect(pickPiDesktopAsset(assets, "linux", "x64")?.name).toBe("Pi-Desktop-0.1.15-x86_64.AppImage");
     expect(pickPiDesktopAsset(assets.filter((a) => !a.name.startsWith("Pi-Desktop-0")), "darwin", "arm64")).toBeUndefined();
     expect(pickPiDesktopAsset([asset("Pi-Desktop-Mate-Setup-0.1.0.exe")], "win32", "x64")).toBeUndefined();
+    expect(pickPiDesktopAsset([asset("Pi-Desktop-Agent-Setup-0.1.0.exe"), asset("Pi-Desktop-Agent-0.1.0-arm64.dmg")], "darwin", "arm64")).toBeUndefined();
   });
 });
