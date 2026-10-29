@@ -199,6 +199,8 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 480,
     title: "Pi Desktop Mate",
+    // Linux 설치본은 실행 파일에 아이콘이 없어 창에 직접 준다 (electron-builder.yml extraResources)
+    ...(process.platform === "linux" && app.isPackaged ? { icon: join(process.resourcesPath, "icon.png") } : {}),
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(here, "../preload/index.cjs"),
