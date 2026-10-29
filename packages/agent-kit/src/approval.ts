@@ -18,6 +18,8 @@ export interface ApprovalRequest {
   target: string;
   /** "항상 허용"을 고를 때 저장할 패턴 */
   pattern: string;
+  /** 매번 한 번만 허용할 수 있다 (권한 상승). 세션·항상 허용과 저장된 규칙을 쓰지 않는다 */
+  onceOnly?: boolean;
 }
 
 /** 제목 첫 줄. 앱은 이 줄로 승인 요청을 알아본다 */
@@ -43,6 +45,7 @@ export function formatApprovalTitle(request: ApprovalRequest): string {
 
 /** 선택지 문자열. 허용 범위가 보이도록 세션·항상 허용에는 패턴을 붙인다 */
 export function approvalOptions(request: ApprovalRequest): string[] {
+  if (request.onceOnly) return [ApprovalChoice.once, ApprovalChoice.deny];
   return [
     ApprovalChoice.once,
     `${ApprovalChoice.session}: ${request.pattern}`,

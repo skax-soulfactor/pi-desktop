@@ -43,6 +43,8 @@ export const IpcChannels = {
   addMemory: "agent:add-memory",
   forgetMemory: "agent:forget-memory",
   getAutoLearn: "agent:get-auto-learn",
+  getElevation: "agent:get-elevation",
+  setElevation: "agent:set-elevation",
   setAutoLearn: "agent:set-auto-learn",
   listRules: "agent:list-rules",
   removeRule: "agent:remove-rule",
@@ -179,6 +181,9 @@ export interface AgentApi {
   /** 대화가 끝난 뒤 자동으로 기억을 뽑는가 */
   getAutoLearn(): Promise<boolean>;
   setAutoLearn(on: boolean): Promise<void>;
+  /** 관리자 권한 실행(shell_exec_elevated)을 켰는가 */
+  getElevation(): Promise<boolean>;
+  setElevation(on: boolean): Promise<void>;
   listRules(): Promise<RuleView[]>;
   removeRule(rule: RuleView): Promise<void>;
   listAudit(): Promise<AuditView[]>;

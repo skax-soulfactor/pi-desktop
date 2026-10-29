@@ -1,5 +1,7 @@
 import type { ApprovalRequest, Risk } from "../../src/approval";
 import { defaultOutputPath, inferMode } from "../documents/chunks";
+import { argvLine, compileElevated, ELEVATED_TOOL, type ElevatedInput } from "../elevation/compile";
+import { linuxPackageManager } from "../elevation/run";
 
 /**
  * 승인 판단의 순수 로직. 파일·프로세스·Pi에 손대지 않으므로 단위 테스트로 확인한다.
@@ -11,6 +13,8 @@ import { defaultOutputPath, inferMode } from "../documents/chunks";
 export interface Classified {
   risk: Risk;
   request?: ApprovalRequest;
+  /** 입력이 잘못돼 묻지 않고 막을 때 그 이유 (권한 상승) */
+  invalid?: string;
 }
 
 /** 바깥을 바꾸지 않는 도구. Pi 기본 읽기 도구, 묻기만 하는 ask_user, 에이전트 자신의 기억만 바꾸는 memory_* (저장할 때마다 알린다) */
@@ -69,6 +73,22 @@ export function classify(toolName: string, input: Record<string, unknown>): Clas
     const when = input.kind === "once" ? `한 번 ${String(input.at ?? "")}` : input.kind === "interval" ? `${String(input.minutes ?? "")}분마다` : `매일 ${String(input.time ?? "")}`;
     const target = `${when}: ${String(input.instruction ?? "")}`;
     return { risk: "write", request: { toolName, risk: "write", summary: "예약 등록", target, pattern: "*" } };
+  }
+  if (toolName === ELEVATED_TOOL) {
+    // 승인 화면에 실제로 실행될 argv를 그대로 보인다. 잘못된 입력이면 묻지 않고 막는다 (invalid)
+    let target: string;
+    let invalid: string | undefined;
+    try {
+      target = argvLine(compileElevated(input as unknown as ElevatedInput, process.platform, linuxPackageManager()));
+    } catch (error) {
+      invalid = error instanceof Error ? error.message : String(error);
+      target = invalid;
+    }
+    return {
+      risk: "exec",
+      request: { toolName, risk: "exec", summary: "관리자 권한으로 실행", target, pattern: "", onceOnly: true },
+      ...(invalid ? { invalid } : {}),
+    };
   }
   if (NETWORK_TOOLS.has(toolName)) {
     const url = String(input.url ?? "");
@@ -188,7 +208,7 @@ const ELEVATION =
 /** 승인으로도 열 수 없는 명령이면 그 이유, 아니면 undefined */
 export function hardBlockReason(command: string): string | undefined {
   if (ELEVATION.test(command) || ELEVATION.test(command.replace(/['"\\]/g, ""))) {
-    return "권한 상승(sudo·runas 등)은 이 도구로 실행할 수 없다";
+    return `권한 상승(sudo·runas 등)은 이 도구로 실행할 수 없다. 관리자 권한이 꼭 필요하면 ${ELEVATED_TOOL}(설정에서 켠 경우에만 보인다)를 쓰거나 사용자에게 직접 실행해 달라고 하라`;
   }
   if (DESTRUCTIVE_WHOLE.some((re) => re.test(command)) || commandHeads(command).some((h) => DESTRUCTIVE_HEAD.some((re) => re.test(h)))) {
     return "시스템을 끄거나 디스크·파일 시스템 전체를 지우는 명령은 실행할 수 없다";
