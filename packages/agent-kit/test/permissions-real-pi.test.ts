@@ -5,6 +5,7 @@ import { startMockLlm, type MockLlm } from "../../host-agent/test/fixtures/mock-
 import { APPROVAL_MARKER, approvalOptions, parseApprovalTitle } from "../src/approval";
 import { classify } from "../extensions/permissions/rules";
 import { startPi, type RpcPi, type RpcRecord } from "./helpers/rpc-pi";
+import { startScriptLlm, type ScriptLlm } from "./helpers/script-llm";
 
 /**
  * 실제 Pi + mock LLM으로 승인 게이트를 끝까지 돌린다.
@@ -89,5 +90,43 @@ describe("permissions (실제 Pi)", () => {
     expect(existsSync(path)).toBe(true);
     const decisions = readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line).decision);
     expect(decisions).toEqual(["deny", "deny", "once", "always", "allow-rule", "blocked"]);
+  });
+});
+
+/** 같은 실행 안에서 거부한 호출을 모델이 다시 부르는 경우 (스크립트 LLM으로 같은 호출을 두 번 만든다) */
+describe("permissions — 거부한 호출을 되풀이할 때 (실제 Pi)", () => {
+  let llm: ScriptLlm;
+  let pi: RpcPi;
+
+  beforeAll(async () => {
+    llm = await startScriptLlm("mock-model");
+    ({ pi } = await startPi(llm.baseUrl));
+  });
+
+  afterAll(async () => {
+    pi?.close();
+    await llm?.close();
+  });
+
+  it("다시 묻지 않고 거부하고, 다음 요청에서는 다시 묻는다", async () => {
+    const bash = { tool: "bash", args: { command: "echo again" } };
+    llm.setScript([bash, bash, { text: "포기" }]);
+    let from = pi.mark;
+    await pi.request({ type: "prompt", message: "실행해" });
+    const asked = await pi.waitFor((r) => r.type === "extension_ui_request" && r.method === "select", from);
+    pi.write({ type: "extension_ui_response", id: asked.id, value: (asked.options as string[])[3] });
+    await pi.waitFor((r) => r.type === "agent_settled", from);
+    const run = pi.records.slice(from);
+    expect(run.filter((r) => r.type === "extension_ui_request" && r.method === "select")).toHaveLength(1);
+    const ends = run.filter((r) => r.type === "tool_execution_end");
+    expect(ends.map((r) => r.isError)).toEqual([true, true]);
+    expect(JSON.stringify(ends[1]!.result)).toContain("다시 묻지 않고 거부");
+
+    llm.setScript([bash, { text: "끝" }]);
+    from = pi.mark;
+    await pi.request({ type: "prompt", message: "이번엔 실행해" });
+    const again = await pi.waitFor((r) => r.type === "extension_ui_request" && r.method === "select", from);
+    pi.write({ type: "extension_ui_response", id: again.id, value: (again.options as string[])[0] });
+    await pi.waitFor((r) => r.type === "agent_settled", from);
   });
 });
