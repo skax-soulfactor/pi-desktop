@@ -29,6 +29,8 @@ export function triggerLabel(trigger: Trigger): string {
       return "파일이 바뀌면";
     case "poll":
       return `"${trigger.command}" 결과가 바뀌면 (${trigger.minutes}분마다 확인)`;
+    case "session":
+      return "작업을 마치면 (Pi 세션이 끝나면)";
   }
 }
 
@@ -40,6 +42,7 @@ export const TRIGGER_KINDS: Array<{ kind: Trigger["kind"]; label: string }> = [
   { kind: "git", label: "저장소 변화 (새 커밋·브랜치)" },
   { kind: "files", label: "파일 변화 (저장 후 잠잠해지면)" },
   { kind: "poll", label: "명령 결과 변화" },
+  { kind: "session", label: "작업을 마치면 (이 폴더의 Pi 세션이 끝나면)" },
 ];
 
 export const TRIGGER_HINTS: Record<Trigger["kind"], string> = {
@@ -49,6 +52,8 @@ export const TRIGGER_HINTS: Record<Trigger["kind"], string> = {
   git: "30초마다 브랜치·커밋을 확인합니다. 임무를 만들 때의 커밋은 기준으로만 삼습니다.",
   files: "작업 폴더의 파일 저장을 지켜봅니다 (.git·node_modules·빌드 결과 제외). 저장이 몰리면 잠잠해진 뒤 한 번 돕니다.",
   poll: "읽기 명령 하나(|·&& 없이)를 정한 간격마다 돌려 출력이 바뀌면 돕니다. 시각처럼 매번 바뀌는 출력은 피하세요.",
+  session:
+    "Pi Desktop·터미널 Pi로 이 폴더(또는 하위 폴더)에서 한 작업이 끝나면(세션이 몇 분 조용하면) 돕니다. 활동 탭에서 활동 관찰을 켜야 합니다. 예: 방금 고친 코드 검토, 빠진 테스트 찾기.",
 };
 
 /** 계기 종류를 바꿀 때의 기본값 */
@@ -66,6 +71,8 @@ export function defaultTrigger(kind: Trigger["kind"]): Trigger {
       return { kind, quietSeconds: 60, cooldownMinutes: 15 };
     case "poll":
       return { kind, command: "gh run list --limit 5", minutes: 30 };
+    case "session":
+      return { kind, cooldownMinutes: 15 };
   }
 }
 
@@ -81,6 +88,7 @@ export const REASON_LABELS: Record<RunRecord["reason"], string> = {
   manual: "지금 실행",
   schedule: "시간표",
   change: "변화 감지",
+  observe: "활동 관찰",
 };
 
 /** "3분 전", "어제 09:00" 처럼 짧게 */
@@ -131,6 +139,7 @@ export function nextRunLabel(duty: DutyView, now: number, paused: boolean): stri
     const when = duty.nextRunAt === undefined || duty.nextRunAt <= now ? "곧 실행" : `${relativeTime(duty.nextRunAt, now)} 실행`;
     return `${duty.pendingChange.cause} · ${when}`;
   }
+  if (duty.trigger.kind === "session") return "작업이 끝나길 기다리는 중";
   if (duty.trigger.kind === "git" || duty.trigger.kind === "files" || duty.trigger.kind === "poll") return "변화를 지켜보는 중";
   if (duty.nextRunAt === undefined) return "";
   return duty.nextRunAt <= now ? "곧 실행" : `다음: ${relativeTime(duty.nextRunAt, now)}`;

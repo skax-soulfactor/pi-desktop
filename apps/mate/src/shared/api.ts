@@ -1,5 +1,14 @@
 import type { InboxItem } from "@pi-desktop/mate-kit/shared";
-import type { Duty, InboxStatus, MateConfig, RunnerState, RunRecord, RunStatus } from "@pi-desktop/mate-runner/types";
+import type {
+  ActivityRecord,
+  Duty,
+  InboxStatus,
+  MateConfig,
+  ProjectSnapshot,
+  RunnerState,
+  RunRecord,
+  RunStatus,
+} from "@pi-desktop/mate-runner/types";
 import type { PiReadiness } from "@pi-desktop/mate-runner/pi-readiness";
 
 export type { PiReadiness };
@@ -10,7 +19,7 @@ export interface PiSetupView extends PiReadiness {
   checkedAt: number;
 }
 
-export type { Duty, InboxItem, InboxStatus, MateConfig, RunRecord, RunStatus };
+export type { ActivityRecord, Duty, InboxItem, InboxStatus, MateConfig, ProjectSnapshot, RunRecord, RunStatus };
 
 export const IpcChannels = {
   overview: "mate:overview",
@@ -24,6 +33,7 @@ export const IpcChannels = {
   revealHome: "mate:reveal-home",
   readSession: "mate:read-session",
   applyChange: "mate:apply-change",
+  delegate: "mate:delegate",
   discardChange: "mate:discard-change",
   getAutostart: "mate:get-autostart",
   setAutostart: "mate:set-autostart",
@@ -80,6 +90,20 @@ export interface Overview {
   inbox: InboxView[];
   runs: RunRecord[];
   runner: RunnerView;
+  observe: ObserveView;
+}
+
+/** 활동 관찰 화면 (M4) */
+export interface ObserveView {
+  /** 최근 활동 기록 (새것부터) */
+  activity: ActivityRecord[];
+  /** 관찰자가 살펴보길 기다리는 후보 수 */
+  queue: number;
+  today: { date: string; count: number };
+  projects: ProjectSnapshot[];
+  /** 주제별 사용자 반응 (보여 줌·받아들임·버림) */
+  feedback: Record<string, { shown: number; accepted: number; dismissed: number }>;
+  since?: number;
 }
 
 /** 화면에서 만들거나 고친 임무. id가 없으면 새 임무 */
@@ -91,7 +115,7 @@ export interface MateApi {
   deleteDuty(id: string): Promise<void>;
   runNow(id: string): Promise<void>;
   setInbox(ids: string[], status: InboxStatus | undefined): Promise<void>;
-  saveConfig(patch: Partial<MateConfig>): Promise<MateConfig>;
+  saveConfig(patch: Partial<Omit<MateConfig, "observe">> & { observe?: Partial<MateConfig["observe"]> }): Promise<MateConfig>;
   pickDirectory(): Promise<string | undefined>;
   restartRunner(): Promise<RunnerView>;
   revealHome(): Promise<void>;
@@ -101,6 +125,8 @@ export interface MateApi {
   applyChange(itemId: string): Promise<void>;
   /** act 변경과 그 작업 공간을 버린다 */
   discardChange(itemId: string): Promise<void>;
+  /** 제안의 맡길 일을 그 폴더에서 바로 실행한다 (git 저장소면 고치기) */
+  delegate(itemId: string): Promise<void>;
   /** 로그인할 때 실행기 시작 (설치본만) */
   getAutostart(): Promise<AutostartView>;
   setAutostart(enabled: boolean): Promise<AutostartView>;

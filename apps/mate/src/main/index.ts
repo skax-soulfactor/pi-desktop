@@ -8,6 +8,11 @@ import {
   addRequest,
   applyInboxChange,
   discardInboxChange,
+  execCommand,
+  OBSERVER_DUTY_ID,
+  OBSERVER_NAME,
+  readActivity,
+  topicFeedback,
   deleteDuty,
   dutyIdFrom,
   findSessionFile,
@@ -27,8 +32,8 @@ import {
   saveConfig,
   saveDuty,
   setInboxStatus,
+  type ConfigPatch,
   type InboxStatus,
-  type MateConfig,
 } from "@pi-desktop/mate-runner";
 import { IpcChannels, type DutyDraft, type Overview, type PiReadiness, type PiSetupView, type RunnerView } from "../shared/api";
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
@@ -130,8 +135,9 @@ async function overview(): Promise<Overview> {
     listRuns(paths, 100),
     runnerView(),
   ]);
+  const [activity, feedback] = await Promise.all([readActivity(paths, 150), topicFeedback(paths)]);
   const now = Date.now();
-  const names = new Map(duties.map((d) => [d.id, d.name]));
+  const names = new Map<string, string>([[OBSERVER_DUTY_ID, OBSERVER_NAME], ...duties.map((d) => [d.id, d.name] as [string, string])]);
   const queued = new Set(requests.map((r) => r.dutyId));
   return {
     home: paths.home,
@@ -154,7 +160,40 @@ async function overview(): Promise<Overview> {
       .sort((a, b) => b.createdAt - a.createdAt),
     runs,
     runner,
+    observe: {
+      activity: activity.reverse(),
+      queue: state.observer?.queue.length ?? 0,
+      today: state.observer?.today ?? { date: "", count: 0 },
+      projects: Object.values(state.observer?.projects ?? {}),
+      feedback,
+      ...(state.observer ? { since: state.observer.since } : {}),
+    },
   };
+}
+
+/**
+ * "Mate에게 맡기기": 제안의 맡길 일을 그 폴더에서 바로 실행한다 (설계 DESIGN-MATE.md §10).
+ * git 저장소면 고치기(act: 별도 작업 공간, 적용은 사용자가), 아니면 제안 단계로. 임무로 남겨 다시 돌릴 수 있게 한다.
+ */
+async function delegate(itemId: string): Promise<void> {
+  const item = (await readInbox(paths.inbox)).find((i) => i.id === itemId);
+  if (!item?.followUp) throw new Error("맡길 일이 없는 제안입니다");
+  const repo = await execCommand("git", ["rev-parse", "--is-inside-work-tree"], item.followUp.cwd);
+  const now = Date.now();
+  const duty = await saveDuty(paths, {
+    id: `delegated-${now.toString(36)}`,
+    name: `맡긴 일: ${item.title}`.slice(0, 80),
+    enabled: true,
+    cwd: item.followUp.cwd,
+    // 관찰자에게 맡길 일을 그것만으로 실행할 수 있게 쓰라고 했으므로 그대로 쓴다
+    prompt: item.followUp.prompt,
+    profile: repo.code === 0 && repo.stdout.trim() === "true" ? "act" : "propose",
+    trigger: { kind: "manual" },
+    createdAt: now,
+  });
+  await addRequest(paths, duty.id);
+  await setInboxStatus(paths, [item.id], "accepted");
+  if (!isAlive(await readPid(paths))) await ensureRunner();
 }
 
 async function saveDraft(draft: DutyDraft) {
@@ -181,7 +220,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannels.setInbox, async (_e, ids: string[], status: InboxStatus | undefined) => {
     await setInboxStatus(paths, ids.filter((id) => typeof id === "string"), status);
   });
-  ipcMain.handle(IpcChannels.saveConfig, (_e, patch: Partial<MateConfig>) => saveConfig(paths, patch));
+  ipcMain.handle(IpcChannels.saveConfig, (_e, patch: ConfigPatch) => saveConfig(paths, patch));
   ipcMain.handle(IpcChannels.pickDirectory, async () => {
     const result = await dialog.showOpenDialog(mainWindow!, { properties: ["openDirectory"] });
     return result.canceled ? undefined : result.filePaths[0];
@@ -199,6 +238,7 @@ function registerIpc(): void {
   );
   ipcMain.handle(IpcChannels.openPiDesktop, () => openPiDesktop());
   ipcMain.handle(IpcChannels.setAutostart, (_e, enabled: boolean) => setAutostart(enabled === true));
+  ipcMain.handle(IpcChannels.delegate, (_e, itemId: string) => delegate(String(itemId)));
   ipcMain.handle(IpcChannels.applyChange, (_e, itemId: string) => applyInboxChange(paths, String(itemId)));
   ipcMain.handle(IpcChannels.discardChange, (_e, itemId: string) => discardInboxChange(paths, String(itemId)));
   ipcMain.handle(IpcChannels.readSession, async (_e, runId: string) => {

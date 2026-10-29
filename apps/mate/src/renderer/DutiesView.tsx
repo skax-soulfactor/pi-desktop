@@ -230,7 +230,7 @@ function DutyForm({
               <span className="muted">초 동안 저장이 없으면</span>
             </>
           )}
-          {(t.kind === "git" || t.kind === "files") && (
+          {(t.kind === "git" || t.kind === "files" || t.kind === "session") && (
             <>
               <input type="number" min={5} value={t.cooldownMinutes ?? 15} onChange={(e) => setTrigger({ cooldownMinutes: Number(e.target.value) })} />
               <span className="muted">분 안에는 다시 돌지 않음</span>

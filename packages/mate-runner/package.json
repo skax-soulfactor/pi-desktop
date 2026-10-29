@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./types": "./src/types.ts",
-    "./pi-readiness": "./src/pi-readiness-types.ts"
+    "./pi-readiness": "./src/pi-readiness-types.ts",
+    "./activity-types": "./src/activity-types.ts"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
