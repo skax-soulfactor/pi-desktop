@@ -629,3 +629,47 @@ code.copy {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 지난 대화 */
+.nav-history {
+  align-self: flex-start;
+  margin: 6px 4px 0;
+}
+
+.history-list li {
+  padding: 0;
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.history-item:hover {
+  background: var(--panel-2);
+}
+
+.history-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.history-title strong,
+.history-snippet {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

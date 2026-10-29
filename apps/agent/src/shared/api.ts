@@ -5,6 +5,7 @@ import type {
   SessionExitNotification,
   SessionSummary,
   SessionUiResolvedNotification,
+  StoredSession,
 } from "@pi-desktop/host-protocol/messages";
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
 import type { UsageRange, UsageSummary } from "@pi-desktop/agent-kit/usage-types";
@@ -46,6 +47,8 @@ export const IpcChannels = {
   listAudit: "agent:list-audit",
   usageSummary: "agent:usage-summary",
   openSession: "agent:open-session",
+  listHistory: "agent:list-history",
+  searchHistory: "agent:search-history",
   attachSession: "agent:attach-session",
   sendCommand: "agent:send-command",
   sendRecord: "agent:send-record",
@@ -82,6 +85,18 @@ export interface UpdateState {
 
 /** 사이드바의 대화 하나: 데몬 세션 요약 + Pi 세션 이름 (set_session_name) */
 export type ChatSummary = SessionSummary & { name?: string };
+
+/** Pi가 디스크에 남긴 지난 대화 하나 (데몬 session.history의 StoredSession) */
+export type StoredChat = StoredSession;
+
+/** 지난 대화 본문 검색 결과 */
+export interface HistoryHit {
+  path: string;
+  snippet: string;
+}
+
+/** 새 세션 대신 이어 열 곳: 그 세션 파일을 그대로(sessionFile), 또는 거기서 분기해서(forkFrom) */
+export type SessionSource = { sessionFile: string } | { forkFrom: string };
 
 /** 기억 하나 (agent-kit memory/store의 Memory와 같은 모양) */
 export interface MemoryView {
@@ -152,7 +167,11 @@ export interface AgentApi {
   usageSummary(range: UsageRange): Promise<UsageSummary>;
   /** agent-kit 확장을 올린 새 Pi 세션을 연다 */
   /** 새 세션을 연다. forkFrom(세션 파일)을 주면 그 대화를 이어 가는 분기 세션으로 연다 */
-  openSession(cwd: string, forkFrom?: string): Promise<SessionSummary>;
+  openSession(cwd: string, from?: SessionSource): Promise<SessionSummary>;
+  /** 지난 대화 (최근 순, 스케줄러 세션 제외) */
+  listHistory(): Promise<StoredChat[]>;
+  /** 지난 대화의 본문까지 찾는다 */
+  searchHistory(query: string): Promise<HistoryHit[]>;
   attachSession(sessionId: string, lastSeq: number): Promise<AttachResult>;
   /** 응답을 기다리는 Pi RPC 명령 (prompt, abort, get_commands …) */
   sendCommand(sessionId: string, command: Record<string, unknown>): Promise<PiResponse>;

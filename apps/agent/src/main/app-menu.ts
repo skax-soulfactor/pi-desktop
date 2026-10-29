@@ -14,6 +14,7 @@ export type MenuCommand =
   | "page:memory"
   | "page:rules"
   | "page:usage"
+  | "page:history"
   | "page:settings";
 
 export interface MenuHandlers {
@@ -37,6 +38,7 @@ export function appMenuTemplate(platform: NodeJS.Platform, isPackaged: boolean, 
       submenu: [
         cmd("새 대화", "new-chat", "CmdOrCtrl+N"),
         cmd("폴더를 골라 새 대화…", "new-chat-folder", "CmdOrCtrl+O"),
+        cmd("지난 대화 열기…", "page:history", "CmdOrCtrl+Shift+O"),
         { type: "separator" },
         cmd("대화 이름 바꾸기…", "rename-chat", "F2"),
         cmd("대화 닫기", "close-chat"),
@@ -53,6 +55,7 @@ export function appMenuTemplate(platform: NodeJS.Platform, isPackaged: boolean, 
         cmd("기억", "page:memory", "CmdOrCtrl+3"),
         cmd("승인", "page:rules", "CmdOrCtrl+4"),
         cmd("사용량", "page:usage", "CmdOrCtrl+5"),
+        cmd("지난 대화", "page:history", "CmdOrCtrl+6"),
         cmd("설정", "page:settings", "CmdOrCtrl+,"),
         { type: "separator" },
         { role: "resetZoom", label: "기본 크기" },
