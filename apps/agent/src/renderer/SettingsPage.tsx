@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { UpdateState } from "../shared/api";
 import { piSetupIssues, type PiSetupView } from "../shared/pi-setup";
 import { PiDesktopButton } from "./PiSetupBanner";
@@ -19,6 +20,10 @@ export function SettingsPage({
   onError: (message: string) => void;
 }) {
   const issues = setup ? piSetupIssues(setup) : [];
+  const [elevation, setElevation] = useState<boolean>();
+  useEffect(() => {
+    window.piAgent.getElevation().then(setElevation, (error: unknown) => onError(String(error)));
+  }, []);
   return (
     <div className="page">
       <header className="page-head">
@@ -62,6 +67,29 @@ export function SettingsPage({
             </button>
             {issues.length === 0 && setup && <span className="badge ok">준비됨</span>}
           </div>
+        </section>
+
+        <section className="card">
+          <h3>관리자 권한 실행</h3>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={elevation ?? false}
+              disabled={elevation === undefined}
+              onChange={(e) => {
+                const on = e.target.checked;
+                window.piAgent.setElevation(on).then(
+                  () => setElevation(on),
+                  (error: unknown) => onError(String(error)),
+                );
+              }}
+            />
+            <span>에이전트가 관리자 권한이 필요한 작업을 요청할 수 있게 하기 (기본 꺼짐)</span>
+          </label>
+          <p className="muted small-text">
+            켜면 사람이 지켜보는 대화에서만 shell_exec_elevated 도구가 보입니다. 부를 때마다 실행될 명령 그대로 승인을 받고(이번만 허용·거부),
+            비밀번호는 OS 인증 창(Windows UAC 등)이 직접 받습니다. 예약·백그라운드 작업에서는 쓸 수 없습니다. 다음 요청부터 바로 적용됩니다.
+          </p>
         </section>
 
         <section className="card">

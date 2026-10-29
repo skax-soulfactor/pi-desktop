@@ -34,7 +34,7 @@ export default function permissions(pi: ExtensionAPI): void {
 
   pi.on("tool_call", async (event, ctx) => {
     const input = (event.input ?? {}) as Record<string, unknown>;
-    const { request } = classify(event.toolName, input);
+    const { request, invalid } = classify(event.toolName, input);
     if (!request) return undefined;
 
     const audit = (decision: AuditRecord["decision"]) =>
@@ -47,6 +47,16 @@ export default function permissions(pi: ExtensionAPI): void {
     if (request.risk === "exec") {
       const blocked = hardBlockReason(request.target);
       if (blocked) return deny("blocked", `${blocked}. 같은 명령을 다시 시도하지 말라.`);
+    }
+
+    // 권한 상승: 잘못된 입력은 묻지 않고 막고, 저장된 규칙·세션 허용을 보지 않고 매번 한 번만 묻는다
+    if (invalid) return deny("blocked", `잘못된 요청이라 실행하지 않았다: ${invalid}`);
+    if (request.onceOnly) {
+      if (!attended(ctx.hasUI)) return deny("unattended", "사람이 확인할 수 없는 실행이라 관리자 권한 실행을 쓸 수 없다.");
+      const choice = decisionOf(await ctx.ui.select(formatApprovalTitle(request), approvalOptions(request)));
+      if (choice !== "once") return deny("deny", "사용자가 거부했다. 같은 작업을 다시 요청하지 말고 사용자에게 이유를 물어라.");
+      await audit("once");
+      return undefined;
     }
 
     const saved = evaluate(await loadRules(dir), request.toolName, request.target);
