@@ -18,8 +18,10 @@ describe("agent-kit 매니페스트", () => {
     expect(entries).toEqual([
       join(kitDir, "extensions", "agent-core", "index.ts"),
       join(kitDir, "extensions", "permissions", "index.ts"),
+      join(kitDir, "extensions", "loop-guard", "index.ts"),
+      join(kitDir, "extensions", "local-model", "index.ts"),
     ]);
-    expect(extensionArgs(entries)).toEqual(["-e", entries[0], "-e", entries[1]]);
+    expect(extensionArgs(entries)).toEqual(entries.flatMap((entry) => ["-e", entry]));
   });
 
   it("pi.extensions가 없거나 절대 경로면 거절한다", async () => {

@@ -16,9 +16,19 @@ export default function permissions(pi: ExtensionAPI): void {
   const dir = dataDir();
   /** 이 세션에서 계속 허용한 것. 세션이 바뀌면 비운다 */
   let sessionRules: Rule[] = [];
+  /**
+   * 이번 실행(run)에서 사용자가 거부한 호출 (도구 + 대상).
+   * 거부당한 도구를 같은 대상으로 또 부르는 것은 가장 분명한 제자리 돌기다 — desktop-agent에서
+   * "다시 시도하지 말라"고 돌려줬는데도 모델이 네 번을 되풀이한 턴이 있었다. 같은 것은 다시 묻지 않고 거부한다.
+   */
+  const deniedThisRun = new Set<string>();
 
   pi.on("session_start", async () => {
     sessionRules = [];
+  });
+
+  pi.on("agent_start", async () => {
+    deniedThisRun.clear();
   });
 
   pi.on("tool_call", async (event, ctx) => {
@@ -52,8 +62,14 @@ export default function permissions(pi: ExtensionAPI): void {
     // 예약 실행·피어 요청처럼 사람이 지켜보지 않는 실행에서는 묻지 못하므로 거부한다 (설계 §1).
     if (!ctx.hasUI) return deny("unattended", "사람이 확인할 수 없는 실행이라 쓰기·실행 도구를 쓸 수 없다.");
 
+    const key = `${request.toolName}\n${request.target}`;
+    if (deniedThisRun.has(key)) {
+      return deny("repeat-deny", "방금 사용자가 거부한 것과 똑같은 호출이라 다시 묻지 않고 거부했다. 다른 방법을 찾거나 사용자에게 이유를 물어라.");
+    }
+
     const decision = decisionOf(await ctx.ui.select(formatApprovalTitle(request), approvalOptions(request)));
     if (decision === "deny") {
+      deniedThisRun.add(key);
       return deny("deny", "사용자가 거부했다. 같은 작업을 다시 시도하지 말고, 다른 방법을 찾거나 사용자에게 이유를 물어라.");
     }
     if (decision === "session") sessionRules.push({ toolName: request.toolName, pattern: request.pattern, action: "allow" });

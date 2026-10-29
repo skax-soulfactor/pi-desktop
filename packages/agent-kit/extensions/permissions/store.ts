@@ -41,8 +41,21 @@ export interface AuditRecord {
   at: string;
   toolName: string;
   target: string;
-  /** allow-rule·deny-rule: 저장된 규칙, once·session·always·deny: 사람이 고름, blocked: 위험 명령, unattended: 사람이 없음 */
-  decision: "allow-rule" | "deny-rule" | "session-rule" | "once" | "session" | "always" | "deny" | "blocked" | "unattended";
+  /**
+   * allow-rule·deny-rule: 저장된 규칙, once·session·always·deny: 사람이 고름,
+   * repeat-deny: 이번 실행에서 거부한 것과 같은 호출, blocked: 위험 명령, unattended: 사람이 없음
+   */
+  decision:
+    | "allow-rule"
+    | "deny-rule"
+    | "session-rule"
+    | "once"
+    | "session"
+    | "always"
+    | "deny"
+    | "repeat-deny"
+    | "blocked"
+    | "unattended";
   cwd: string;
 }
 

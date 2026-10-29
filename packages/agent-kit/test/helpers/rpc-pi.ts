@@ -91,22 +91,37 @@ export interface StartedPi {
   projectDir: string;
   /** agent-kit 상태 폴더 (PI_DESKTOP_AGENT_DATA) */
   dataDir: string;
+  /** Pi 설정 폴더 (PI_CODING_AGENT_DIR) */
+  piAgentDir: string;
+}
+
+export interface StartOptions {
+  /** models.json의 contextWindow. 작은 창(로컬 모델)을 흉내 낼 때 */
+  contextWindow?: number;
+  /** settings.json에 쓸 내용 */
+  settings?: Record<string, unknown>;
+  /** 작업 폴더에 미리 만들 파일 */
+  files?: Record<string, string>;
 }
 
 /**
  * @param llmBaseUrl mock LLM 주소. LLM을 부르지 않는 테스트면 아무 값이나 둔다
  */
-export async function startPi(llmBaseUrl = "http://127.0.0.1:9/v1"): Promise<StartedPi> {
+export async function startPi(llmBaseUrl = "http://127.0.0.1:9/v1", options: StartOptions = {}): Promise<StartedPi> {
   const piAgentDir = mkdtempSync(join(tmpdir(), "agent-kit-pi-"));
+  const model: Record<string, unknown> = { id: "mock-model" };
+  if (options.contextWindow) model.contextWindow = options.contextWindow;
   writeFileSync(
     join(piAgentDir, "models.json"),
     JSON.stringify({
       providers: {
-        mock: { baseUrl: llmBaseUrl, api: "openai-completions", apiKey: "mock", models: [{ id: "mock-model" }] },
+        mock: { baseUrl: llmBaseUrl, api: "openai-completions", apiKey: "mock", models: [model] },
       },
     }),
   );
+  if (options.settings) writeFileSync(join(piAgentDir, "settings.json"), JSON.stringify(options.settings));
   const projectDir = mkdtempSync(join(tmpdir(), "agent-kit-project-"));
+  for (const [name, content] of Object.entries(options.files ?? {})) writeFileSync(join(projectDir, name), content);
   const dataDir = mkdtempSync(join(tmpdir(), "agent-kit-data-"));
   const args = [
     findPiCli(),
@@ -128,5 +143,5 @@ export async function startPi(llmBaseUrl = "http://127.0.0.1:9/v1"): Promise<Sta
       PI_DESKTOP_AGENT_DATA: dataDir,
     },
   });
-  return { pi: new RpcPi(child), projectDir, dataDir };
+  return { pi: new RpcPi(child), projectDir, dataDir, piAgentDir };
 }
