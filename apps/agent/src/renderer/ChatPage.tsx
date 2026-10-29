@@ -3,6 +3,7 @@ import { ChatView } from "../vendor/renderer/ChatView";
 import { StatusLine, Widgets } from "../vendor/renderer/ExtensionUi";
 import { withAttachments } from "./attachments";
 import { EXAMPLES } from "./examples";
+import { FolderMenu } from "./FolderMenu";
 import type { useAgentSession } from "./use-agent-session";
 
 type Session = ReturnType<typeof useAgentSession>;
@@ -19,6 +20,10 @@ export function ChatPage({
   onRenamed,
   onNewChat,
   onNewChatInFolder,
+  recent,
+  home,
+  onMoveTo,
+  onMoveToPicked,
   guard,
 }: {
   agent: Session;
@@ -31,6 +36,12 @@ export function ChatPage({
   /** 새 대화를 연다. folder가 없으면 마지막 폴더 */
   onNewChat: (folder?: string) => Promise<void>;
   onNewChatInFolder: () => Promise<void>;
+  /** 최근 작업 폴더와 홈 (폴더 옮기기 메뉴) */
+  recent: string[];
+  home?: string;
+  /** 지금 대화를 그 폴더로 옮겨 이어 간다 */
+  onMoveTo: (folder: string) => void;
+  onMoveToPicked: () => void;
   guard: (action: () => Promise<void>) => void;
 }) {
   const { session, chat, ui, kit, model, models } = agent;
@@ -114,9 +125,18 @@ export function ChatPage({
                   </button>
                 </span>
               )}
-              <span className="chat-folder muted small-text" title={session.cwd}>
-                📁 {session.cwd}
-              </span>
+              <FolderMenu
+                className="chat-folder link-button muted small-text"
+                label={`📁 ${session.cwd} ▾`}
+                title="다른 폴더로 옮겨 이 대화를 이어 갑니다"
+                disabled={chat.running}
+                heading="이 대화를 이어 갈 폴더 (지금까지의 대화를 가져가고, 원래 대화는 남습니다)"
+                recent={recent}
+                home={home}
+                exclude={session.cwd}
+                onPick={onMoveTo}
+                onBrowse={onMoveToPicked}
+              />
             </div>
             <span className="spacer" />
             <select

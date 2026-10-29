@@ -412,3 +412,106 @@ code.copy {
   padding: 6px 16px;
   border-bottom: 1px solid var(--border);
 }
+
+/* 폴더 메뉴 (새 대화·폴더 옮기기) */
+.folder-menu {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.folder-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 280px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+}
+
+.folder-menu-heading {
+  padding: 4px 8px 6px;
+}
+
+.folder-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.folder-menu-item:hover {
+  background: var(--panel-2);
+}
+
+.folder-menu-item span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 대화 머리의 폴더: 글자처럼 보이는 버튼 */
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.link-button:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+/* 사이드바: 폴더 묶음 */
+.nav-group > ul {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-group-head {
+  padding: 6px 8px 2px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-group > ul > li {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+
+.nav-group > ul > li.active {
+  background: var(--panel-2);
+}
+
+/* 묶음 자체는 세로로 쌓는다 (.nav-sessions li의 가로 배치를 덮어씀) */
+.nav-sessions > li.nav-group {
+  display: block;
+}
