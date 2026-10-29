@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -18,6 +18,7 @@ import { HostConnection } from "../vendor/main/host-connection";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";
 import { ReplayCollector } from "../vendor/main/replay-collector";
 import { IpcChannels, type AttachResult } from "../shared/api";
+import { KeyStore } from "./key-store";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -88,7 +89,7 @@ function createConnection(): HostConnection {
   });
 }
 
-function registerIpc(connection: HostConnection): void {
+function registerIpc(connection: HostConnection, keys: KeyStore): void {
   ipcMain.handle(IpcChannels.connectionState, () => connection.current);
   ipcMain.handle(IpcChannels.defaultCwd, () => homedir());
   ipcMain.handle(IpcChannels.pickDirectory, async () => {
@@ -101,11 +102,16 @@ function registerIpc(connection: HostConnection): void {
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? [] : result.filePaths;
   });
+  ipcMain.handle(IpcChannels.listKeys, () => keys.names());
+  ipcMain.handle(IpcChannels.setKey, (_event, name: string, value: string) => keys.set(name, value));
+  ipcMain.handle(IpcChannels.removeKey, (_event, name: string) => keys.remove(name));
   ipcMain.handle(IpcChannels.openSession, async (_event, cwd: string) => {
     // 개발용 덮어쓰기(저장소의 Pi, 격리된 Pi 설정, mock 프로바이더)를 먼저 깔고 agent-kit 확장을 뒤에 붙인다.
     const overrides = devSessionOverrides();
     const kitArgs = extensionArgs(await extensionEntries(kitDir()));
-    const params: SessionOpenParams = { ...overrides, cwd, piArgs: [...(overrides.piArgs ?? []), ...kitArgs] };
+    // 키체인에 둔 API 키는 이 세션의 Pi 프로세스 환경으로만 넘긴다 (설계 DESIGN-AGENT.md §3)
+    const env = { ...overrides.env, ...keys.env() };
+    const params: SessionOpenParams = { ...overrides, cwd, piArgs: [...(overrides.piArgs ?? []), ...kitArgs], env };
     const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, params);
     return result.session;
   });
@@ -165,7 +171,7 @@ let connection: HostConnection | undefined;
 
 app.whenReady().then(() => {
   connection = createConnection();
-  registerIpc(connection);
+  registerIpc(connection, new KeyStore(join(app.getPath("userData"), "keys.json"), safeStorage));
   createWindow();
   connection.start();
 
