@@ -98,7 +98,7 @@ P0는 `@desktop` 별칭으로 Pi Desktop 소스를 직접 가져다 썼다. 처�
 | 창 배치 등 앱 전용 상태 | Electron `userData` | DESIGN.md §1과 같은 규칙 |
 
 API 키는 Pi의 방식(`auth.json`, 환경 변수, `models.json`의 `$ENV` 참조)을 따른다.
-평문 저장을 피하고 싶으면 앱이 OS 키체인에서 꺼내 세션 환경 변수로 넘기고 `models.json`에서 `$ENV`로 참조하는 방식을 P3에서 제공한다.
+평문 저장을 피하고 싶으면 앱의 "API 키" 화면에 저장한다(P3-④). 앱은 Electron `safeStorage`(Windows DPAPI·macOS Keychain·Linux libsecret)로 암호화해 앱 데이터의 `keys.json`에 두고, 새 세션을 열 때만 풀어 Pi 프로세스의 환경 변수로 넘긴다. 내장 프로바이더는 `ANTHROPIC_API_KEY` 같은 이름을 Pi가 그대로 읽고, 커스텀 프로바이더는 `models.json`에서 `"apiKey": "$이름"`으로 참조한다. 암호화를 쓸 수 없는 환경에서는 저장을 거절한다. 세션의 셸 명령도 이 환경을 물려받으므로, 키를 출력하는 명령은 승인 단계에서 걸러야 한다.
 
 ## 4. 기능 배치
 
@@ -137,6 +137,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | | **구현 메모 (P3-①)**: `ask_user`·`web_fetch` 도구와 승인 위험도 "네트워크"를 추가. 실제 Pi 계약 테스트로 선택지·직접 입력·네트워크 승인·본문 추출·HTTP 오류를 확인 | |
 | | **구현 메모 (P3-②)**: 기억 하나 = `pi-desktop-agent/memory/<id>.md`(frontmatter `kind`·`created`). SQLite·벡터 대신 사람이 고칠 수 있는 파일. 매 요청 전 `before_agent_start`에서 선호는 늘, 사실·교훈은 요청과 글자 2-gram이 겹치는 것만 골라 `agent_memory` 섹션으로 싣는다(Pi가 시스템 메시지 하나를 고쳐 보내므로 대화에 쌓이지 않음). 로컬 모델은 창의 10%만. 도구 `memory_save`·`memory_forget`(승인 없이, 할 때마다 알림), 명령 `/agent:remember`·`/agent:memories`. 잊은 기억은 `forgotten/`으로 옮겨 되돌릴 수 있다. desktop-agent의 "턴 뒤 LLM으로 기억 뽑기"와 실패 교훈 자동 기록은 아직 옮기지 않았다 | |
 | | **구현 메모 (P3-③)**: `process_document`는 창의 30%(토큰당 2글자) 크기로 문단 경계에서 나눠 조각마다 `ctx.modelRegistry.complete`로 지금 모델을 부른다. transform(번역·교정)은 결과를 `<이름>.result.md`(또는 output)로 쓰고 그 경로로 "쓰기" 승인, reduce(요약·질문)는 조각별로 뽑아 한 번 더 모아 답하며 묻지 않는다. .docx는 의존성 없이 zip에서 `word/document.xml`만 풀어 본문을 뽑는다(PDF는 아직). 앱의 "파일 첨부"는 내용 대신 `[첨부] <경로>`를 메시지에 싣는다. 조각 처리 요청에는 local-model의 사고 끄기가 적용되지 않는다 | |
+| | **구현 메모 (P3-④)**: 앱의 `KeyStore`(safeStorage 암호화, 이름만 표시)와 "API 키" 화면. 새 세션의 `session.open` env로만 넘긴다(§3). P3 완료 — 남은 것: 턴 뒤 기억 뽑기·실패 교훈 자동 기록, PDF, 이미지 첨부 | |
 | P4 백그라운드 | `tasks`(워커 세션), 데몬 스케줄러, 알림 | 앱을 닫아도 예약 작업이 돈다 |
 | P5 확장 | `peers`/네트워크, 권한 상승, 배포 설정 | |
 

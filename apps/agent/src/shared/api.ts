@@ -18,6 +18,9 @@ export const IpcChannels = {
   defaultCwd: "agent:default-cwd",
   pickDirectory: "agent:pick-directory",
   pickFiles: "agent:pick-files",
+  listKeys: "agent:list-keys",
+  setKey: "agent:set-key",
+  removeKey: "agent:remove-key",
   openSession: "agent:open-session",
   attachSession: "agent:attach-session",
   sendCommand: "agent:send-command",
@@ -43,6 +46,10 @@ export interface AgentApi {
   pickDirectory(): Promise<string | undefined>;
   /** 첨부할 파일을 고른다 (여러 개). 취소하면 빈 배열 */
   pickFiles(): Promise<string[]>;
+  /** OS 키체인에 저장한 API 키 이름들 (값은 돌려주지 않는다) */
+  listKeys(): Promise<string[]>;
+  setKey(name: string, value: string): Promise<void>;
+  removeKey(name: string): Promise<void>;
   /** agent-kit 확장을 올린 새 Pi 세션을 연다 */
   openSession(cwd: string): Promise<SessionSummary>;
   attachSession(sessionId: string, lastSeq: number): Promise<AttachResult>;
