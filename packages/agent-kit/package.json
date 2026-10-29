@@ -15,7 +15,8 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/agent-core/index.ts"
+      "./extensions/agent-core/index.ts",
+      "./extensions/permissions/index.ts"
     ]
   },
   "scripts": {
