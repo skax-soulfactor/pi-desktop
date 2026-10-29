@@ -19,6 +19,7 @@ describe("agent-kit 매니페스트", () => {
       join(kitDir, "extensions", "agent-core", "index.ts"),
       join(kitDir, "extensions", "permissions", "index.ts"),
       join(kitDir, "extensions", "loop-guard", "index.ts"),
+      join(kitDir, "extensions", "local-model", "index.ts"),
     ]);
     expect(extensionArgs(entries)).toEqual(entries.flatMap((entry) => ["-e", entry]));
   });
