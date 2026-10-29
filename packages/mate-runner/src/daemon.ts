@@ -147,7 +147,11 @@ export class Runner {
     await log(this.options.paths, `runner stop pid=${process.pid}`);
   }
 
-  /** 할 일이 없을 때까지 요청 → 시간표 순으로 하나씩 실행한다 */
+  /**
+   * 할 일이 없을 때까지 요청 → 시간표 순으로 하나씩 실행한다.
+   * 확인하는 동안 다시 깨우는 신호가 오면(요청 파일이 막 생김) 할 일이 없었어도 한 번 더 확인한다.
+   * 그러지 않으면 그 요청이 다음 주기 확인(30초)까지 밀린다.
+   */
   async tick(): Promise<void> {
     if (this.busy) {
       this.again = true;
@@ -159,9 +163,10 @@ export class Runner {
         this.again = false;
         const next = await this.pickNext();
         await this.heartbeat();
-        if (!next) break;
-        await this.execute(next.duty, next.reason);
-        this.again = true;
+        if (next) {
+          await this.execute(next.duty, next.reason);
+          this.again = true;
+        }
       } while (this.again && !this.abort.signal.aborted);
     } catch (error) {
       await log(this.options.paths, `tick error ${(error as Error).stack ?? error}`);
