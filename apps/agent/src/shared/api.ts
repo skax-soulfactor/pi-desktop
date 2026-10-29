@@ -21,9 +21,6 @@ export const IpcChannels = {
   defaultCwd: "agent:default-cwd",
   pickDirectory: "agent:pick-directory",
   pickFiles: "agent:pick-files",
-  listKeys: "agent:list-keys",
-  setKey: "agent:set-key",
-  removeKey: "agent:remove-key",
   listTasks: "agent:list-tasks",
   listSchedules: "agent:list-schedules",
   setScheduleEnabled: "agent:set-schedule-enabled",
@@ -90,10 +87,6 @@ export interface AgentApi {
   pickDirectory(): Promise<string | undefined>;
   /** 첨부할 파일을 고른다 (여러 개). 취소하면 빈 배열 */
   pickFiles(): Promise<string[]>;
-  /** OS 키체인에 저장한 API 키 이름들 (값은 돌려주지 않는다) */
-  listKeys(): Promise<string[]>;
-  setKey(name: string, value: string): Promise<void>;
-  removeKey(name: string): Promise<void>;
   /** 최근 작업 (대화에서 맡긴 것·예약 실행). 최근 것부터 */
   listTasks(): Promise<TaskRecord[]>;
   listSchedules(): Promise<Schedule[]>;

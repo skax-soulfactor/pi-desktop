@@ -51,7 +51,7 @@ export function piSetupIssues(setup: PiSetupView): SetupIssue[] {
       kind: "no-models",
       level: "error",
       title: "쓸 수 있는 모델이 없습니다",
-      detail: "프로바이더 로그인·API 키·모델 설정은 Pi Desktop에서 합니다. 설정한 뒤 \"다시 확인\"을 누르세요.",
+      detail: "프로바이더 로그인·API 키·모델 설정은 Pi Desktop에서 합니다. Pi Desktop의 프로바이더 화면에서 로그인하거나 키를 넣은 뒤 \"다시 확인\"을 누르세요.",
     });
   }
   if (setup.platform === "win32" && setup.gitBash && !setup.gitBash.found) {
