@@ -20,6 +20,8 @@ export function matePaths(home: string) {
     inbox: join(home, "inbox.jsonl"),
     inboxState: join(home, "inbox-state.json"),
     sessions: join(home, "sessions"),
+    /** act 실행의 작업 공간(git worktree) */
+    worktrees: join(home, "worktrees"),
     runDir: join(home, "run"),
     pid: join(home, "run", "mated.pid"),
     log: join(home, "run", "mated.log"),

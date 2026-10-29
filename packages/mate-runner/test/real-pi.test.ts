@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,8 @@ import { readInbox } from "@pi-desktop/mate-kit";
 import { PI_CLI, setupRealPi, type RealPiFixture } from "../../host-agent/test/helpers/real-pi";
 import { isAlive, readPid } from "../src/daemon";
 import { matePaths, type MatePaths } from "../src/paths";
-import { addRequest, listRuns, loadState, saveConfig, saveDuty } from "../src/store";
+import { applyInboxChange } from "../src/inbox-change";
+import { addRequest, listRuns, loadInboxState, loadState, saveConfig, saveDuty } from "../src/store";
 import type { Duty, RunRecord } from "../src/types";
 
 /**
@@ -147,6 +148,42 @@ describe("실행기 + 실제 Pi", () => {
     expect(isAlive(first.pid)).toBe(false);
     // pid 파일이 남아도 죽은 pid라 다음 start가 새로 띄운다
     expect(isAlive(await readPid(paths))).toBe(false);
+  });
+
+  it("act: 작업 공간에서 고친 것은 승인 대기로 올라가고, 적용해야 내 폴더에 들어온다", async () => {
+    const repo = await mkdtemp(join(tmpdir(), "mate-act-"));
+    const gitEnv = { ...env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+    const git = (...args: string[]) => execFileAsync("git", args, { cwd: repo, env: gitEnv });
+    await git("init", "-q", "-b", "main");
+    await writeFile(join(repo, "README.md"), "hello\n");
+    await git("add", ".");
+    await git("commit", "-qm", "first");
+    const act = (id: string, prompt: string) =>
+      saveDuty(paths, { id, name: `고치기 ${id}`, cwd: repo, prompt, profile: "act", trigger: { kind: "manual" } });
+    try {
+      await act("fix", 'tool:write {"path":"fix.txt","content":"고침\\n"}');
+      const record = await run("fix");
+      expect(record).toMatchObject({ status: "done", changeFiles: 1, proposals: 1 });
+      expect(existsSync(join(repo, "fix.txt"))).toBe(false);
+      const item = (await readInbox(paths.inbox)).find((i) => i.runId === record.id && i.change);
+      expect(item).toMatchObject({ severity: "action", title: "고치기 fix: 파일 1개 고침", change: { files: ["fix.txt"] } });
+      expect(existsSync(item!.change!.worktree)).toBe(true);
+
+      await applyInboxChange(paths, item!.id);
+      // 줄 끝은 사용자 git 설정(core.autocrlf)을 따른다
+      expect((await readFile(join(repo, "fix.txt"), "utf8")).replace(/\r\n/g, "\n")).toBe("고침\n");
+      expect(existsSync(item!.change!.worktree)).toBe(false);
+      expect((await loadInboxState(paths))[item!.id]?.status).toBe("applied");
+
+      // 작업 공간 밖으로는 쓰지 못하고, 바뀐 것이 없으면 작업 공간을 남기지 않는다
+      await act("escape", 'tool:write {"path":"../mate-escape.txt","content":"x"}');
+      expect(await run("escape")).toMatchObject({ status: "done", proposals: 0 });
+      expect(existsSync(join(paths.worktrees, "..", "mate-escape.txt"))).toBe(false);
+      expect(existsSync(join(repo, "..", "mate-escape.txt"))).toBe(false);
+      expect((await readdir(paths.worktrees)).filter((n) => !n.endsWith(".patch"))).toEqual([]);
+    } finally {
+      await rm(repo, { recursive: true, force: true }).catch(() => {});
+    }
   });
 
   it("git 계기: 처음 본 커밋은 기준만 잡고, 새 커밋이 생기면 돈다", async () => {

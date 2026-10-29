@@ -88,6 +88,8 @@ export interface RunRecord {
   /** 이 실행에서 인박스에 새로 남긴 제안 수 */
   proposals?: number;
   sessionId?: string;
+  /** act: 인박스에 올린 변경의 파일 수 */
+  changeFiles?: number;
   /** Mate 홈 sessions/ 안의 Pi 세션 파일 */
   sessionFile?: string;
 }
@@ -129,7 +131,8 @@ export interface RunRequest {
   requestedAt: number;
 }
 
-export type InboxStatus = "accepted" | "dismissed";
+/** accepted: 확인함, dismissed: 버림, applied: act 변경을 적용함 */
+export type InboxStatus = "accepted" | "dismissed" | "applied";
 
 /** inbox-state.json: 제안별 사용자 처리 상태. 없으면 "새 제안" */
 export type InboxState = Record<string, { status: InboxStatus; at: number }>;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Overview } from "../shared/api";
+import type { AutostartView, Overview } from "../shared/api";
 import type { Act } from "./App";
 import { relativeTime } from "./mate-view";
 
@@ -9,6 +9,10 @@ export function SettingsView({ overview, act }: { overview: Overview; act: Act }
   const [model, setModel] = useState(config.model);
   const [limit, setLimit] = useState(String(config.dailyRunLimit));
   const [maxCost, setMaxCost] = useState(String(config.maxCostUsd));
+  const [autostart, setAutostartState] = useState<AutostartView>();
+  useEffect(() => {
+    void window.mate.getAutostart().then(setAutostartState);
+  }, []);
   useEffect(() => {
     setModel(config.model);
     setLimit(String(config.dailyRunLimit));
@@ -60,13 +64,22 @@ export function SettingsView({ overview, act }: { overview: Overview; act: Act }
         <span>데이터 폴더</span>
         <span className="path">{overview.home}</span>
       </div>
+      <label className="radio">
+        <input
+          type="checkbox"
+          disabled={!autostart?.supported}
+          checked={autostart?.enabled ?? false}
+          onChange={() => void act(async () => setAutostartState(await window.mate.setAutostart(!autostart?.enabled)))}
+        />
+        <strong>로그인할 때 실행기 시작</strong>
+        <span className="muted">{autostart?.reason ?? "PC를 켜고 앱을 열지 않아도 시간표·변화 감지가 돕니다 (창은 뜨지 않음)"}</span>
+      </label>
       <div className="row">
         <button onClick={() => void act(() => window.mate.restartRunner())}>실행기 다시 시작</button>
         <button onClick={() => void act(() => window.mate.revealHome())}>데이터 폴더 열기</button>
       </div>
       <p className="muted small-text">
-        실행기는 앱을 닫아도 남아 시간표를 지킵니다. PC를 다시 켠 뒤에는 앱을 한 번 열어야 다시 돕니다. 승인이 필요한 일과 결과는 모두
-        인박스에 쌓여, 앱을 켰을 때 봅니다.
+        실행기는 앱을 닫아도 남아 시간표를 지킵니다. 결과와 승인이 필요한 변경은 모두 인박스에 쌓여, 앱을 켰을 때 봅니다.
       </p>
     </section>
   );

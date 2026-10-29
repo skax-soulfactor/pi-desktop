@@ -7,6 +7,10 @@ export const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 export const PROFILE_LABELS: Record<DutyDraft["profile"], { name: string; hint: string }> = {
   observe: { name: "보고", hint: "읽기만 하고, 실행마다 결과 한 건을 인박스에 남깁니다" },
   propose: { name: "제안", hint: "읽기만 하고, 알릴 것이 있을 때만 골라 인박스에 남깁니다" },
+  act: {
+    name: "고치기",
+    hint: "별도 작업 공간(git worktree)에서 고치고, 인박스에서 \"적용\"을 눌러야 내 폴더에 들어옵니다 (git 저장소만)",
+  },
 };
 
 export function triggerLabel(trigger: Trigger): string {

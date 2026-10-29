@@ -12,6 +12,10 @@ const api: MateApi = {
   restartRunner: () => ipcRenderer.invoke(IpcChannels.restartRunner),
   revealHome: () => ipcRenderer.invoke(IpcChannels.revealHome),
   readSession: (runId) => ipcRenderer.invoke(IpcChannels.readSession, runId),
+  applyChange: (itemId) => ipcRenderer.invoke(IpcChannels.applyChange, itemId),
+  discardChange: (itemId) => ipcRenderer.invoke(IpcChannels.discardChange, itemId),
+  getAutostart: () => ipcRenderer.invoke(IpcChannels.getAutostart),
+  setAutostart: (enabled) => ipcRenderer.invoke(IpcChannels.setAutostart, enabled),
   onChanged: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(IpcChannels.changed, handler);

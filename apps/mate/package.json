@@ -15,7 +15,9 @@
     "dev:mock": "node scripts/dev-mock.mjs",
     "build": "npm run build -w @pi-desktop/mate-runner && electron-vite build",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dist": "npm run build && electron-builder --config electron-builder.yml --publish never",
+    "render-icon": "electron scripts/render-icon.mjs"
   },
   "devDependencies": {
     "@pi-desktop/mate-kit": "*",
@@ -29,6 +31,7 @@
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "electron-builder": "^26.15.3"
   }
 }
