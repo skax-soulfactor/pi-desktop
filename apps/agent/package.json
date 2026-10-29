@@ -15,7 +15,8 @@
     "dev:mock": "node scripts/dev-mock.mjs",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dist": "npm run build -w @pi-desktop/host-agent && electron-vite build && electron-builder --config electron-builder.yml --publish never"
   },
   "devDependencies": {
     "@pi-desktop/agent-kit": "*",
@@ -24,6 +25,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "44.9.1",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^6.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
