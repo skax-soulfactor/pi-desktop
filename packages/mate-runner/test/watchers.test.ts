@@ -16,10 +16,16 @@ describe("변화 기록", () => {
     expect(changed.pending).toEqual({ since: 3, lastAt: 4, cause: "커밋 c3", count: 2 });
   });
 
-  it("파일 변경은 묶어서 세고 마지막 시각을 늦춘다", () => {
+  it("파일 변경은 묶어서 파일 수로 세고 마지막 시각을 늦춘다", () => {
     const once = noteFileChange({ key: "k" }, "src/a.ts", 10);
-    expect(once.pending).toEqual({ since: 10, lastAt: 10, cause: "파일 바뀜: src/a.ts", count: 1 });
-    expect(noteFileChange(once, "src/b.ts", 20).pending).toEqual({ since: 10, lastAt: 20, cause: "파일 변경 2번 (마지막: src/b.ts)", count: 2 });
+    expect(once.pending).toEqual({ since: 10, lastAt: 10, cause: "파일 바뀜: src/a.ts", count: 1, files: ["src/a.ts"] });
+    // 저장 한 번에 이벤트가 여러 번 와도 같은 파일은 한 번
+    const again = noteFileChange(once, "src/a.ts", 15);
+    expect(again.pending).toMatchObject({ lastAt: 15, count: 1, cause: "파일 바뀜: src/a.ts" });
+    expect(noteFileChange(again, "src/b.ts", 20).pending).toMatchObject({ since: 10, lastAt: 20, cause: "파일 2개 바뀜 (src/a.ts, src/b.ts)", count: 2 });
+    let many = again;
+    for (const f of ["b", "c", "d"]) many = noteFileChange(many, `${f}.ts`, 30);
+    expect(many.pending?.cause).toBe("파일 4개 바뀜 (src/a.ts, b.ts, c.ts 등)");
   });
 
   it("빌드 결과·의존성·.git은 파일 변경으로 보지 않는다", () => {

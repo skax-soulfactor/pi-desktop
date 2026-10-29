@@ -37,11 +37,17 @@ function addPending(pending: WatchState["pending"], cause: string, now: number):
   return pending ? { ...pending, lastAt: now, cause, count: pending.count + 1 } : { since: now, lastAt: now, cause, count: 1 };
 }
 
-/** 파일 변경 하나를 기록한다 (잦은 저장은 묶임: 마지막 변경 시각만 늦춘다) */
+const MAX_FILES = 20;
+
+/** 파일 변경 하나를 기록한다 (잦은 저장은 묶임: 마지막 변경 시각만 늦추고, 같은 파일은 한 번만 센다) */
 export function noteFileChange(watch: WatchState, relative: string, now: number): WatchState {
-  const count = (watch.pending?.count ?? 0) + 1;
-  const cause = count === 1 ? `파일 바뀜: ${relative}` : `파일 변경 ${count}번 (마지막: ${relative})`;
-  return { ...watch, pending: { ...addPending(watch.pending, cause, now), cause, count } };
+  const known = watch.pending?.files ?? [];
+  const seen = known.includes(relative);
+  const files = seen || known.length >= MAX_FILES ? known : [...known, relative];
+  const count = (watch.pending?.count ?? 0) + (seen ? 0 : 1);
+  const shown = files.slice(0, 3).join(", ") + (count > 3 ? " 등" : "");
+  const cause = count === 1 ? `파일 바뀜: ${relative}` : `파일 ${count}개 바뀜 (${shown})`;
+  return { ...watch, pending: { ...addPending(watch.pending, cause, now), cause, count, files } };
 }
 
 /** poll 명령으로 쓸 수 있는지: 읽기 허용 목록을 통과하는 단일 명령 (파이프·&& 없이) */

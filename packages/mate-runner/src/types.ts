@@ -101,7 +101,14 @@ export interface WatchState {
   /** poll: 마지막으로 명령을 돌린 시각 */
   polledAt?: number;
   /** 실행을 기다리는 변화 */
-  pending?: { since: number; lastAt: number; cause: string; count: number };
+  pending?: {
+    since: number;
+    lastAt: number;
+    cause: string;
+    count: number;
+    /** files: 바뀐 파일 (중복 없이, 앞의 20개까지). 저장 한 번에 이벤트가 여러 번 와도 한 번으로 센다 */
+    files?: string[];
+  };
 }
 
 export interface RunnerState {
