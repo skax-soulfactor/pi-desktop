@@ -16,7 +16,7 @@ export const EXAMPLES: Example[] = [
   },
   {
     title: "큰 문서 번역·요약",
-    detail: "docx·긴 텍스트도 나눠서 처리합니다. 파일 첨부로 경로를 넣으세요",
+    detail: "docx·pdf·긴 텍스트도 나눠서 처리합니다. 파일 첨부로 경로를 넣으세요",
     prompt: "첨부한 문서를 핵심만 다섯 줄로 요약해 줘.",
   },
   {

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from "electron";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   Methods,
@@ -25,10 +25,11 @@ import { loadAudit, loadRules, removeRule } from "@pi-desktop/agent-kit/permissi
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
 import { searchSessions } from "./history";
+import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
 import { HostConnection } from "../vendor/main/host-connection";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";
 import { ReplayCollector } from "../vendor/main/replay-collector";
-import { IpcChannels, type AttachResult, type ChatSummary, type MemoryView, type RuleView, type SessionSource } from "../shared/api";
+import { IpcChannels, type AttachResult, type ChatSummary, type MemoryView, type RuleView, type SessionSource, type ImageAttachment } from "../shared/api";
 import { findPiDesktop, installPiDesktop, openPiDesktop } from "./pi-desktop";
 import type { PiSetupView } from "../shared/pi-setup";
 import { TaskWatcher } from "./task-watcher";
@@ -230,6 +231,21 @@ function registerIpc(connection: HostConnection): void {
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? [] : result.filePaths;
   });
+  ipcMain.handle(IpcChannels.readImages, (_event, paths: string[]) =>
+    Promise.all(
+      paths.map(async (path): Promise<ImageAttachment> => {
+        const name = basename(path);
+        const mimeType = imageMimeType(path) ?? "application/octet-stream";
+        try {
+          const size = (await stat(path)).size;
+          if (size > MAX_IMAGE_BYTES) return { name, mimeType, error: `${(size / 1024 / 1024).toFixed(1)}MB라 너무 큽니다 (5MB까지)` };
+          return { name, mimeType, data: (await readFile(path)).toString("base64") };
+        } catch (error) {
+          return { name, mimeType, error: error instanceof Error ? error.message : String(error) };
+        }
+      }),
+    ),
+  );
   ipcMain.handle(IpcChannels.listTasks, async () => (await loadTasks(tasksDir(agentDataDir()))).slice(0, 30));
   ipcMain.handle(IpcChannels.listSchedules, () => loadSchedules(schedulesPath(agentDataDir())));
   ipcMain.handle(IpcChannels.setScheduleEnabled, async (_event, id: string, enabled: boolean) => {

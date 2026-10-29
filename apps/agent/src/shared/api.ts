@@ -25,6 +25,7 @@ export const IpcChannels = {
   defaultCwd: "agent:default-cwd",
   pickDirectory: "agent:pick-directory",
   pickFiles: "agent:pick-files",
+  readImages: "agent:read-images",
   listTasks: "agent:list-tasks",
   listSchedules: "agent:list-schedules",
   setScheduleEnabled: "agent:set-schedule-enabled",
@@ -89,6 +90,15 @@ export type ChatSummary = SessionSummary & { name?: string };
 /** Pi가 디스크에 남긴 지난 대화 하나 (데몬 session.history의 StoredSession) */
 export type StoredChat = StoredSession;
 
+/** 메시지와 함께 보낼 이미지 하나 */
+export interface ImageAttachment {
+  name: string;
+  mimeType: string;
+  /** base64. 읽지 못했으면 없고 error가 있다 */
+  data?: string;
+  error?: string;
+}
+
 /** 지난 대화 본문 검색 결과 */
 export interface HistoryHit {
   path: string;
@@ -132,6 +142,8 @@ export interface AgentApi {
   pickDirectory(): Promise<string | undefined>;
   /** 첨부할 파일을 고른다 (여러 개). 취소하면 빈 배열 */
   pickFiles(): Promise<string[]>;
+  /** 이미지 파일을 base64로 읽는다 (크기 상한을 넘거나 읽지 못한 것은 error) */
+  readImages(paths: string[]): Promise<ImageAttachment[]>;
   /** 최근 작업 (대화에서 맡긴 것·예약 실행). 최근 것부터 */
   listTasks(): Promise<TaskRecord[]>;
   listSchedules(): Promise<Schedule[]>;
