@@ -1,6 +1,6 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
-import { ChatView } from "@desktop/renderer/ChatView";
-import { ExtensionDialog, StatusLine, Toasts, Widgets } from "@desktop/renderer/ExtensionUi";
+import { ChatView } from "../vendor/renderer/ChatView";
+import { ExtensionDialog, StatusLine, Toasts, Widgets } from "../vendor/renderer/ExtensionUi";
 import { connectionLabel } from "./connection-label";
 import { useAgentSession, type KitState } from "./use-agent-session";
 

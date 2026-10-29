@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionEventNotification, SessionSummary } from "@pi-desktop/host-protocol/messages";
 import { STATUS_COMMAND } from "@pi-desktop/agent-kit/constants";
-import { addNotice, applyEvent, initialChatState, type ChatState } from "@desktop/renderer/chat-state";
+import { addNotice, applyEvent, initialChatState, type ChatState } from "../vendor/renderer/chat-state";
 import {
   applyUiEvent,
   dialogResponse,
@@ -11,7 +11,7 @@ import {
   resolveDialog,
   type DialogRequest,
   type ExtensionUiState,
-} from "@desktop/renderer/extension-ui-state";
+} from "../vendor/renderer/extension-ui-state";
 import type { ConnectionState } from "../shared/api";
 
 /** agent-kit이 세션에 올라갔는지 (설계 DESIGN-AGENT.md §2.1) */
