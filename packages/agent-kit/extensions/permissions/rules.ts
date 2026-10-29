@@ -32,6 +32,7 @@ const READ_TOOLS = new Set([
   "cancel_task",
   "list_schedules",
   "cancel_schedule",
+  "list_peers",
 ]);
 /** 바깥으로 요청을 보내는 도구. 주소에 데이터를 실어 내보낼 수 있으므로 묻는다 */
 const NETWORK_TOOLS = new Set(["web_fetch"]);
@@ -89,6 +90,11 @@ export function classify(toolName: string, input: Record<string, unknown>): Clas
       request: { toolName, risk: "exec", summary: "관리자 권한으로 실행", target, pattern: "", onceOnly: true },
       ...(invalid ? { invalid } : {}),
     };
+  }
+  if (toolName === "ask_peer") {
+    // 대화 내용을 다른 사람의 에이전트로 보낸다. 피어 단위로 계속 허용할 수 있다
+    const peer = String(input.peer ?? "");
+    return { risk: "network", request: { toolName, risk: "network", summary: "피어에게 묻기", target: `${peer}: ${String(input.question ?? "")}`, pattern: `${peer}:*` } };
   }
   if (NETWORK_TOOLS.has(toolName)) {
     const url = String(input.url ?? "");

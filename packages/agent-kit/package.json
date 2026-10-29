@@ -20,7 +20,11 @@
     "./permissions": "./extensions/permissions/store.ts",
     "./usage": "./src/usage.ts",
     "./usage-types": "./src/usage-types.ts",
-    "./elevation": "./extensions/elevation/store.ts"
+    "./elevation": "./extensions/elevation/store.ts",
+    "./peers": "./extensions/peers/store.ts",
+    "./peers-client": "./extensions/peers/client.ts",
+    "./peer-types": "./extensions/peers/types.ts",
+    "./peers-protocol": "./extensions/peers/protocol.ts"
   },
   "pi": {
     "extensions": [
@@ -34,7 +38,8 @@
       "./extensions/documents/index.ts",
       "./extensions/tasks/index.ts",
       "./extensions/schedule/index.ts",
-      "./extensions/elevation/index.ts"
+      "./extensions/elevation/index.ts",
+      "./extensions/peers/index.ts"
     ]
   },
   "scripts": {

@@ -27,6 +27,9 @@ import { loadAudit, loadRules, removeRule } from "@pi-desktop/agent-kit/permissi
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
 import { searchSessions } from "./history";
+import { approvePairing, checkPairings, forgetPeer, networkState, pairWith, previewPeer, rejectPairing, saveCard, setNetworkSettings, setPeerPolicy } from "./network";
+import { DEFAULT_PEER_PORT, type CardDraft, type PeerPolicy, type PeerSettings } from "@pi-desktop/agent-kit/peers";
+import { normalizeAddress } from "@pi-desktop/agent-kit/peers-protocol";
 import { readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "./mcp-config";
 import { WEB_SEARCH_PRESETS, type McpCheckResult } from "../shared/mcp";
 import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
@@ -240,6 +243,18 @@ function registerIpc(connection: HostConnection): void {
       );
     });
   });
+  ipcMain.handle(IpcChannels.networkState, () => networkState(agentDataDir()));
+  ipcMain.handle(IpcChannels.setNetworkSettings, (_event, settings: PeerSettings) => setNetworkSettings(agentDataDir(), settings));
+  ipcMain.handle(IpcChannels.saveCard, (_event, card: CardDraft) => saveCard(agentDataDir(), card));
+  ipcMain.handle(IpcChannels.previewPeer, (_event, address: string) => previewPeer(normalizeAddress(address, DEFAULT_PEER_PORT)));
+  ipcMain.handle(IpcChannels.pairWith, async (_event, address: string) => {
+    await pairWith(agentDataDir(), normalizeAddress(address, DEFAULT_PEER_PORT));
+  });
+  ipcMain.handle(IpcChannels.checkPairings, () => checkPairings(agentDataDir()));
+  ipcMain.handle(IpcChannels.approvePairing, (_event, requestId: string) => approvePairing(agentDataDir(), requestId));
+  ipcMain.handle(IpcChannels.rejectPairing, (_event, requestId: string) => rejectPairing(agentDataDir(), requestId));
+  ipcMain.handle(IpcChannels.forgetPeer, (_event, id: string) => forgetPeer(agentDataDir(), id));
+  ipcMain.handle(IpcChannels.setPeerPolicy, (_event, id: string, policy: PeerPolicy) => setPeerPolicy(agentDataDir(), id, policy));
   ipcMain.handle(IpcChannels.usageSummary, async (_event, range: UsageRange) => {
     const now = new Date();
     const { from } = rangeBuckets(range, now);

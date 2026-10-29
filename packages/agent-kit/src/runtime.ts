@@ -35,3 +35,10 @@ export const LEARN_ENV = "PI_DESKTOP_AGENT_LEARN";
 export function learning(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[LEARN_ENV] !== "0";
 }
+
+/** 다른 에이전트(피어)의 질문에 답하는 워커에 주는 환경 변수. 기억 중 선호는 싣지 않는다 */
+export const PEER_ENV = "PI_DESKTOP_AGENT_PEER";
+
+export function isPeerAnswer(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env[PEER_ENV] === "1";
+}

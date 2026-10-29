@@ -15,6 +15,7 @@ import type { Schedule } from "@pi-desktop/agent-kit/schedule-plan";
 import type { ConnectionState } from "../vendor/shared/api";
 import type { PiSetupView } from "./pi-setup";
 import type { McpCheckResult, McpServerView } from "./mcp";
+import type { AgentCard, CardDraft, NetworkState, PeerPolicy, PeerSettings } from "./network";
 
 /**
  * 에이전트 앱의 main ↔ renderer IPC.
@@ -55,6 +56,16 @@ export const IpcChannels = {
   setMcpEnabled: "agent:set-mcp-enabled",
   removeMcp: "agent:remove-mcp",
   checkMcp: "agent:check-mcp",
+  networkState: "agent:network-state",
+  setNetworkSettings: "agent:set-network-settings",
+  saveCard: "agent:save-card",
+  previewPeer: "agent:preview-peer",
+  pairWith: "agent:pair-with",
+  checkPairings: "agent:check-pairings",
+  approvePairing: "agent:approve-pairing",
+  rejectPairing: "agent:reject-pairing",
+  forgetPeer: "agent:forget-peer",
+  setPeerPolicy: "agent:set-peer-policy",
   openMcpFile: "agent:open-mcp-file",
   openSession: "agent:open-session",
   listHistory: "agent:list-history",
@@ -197,6 +208,19 @@ export interface AgentApi {
   removeMcp(name: string): Promise<McpServerView[]>;
   /** pi mcp list로 연결을 확인한다 */
   checkMcp(): Promise<McpCheckResult>;
+  /** 에이전트 네트워크 (피어) */
+  networkState(): Promise<NetworkState>;
+  setNetworkSettings(settings: PeerSettings): Promise<void>;
+  saveCard(card: CardDraft): Promise<void>;
+  /** 상대 주소로 카드를 받아 본다 */
+  previewPeer(address: string): Promise<AgentCard>;
+  pairWith(address: string): Promise<void>;
+  /** 보낸 페어링 요청의 결과를 가져온다 (새로 맺어진 피어 이름) */
+  checkPairings(): Promise<string[]>;
+  approvePairing(requestId: string): Promise<void>;
+  rejectPairing(requestId: string): Promise<void>;
+  forgetPeer(id: string): Promise<void>;
+  setPeerPolicy(id: string, policy: PeerPolicy): Promise<void>;
   openMcpFile(): Promise<void>;
   /** agent-kit 확장을 올린 새 Pi 세션을 연다 */
   /** 새 세션을 연다. forkFrom(세션 파일)을 주면 그 대화를 이어 가는 분기 세션으로 연다 */
