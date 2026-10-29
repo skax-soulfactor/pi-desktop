@@ -14,6 +14,7 @@ export type { UsageRange, UsageSource, UsageSummary, UsageTotals } from "@pi-des
 import type { Schedule } from "@pi-desktop/agent-kit/schedule-plan";
 import type { ConnectionState } from "../vendor/shared/api";
 import type { PiSetupView } from "./pi-setup";
+import type { McpCheckResult, McpServerView } from "./mcp";
 
 /**
  * 에이전트 앱의 main ↔ renderer IPC.
@@ -47,6 +48,12 @@ export const IpcChannels = {
   removeRule: "agent:remove-rule",
   listAudit: "agent:list-audit",
   usageSummary: "agent:usage-summary",
+  listMcp: "agent:list-mcp",
+  addMcpPreset: "agent:add-mcp-preset",
+  setMcpEnabled: "agent:set-mcp-enabled",
+  removeMcp: "agent:remove-mcp",
+  checkMcp: "agent:check-mcp",
+  openMcpFile: "agent:open-mcp-file",
   openSession: "agent:open-session",
   listHistory: "agent:list-history",
   searchHistory: "agent:search-history",
@@ -177,6 +184,15 @@ export interface AgentApi {
   listAudit(): Promise<AuditView[]>;
   /** 기간의 사용량 (Pi 세션 파일 + 세션 밖 호출) */
   usageSummary(range: UsageRange): Promise<UsageSummary>;
+  /** Pi 사용자 MCP 설정(mcp.json)의 서버들 */
+  listMcp(): Promise<McpServerView[]>;
+  /** 미리 정한 웹 검색 서버를 넣는다 (키가 필요하면 key) */
+  addMcpPreset(id: string, key?: string): Promise<McpServerView[]>;
+  setMcpEnabled(name: string, enabled: boolean): Promise<McpServerView[]>;
+  removeMcp(name: string): Promise<McpServerView[]>;
+  /** pi mcp list로 연결을 확인한다 */
+  checkMcp(): Promise<McpCheckResult>;
+  openMcpFile(): Promise<void>;
   /** agent-kit 확장을 올린 새 Pi 세션을 연다 */
   /** 새 세션을 연다. forkFrom(세션 파일)을 주면 그 대화를 이어 가는 분기 세션으로 연다 */
   openSession(cwd: string, from?: SessionSource): Promise<SessionSummary>;

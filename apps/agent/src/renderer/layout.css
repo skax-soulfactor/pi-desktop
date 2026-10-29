@@ -708,3 +708,47 @@ code.copy {
   border: 1px solid var(--border);
   line-height: 1;
 }
+
+/* 웹 검색·MCP */
+.mcp-preset,
+.list li:has(.mcp-toggle) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcp-key {
+  width: 220px;
+}
+
+.mcp-toggle {
+  margin: 0;
+}
+
+.mcp-target {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 520px;
+}
+
+.mcp-output {
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.notice-line {
+  padding: 6px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+
+.error-text {
+  color: var(--danger, #d33);
+}

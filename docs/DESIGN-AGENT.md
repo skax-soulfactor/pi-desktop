@@ -112,6 +112,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | 승인 게이트, 정책, 감사, 위험 명령 차단 | 확장 `permissions` | `tool_call`에서 block. 앱이 있으면 풍부한 승인 화면, 없으면 `ctx.ui.select`. `hasUI` false면 거부 |
 | 권한 상승 | 확장 `permissions` | 별도 도구. 사람이 보고 있을 때만 활성 (`setActiveTools`) |
 | 웹 페이지 읽기, 웹 검색 | 확장 `web` + **Pi 기본**(MCP) | `web_fetch`(주소 하나의 본문을 글로)만 만든다. 검색은 Pi 방식대로 검색 MCP 서버(`mcp.json`)에 맡긴다. `web_fetch`는 주소에 데이터를 실어 내보낼 수 있어 "네트워크" 승인(사이트 단위 패턴) |
+| 웹 검색·MCP 설정 화면 | 앱 | Pi의 사용자 MCP 설정(`<Pi 설정 폴더>/mcp.json`)을 고친다. 미리 정한 웹 검색 서버: Exa(원격 `https://mcp.exa.ai/mcp`, 키 없음), Brave(`npx -y @brave/brave-search-mcp-server`, `BRAVE_API_KEY`), Tavily(`npx -y tavily-mcp`, `TAVILY_API_KEY`). 키는 그 서버의 `env`에 넣고 화면으로 다시 보내지 않는다. 켜고 끄기는 `enabled`만, 빼기는 그 서버만 바꾸고 모르는 칸은 둔다. 깨진 파일은 덮어쓰지 않는다. 연결 확인은 `pi mcp list`(세션 없이). 바꾼 설정은 새 대화부터 적용 |
 | 메인/워커 분리, 작업 위임 | 확장 `tasks` | 워커는 확장이 띄우는 자식 `pi --mode rpc`(같은 모델·`-e` 확장·환경). 워커의 다이얼로그는 부모 `ctx.ui`로 넘기고, 완료는 `[작업 알림]` custom message + `triggerTurn`으로 주입 |
 | 예약·주기 작업 | 확장 `schedule` + 데몬의 상주 세션 | Host Agent(Pi Desktop과 공유)는 고치지 않는다. 대신 앱이 데몬에 **스케줄러 세션** 하나를 띄워 두고, 그 세션의 확장이 타이머를 돌려 도래한 예약을 "사람 없는" 워커로 실행한다. 데몬은 돌고 있는 세션이 있으면 꺼지지 않으므로 앱을 닫아도 돈다 (PC를 다시 켜면 앱을 한 번 열어야 다시 돈다) |
 | 지식베이스 (회상·추출·교훈) | 확장 `memory` | `before_agent_start`에서 관련 기억을 프롬프트 섹션으로, `agent_settled`에서 추출. 저장은 Markdown 파일 |
