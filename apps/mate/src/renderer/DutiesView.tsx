@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { DutyDraft, DutyView, Overview, PiSetupView } from "../shared/api";
-import { ModelOptions } from "./PiSetup";
+import { ModelSelect } from "./PiSetup";
 import type { Act } from "./App";
 import {
   defaultTrigger,
@@ -243,13 +243,12 @@ function DutyForm({
         <summary>고급</summary>
         <label>
           모델
-          <input
-            list="duty-models"
+          <ModelSelect
             value={draft.model ?? ""}
-            onChange={(e) => set({ model: e.target.value || undefined })}
-            placeholder={`기본: ${defaultModel}`}
+            onChange={(model) => set({ model: model || undefined })}
+            setup={setup}
+            inheritLabel={`Mate 설정 따르기 (${defaultModel || "Pi 기본 모델"})`}
           />
-          <ModelOptions id="duty-models" setup={setup} />
         </label>
         <label>
           시간 제한(초)

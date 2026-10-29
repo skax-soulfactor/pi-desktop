@@ -41,6 +41,10 @@ export const IpcChannels = {
   installPiDesktop: "mate:install-pi-desktop",
   openPiDesktop: "mate:open-pi-desktop",
   installProgress: "mate:install-progress",
+  updateState: "mate:update-state",
+  updateStateChanged: "mate:update-state-changed",
+  checkForUpdates: "mate:check-for-updates",
+  confirmUpdate: "mate:confirm-update",
   changed: "mate:changed",
 } as const;
 
@@ -52,6 +56,19 @@ export interface DutyView extends Duty {
   queued: boolean;
   /** 변화 계기: 감지해서 실행을 기다리는 변화 */
   pendingChange?: { cause: string; since: number };
+}
+
+/** Mate 자동 업데이트 상태 (Pi Desktop과 같은 모양) */
+export interface UpdateState {
+  /** disabled: 개발·로컬 빌드, idle, checking, none: 최신, available, downloading, downloaded: 다시 시작하면 설치, error */
+  status: "disabled" | "idle" | "checking" | "none" | "available" | "downloading" | "downloaded" | "error";
+  current: string;
+  /** auto: 내려받아 설치(Windows·AppImage), notify: 알리기만(서명 없는 macOS·deb) */
+  mode: "auto" | "notify";
+  version?: string;
+  percent?: number;
+  error?: string;
+  checkedAt?: number;
 }
 
 export interface AutostartView {
@@ -137,6 +154,13 @@ export interface MateApi {
   /** 설치된 Pi Desktop을 연다. 없으면 false */
   openPiDesktop(): Promise<boolean>;
   onInstallProgress(listener: (received: number, total: number) => void): () => void;
+  /** 자동 업데이트 */
+  updateState(): Promise<UpdateState>;
+  /** interactive면 결과를 창으로 알리고, 새 버전이 있으면 업데이트할지 묻는다 */
+  checkForUpdates(interactive?: boolean): Promise<UpdateState>;
+  /** 찾은 새 버전을 받을지 묻는다 (상단 배지) */
+  confirmUpdate(): Promise<void>;
+  onUpdateState(listener: (state: UpdateState) => void): () => void;
   /** Mate 홈의 파일이 바뀌면 불린다. 해제 함수를 돌려준다 */
   onChanged(listener: () => void): () => void;
 }

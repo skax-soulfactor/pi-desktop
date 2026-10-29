@@ -93,13 +93,59 @@ export function PiSetupBanner({
 
 const NPM_INSTALL = "npm install -g @earendil-works/pi-coding-agent";
 
-/** 모델 입력칸에 붙이는 선택지 (쓸 수 있는 모델) */
-export function ModelOptions({ id, setup }: { id: string; setup: PiSetupView | undefined }) {
+const INHERIT = "__inherit__";
+const CUSTOM = "__custom__";
+
+/**
+ * 모델 고르기: 첫 항목은 "따르기"(value가 비어 있음), 그 아래 Pi에서 쓸 수 있는 모델(프로바이더별), 마지막에 직접 입력.
+ * 목록에 없는 값이 들어 있으면 직접 입력 칸을 보인다.
+ */
+export function ModelSelect({
+  value,
+  onChange,
+  setup,
+  inheritLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  setup: PiSetupView | undefined;
+  inheritLabel: string;
+}) {
+  const models = setup?.models ?? [];
+  const known = models.some((m) => `${m.provider}/${m.id}` === value);
+  const [custom, setCustom] = useState(!!value && !known && models.length > 0);
+  // 직접 입력을 골랐으면 값이 비어 있어도 입력 칸을 보인다
+  const selected = custom ? CUSTOM : !value ? INHERIT : known ? value : CUSTOM;
+  const providers = [...new Set(models.map((m) => m.provider))];
   return (
-    <datalist id={id}>
-      {setup?.models.map((m) => (
-        <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`} />
-      ))}
-    </datalist>
+    <div className="row">
+      <select
+        value={selected}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (next === CUSTOM) return setCustom(true);
+          setCustom(false);
+          onChange(next === INHERIT ? "" : next);
+        }}
+      >
+        <option value={INHERIT}>{inheritLabel}</option>
+        {providers.map((provider) => (
+          <optgroup key={provider} label={provider}>
+            {models
+              .filter((m) => m.provider === provider)
+              .map((m) => (
+                <option key={m.id} value={`${m.provider}/${m.id}`}>
+                  {m.id}
+                </option>
+              ))}
+          </optgroup>
+        ))}
+        <option value={CUSTOM}>직접 입력…</option>
+      </select>
+      {selected === CUSTOM && (
+        <input className="grow" value={value} onChange={(e) => onChange(e.target.value.trim())} placeholder="provider/model-id" autoFocus={custom} />
+      )}
+      {!setup && <span className="muted small-text">모델 목록을 불러오는 중…</span>}
+    </div>
   );
 }

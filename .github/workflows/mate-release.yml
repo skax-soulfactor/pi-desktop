@@ -5,7 +5,8 @@
 # Pi Desktop(release.yml, v* 태그)과 섞이지 않게 한다 (설계 DESIGN-MATE.md §0):
 # - 태그 이름이 달라 서로의 워크플로를 깨우지 않는다 ("v*"는 mate-v…와 맞지 않음)
 # - Mate 릴리스는 "Latest"로 표시하지 않는다. Pi Desktop의 자동 업데이트는 Latest 릴리스의 latest.yml을 보기 때문이다
-# - Mate는 아직 자동 업데이트가 없어 latest*.yml을 올리지 않는다
+# - Mate 자동 업데이트용 latest.yml·latest-linux.yml과 blockmap을 함께 올린다. 앱은 릴리스 목록에서 가장 높은 mate-v*를 찾아
+#   그 릴리스의 내려받기 주소에서 읽으므로, Pi Desktop의 latest.yml(Latest 릴리스)과 섞이지 않는다
 # 코드 서명은 하지 않는다.
 name: Mate Release
 
@@ -55,6 +56,8 @@ jobs:
             apps/mate/release/*.dmg
             apps/mate/release/*.AppImage
             apps/mate/release/*.deb
+            apps/mate/release/*.blockmap
+            apps/mate/release/latest*.yml
 
   publish:
     name: GitHub Releases에 올리기
@@ -75,5 +78,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "Pi Desktop Mate ${GITHUB_REF_NAME#mate-}" \
-            --notes "Pi Desktop Mate 설치 파일입니다. Pi Desktop과 별도 앱이며 자동 업데이트는 아직 없습니다. 설명: apps/mate/README.md" \
+            --notes "Pi Desktop Mate 설치 파일입니다. Pi Desktop과 별도 앱입니다. v0.3.0부터 앱 안에서 자동 업데이트됩니다(Windows·AppImage, macOS는 새 버전을 알림). 설명: apps/mate/README.md" \
             --latest=false

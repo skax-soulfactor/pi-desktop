@@ -59,7 +59,8 @@ export async function writeJsonAtomic(path: string, data: unknown): Promise<void
 export async function loadConfig(paths: MatePaths): Promise<MateConfig> {
   const raw = await readJson<Partial<MateConfig>>(paths.config, {});
   return {
-    model: typeof raw.model === "string" && raw.model.trim() ? raw.model.trim() : DEFAULT_CONFIG.model,
+    // 빈 문자열은 "Pi 기본 모델 따르기" (설정 파일에 model이 아예 없으면 Mate 기본값)
+    model: typeof raw.model === "string" ? raw.model.trim() : DEFAULT_CONFIG.model,
     paused: raw.paused === true,
     dailyRunLimit:
       typeof raw.dailyRunLimit === "number" && raw.dailyRunLimit >= 0 ? Math.floor(raw.dailyRunLimit) : DEFAULT_CONFIG.dailyRunLimit,

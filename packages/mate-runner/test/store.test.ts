@@ -42,6 +42,9 @@ describe("store", () => {
       // 활동 관찰은 사용자가 켜야 한다
       observe: { enabled: false, quietMinutes: 5, dailySuggestionLimit: 5, excluded: [] },
     });
+    // 빈 모델은 "Pi 기본 모델 따르기"로 남는다
+    expect((await saveConfig(paths, { model: "" })).model).toBe("");
+    await saveConfig(paths, { model: "anthropic/claude-haiku-5-5" });
     // 관찰 설정은 일부만 바꿔도 나머지가 남는다
     expect((await saveConfig(paths, { observe: { enabled: true } })).observe).toMatchObject({ enabled: true, quietMinutes: 5 });
     expect((await saveConfig(paths, { paused: true })).paused).toBe(true);

@@ -32,7 +32,7 @@ Mate는 이 PC의 Pi로 일한다 (Pi Desktop과 같은 Pi·로그인·모델). 
 
 보고·제안은 파일을 바꾸지 않는다(쓰기 도구를 Pi에 선언하지 않음). 고치기는 사용자 저장소 HEAD에서 만든 별도 git worktree(`~/.pi-desktop-mate/worktrees`, 브랜치 없음) 안만 고칠 수 있고, 적용 전까지 내 작업 폴더는 그대로다.
 bash는 어느 단계든 읽기 명령(git·gh 조회, ls·cat·grep 등)만 통과한다.
-기본 모델은 `anthropic/claude-haiku-5-5`이고 설정에서 바꾼다.
+기본 모델은 `anthropic/claude-haiku-5-5`이고 설정에서 목록으로 바꾼다. **Pi 기본 모델 따르기**를 고르면 Pi Desktop에서 바꾼 기본 모델을 따른다.
 
 알아 둘 것:
 
@@ -52,7 +52,8 @@ bash는 어느 단계든 읽기 명령(git·gh 조회, ls·cat·grep 등)만 통
 ## 설치와 릴리스
 
 - 설치 파일: GitHub Releases의 `mate-v*` 릴리스 (Windows `Pi-Desktop-Mate-Setup-*.exe`, macOS dmg, Linux AppImage/deb). 코드 서명이 없어 처음 실행할 때 경고가 나올 수 있다.
-- Pi Desktop과 별도 앱이다. Mate 릴리스는 GitHub에서 Latest로 표시하지 않아 Pi Desktop 자동 업데이트에 섞이지 않는다. Mate 자동 업데이트는 아직 없다.
+- Pi Desktop과 별도 앱이다. Mate 릴리스는 GitHub에서 Latest로 표시하지 않아 Pi Desktop 자동 업데이트에 섞이지 않는다.
+- **자동 업데이트**(v0.3.0부터): 새 버전이 나오면 상단에 "새 버전" 배지가 뜨고, 누르면 내려받아 다시 시작할 때 설치한다(Windows·AppImage. macOS는 릴리스 페이지 안내). 설정의 "업데이트 확인"으로 바로 확인할 수 있다. v0.2.0 이하는 v0.3.0을 한 번 직접 설치해야 한다.
 - 로컬에서 만들기: `npm run dist -w @pi-desktop/mate` (지금 OS용, 결과는 `apps/mate/release/`)
 
 ## 개발

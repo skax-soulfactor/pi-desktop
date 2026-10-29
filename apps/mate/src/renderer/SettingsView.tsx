@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { AutostartView, Overview, PiSetupView } from "../shared/api";
-import { ModelOptions } from "./PiSetup";
+import type { AutostartView, Overview, PiSetupView, UpdateState } from "../shared/api";
+import { ModelSelect } from "./PiSetup";
 import type { Act } from "./App";
 import { relativeTime } from "./mate-view";
 
@@ -10,11 +10,13 @@ export function SettingsView({
   act,
   setup,
   onRefreshSetup,
+  update,
 }: {
   overview: Overview;
   act: Act;
   setup: PiSetupView | undefined;
   onRefreshSetup: () => void;
+  update: UpdateState | undefined;
 }) {
   const { config, runner } = overview;
   const [model, setModel] = useState(config.model);
@@ -40,16 +42,15 @@ export function SettingsView({
       </label>
       <label>
         기본 모델
-        <input list="config-models" value={model} onChange={(e) => setModel(e.target.value)} placeholder="provider/model-id" />
-        <ModelOptions id="config-models" setup={setup} />
+        <ModelSelect
+          value={model}
+          onChange={setModel}
+          setup={setup}
+          inheritLabel={`Pi 기본 모델 따르기${setup?.piDefaultModel ? ` (지금: ${setup.piDefaultModel})` : ""}`}
+        />
         <span className="muted small-text">
-          임무에서 따로 정하지 않으면 이 모델을 씁니다. 칸을 누르면 Pi에서 쓸 수 있는 모델({setup?.models.length ?? "…"}개)이 나옵니다.
-          {setup?.piDefaultModel && (
-            <>
-              {" "}
-              Pi 기본 모델: <button className="link" onClick={() => setModel(setup.piDefaultModel!)}>{setup.piDefaultModel}</button>
-            </>
-          )}
+          임무에서 따로 정하지 않으면 이 모델을 씁니다. "Pi 기본 모델 따르기"를 고르면 Pi Desktop에서 바꾼 기본 모델을 그대로 씁니다. 목록은
+          로그인한 프로바이더의 모델({setup?.models.length ?? "…"}개)입니다.
         </span>
       </label>
       <label>
@@ -64,7 +65,7 @@ export function SettingsView({
       <div className="row end">
         <button
           className="primary"
-          disabled={!dirty || !model.trim() || !(Number(limit) >= 0) || !(Number(maxCost) >= 0)}
+          disabled={!dirty || !(Number(limit) >= 0) || !(Number(maxCost) >= 0)}
           onClick={() =>
             void act(() =>
               window.mate.saveConfig({ model: model.trim(), dailyRunLimit: Math.floor(Number(limit)), maxCostUsd: Number(maxCost) }),
@@ -95,6 +96,19 @@ export function SettingsView({
         )}
       </div>
 
+      <h2>Mate</h2>
+      <div className="kv">
+        <span>버전</span>
+        <span>{update ? update.current : "…"}</span>
+        <span>업데이트</span>
+        <span>{update ? updateText(update) : "…"}</span>
+      </div>
+      <div className="row">
+        <button disabled={!update || update.status === "disabled"} onClick={() => void act(() => window.mate.checkForUpdates(true))}>
+          업데이트 확인
+        </button>
+      </div>
+
       <h2>실행기</h2>
       <div className="kv">
         <span>상태</span>
@@ -123,4 +137,25 @@ export function SettingsView({
       </p>
     </section>
   );
+}
+
+function updateText(u: UpdateState): string {
+  switch (u.status) {
+    case "disabled":
+      return u.error ?? "확인하지 않음";
+    case "idle":
+      return "곧 확인합니다 (6시간마다)";
+    case "checking":
+      return "확인 중…";
+    case "none":
+      return "최신 버전입니다";
+    case "available":
+      return `새 버전 ${u.version}이(가) 있습니다${u.mode === "notify" ? " (릴리스 페이지에서 내려받기)" : ""}`;
+    case "downloading":
+      return `내려받는 중 ${u.percent ?? 0}%`;
+    case "downloaded":
+      return `${u.version}을(를) 받았습니다. 다시 시작하면 설치합니다`;
+    case "error":
+      return `확인 실패: ${u.error ?? ""}`;
+  }
 }
