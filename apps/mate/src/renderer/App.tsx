@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Overview, PiSetupView } from "../shared/api";
+import type { Overview, PiSetupView, UpdateState } from "../shared/api";
 import { PiSetupBanner } from "./PiSetup";
 import { ActivityView } from "./ActivityView";
 import { DutiesView } from "./DutiesView";
@@ -18,6 +18,11 @@ export function App() {
   const [tab, setTab] = useState<Tab>("inbox");
   const [now, setNow] = useState(Date.now());
   const [setup, setSetup] = useState<PiSetupView>();
+  const [update, setUpdate] = useState<UpdateState>();
+  useEffect(() => {
+    void window.mate.updateState().then(setUpdate);
+    return window.mate.onUpdateState(setUpdate);
+  }, []);
   const checkSetup = useCallback((refresh = false) => {
     void window.mate.piReadiness(refresh).then(setSetup);
   }, []);
@@ -95,6 +100,15 @@ export function App() {
           </button>
         </nav>
         <div className="runner-status" title={runner.pid ? `실행기 pid ${runner.pid}` : undefined}>
+          {update && (update.status === "available" || update.status === "downloading" || update.status === "downloaded") && (
+            <button className="small primary" onClick={() => void act(() => window.mate.confirmUpdate())} disabled={update.status === "downloading"}>
+              {update.status === "downloading"
+                ? `업데이트 받는 중 ${update.percent ?? 0}%`
+                : update.status === "downloaded"
+                  ? `${update.version} 설치하려면 다시 시작`
+                  : `새 버전 ${update.version}`}
+            </button>
+          )}
           {overview.config.paused && <span className="chip warn">일시 정지</span>}
           {runner.alive ? (
             <span className="chip ok">{current ? `${current.name} ${STATUS_LABELS.running}` : "실행기 대기 중"}</span>
@@ -123,7 +137,9 @@ export function App() {
         {tab === "duties" && <DutiesView overview={overview} now={now} act={act} setup={setup} />}
         {tab === "activity" && <ActivityView overview={overview} now={now} act={act} />}
         {tab === "runs" && <RunsView overview={overview} now={now} />}
-        {tab === "settings" && <SettingsView overview={overview} act={act} setup={setup} onRefreshSetup={() => checkSetup(true)} />}
+        {tab === "settings" && (
+          <SettingsView overview={overview} act={act} setup={setup} onRefreshSetup={() => checkSetup(true)} update={update} />
+        )}
       </main>
     </div>
   );
