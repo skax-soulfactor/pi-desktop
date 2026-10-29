@@ -1,3 +1,4 @@
+import type { UpdateState } from "../shared/api";
 import { piSetupIssues, type PiSetupView } from "../shared/pi-setup";
 import { PiDesktopButton } from "./PiSetupBanner";
 
@@ -6,7 +7,17 @@ import { PiDesktopButton } from "./PiSetupBanner";
  * Pi 설치·로그인·프로바이더·모델 같은 Pi 관리는 Pi Desktop에서 한다. 여기서는 상태를 보여 주고 Pi Desktop으로 보낸다.
  * API 키도 Pi Desktop에서 넣는다 (auth.json). 에이전트는 따로 키를 받지 않는다.
  */
-export function SettingsPage({ setup, onRefresh, onError }: { setup?: PiSetupView; onRefresh: () => void; onError: (message: string) => void }) {
+export function SettingsPage({
+  setup,
+  update,
+  onRefresh,
+  onError,
+}: {
+  setup?: PiSetupView;
+  update?: UpdateState;
+  onRefresh: () => void;
+  onError: (message: string) => void;
+}) {
   const issues = setup ? piSetupIssues(setup) : [];
   return (
     <div className="page">
@@ -52,7 +63,43 @@ export function SettingsPage({ setup, onRefresh, onError }: { setup?: PiSetupVie
             {issues.length === 0 && setup && <span className="badge ok">준비됨</span>}
           </div>
         </section>
+
+        <section className="card">
+          <h3>업데이트</h3>
+          <p className="muted">
+            앱을 켜고 20초 뒤와 6시간마다 새 버전을 확인합니다. 묻기 전에는 내려받거나 설치하지 않습니다.
+            {update?.mode === "notify" && " 이 OS에서는 자동 설치가 되지 않아 새 버전을 알리고 릴리스 페이지를 엽니다."}
+          </p>
+          <div className="row">
+            <span>지금 버전 {update?.current ?? "?"}</span>
+            <span className="muted small-text">{updateText(update)}</span>
+            <button className="small" disabled={update?.status === "checking"} onClick={() => void window.piAgent.checkForUpdates(true)}>
+              업데이트 확인
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );
+}
+
+function updateText(update: UpdateState | undefined): string {
+  switch (update?.status) {
+    case "disabled":
+      return update.error ?? "업데이트를 확인하지 않는 실행";
+    case "checking":
+      return "확인 중…";
+    case "none":
+      return "최신 버전";
+    case "available":
+      return `새 버전 ${update.version}`;
+    case "downloading":
+      return `내려받는 중 ${update.percent ?? 0}%`;
+    case "downloaded":
+      return `${update.version} 내려받음 — 다시 시작하면 설치`;
+    case "error":
+      return `확인 실패: ${update.error ?? ""}`;
+    default:
+      return "";
+  }
 }
