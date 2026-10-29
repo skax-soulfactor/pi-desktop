@@ -35,10 +35,13 @@ export async function prepareWorkspace(exec: Exec, dutyCwd: string, worktreesDir
     throw new Error("고치기(act) 단계는 git 저장소에서만 쓸 수 있습니다");
   }
   const base = await git(exec, repo, "rev-parse", "HEAD");
+  // 임무 폴더가 저장소의 어느 하위 폴더인지는 git에게 묻는다. 경로끼리 계산하면 Windows 짧은 이름(RUNNER~1)과
+  // git이 돌려주는 긴 이름이 달라 엉뚱한 상대 경로가 나온다
+  const prefix = await git(exec, dutyCwd, "rev-parse", "--show-prefix");
   await mkdir(worktreesDir, { recursive: true });
   const worktree = join(worktreesDir, runId);
   await git(exec, repo, "worktree", "add", "--detach", worktree, base);
-  return { repo, worktree, base, cwd: join(worktree, relative(repo, resolve(dutyCwd))) };
+  return { repo, worktree, base, cwd: prefix ? join(worktree, prefix.replace(/\/$/, "")) : worktree };
 }
 
 /** 작업 공간의 변경(새 파일 포함)을 모은다. 없으면 undefined */
