@@ -5,6 +5,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { chunkChars, defaultOutputPath, inferMode, splitIntoChunks, type DocumentMode } from "./chunks";
 import { docxText } from "./docx";
+import { pdfText } from "./pdf";
 import { recordUsage } from "../../src/usage";
 import { dataDir } from "../permissions/store";
 
@@ -15,17 +16,17 @@ import { dataDir } from "../permissions/store";
  * Pi 방식으로 한다: 원문은 파일 그대로 두고, 결과도 파일로 남긴다.
  * - transform(번역·교정 등): 조각 결과를 이어 붙여 결과 파일로 쓴다 → permissions가 "쓰기"로 묻는다
  * - reduce(요약·질문 등): 조각마다 필요한 것만 뽑은 뒤 한 번 더 모아 답한다
- * .docx는 본문 글을 뽑아 다룬다. read 도구로 docx를 읽을 수 없으므로, docx를 읽기만 할 때도 이 도구를 쓴다.
+ * .docx·.pdf는 본문 글을 뽑아 다룬다(pdf.ts). read 도구로 읽을 수 없으므로, 읽기만 할 때도 이 도구를 쓴다.
  */
 export default function documents(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "process_document",
     label: "문서 처리",
     description:
-      "창에 다 들어가지 않는 큰 문서(.txt·.md·.docx 등)를 조각으로 나눠 지시대로 처리한다. " +
+      "창에 다 들어가지 않는 큰 문서(.txt·.md·.docx·.pdf 등)를 조각으로 나눠 지시대로 처리한다. " +
       "번역·교정처럼 문서 전체를 바꿔 내놓는 일은 mode=transform(결과를 파일로 쓴다), 요약·질문은 mode=reduce(답을 돌려준다). " +
-      "docx는 read로 읽을 수 없으니 이 도구를 쓴다. 큰 결과를 미리보기만 보고 답하지 말고 이 도구로 전체를 처리하라.",
-    promptSnippet: "process_document: 큰 문서·docx를 조각으로 나눠 번역·요약 등을 처리한다",
+      "docx·pdf는 read로 읽을 수 없으니 읽기만 할 때도 이 도구를 쓴다(스캔한 PDF는 글자가 없어 읽지 못한다). 큰 결과를 미리보기만 보고 답하지 말고 이 도구로 전체를 처리하라.",
+    promptSnippet: "process_document: 큰 문서·docx·pdf를 조각으로 나눠 번역·요약 등을 처리한다",
     parameters: Type.Object({
       path: Type.String({ description: "처리할 문서 경로 (작업 폴더 기준 또는 절대 경로)" }),
       instruction: Type.String({ description: "문서에 할 일 (예: 영어로 번역, 핵심만 다섯 줄로 요약)" }),
@@ -78,8 +79,10 @@ function absolute(cwd: string, path: string): string {
 
 export async function loadDocumentText(path: string): Promise<string> {
   const buffer = await readFile(path);
-  if (extname(path).toLowerCase() === ".docx") return docxText(buffer);
-  if (buffer.subarray(0, 8192).includes(0)) throw new Error(`글이 아닌 파일이라 처리하지 않았다: ${path} (.docx·텍스트만 지원)`);
+  const ext = extname(path).toLowerCase();
+  if (ext === ".docx") return docxText(buffer);
+  if (ext === ".pdf" || buffer.subarray(0, 5).toString("latin1") === "%PDF-") return pdfText(buffer);
+  if (buffer.subarray(0, 8192).includes(0)) throw new Error(`글이 아닌 파일이라 처리하지 않았다: ${path} (.docx·.pdf·텍스트만 지원)`);
   return buffer.toString("utf8");
 }
 

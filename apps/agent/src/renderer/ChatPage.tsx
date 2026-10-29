@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { ChatView } from "../vendor/renderer/ChatView";
 import { StatusLine, Widgets } from "../vendor/renderer/ExtensionUi";
-import { withAttachments } from "./attachments";
+import { acceptsImages, MAX_IMAGE_BYTES, splitAttachments, withAttachments } from "./attachments";
+import type { ImageAttachment } from "../shared/api";
 import { EXAMPLES } from "./examples";
 import { FolderMenu } from "./FolderMenu";
 import type { useAgentSession } from "./use-agent-session";
@@ -47,6 +48,9 @@ export function ChatPage({
   const { session, chat, ui, kit, model, models } = agent;
   const [draft, setDraft] = useState("");
   const [renaming, setRenaming] = useState<string>();
+  /** 메시지와 함께 보낼 이미지 (보내면 비운다) */
+  const [images, setImages] = useState<Array<Required<Pick<ImageAttachment, "name" | "mimeType" | "data">>>>([]);
+  const [attachNote, setAttachNote] = useState<string>();
   const input = useRef<HTMLTextAreaElement>(null);
 
   // 대화가 열리면 바로 입력할 수 있게 한다
@@ -75,10 +79,52 @@ export function ChatPage({
     });
 
   const submit = () => {
-    const message = draft.trim();
+    const message = draft.trim() || (images.length > 0 ? "첨부한 이미지를 봐 주세요." : "");
     if (!message || !session) return;
+    const sending = images;
     setDraft("");
-    guard(() => agent.send(message));
+    setImages([]);
+    setAttachNote(undefined);
+    guard(() => agent.send(message, sending));
+  };
+
+  /** 고른 파일: 이미지는 볼 수 있는 모델이면 함께 보내고, 나머지는 경로를 적는다 */
+  const attach = async (paths: string[]) => {
+    const { images: imagePaths, files } = splitAttachments(paths);
+    const asPaths = acceptsImages(model?.input) ? files : paths;
+    if (asPaths.length > 0) setDraft((prev) => withAttachments(prev, asPaths));
+    if (imagePaths.length === 0) return setAttachNote(undefined);
+    if (!acceptsImages(model?.input)) return setAttachNote("이 모델은 이미지를 볼 수 없어 경로만 붙였습니다. 이미지를 보려면 이미지를 받는 모델로 바꾸세요.");
+    const read = await window.piAgent.readImages(imagePaths);
+    addImages(read);
+  };
+
+  const addImages = (read: ImageAttachment[]) => {
+    const ok = read.filter((i): i is Required<Pick<ImageAttachment, "name" | "mimeType" | "data">> & ImageAttachment => !!i.data);
+    setImages((prev) => [...prev, ...ok.map((i) => ({ name: i.name, mimeType: i.mimeType, data: i.data }))]);
+    const failed = read.filter((i) => !i.data);
+    setAttachNote(failed.length > 0 ? `붙이지 못한 이미지: ${failed.map((i) => `${i.name} (${i.error})`).join(", ")}` : undefined);
+  };
+
+  /** 클립보드의 이미지(화면 캡처 등)를 붙여 넣는다. 글은 그대로 입력창에 들어간다 */
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = [...e.clipboardData.files].filter((file) => file.type.startsWith("image/"));
+    if (files.length === 0 || !session) return;
+    e.preventDefault();
+    if (!acceptsImages(model?.input)) return setAttachNote("이 모델은 이미지를 볼 수 없습니다. 이미지를 받는 모델로 바꾸세요.");
+    void Promise.all(
+      files.map(
+        (file) =>
+          new Promise<ImageAttachment>((resolve) => {
+            const name = file.name || "붙여 넣은 이미지";
+            if (file.size > MAX_IMAGE_BYTES) return resolve({ name, mimeType: file.type, error: "5MB보다 큽니다" });
+            const reader = new FileReader();
+            reader.onload = () => resolve({ name, mimeType: file.type, data: String(reader.result).replace(/^data:[^,]*,/, "") });
+            reader.onerror = () => resolve({ name, mimeType: file.type, error: "읽지 못했습니다" });
+            reader.readAsDataURL(file);
+          }),
+      ),
+    ).then(addImages);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -194,14 +240,28 @@ export function ChatPage({
       )}
 
       <Widgets ui={ui} placement="aboveEditor" />
+      {(images.length > 0 || attachNote) && (
+        <div className="attach-tray">
+          {images.map((image, i) => (
+            <span key={i} className="attach-chip" title={image.name}>
+              <img src={`data:${image.mimeType};base64,${image.data}`} alt={image.name} />
+              <button className="icon-button" title="빼기" onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}>
+                ×
+              </button>
+            </span>
+          ))}
+          {attachNote && <span className="muted small-text">{attachNote}</span>}
+        </div>
+      )}
       <div className="composer">
         <textarea
           ref={input}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           disabled={!session || !connected}
-          placeholder={session ? "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈)" : "먼저 새 대화를 여세요"}
+          placeholder={session ? "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈, 이미지는 붙여 넣기도 됩니다)" : "먼저 새 대화를 여세요"}
         />
         <div className="actions">
           {chat.running && <button onClick={() => guard(agent.abort)}>중지</button>}
@@ -209,14 +269,13 @@ export function ChatPage({
             disabled={!session}
             onClick={() =>
               guard(async () => {
-                const paths = await window.piAgent.pickFiles();
-                setDraft((prev) => withAttachments(prev, paths));
+                await attach(await window.piAgent.pickFiles());
               })
             }
           >
             파일 첨부
           </button>
-          <button className="primary" disabled={!session || !draft.trim()} onClick={submit}>
+          <button className="primary" disabled={!session || (!draft.trim() && images.length === 0)} onClick={submit}>
             보내기
           </button>
         </div>

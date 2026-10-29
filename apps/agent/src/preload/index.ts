@@ -13,6 +13,7 @@ const api: AgentApi = {
   defaultCwd: () => ipcRenderer.invoke(IpcChannels.defaultCwd),
   pickDirectory: () => ipcRenderer.invoke(IpcChannels.pickDirectory),
   pickFiles: () => ipcRenderer.invoke(IpcChannels.pickFiles),
+  readImages: (paths) => ipcRenderer.invoke(IpcChannels.readImages, paths),
   listTasks: () => ipcRenderer.invoke(IpcChannels.listTasks),
   listSchedules: () => ipcRenderer.invoke(IpcChannels.listSchedules),
   setScheduleEnabled: (id, enabled) => ipcRenderer.invoke(IpcChannels.setScheduleEnabled, id, enabled),

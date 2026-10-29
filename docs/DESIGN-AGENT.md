@@ -118,7 +118,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | 사용자 지침·선호 | **Pi 기본** | `AGENTS.md` |
 | 스킬, MCP | **Pi 기본** | `skills/`, `mcp.json` |
 | 큰 입력 처리 | 확장 `documents` | 원문은 파일로, `read`의 offset/limit로 읽기. 분할 요약·번역은 워커 세션 |
-| docx 등 첨부 변환 | 확장 `attachments` | `input` 이벤트에서 변환 후 파일 경로 전달 |
+| 첨부 (문서·PDF·이미지) | 앱 + 확장 `documents` | 문서는 내용 대신 `[첨부] 경로`를 메시지에 적고, 모델이 read(텍스트)나 `process_document`(.docx·.pdf·큰 문서)로 읽는다. PDF는 의존성 없이 `node:zlib`로 읽는다(`documents/pdf.ts`: FlateDecode·객체 스트림·페이지 트리·상속 Resources·ToUnicode CMap. 암호화·스캔 이미지·Form XObject 안 글은 못 읽고 이유를 알린다). 이미지(png·jpeg·gif·webp, 5MB까지)는 모델이 이미지를 받으면(`model.input`) RPC `prompt`의 `images`로 함께 보내고, 받지 못하면 경로로 둔다. 입력창에 붙여 넣은 이미지(화면 캡처)도 같다 |
 | 되묻기 | 확장 `ask-user` | `ask_user` 도구. 선택지가 있으면 `ctx.ui.select`(+"직접 입력"), 없으면 `input`. 바깥을 바꾸지 않아 승인 없이, 사람이 없으면 묻지 못한다고 돌려준다 |
 | 로컬 모델 대응 | 확장 `local-model` + `models.json` | 도구 결과 축소(`tool_result`), 서버 창 크기·사고 지원 실측, 사고 끄기(`reasoning_effort: "none"`), 압축 설정(`compaction.modelOverrides`)을 창에 맞게. 도구 줄이기는 하지 않는다 — Pi 기본 도구가 4개뿐이라 desktop-agent처럼 정의만으로 창을 먹지 않는다 |
 | 반복·제자리 돌기 차단 | 확장 `loop-guard` (+ `permissions`) | `tool_call`에서 같은 조회 반복 차단, `turn_end`에서 문단 반복 감지, 신호가 쌓이면 멈춤. 거부한 호출의 반복은 `permissions`가 다시 묻지 않고 거부 |

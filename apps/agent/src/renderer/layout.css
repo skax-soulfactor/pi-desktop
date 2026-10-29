@@ -673,3 +673,38 @@ code.copy {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 보낼 이미지 미리 보기 */
+.attach-tray {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 0;
+}
+
+.attach-chip {
+  position: relative;
+  display: inline-flex;
+}
+
+.attach-chip img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.attach-chip .icon-button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  line-height: 1;
+}

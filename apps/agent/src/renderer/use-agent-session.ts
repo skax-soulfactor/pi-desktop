@@ -19,6 +19,8 @@ export interface ModelRef {
   provider: string;
   id: string;
   name?: string;
+  /** 받는 입력 (예: ["text", "image"]) */
+  input?: string[];
 }
 
 /** agent-kit이 세션에 올라갔는지 (설계 DESIGN-AGENT.md §2.1) */
@@ -90,10 +92,10 @@ export function useAgentSession() {
   const refreshModel = useCallback(async (sessionId: string) => {
     const state = await api().sendCommand(sessionId, { type: "get_state" });
     const current = (state.data as { model?: ModelRef } | undefined)?.model;
-    setModel(current ? { provider: current.provider, id: current.id, name: current.name } : undefined);
+    setModel(current ? { provider: current.provider, id: current.id, name: current.name, input: current.input } : undefined);
     const available = await api().sendCommand(sessionId, { type: "get_available_models" });
     const list = (available.data as { models?: ModelRef[] } | undefined)?.models ?? [];
-    setModels(list.map((m) => ({ provider: m.provider, id: m.id, name: m.name })));
+    setModels(list.map((m) => ({ provider: m.provider, id: m.id, name: m.name, input: m.input })));
   }, []);
 
   /** 세션에 처음부터 붙는다. 저널 앞부분이 잘렸으면 Pi가 가진 대화 전체로 다시 그린다 */
@@ -189,12 +191,13 @@ export function useAgentSession() {
 
   /** 프롬프트를 보낸다. 응답 중이면 끝난 뒤에 이어서 처리하도록 follow-up으로 넣는다 */
   const send = useCallback(
-    async (message: string) => {
+    async (message: string, images: Array<{ mimeType: string; data: string }> = []) => {
       const current = sessionRef.current;
       if (!current) return;
       const response = await api().sendCommand(current.sessionId, {
         type: "prompt",
         message,
+        ...(images.length > 0 ? { images: images.map((i) => ({ type: "image", data: i.data, mimeType: i.mimeType })) } : {}),
         ...(chat.running ? { streamingBehavior: "followUp" } : {}),
       });
       if (response.success === false) notice("error", String(response.error ?? "보내지 못했습니다"));
