@@ -24,6 +24,11 @@ const input = {
 };
 
 describe("piArgs", () => {
+  it("모델을 정하지 않으면 --model을 넘기지 않아 Pi 기본 모델을 따른다", () => {
+    expect(piArgs(input)).toContain("--model");
+    expect(piArgs({ ...input, model: "" })).not.toContain("--model");
+  });
+
   it("권한 단계에 맞는 도구만 선언하고 지시는 마지막 인자", () => {
     const observe = piArgs(input);
     expect(observe.slice(0, 4)).toEqual(["--mode", "json", "--session-dir", "/h/sessions"]);

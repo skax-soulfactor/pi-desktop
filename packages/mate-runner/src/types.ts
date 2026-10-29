@@ -44,7 +44,7 @@ export interface Duty {
 }
 
 export interface MateConfig {
-  /** provider/id 형식 */
+  /** provider/id 형식. 빈 문자열이면 Pi 기본 모델을 따른다 (--model을 넘기지 않음) */
   model: string;
   /** 켜면 시간표·변화 실행을 하지 않는다 ("지금 실행"은 함) */
   paused: boolean;

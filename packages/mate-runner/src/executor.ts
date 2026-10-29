@@ -72,7 +72,8 @@ export function piArgs(input: RunInput): string[] {
     "--session-dir", input.sessionsDir,
     ...input.extensions.flatMap((e) => ["-e", e]),
     "--tools", profileTools(duty.profile).join(","),
-    "--model", input.model,
+    // 모델을 정하지 않았으면 Pi 기본 모델(settings.json)을 따른다
+    ...(input.model ? ["--model", input.model] : []),
     "--append-system-prompt", mateSystemPrompt(duty, input.cause),
     duty.prompt,
   ];
