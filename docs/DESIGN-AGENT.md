@@ -23,7 +23,7 @@ Pi Desktop이 "설치된 Pi를 그대로 GUI로 쓰는 앱"이라면, Pi Desktop
 | Pi 관리 | 에이전트 앱은 Pi 설치·업데이트·로그인·프로바이더·모델 관리 화면을 두지 않는다. **Pi Desktop이 맡는다** (Mate와 같은 방식). 에이전트는 데몬의 `pi.status`·`pi.models`로 상태를 보여 주고, 문제가 있으면 Pi Desktop을 열거나 Latest 릴리스에서 설치하게 안내한다. 대화 화면에서 바꾸는 모델은 그 대화(세션)에만 적용된다 |
 | Pi Desktop Mate와의 분리 | 같은 저장소의 다른 앱(`apps/mate`, `packages/mate-*`, 별도 세션에서 진행). 폴더·데이터 홈(`~/.pi-desktop-mate`)·개발 포트(Mate 18913, Agent 18912)·태그(`mate-v*`)가 모두 다르다. Agent 작업은 Mate 파일을 고치지 않는다 |
 | Pi Desktop과의 분리 | `apps/desktop`과 루트 README는 고치지 않는다. 겹치는 파일은 `package-lock.json`뿐이다. 작업은 별도 worktree(`../pi-desktop-agent`)의 `feat/agent-*` 브랜치에서 한다 |
-| 릴리스 | **이 저장소(pi-desktop)의 GitHub Releases**에 올린다. Pi Desktop의 `v*`, Pi Desktop Mate의 `mate-v*`와 섞지 않고 `agent-v*` 태그와 별도 워크플로(`.github/workflows/release-agent.yml`)를 쓴다. Agent 릴리스는 **Latest로 표시하지 않는다** (Pi Desktop 자동 업데이트가 Latest 릴리스의 latest.yml을 보기 때문). Agent 자동 업데이트는 아직 없어 latest*.yml을 올리지 않는다. Mate와 같은 방식이다 |
+| 릴리스 | **이 저장소(pi-desktop)의 GitHub Releases**에 올린다. Pi Desktop의 `v*`, Pi Desktop Mate의 `mate-v*`와 섞지 않고 `agent-v*` 태그와 별도 워크플로(`.github/workflows/release-agent.yml`)를 쓴다. Agent 릴리스는 **Latest로 표시하지 않는다** (Pi Desktop 자동 업데이트가 Latest 릴리스의 latest.yml을 보기 때문). **자동 업데이트(v0.1.2~)**: 앱이 릴리스 목록에서 가장 높은 `agent-v*`를 찾아 그 릴리스의 내려받기 주소를 generic 방식으로 쓴다 (Mate와 같은 방식). 릴리스에 latest.yml·latest-linux.yml·blockmap을 함께 올린다. Windows·AppImage는 내려받아 설치, 서명 없는 macOS·deb는 알리기만 |
 | 기존 desktop-agent | 자동 업데이트로 배포된 상태라 그 저장소에서 갈아엎지 않는다. 기능 목록과 설계 근거를 참고하는 용도로만 남긴다 |
 
 ## 1. 핵심 원칙
@@ -100,7 +100,7 @@ P0는 `@desktop` 별칭으로 Pi Desktop 소스를 직접 가져다 썼다. 처�
 | 창 배치 등 앱 전용 상태 | Electron `userData` | DESIGN.md §1과 같은 규칙 |
 
 API 키는 Pi의 방식(`auth.json`, 환경 변수, `models.json`의 `$ENV` 참조)을 따른다.
-평문 저장을 피하고 싶으면 앱의 "API 키" 화면에 저장한다(P3-④). 앱은 Electron `safeStorage`(Windows DPAPI·macOS Keychain·Linux libsecret)로 암호화해 앱 데이터의 `keys.json`에 두고, 새 세션을 열 때만 풀어 Pi 프로세스의 환경 변수로 넘긴다. 내장 프로바이더는 `ANTHROPIC_API_KEY` 같은 이름을 Pi가 그대로 읽고, 커스텀 프로바이더는 `models.json`에서 `"apiKey": "$이름"`으로 참조한다. 암호화를 쓸 수 없는 환경에서는 저장을 거절한다. 세션의 셸 명령도 이 환경을 물려받으므로, 키를 출력하는 명령은 승인 단계에서 걸러야 한다.
+API 키·프로바이더 로그인은 **Pi Desktop**에서 넣는다 (Pi 설정의 auth.json). 에이전트는 따로 키를 받지 않는다. (P3-④에서 만든 OS 키체인 보관은 키 관리를 Pi Desktop 한 곳으로 모으면서 v0.1.2에서 없앴다.)
 
 ## 4. 기능 배치
 
@@ -139,7 +139,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | | **구현 메모 (P3-①)**: `ask_user`·`web_fetch` 도구와 승인 위험도 "네트워크"를 추가. 실제 Pi 계약 테스트로 선택지·직접 입력·네트워크 승인·본문 추출·HTTP 오류를 확인 | |
 | | **구현 메모 (P3-②)**: 기억 하나 = `pi-desktop-agent/memory/<id>.md`(frontmatter `kind`·`created`). SQLite·벡터 대신 사람이 고칠 수 있는 파일. 매 요청 전 `before_agent_start`에서 선호는 늘, 사실·교훈은 요청과 글자 2-gram이 겹치는 것만 골라 `agent_memory` 섹션으로 싣는다(Pi가 시스템 메시지 하나를 고쳐 보내므로 대화에 쌓이지 않음). 로컬 모델은 창의 10%만. 도구 `memory_save`·`memory_forget`(승인 없이, 할 때마다 알림), 명령 `/agent:remember`·`/agent:memories`. 잊은 기억은 `forgotten/`으로 옮겨 되돌릴 수 있다. desktop-agent의 "턴 뒤 LLM으로 기억 뽑기"와 실패 교훈 자동 기록은 아직 옮기지 않았다 | |
 | | **구현 메모 (P3-③)**: `process_document`는 창의 30%(토큰당 2글자) 크기로 문단 경계에서 나눠 조각마다 `ctx.modelRegistry.complete`로 지금 모델을 부른다. transform(번역·교정)은 결과를 `<이름>.result.md`(또는 output)로 쓰고 그 경로로 "쓰기" 승인, reduce(요약·질문)는 조각별로 뽑아 한 번 더 모아 답하며 묻지 않는다. .docx는 의존성 없이 zip에서 `word/document.xml`만 풀어 본문을 뽑는다(PDF는 아직). 앱의 "파일 첨부"는 내용 대신 `[첨부] <경로>`를 메시지에 싣는다. 조각 처리 요청에는 local-model의 사고 끄기가 적용되지 않는다 | |
-| | **구현 메모 (P3-④)**: 앱의 `KeyStore`(safeStorage 암호화, 이름만 표시)와 "API 키" 화면. 새 세션의 `session.open` env로만 넘긴다(§3). P3 완료 — 남은 것: 턴 뒤 기억 뽑기·실패 교훈 자동 기록, PDF, 이미지 첨부 | |
+| | **구현 메모 (P3-④)**: 앱의 `KeyStore`(safeStorage 암호화)와 "API 키" 화면을 만들었으나, v0.1.2에서 키 관리를 Pi Desktop으로 모으며 없앴다(§3) | |
 | **P4 백그라운드** | `tasks`(워커 세션), 스케줄러, 알림 | 앱을 닫아도 예약 작업이 돈다. PR을 나눈다: ① tasks ② 스케줄러 ③ 앱 작업 목록·알림 |
 | | **구현 메모 (P4-①)**: `delegate_task`·`list_tasks`·`cancel_task`. 워커는 자식 Pi(`process.argv`의 cli와 `-e`를 물려받음, `PI_DESKTOP_AGENT_WORKER=1`이라 위임 도구 없음). 승인 제목 첫 줄 끝에 `(작업 <id>)`. 동시 2개, 결과는 대화에 4000자까지(전문은 `tasks/<id>.json`). RPC는 `hasUI`가 늘 true라 사람이 없는 실행은 `PI_DESKTOP_AGENT_UNATTENDED=1`로 알리고 permissions·ask_user가 따른다 | |
 | | **구현 메모 (P4-②)**: 앱이 데몬에 붙을 때마다 `<데몬 홈>/scheduler` 폴더의 세션이 돌고 있는지 보고 없으면 `PI_DESKTOP_AGENT_SCHEDULER=1`로 연다. 그 세션의 schedule 확장이 30초마다 `schedules.json`을 보고 도래한 예약(놓친 것은 한 번)을 사람 없는 워커로 돌려 `tasks/<id>.json`에 남긴다. 대화 세션의 `schedule_task`는 "쓰기"로 승인. dev:mock 앱으로 앱 창을 모두 닫은 뒤에도 예약이 도는 것을 확인했다. PC를 다시 켜면 데몬이 없으므로 앱을 한 번 열어야 다시 돈다(OS 스케줄러 연동은 하지 않음) | |

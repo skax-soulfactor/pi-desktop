@@ -21,9 +21,6 @@ export const IpcChannels = {
   defaultCwd: "agent:default-cwd",
   pickDirectory: "agent:pick-directory",
   pickFiles: "agent:pick-files",
-  listKeys: "agent:list-keys",
-  setKey: "agent:set-key",
-  removeKey: "agent:remove-key",
   listTasks: "agent:list-tasks",
   listSchedules: "agent:list-schedules",
   setScheduleEnabled: "agent:set-schedule-enabled",
@@ -33,6 +30,9 @@ export const IpcChannels = {
   installPiDesktop: "agent:install-pi-desktop",
   listSessions: "agent:list-sessions",
   closeSession: "agent:close-session",
+  updateState: "agent:update-state",
+  checkForUpdates: "agent:check-for-updates",
+  confirmUpdate: "agent:confirm-update",
   listMemories: "agent:list-memories",
   addMemory: "agent:add-memory",
   forgetMemory: "agent:forget-memory",
@@ -50,6 +50,8 @@ export const IpcChannels = {
   uiResolved: "agent:ui-resolved",
   tasksChanged: "agent:tasks-changed",
   installProgress: "agent:install-progress",
+  updateStateChanged: "agent:update-state-changed",
+  menuCommand: "agent:menu-command",
 } as const;
 
 export type { ConnectionState, PiSetupView, Schedule, TaskRecord };
@@ -58,6 +60,22 @@ export type { ConnectionState, PiSetupView, Schedule, TaskRecord };
 export interface AttachResult extends SessionAttachResult {
   events: SessionEventNotification[];
 }
+
+/** 자동 업데이트 상태 (Pi Desktop Mate와 같은 모양) */
+export interface UpdateState {
+  /** disabled: 개발·로컬 빌드, idle, checking, none: 최신, available, downloading, downloaded: 다시 시작하면 설치, error */
+  status: "disabled" | "idle" | "checking" | "none" | "available" | "downloading" | "downloaded" | "error";
+  current: string;
+  /** auto: 내려받아 설치(Windows·AppImage), notify: 알리기만(서명 없는 macOS·deb) */
+  mode: "auto" | "notify";
+  version?: string;
+  percent?: number;
+  error?: string;
+  checkedAt?: number;
+}
+
+/** 사이드바의 대화 하나: 데몬 세션 요약 + Pi 세션 이름 (set_session_name) */
+export type ChatSummary = SessionSummary & { name?: string };
 
 /** 기억 하나 (agent-kit memory/store의 Memory와 같은 모양) */
 export interface MemoryView {
@@ -90,10 +108,6 @@ export interface AgentApi {
   pickDirectory(): Promise<string | undefined>;
   /** 첨부할 파일을 고른다 (여러 개). 취소하면 빈 배열 */
   pickFiles(): Promise<string[]>;
-  /** OS 키체인에 저장한 API 키 이름들 (값은 돌려주지 않는다) */
-  listKeys(): Promise<string[]>;
-  setKey(name: string, value: string): Promise<void>;
-  removeKey(name: string): Promise<void>;
   /** 최근 작업 (대화에서 맡긴 것·예약 실행). 최근 것부터 */
   listTasks(): Promise<TaskRecord[]>;
   listSchedules(): Promise<Schedule[]>;
@@ -105,9 +119,17 @@ export interface AgentApi {
   openPiDesktop(): Promise<boolean>;
   /** Pi Desktop 최신 설치 파일을 내려받아 연다 (확인 창을 띄움) */
   installPiDesktop(): Promise<{ status: "opened" | "cancelled" | "page" }>;
-  /** 데몬에서 돌고 있는 대화 세션 (스케줄러 세션은 뺀다) */
-  listSessions(): Promise<SessionSummary[]>;
+  /** 데몬에서 돌고 있는 대화 세션과 그 이름 (스케줄러 세션은 뺀다) */
+  listSessions(): Promise<ChatSummary[]>;
   closeSession(sessionId: string): Promise<void>;
+  updateState(): Promise<UpdateState>;
+  /** interactive면 결과를 창으로 알리고, 새 버전이 있으면 업데이트할지 묻는다 */
+  checkForUpdates(interactive?: boolean): Promise<UpdateState>;
+  /** 찾은 새 버전을 받을지 묻는다 (사이드바 배지) */
+  confirmUpdate(): Promise<void>;
+  onUpdateState(listener: (state: UpdateState) => void): () => void;
+  /** 앱 메뉴바에서 고른 명령 (app-menu.ts의 MenuCommand) */
+  onMenuCommand(listener: (id: string) => void): () => void;
   listMemories(): Promise<MemoryView[]>;
   addMemory(kind: MemoryView["kind"], text: string): Promise<void>;
   forgetMemory(id: string): Promise<void>;

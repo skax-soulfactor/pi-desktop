@@ -14,23 +14,54 @@ type Session = ReturnType<typeof useAgentSession>;
 export function ChatPage({
   agent,
   connected,
+  title,
+  renameTick,
+  onRenamed,
   onNewChat,
+  onNewChatInFolder,
   guard,
 }: {
   agent: Session;
   connected: boolean;
+  /** 대화 이름 (Pi 세션 이름, 없으면 폴더 이름) */
+  title?: string;
+  /** 바뀔 때마다 이름 입력칸을 연다 (메뉴 F2·사이드바 두 번 누르기) */
+  renameTick: number;
+  onRenamed: () => void;
   /** 새 대화를 연다. folder가 없으면 마지막 폴더 */
   onNewChat: (folder?: string) => Promise<void>;
+  onNewChatInFolder: () => Promise<void>;
   guard: (action: () => Promise<void>) => void;
 }) {
   const { session, chat, ui, kit, model, models } = agent;
   const [draft, setDraft] = useState("");
+  const [renaming, setRenaming] = useState<string>();
   const input = useRef<HTMLTextAreaElement>(null);
 
   // 대화가 열리면 바로 입력할 수 있게 한다
   useEffect(() => {
     if (session) input.current?.focus();
+    setRenaming(undefined);
   }, [session?.sessionId]);
+
+  // 이름 바꾸기 요청이 새로 왔을 때만 연다. 다른 화면에 갔다 돌아와 다시 그려질 때는 열지 않는다
+  const seenRenameTick = useRef(renameTick);
+  useEffect(() => {
+    if (renameTick === seenRenameTick.current) return;
+    seenRenameTick.current = renameTick;
+    if (session) setRenaming(title ?? "");
+  }, [renameTick]);
+
+  /** Pi 세션 이름으로 저장한다 (세션 파일에 남아 Pi Desktop·TUI 목록에도 같은 이름이 보인다) */
+  const saveName = (name: string) =>
+    guard(async () => {
+      setRenaming(undefined);
+      const trimmed = name.trim();
+      if (!session || !trimmed || trimmed === title) return;
+      const response = await window.piAgent.sendCommand(session.sessionId, { type: "set_session_name", name: trimmed });
+      if (response.success === false) throw new Error(String(response.error ?? "이름을 바꾸지 못했습니다"));
+      onRenamed();
+    });
 
   const submit = () => {
     const message = draft.trim();
@@ -61,9 +92,32 @@ export function ChatPage({
       <header className="page-head">
         {session ? (
           <>
-            <span className="chat-folder" title={session.cwd}>
-              📁 {session.cwd}
-            </span>
+            <div className="chat-title">
+              {renaming !== undefined ? (
+                <input
+                  autoFocus
+                  className="rename-input"
+                  value={renaming}
+                  placeholder="대화 이름"
+                  onChange={(e) => setRenaming(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing) saveName(renaming);
+                    if (e.key === "Escape") setRenaming(undefined);
+                  }}
+                  onBlur={() => saveName(renaming)}
+                />
+              ) : (
+                <span className="chat-name">
+                  <strong>{title}</strong>
+                  <button className="icon-button" title="대화 이름 바꾸기 (F2)" onClick={() => setRenaming(title ?? "")}>
+                    ✎
+                  </button>
+                </span>
+              )}
+              <span className="chat-folder muted small-text" title={session.cwd}>
+                📁 {session.cwd}
+              </span>
+            </div>
             <span className="spacer" />
             <select
               className="model-select"
@@ -100,15 +154,7 @@ export function ChatPage({
               <button className="primary" disabled={!connected} onClick={() => guard(() => onNewChat())}>
                 새 대화
               </button>
-              <button
-                disabled={!connected}
-                onClick={() =>
-                  guard(async () => {
-                    const folder = await window.piAgent.pickDirectory();
-                    if (folder) await onNewChat(folder);
-                  })
-                }
-              >
+              <button disabled={!connected} onClick={() => guard(onNewChatInFolder)}>
                 폴더를 골라 새 대화
               </button>
             </div>

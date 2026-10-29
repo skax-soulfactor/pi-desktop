@@ -21,7 +21,6 @@
   padding: 4px 8px 12px;
 }
 
-.nav-item,
 .nav-session {
   text-align: left;
   background: none;
@@ -31,19 +30,8 @@
   cursor: pointer;
 }
 
-.nav-item {
-  padding: 7px 10px;
-}
-
-.nav-item:hover,
 .nav-session:hover {
   background: var(--panel-2);
-}
-
-.nav-item.active {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
-  font-weight: 600;
 }
 
 .nav-section {
@@ -82,6 +70,11 @@
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
+}
+
+.nav-session-title {
+  display: flex;
+  flex-direction: column;
 }
 
 .nav-session > span:first-child {
@@ -372,4 +365,50 @@ code.copy {
 
 .facts dd {
   margin: 0;
+}
+
+/* 대화 머리: 이름(✎로 바꾸기)과 폴더 */
+.chat-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 55%;
+}
+
+.chat-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-folder {
+  max-width: 100%;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.rename-input {
+  min-width: 240px;
+}
+
+/* 대화가 아닌 화면 위의 돌아가기 띠 */
+.back-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
 }

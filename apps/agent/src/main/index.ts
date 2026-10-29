@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from "electron";
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -25,11 +25,12 @@ import { devSessionOverrides } from "../vendor/main/dev-overrides";
 import { HostConnection } from "../vendor/main/host-connection";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";
 import { ReplayCollector } from "../vendor/main/replay-collector";
-import { IpcChannels, type AttachResult, type MemoryView, type RuleView } from "../shared/api";
-import { KeyStore } from "./key-store";
+import { IpcChannels, type AttachResult, type ChatSummary, type MemoryView, type RuleView } from "../shared/api";
 import { findPiDesktop, installPiDesktop, openPiDesktop } from "./pi-desktop";
 import type { PiSetupView } from "../shared/pi-setup";
 import { TaskWatcher } from "./task-watcher";
+import { appMenuTemplate } from "./app-menu";
+import { OWNER, REPO, Updater } from "./updater";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -85,12 +86,12 @@ function schedulerDir(): string {
 
 /**
  * 세션 열기 파라미터. 개발용 덮어쓰기(저장소의 Pi, 격리된 Pi 설정, mock 프로바이더)를 먼저 깔고 agent-kit 확장을 뒤에 붙인다.
- * 키체인에 둔 API 키는 이 세션의 Pi 프로세스 환경으로만 넘긴다 (설계 DESIGN-AGENT.md §3).
+ * API 키·프로바이더 로그인은 Pi Desktop이 Pi 설정(auth.json)에 두므로 여기서 따로 넘기지 않는다 (설계 DESIGN-AGENT.md §0).
  */
-async function sessionParams(cwd: string, keys: KeyStore, extraEnv: Record<string, string> = {}): Promise<SessionOpenParams> {
+async function sessionParams(cwd: string, extraEnv: Record<string, string> = {}): Promise<SessionOpenParams> {
   const overrides = devSessionOverrides();
   const kitArgs = extensionArgs(await extensionEntries(kitDir()));
-  const env = { ...overrides.env, ...keys.env(), ...extraEnv };
+  const env = { ...overrides.env, ...extraEnv };
   return { ...overrides, cwd, piArgs: [...(overrides.piArgs ?? []), ...kitArgs], env };
 }
 
@@ -98,12 +99,12 @@ async function sessionParams(cwd: string, keys: KeyStore, extraEnv: Record<strin
  * 예약을 돌리는 스케줄러 세션을 데몬에 하나 띄워 둔다 (설계 DESIGN-AGENT.md §4 "예약·주기 작업").
  * 데몬은 돌고 있는 세션이 있으면 꺼지지 않으므로, 앱을 닫아도 예약이 돈다. 이미 떠 있으면 아무것도 하지 않는다.
  */
-async function ensureSchedulerSession(connection: HostConnection, keys: KeyStore): Promise<void> {
+async function ensureSchedulerSession(connection: HostConnection): Promise<void> {
   const cwd = schedulerDir();
   const sessions = await connection.request<SessionSummary[]>(Methods.sessionList);
   if (sessions.some((s) => s.cwd === cwd && s.state === "running")) return;
   await mkdir(cwd, { recursive: true });
-  await connection.request<SessionOpenResult>(Methods.sessionOpen, await sessionParams(cwd, keys, { PI_DESKTOP_AGENT_SCHEDULER: "1" }));
+  await connection.request<SessionOpenResult>(Methods.sessionOpen, await sessionParams(cwd, { PI_DESKTOP_AGENT_SCHEDULER: "1" }));
 }
 
 let mainWindow: BrowserWindow | undefined;
@@ -148,7 +149,7 @@ function createConnection(onConnected: () => void): HostConnection {
   });
 }
 
-function registerIpc(connection: HostConnection, keys: KeyStore): void {
+function registerIpc(connection: HostConnection): void {
   ipcMain.handle(IpcChannels.connectionState, () => connection.current);
   ipcMain.handle(IpcChannels.piSetup, async (): Promise<PiSetupView> => {
     // Pi 관리는 Pi Desktop이 맡는다. 여기서는 데몬이 아는 상태를 모아 안내만 한다 (설계 DESIGN-AGENT.md §0)
@@ -183,9 +184,21 @@ function registerIpc(connection: HostConnection, keys: KeyStore): void {
   ipcMain.handle(IpcChannels.listRules, () => loadRules(agentDataDir()));
   ipcMain.handle(IpcChannels.removeRule, (_event, rule: RuleView) => removeRule(agentDataDir(), rule));
   ipcMain.handle(IpcChannels.listAudit, () => loadAudit(agentDataDir(), 100));
-  ipcMain.handle(IpcChannels.listSessions, async () => {
+  ipcMain.handle(IpcChannels.listSessions, async (): Promise<ChatSummary[]> => {
     const sessions = await connection.request<SessionSummary[]>(Methods.sessionList);
-    return sessions.filter((s) => s.state === "running" && s.cwd !== schedulerDir()).sort((a, b) => b.startedAt - a.startedAt);
+    const chats = sessions.filter((s) => s.state === "running" && s.cwd !== schedulerDir()).sort((a, b) => b.startedAt - a.startedAt);
+    // 이름은 Pi 세션 파일에 있다 (set_session_name). 이름을 못 읽어도 목록은 보인다
+    return Promise.all(
+      chats.map(async (s): Promise<ChatSummary> => {
+        try {
+          const state = await connection.request<PiResponse>(Methods.sessionSend, { sessionId: s.sessionId, command: { type: "get_state" } }, 3000);
+          const name = (state.data as { sessionName?: string } | undefined)?.sessionName;
+          return name ? { ...s, name } : s;
+        } catch {
+          return s;
+        }
+      }),
+    );
   });
   ipcMain.handle(IpcChannels.closeSession, async (_event, sessionId: string) => {
     await connection.request(Methods.sessionClose, { sessionId });
@@ -201,9 +214,6 @@ function registerIpc(connection: HostConnection, keys: KeyStore): void {
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? [] : result.filePaths;
   });
-  ipcMain.handle(IpcChannels.listKeys, () => keys.names());
-  ipcMain.handle(IpcChannels.setKey, (_event, name: string, value: string) => keys.set(name, value));
-  ipcMain.handle(IpcChannels.removeKey, (_event, name: string) => keys.remove(name));
   ipcMain.handle(IpcChannels.listTasks, async () => (await loadTasks(tasksDir(agentDataDir()))).slice(0, 30));
   ipcMain.handle(IpcChannels.listSchedules, () => loadSchedules(schedulesPath(agentDataDir())));
   ipcMain.handle(IpcChannels.setScheduleEnabled, async (_event, id: string, enabled: boolean) => {
@@ -213,7 +223,7 @@ function registerIpc(connection: HostConnection, keys: KeyStore): void {
     await updateSchedules(schedulesPath(agentDataDir()), (all) => all.filter((s) => s.id !== id));
   });
   ipcMain.handle(IpcChannels.openSession, async (_event, cwd: string) => {
-    const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, await sessionParams(cwd, keys));
+    const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, await sessionParams(cwd));
     return result.session;
   });
   ipcMain.handle(IpcChannels.attachSession, async (_event, sessionId: string, lastSeq: number) => {
@@ -278,13 +288,37 @@ function createWindow(): void {
 let connection: HostConnection | undefined;
 
 app.whenReady().then(() => {
-  const keys = new KeyStore(join(app.getPath("userData"), "keys.json"), safeStorage);
   const created = createConnection(() => {
     // 실패해도 대화는 쓸 수 있어야 한다. 다음에 다시 붙을 때 다시 시도한다
-    ensureSchedulerSession(created, keys).catch((error: unknown) => console.error("스케줄러 세션을 띄우지 못했다:", error));
+    ensureSchedulerSession(created).catch((error: unknown) => console.error("스케줄러 세션을 띄우지 못했다:", error));
   });
   connection = created;
-  registerIpc(connection, keys);
+  registerIpc(connection);
+
+  // 자동 업데이트 (Pi Desktop Mate와 같은 방식: 가장 높은 agent-v* 릴리스를 generic으로)
+  const updater = new Updater((state) => sendToRenderer(IpcChannels.updateStateChanged, state), () => mainWindow);
+  ipcMain.handle(IpcChannels.updateState, () => updater.current);
+  ipcMain.handle(IpcChannels.checkForUpdates, (_event, interactive?: boolean) => updater.check(interactive === true));
+  ipcMain.handle(IpcChannels.confirmUpdate, () => updater.confirmUpdate());
+  updater.start();
+
+  // 기능 화면은 사이드바가 아니라 메뉴바에서 연다 (app-menu.ts)
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      appMenuTemplate(process.platform, app.isPackaged, {
+        command: (id) => sendToRenderer(IpcChannels.menuCommand, id),
+        checkForUpdates: () => void updater.check(true),
+        openReleases: () => void shell.openExternal(`https://github.com/${OWNER}/${REPO}/releases`),
+        about: () =>
+          void dialog.showMessageBox({
+            type: "info",
+            title: "Pi Desktop Agent 정보",
+            message: `Pi Desktop Agent ${app.getVersion()}`,
+            detail: `Pi를 엔진으로 쓰는 데스크톱 에이전트 (기능은 agent-kit)\nElectron ${process.versions.electron} · Node ${process.versions.node}\nhttps://github.com/${OWNER}/${REPO}`,
+          }),
+      }),
+    ),
+  );
   // Windows 작업 표시줄·알림의 앱 식별자. 설치 프로그램이 만든 바로 가기는 electron-builder의 appId를 쓰므로
   // 같은 값이어야 한다. 다르면 실행 중인 창이 다른 앱으로 묶여 기본 Electron 아이콘이 보인다.
   app.setAppUserModelId("dev.pi-desktop.agent");
