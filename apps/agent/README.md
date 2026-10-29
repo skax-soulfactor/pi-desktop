@@ -31,6 +31,33 @@ npm run dev:mock -w @pi-desktop/agent
 
 설치된 Pi로 실행할 때는 `npm run dev -w @pi-desktop/agent`를 씁니다.
 
+## 설치 파일과 릴리스
+
+```bash
+npm run dist -w @pi-desktop/agent
+```
+
+지금 OS용 설치 파일을 `apps/agent/release/`에 만듭니다 (올리지 않음). 설치본은 Host Agent 번들과 agent-kit 소스를 리소스로 싣고,
+**대상 PC에 설치된 Pi**(`npm install -g @earendil-works/pi-coding-agent`)를 씁니다.
+
+릴리스는 `agent-v`로 시작하는 태그를 올리면 `.github/workflows/release-agent.yml`이 세 OS에서 만들어
+에이전트 전용 배포 저장소 `skax-soulfactor/pi-desktop-agent`에 `v<버전>` 릴리스로 올립니다.
+Pi Desktop의 `v*` 릴리스와 섞지 않기 위해서입니다 (설계 §0).
+
+```bash
+git tag agent-v0.1.0
+```
+
+```bash
+git push origin agent-v0.1.0
+```
+
+처음 한 번 준비할 것:
+- 배포 저장소 `skax-soulfactor/pi-desktop-agent`(공개)를 만든다. 자동 업데이트를 붙일 때 토큰 없이 확인하려면 공개여야 한다.
+- 그 저장소에 쓸 수 있는 토큰(fine-grained: Contents 읽기·쓰기)을 이 저장소의 시크릿 `AGENT_RELEASE_TOKEN`에 넣는다.
+
+Actions 탭에서 "Release Agent"를 손으로 돌리면 만들기만 하고 올리지 않습니다. 코드 서명은 하지 않습니다 (Pi Desktop README "코드 서명"과 같음).
+
 ## 테스트
 
 ```bash
