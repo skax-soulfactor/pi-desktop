@@ -12,6 +12,7 @@ export default function mateProposeExtension(pi: ExtensionAPI): void {
   const inbox = process.env[MATE_ENV.inbox];
   if (!inbox) return;
   const ids = { dutyId: process.env[MATE_ENV.dutyId] ?? "manual", runId: process.env[MATE_ENV.runId] ?? "manual" };
+  const topic = process.env[MATE_ENV.topic];
 
   pi.registerTool(
     defineTool({
@@ -24,6 +25,11 @@ export default function mateProposeExtension(pi: ExtensionAPI): void {
         title: Type.String({ description: "한 줄 제목 (예: CI 실패: unit-tests)" }),
         summary: Type.String({ description: "무엇을 발견했고 무엇을 하면 좋은지 2~3문장" }),
         detail: Type.Optional(Type.String({ description: "근거: 파일·줄, 명령 출력, 제안 패치 (Markdown)" })),
+        followUp: Type.Optional(
+          Type.String({
+            description: "사용자가 \"Mate에게 맡기기\"를 누르면 이 폴더에서 실행할 고치기 지시 (구체적으로). 고칠 일이 아니면 비운다",
+          }),
+        ),
         severity: Type.Optional(
           Type.Union([Type.Literal("info"), Type.Literal("warn"), Type.Literal("action")], {
             description: "info: 참고, warn: 살펴볼 문제, action: 사용자가 할 일",
@@ -32,7 +38,14 @@ export default function mateProposeExtension(pi: ExtensionAPI): void {
       }),
       async execute(_toolCallId, params) {
         const item = makeProposal(
-          { title: params.title, summary: params.summary, detail: params.detail, severity: params.severity as Severity | undefined },
+          {
+            title: params.title,
+            summary: params.summary,
+            detail: params.detail,
+            severity: params.severity as Severity | undefined,
+            ...(topic ? { topic } : {}),
+            ...(params.followUp ? { followUp: { prompt: params.followUp, cwd: process.cwd() } } : {}),
+          },
           ids,
         );
         const added = await appendProposal(inbox, item);

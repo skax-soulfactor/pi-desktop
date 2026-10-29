@@ -8,6 +8,10 @@ export interface ProposalInput {
   summary: string;
   detail?: string;
   severity?: Severity;
+  /** 관찰자 실행이 붙이는 주제 */
+  topic?: string;
+  /** "Mate에게 맡기기"로 실행할 지시와 폴더 */
+  followUp?: { prompt: string; cwd: string };
 }
 
 /** 같은 임무에서 제목과 요약이 같으면 같은 제안으로 본다 (공백 차이는 무시) */
@@ -26,6 +30,8 @@ export function makeProposal(input: ProposalInput, ids: { dutyId: string; runId:
     summary: input.summary.trim(),
     ...(input.detail?.trim() ? { detail: input.detail.trim() } : {}),
     severity: input.severity ?? "info",
+    ...(input.topic ? { topic: input.topic } : {}),
+    ...(input.followUp?.prompt.trim() ? { followUp: { prompt: input.followUp.prompt.trim(), cwd: input.followUp.cwd } } : {}),
     createdAt: now,
   };
 }
