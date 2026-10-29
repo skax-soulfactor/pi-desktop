@@ -109,7 +109,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | 파일 읽기·쓰기, 셸 | **Pi 기본 도구** | `read`/`write`/`edit`/`grep`/`find`/`ls`/`bash`, Windows는 `powershell`도 |
 | 승인 게이트, 정책, 감사, 위험 명령 차단 | 확장 `permissions` | `tool_call`에서 block. 앱이 있으면 풍부한 승인 화면, 없으면 `ctx.ui.select`. `hasUI` false면 거부 |
 | 권한 상승 | 확장 `permissions` | 별도 도구. 사람이 보고 있을 때만 활성 (`setActiveTools`) |
-| HTTP 요청, 웹 검색 | 확장 `web` | `registerTool` |
+| 웹 페이지 읽기, 웹 검색 | 확장 `web` + **Pi 기본**(MCP) | `web_fetch`(주소 하나의 본문을 글로)만 만든다. 검색은 Pi 방식대로 검색 MCP 서버(`mcp.json`)에 맡긴다. `web_fetch`는 주소에 데이터를 실어 내보낼 수 있어 "네트워크" 승인(사이트 단위 패턴) |
 | 메인/워커 분리, 작업 위임 | 확장 `tasks` | 워커는 별도 Pi 세션. 진행은 `onUpdate`, 완료는 `custom_message`로 주입 |
 | 예약·주기 작업 | Host Agent + 확장 `schedule` | 타이머는 앱이 꺼져도 도는 데몬에 둔다. 확장은 등록·조회 도구만 |
 | 지식베이스 (회상·추출·교훈) | 확장 `memory` | `before_agent_start`에서 관련 기억을 프롬프트 섹션으로, `agent_settled`에서 추출. 저장은 Markdown 파일 |
@@ -117,7 +117,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | 스킬, MCP | **Pi 기본** | `skills/`, `mcp.json` |
 | 큰 입력 처리 | 확장 `documents` | 원문은 파일로, `read`의 offset/limit로 읽기. 분할 요약·번역은 워커 세션 |
 | docx 등 첨부 변환 | 확장 `attachments` | `input` 이벤트에서 변환 후 파일 경로 전달 |
-| 되묻기 | 확장 `ask-user` | `ctx.ui.select`/`input`을 도구로 노출 |
+| 되묻기 | 확장 `ask-user` | `ask_user` 도구. 선택지가 있으면 `ctx.ui.select`(+"직접 입력"), 없으면 `input`. 바깥을 바꾸지 않아 승인 없이, 사람이 없으면 묻지 못한다고 돌려준다 |
 | 로컬 모델 대응 | 확장 `local-model` + `models.json` | 도구 결과 축소(`tool_result`), 서버 창 크기·사고 지원 실측, 사고 끄기(`reasoning_effort: "none"`), 압축 설정(`compaction.modelOverrides`)을 창에 맞게. 도구 줄이기는 하지 않는다 — Pi 기본 도구가 4개뿐이라 desktop-agent처럼 정의만으로 창을 먹지 않는다 |
 | 반복·제자리 돌기 차단 | 확장 `loop-guard` (+ `permissions`) | `tool_call`에서 같은 조회 반복 차단, `turn_end`에서 문단 반복 감지, 신호가 쌓이면 멈춤. 거부한 호출의 반복은 `permissions`가 다시 묻지 않고 거부 |
 | 에이전트 네트워크(A2A) | 앱/데몬 + 확장 `peers` | 전송·카드·중계는 앱/데몬, 피어 호출 도구는 확장 |
@@ -133,7 +133,8 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | | **구현 메모 (P1 완료)**: 읽기 도구(read·grep·find·ls)는 묻지 않고, 쓰기(write·edit)·실행(bash·powershell·모르는 도구)은 `ctx.ui.select`로 묻는다. 선택지는 이번만·이 세션에서 계속·항상(규칙 저장)·거부이고, 취소와 시간 초과는 거부다. 위험 명령과 권한 상승은 묻지 않고 막는다. 규칙은 `permissions.json`, 판단은 `audit.jsonl`. 앱은 select 제목의 승인 형식(`agent-kit/approval`)을 읽어 전용 화면을 띄운다. 실제 Pi 계약 테스트(`permissions-real-pi.test.ts`)와 dev:mock 앱에서 허용·거부 흐름을 확인 | |
 | **P2 로컬 모델** | `local-model`, `loop-guard`, 압축 설정 | qwen3.5:9b로 desktop-agent와 같은 시나리오 비교 |
 | | **구현 메모 (P2, 실측 전)**: loop-guard는 실행 단위로 같은 읽기 조회(성공한 것만, 쓰기·실행 성공 시 잊음)와 30자 이상 문단 반복을 세고, 3번 쌓이면 남은 호출을 terminate로 막은 뒤 알리고 멈춘다. permissions는 같은 실행에서 거부한 호출을 다시 묻지 않는다(repeat-deny). local-model은 첫 요청 때 Ollama `/api/ps`·`/api/show`로 실제 창·사고 지원을 묻고 설정과 다르면 알린다. 결과는 창의 1/4(토큰당 3글자 어림)을 넘으면 앞부분만 보내고, read는 범위를 좁혀 다시 읽게, 그 밖은 전문을 `pi-desktop-agent/outputs/`에 남긴다. `/agent:local-setup`은 확인 뒤 창의 25%·35%를 reserve·keepRecent로 저장한다. Ollama를 흉내 낸 스크립트 LLM으로 계약 테스트를 했고, **이 개발 PC에는 Ollama가 없어 qwen3.5:9b 실측은 아직이다** (아래 절차) | |
-| P3 기본 기능 | `memory`, `documents`, `attachments`, `ask-user`, `web`, 키체인 연동 | |
+| **P3 기본 기능** | `memory`, `documents`, `attachments`, `ask-user`, `web`, 키체인 연동 | PR을 기능 단위로 나눈다: ① ask-user·web ② memory ③ documents·attachments ④ 키체인 |
+| | **구현 메모 (P3-①)**: `ask_user`·`web_fetch` 도구와 승인 위험도 "네트워크"를 추가. 실제 Pi 계약 테스트로 선택지·직접 입력·네트워크 승인·본문 추출·HTTP 오류를 확인 | |
 | P4 백그라운드 | `tasks`(워커 세션), 데몬 스케줄러, 알림 | 앱을 닫아도 예약 작업이 돈다 |
 | P5 확장 | `peers`/네트워크, 권한 상승, 배포 설정 | |
 
