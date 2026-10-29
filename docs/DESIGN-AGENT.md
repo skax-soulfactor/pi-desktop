@@ -110,8 +110,8 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | 승인 게이트, 정책, 감사, 위험 명령 차단 | 확장 `permissions` | `tool_call`에서 block. 앱이 있으면 풍부한 승인 화면, 없으면 `ctx.ui.select`. `hasUI` false면 거부 |
 | 권한 상승 | 확장 `permissions` | 별도 도구. 사람이 보고 있을 때만 활성 (`setActiveTools`) |
 | 웹 페이지 읽기, 웹 검색 | 확장 `web` + **Pi 기본**(MCP) | `web_fetch`(주소 하나의 본문을 글로)만 만든다. 검색은 Pi 방식대로 검색 MCP 서버(`mcp.json`)에 맡긴다. `web_fetch`는 주소에 데이터를 실어 내보낼 수 있어 "네트워크" 승인(사이트 단위 패턴) |
-| 메인/워커 분리, 작업 위임 | 확장 `tasks` | 워커는 별도 Pi 세션. 진행은 `onUpdate`, 완료는 `custom_message`로 주입 |
-| 예약·주기 작업 | Host Agent + 확장 `schedule` | 타이머는 앱이 꺼져도 도는 데몬에 둔다. 확장은 등록·조회 도구만 |
+| 메인/워커 분리, 작업 위임 | 확장 `tasks` | 워커는 확장이 띄우는 자식 `pi --mode rpc`(같은 모델·`-e` 확장·환경). 워커의 다이얼로그는 부모 `ctx.ui`로 넘기고, 완료는 `[작업 알림]` custom message + `triggerTurn`으로 주입 |
+| 예약·주기 작업 | 확장 `schedule` + 데몬의 상주 세션 | Host Agent(Pi Desktop과 공유)는 고치지 않는다. 대신 앱이 데몬에 **스케줄러 세션** 하나를 띄워 두고, 그 세션의 확장이 타이머를 돌려 도래한 예약을 "사람 없는" 워커로 실행한다. 데몬은 돌고 있는 세션이 있으면 꺼지지 않으므로 앱을 닫아도 돈다 (PC를 다시 켜면 앱을 한 번 열어야 다시 돈다) |
 | 지식베이스 (회상·추출·교훈) | 확장 `memory` | `before_agent_start`에서 관련 기억을 프롬프트 섹션으로, `agent_settled`에서 추출. 저장은 Markdown 파일 |
 | 사용자 지침·선호 | **Pi 기본** | `AGENTS.md` |
 | 스킬, MCP | **Pi 기본** | `skills/`, `mcp.json` |
@@ -138,7 +138,8 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | | **구현 메모 (P3-②)**: 기억 하나 = `pi-desktop-agent/memory/<id>.md`(frontmatter `kind`·`created`). SQLite·벡터 대신 사람이 고칠 수 있는 파일. 매 요청 전 `before_agent_start`에서 선호는 늘, 사실·교훈은 요청과 글자 2-gram이 겹치는 것만 골라 `agent_memory` 섹션으로 싣는다(Pi가 시스템 메시지 하나를 고쳐 보내므로 대화에 쌓이지 않음). 로컬 모델은 창의 10%만. 도구 `memory_save`·`memory_forget`(승인 없이, 할 때마다 알림), 명령 `/agent:remember`·`/agent:memories`. 잊은 기억은 `forgotten/`으로 옮겨 되돌릴 수 있다. desktop-agent의 "턴 뒤 LLM으로 기억 뽑기"와 실패 교훈 자동 기록은 아직 옮기지 않았다 | |
 | | **구현 메모 (P3-③)**: `process_document`는 창의 30%(토큰당 2글자) 크기로 문단 경계에서 나눠 조각마다 `ctx.modelRegistry.complete`로 지금 모델을 부른다. transform(번역·교정)은 결과를 `<이름>.result.md`(또는 output)로 쓰고 그 경로로 "쓰기" 승인, reduce(요약·질문)는 조각별로 뽑아 한 번 더 모아 답하며 묻지 않는다. .docx는 의존성 없이 zip에서 `word/document.xml`만 풀어 본문을 뽑는다(PDF는 아직). 앱의 "파일 첨부"는 내용 대신 `[첨부] <경로>`를 메시지에 싣는다. 조각 처리 요청에는 local-model의 사고 끄기가 적용되지 않는다 | |
 | | **구현 메모 (P3-④)**: 앱의 `KeyStore`(safeStorage 암호화, 이름만 표시)와 "API 키" 화면. 새 세션의 `session.open` env로만 넘긴다(§3). P3 완료 — 남은 것: 턴 뒤 기억 뽑기·실패 교훈 자동 기록, PDF, 이미지 첨부 | |
-| P4 백그라운드 | `tasks`(워커 세션), 데몬 스케줄러, 알림 | 앱을 닫아도 예약 작업이 돈다 |
+| **P4 백그라운드** | `tasks`(워커 세션), 스케줄러, 알림 | 앱을 닫아도 예약 작업이 돈다. PR을 나눈다: ① tasks ② 스케줄러 ③ 앱 작업 목록·알림 |
+| | **구현 메모 (P4-①)**: `delegate_task`·`list_tasks`·`cancel_task`. 워커는 자식 Pi(`process.argv`의 cli와 `-e`를 물려받음, `PI_DESKTOP_AGENT_WORKER=1`이라 위임 도구 없음). 승인 제목 첫 줄 끝에 `(작업 <id>)`. 동시 2개, 결과는 대화에 4000자까지(전문은 `tasks/<id>.json`). RPC는 `hasUI`가 늘 true라 사람이 없는 실행은 `PI_DESKTOP_AGENT_UNATTENDED=1`로 알리고 permissions·ask_user가 따른다 | |
 | P5 확장 | `peers`/네트워크, 권한 상승, 배포 설정 | |
 
 ## 6. 리스크
