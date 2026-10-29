@@ -1,0 +1,4 @@
+/* 에이전트 앱 전용 스타일. 공통 모양은 Pi Desktop의 styles.css를 쓴다 */
+#root {
+  height: 100vh;
+}

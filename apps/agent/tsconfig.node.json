@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": { "@desktop/*": ["../desktop/src/*"] }
+  },
+  "include": ["electron.vite.config.ts", "src/main", "src/preload", "src/shared", "scripts/*.d.ts"]
+}

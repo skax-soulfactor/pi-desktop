@@ -1,0 +1,27 @@
+{
+  "name": "@pi-desktop/agent-kit",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Pi Desktop Agent의 기능 묶음. Pi 패키지(확장·스킬)라서 터미널 pi에도 설치할 수 있다",
+  "license": "MIT",
+  "keywords": [
+    "pi-package"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./constants": "./src/constants.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/agent-core/index.ts"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.3.0"
+  }
+}
