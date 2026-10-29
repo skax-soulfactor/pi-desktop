@@ -9,14 +9,16 @@ export const MATE_ENV = {
   inbox: "PI_DESKTOP_MATE_INBOX",
   dutyId: "PI_DESKTOP_MATE_DUTY",
   runId: "PI_DESKTOP_MATE_RUN",
+  /** act: write·edit를 허용하는 작업 공간(git worktree) 루트 */
+  writeRoot: "PI_DESKTOP_MATE_WRITE_ROOT",
 } as const;
 
 export const PROPOSE_TOOL = "mate_propose";
 
-/** observe: 읽기만, propose: 읽기 + 제안 (act는 M3) */
-export type MateProfile = "observe" | "propose";
+/** observe: 읽기만, propose: 읽기 + 제안, act: 별도 작업 공간에서 고치고 승인을 기다림 (M3) */
+export type MateProfile = "observe" | "propose" | "act";
 
-export const PROFILES: readonly MateProfile[] = ["observe", "propose"];
+export const PROFILES: readonly MateProfile[] = ["observe", "propose", "act"];
 
 export function isProfile(value: unknown): value is MateProfile {
   return typeof value === "string" && (PROFILES as readonly string[]).includes(value);
@@ -25,15 +27,34 @@ export function isProfile(value: unknown): value is MateProfile {
 /** 권한 단계마다 모델에 선언하는 도구. 실행기는 이 목록으로 `--tools`를 만든다 */
 export function profileTools(profile: MateProfile): string[] {
   const read = ["read", "grep", "find", "ls", "bash"];
-  return profile === "propose" ? [...read, PROPOSE_TOOL] : read;
+  switch (profile) {
+    case "observe":
+      return read;
+    case "propose":
+      return [...read, PROPOSE_TOOL];
+    case "act":
+      return [...read, "edit", "write", PROPOSE_TOOL];
+  }
 }
 
 export type Severity = "info" | "warn" | "action";
 
+/** act 실행이 작업 공간에 남긴 변경 (인박스에서 적용·버리기) */
+export interface ChangeInfo {
+  /** 사용자 저장소 루트 */
+  repo: string;
+  /** git worktree 폴더 (Mate 홈 worktrees/ 안, 브랜치 없이 분리된 HEAD). 변경은 커밋하지 않고 여기 남는다 */
+  worktree: string;
+  /** 작업 공간을 만든 커밋 */
+  base: string;
+  /** 바뀐 파일 (저장소 기준 경로) */
+  files: string[];
+}
+
 /** inbox.jsonl 한 줄. 한 번 쓰면 바꾸지 않는다 (상태는 inbox-state.json) */
 export interface InboxItem {
   id: string;
-  /** 중복 제거용: 임무 + 제목 + 요약 */
+  /** 중복 제거용: 임무 + 제목 + 요약 (act 변경은 임무 + 패치) */
   hash: string;
   dutyId: string;
   runId: string;
@@ -43,4 +64,6 @@ export interface InboxItem {
   detail?: string;
   severity: Severity;
   createdAt: number;
+  /** act 실행의 변경. 있으면 인박스에서 "적용"할 수 있다 */
+  change?: ChangeInfo;
 }
