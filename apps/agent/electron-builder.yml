@@ -1,7 +1,7 @@
 # Pi Desktop Agent 설치 파일 만들기 (설계 DESIGN-AGENT.md §0 "릴리스").
 # 로컬: npm run dist -w @pi-desktop/agent   (지금 OS용, 올리지 않음)
 # 릴리스: agent-v로 시작하는 태그를 올리면 .github/workflows/release-agent.yml이 세 OS에서 만들어
-#        에이전트 전용 배포 저장소(publish)에 올린다. Pi Desktop의 v* 릴리스와 섞이지 않는다.
+#        이 저장소(pi-desktop)의 GitHub Releases에 올린다. Latest로 표시하지 않아 Pi Desktop의 v* 릴리스와 섞이지 않는다.
 appId: dev.pi-desktop.agent
 productName: Pi Desktop Agent
 copyright: Copyright © skax-soulfactor
@@ -40,13 +40,9 @@ extraResources:
 
 npmRebuild: false
 
-# 자동 업데이트·배포 위치. Pi Desktop(skax-soulfactor/pi-desktop)과 같은 Releases를 쓰면 Pi Desktop의
-# 자동 업데이트가 에이전트 릴리스를 최신 버전으로 착각하므로 저장소를 나눈다.
-publish:
-  provider: github
-  owner: skax-soulfactor
-  repo: pi-desktop-agent
-  releaseType: release
+# 자동 업데이트는 아직 없다. latest*.yml·app-update.yml을 만들지 않는다 (Pi Desktop Mate와 같음).
+# 붙일 때는 Pi Desktop의 자동 업데이트(Latest 릴리스를 봄)와 겹치지 않게 별도 피드를 쓴다 (설계 DESIGN-AGENT.md §0).
+publish: null
 
 win:
   target:
@@ -65,8 +61,6 @@ nsis:
 mac:
   target:
     - target: dmg
-      arch: [x64, arm64]
-    - target: zip
       arch: [x64, arm64]
   category: public.app-category.productivity
   artifactName: Pi-Desktop-Agent-${version}-${arch}.${ext}
