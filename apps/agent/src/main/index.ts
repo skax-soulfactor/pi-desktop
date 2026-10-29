@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ import {
   type SessionEventNotification,
   type SessionOpenParams,
   type SessionOpenResult,
+  type SessionSummary,
 } from "@pi-desktop/host-protocol";
 import { extensionArgs, extensionEntries } from "@pi-desktop/agent-kit";
 import { agentBuildId } from "../vendor/main/agent-build";
@@ -50,6 +51,34 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
   app.commandLine.appendSwitch("remote-debugging-port", process.env.PI_DESKTOP_REMOTE_DEBUG_PORT);
 }
 
+/** 데몬에 상주시키는 스케줄러 세션의 작업 폴더. 이 폴더로 연 세션이 있으면 이미 떠 있는 것으로 본다 */
+function schedulerDir(): string {
+  return join(daemonHome(), "scheduler");
+}
+
+/**
+ * 세션 열기 파라미터. 개발용 덮어쓰기(저장소의 Pi, 격리된 Pi 설정, mock 프로바이더)를 먼저 깔고 agent-kit 확장을 뒤에 붙인다.
+ * 키체인에 둔 API 키는 이 세션의 Pi 프로세스 환경으로만 넘긴다 (설계 DESIGN-AGENT.md §3).
+ */
+async function sessionParams(cwd: string, keys: KeyStore, extraEnv: Record<string, string> = {}): Promise<SessionOpenParams> {
+  const overrides = devSessionOverrides();
+  const kitArgs = extensionArgs(await extensionEntries(kitDir()));
+  const env = { ...overrides.env, ...keys.env(), ...extraEnv };
+  return { ...overrides, cwd, piArgs: [...(overrides.piArgs ?? []), ...kitArgs], env };
+}
+
+/**
+ * 예약을 돌리는 스케줄러 세션을 데몬에 하나 띄워 둔다 (설계 DESIGN-AGENT.md §4 "예약·주기 작업").
+ * 데몬은 돌고 있는 세션이 있으면 꺼지지 않으므로, 앱을 닫아도 예약이 돈다. 이미 떠 있으면 아무것도 하지 않는다.
+ */
+async function ensureSchedulerSession(connection: HostConnection, keys: KeyStore): Promise<void> {
+  const cwd = schedulerDir();
+  const sessions = await connection.request<SessionSummary[]>(Methods.sessionList);
+  if (sessions.some((s) => s.cwd === cwd && s.state === "running")) return;
+  await mkdir(cwd, { recursive: true });
+  await connection.request<SessionOpenResult>(Methods.sessionOpen, await sessionParams(cwd, keys, { PI_DESKTOP_AGENT_SCHEDULER: "1" }));
+}
+
 let mainWindow: BrowserWindow | undefined;
 const replays = new ReplayCollector<SessionEventNotification>();
 
@@ -57,7 +86,7 @@ function sendToRenderer(channel: string, payload: unknown): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
 }
 
-function createConnection(): HostConnection {
+function createConnection(onConnected: () => void): HostConnection {
   const script = agentScriptPath();
   const ignore = () => {};
   return new HostConnection({
@@ -72,7 +101,10 @@ function createConnection(): HostConnection {
         agentBuild,
       };
     },
-    onState: (state) => sendToRenderer(IpcChannels.connectionChanged, state),
+    onState: (state) => {
+      sendToRenderer(IpcChannels.connectionChanged, state);
+      if (state.status === "connected") onConnected();
+    },
     onSessionEvent: (n) => {
       replays.capture(n.sessionId, n);
       sendToRenderer(IpcChannels.sessionEvent, n);
@@ -106,13 +138,7 @@ function registerIpc(connection: HostConnection, keys: KeyStore): void {
   ipcMain.handle(IpcChannels.setKey, (_event, name: string, value: string) => keys.set(name, value));
   ipcMain.handle(IpcChannels.removeKey, (_event, name: string) => keys.remove(name));
   ipcMain.handle(IpcChannels.openSession, async (_event, cwd: string) => {
-    // 개발용 덮어쓰기(저장소의 Pi, 격리된 Pi 설정, mock 프로바이더)를 먼저 깔고 agent-kit 확장을 뒤에 붙인다.
-    const overrides = devSessionOverrides();
-    const kitArgs = extensionArgs(await extensionEntries(kitDir()));
-    // 키체인에 둔 API 키는 이 세션의 Pi 프로세스 환경으로만 넘긴다 (설계 DESIGN-AGENT.md §3)
-    const env = { ...overrides.env, ...keys.env() };
-    const params: SessionOpenParams = { ...overrides, cwd, piArgs: [...(overrides.piArgs ?? []), ...kitArgs], env };
-    const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, params);
+    const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, await sessionParams(cwd, keys));
     return result.session;
   });
   ipcMain.handle(IpcChannels.attachSession, async (_event, sessionId: string, lastSeq: number) => {
@@ -170,8 +196,13 @@ function createWindow(): void {
 let connection: HostConnection | undefined;
 
 app.whenReady().then(() => {
-  connection = createConnection();
-  registerIpc(connection, new KeyStore(join(app.getPath("userData"), "keys.json"), safeStorage));
+  const keys = new KeyStore(join(app.getPath("userData"), "keys.json"), safeStorage);
+  const created = createConnection(() => {
+    // 실패해도 대화는 쓸 수 있어야 한다. 다음에 다시 붙을 때 다시 시도한다
+    ensureSchedulerSession(created, keys).catch((error: unknown) => console.error("스케줄러 세션을 띄우지 못했다:", error));
+  });
+  connection = created;
+  registerIpc(connection, keys);
   createWindow();
   connection.start();
 
