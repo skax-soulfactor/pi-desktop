@@ -1,0 +1,34 @@
+{
+  "name": "@pi-desktop/agent",
+  "productName": "Pi Desktop Agent",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Pi를 엔진으로 쓰는 데스크톱 에이전트 (기능은 @pi-desktop/agent-kit)",
+  "author": "skax-soulfactor",
+  "homepage": "https://github.com/skax-soulfactor/pi-desktop",
+  "license": "MIT",
+  "main": "out/main/index.js",
+  "scripts": {
+    "predev": "npm run build -w @pi-desktop/host-agent",
+    "dev": "electron-vite dev",
+    "dev:mock": "node scripts/dev-mock.mjs",
+    "build": "electron-vite build",
+    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json"
+  },
+  "devDependencies": {
+    "@pi-desktop/agent-kit": "*",
+    "@pi-desktop/host-protocol": "*",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "44.9.1",
+    "electron-vite": "^6.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "shiki": "^4.5.0",
+    "vite": "^8.3.4"
+  }
+}
