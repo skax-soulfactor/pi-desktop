@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { folderName, isSameFolder } from "./recent-folders";
 
 /**
@@ -50,15 +43,9 @@ export function FolderMenu({
     const menu = list.current?.getBoundingClientRect();
     if (!anchor || !menu) return;
     const margin = 8;
-    const left = Math.max(
-      margin,
-      Math.min(anchor.left, window.innerWidth - menu.width - margin),
-    );
+    const left = Math.max(margin, Math.min(anchor.left, window.innerWidth - menu.width - margin));
     const below = anchor.bottom + 4;
-    const top =
-      below + menu.height > window.innerHeight - margin
-        ? Math.max(margin, anchor.top - menu.height - 4)
-        : below;
+    const top = below + menu.height > window.innerHeight - margin ? Math.max(margin, anchor.top - menu.height - 4) : below;
     setPlace({ left, top });
   }, [open]);
 
@@ -67,8 +54,7 @@ export function FolderMenu({
     if (!open) return;
     const close = () => setOpen(false);
     const onDown = (e: MouseEvent) => {
-      if (box.current && !box.current.contains(e.target as Node))
-        setOpen(false);
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -109,27 +95,12 @@ export function FolderMenu({
         <div className="folder-menu-list" role="menu" ref={list} style={place}>
           <div className="folder-menu-heading muted small-text">{heading}</div>
           {choices.map((folder) => (
-            <button
-              key={folder}
-              role="menuitem"
-              className="folder-menu-item"
-              title={folder}
-              onClick={() => pick(() => onPick(folder))}
-            >
-              <span>
-                📁{" "}
-                {home && isSameFolder(folder, home)
-                  ? `홈 (${folderName(folder)})`
-                  : folderName(folder)}
-              </span>
+            <button key={folder} role="menuitem" className="folder-menu-item" title={folder} onClick={() => pick(() => onPick(folder))}>
+              <span>📁 {home && isSameFolder(folder, home) ? `홈 (${folderName(folder)})` : folderName(folder)}</span>
               <span className="muted small-text">{folder}</span>
             </button>
           ))}
-          <button
-            role="menuitem"
-            className="folder-menu-item"
-            onClick={() => pick(onBrowse)}
-          >
+          <button role="menuitem" className="folder-menu-item" onClick={() => pick(onBrowse)}>
             <span>다른 폴더…</span>
           </button>
         </div>
