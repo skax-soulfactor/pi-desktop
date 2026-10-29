@@ -89,7 +89,14 @@ describe("실행기 + 실제 Pi", () => {
       await new Promise((r) => setTimeout(r, 100));
       done = (await listRuns(paths)).find((r) => r.dutyId === "echo" && r.status === "done");
     }
-    expect(done).toMatchObject({ reason: "manual", summary: "echo: 상주 확인" });
+    // 실패하면 실행기 로그·기록·상태를 함께 보여 준다 (분리된 프로세스라 출력이 테스트에 남지 않음)
+    const diagnostics = async () =>
+      [
+        await readFile(paths.log, "utf8").catch(() => "(로그 없음)"),
+        JSON.stringify(await listRuns(paths), null, 1),
+        await readFile(paths.state, "utf8").catch(() => "(상태 없음)"),
+      ].join("\n---\n");
+    expect(done, done ? "" : await diagnostics()).toMatchObject({ reason: "manual", summary: "echo: 상주 확인" });
 
     await execFileAsync(process.execPath, [RUNNER, "stop"], { env });
     for (let i = 0; i < 50 && isAlive(first.pid); i++) await new Promise((r) => setTimeout(r, 100));
