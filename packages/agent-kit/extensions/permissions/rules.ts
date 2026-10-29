@@ -1,0 +1,154 @@
+import type { ApprovalRequest, Risk } from "../../src/approval";
+
+/**
+ * 승인 판단의 순수 로직. 파일·프로세스·Pi에 손대지 않으므로 단위 테스트로 확인한다.
+ *
+ * 위험 명령 판별은 desktop-agent의 Permission Gateway에서 실제로 겪은 일을 바탕으로 옮겨 왔다.
+ * 이 목록은 샌드박스가 아니라 사고 방지턱이다 (설계 DESIGN-AGENT.md §1 "승인은 동의 절차").
+ */
+
+export interface Classified {
+  risk: Risk;
+  request?: ApprovalRequest;
+}
+
+/** 바깥을 바꾸지 않는 Pi 기본 도구 */
+const READ_TOOLS = new Set(["read", "grep", "find", "ls"]);
+const SHELL_TOOLS = new Set(["bash", "powershell"]);
+const FILE_TOOLS = new Set(["write", "edit"]);
+
+/** 도구 호출 하나를 위험도와 승인 요청으로 바꾼다. 모르는 도구(다른 확장·MCP)는 실행으로 보고 묻는다 */
+export function classify(toolName: string, input: Record<string, unknown>): Classified {
+  if (READ_TOOLS.has(toolName)) return { risk: "read" };
+  if (SHELL_TOOLS.has(toolName)) {
+    const command = String(input.command ?? "");
+    return {
+      risk: "exec",
+      request: { toolName, risk: "exec", summary: "명령 실행", target: command, pattern: commandPattern(command) },
+    };
+  }
+  if (FILE_TOOLS.has(toolName)) {
+    const path = String(input.path ?? "");
+    return {
+      risk: "write",
+      request: {
+        toolName,
+        risk: "write",
+        summary: toolName === "edit" ? "파일 고치기" : "파일 쓰기",
+        target: path,
+        pattern: folderPattern(path),
+      },
+    };
+  }
+  const target = JSON.stringify(input).slice(0, 500);
+  return { risk: "exec", request: { toolName, risk: "exec", summary: "도구 실행", target, pattern: "*" } };
+}
+
+/** "git status --short" → "git status*" (첫 두 낱말까지) */
+export function commandPattern(command: string): string {
+  const words = command.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "*";
+  return `${words.slice(0, Math.min(2, words.length)).join(" ")}*`;
+}
+
+/** "src/a/b.ts" → "src/a/**" (그 파일이 있는 폴더 아래 전부) */
+export function folderPattern(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const slash = normalized.lastIndexOf("/");
+  return slash < 0 ? "*" : `${normalized.slice(0, slash)}/**`;
+}
+
+/**
+ * 패턴 매칭. `/`가 들어간 패턴은 경로 글롭(`**` 아무 깊이, `*` 한 단계), 아니면 끝의 `*`만 접두사 매칭.
+ * Windows 경로는 `/`로 바꿔 비교한다.
+ */
+export function patternMatches(pattern: string, target: string): boolean {
+  const pat = pattern.replace(/\\/g, "/");
+  const tgt = target.replace(/\\/g, "/");
+  if (pat === "*") return true;
+  if (pat.includes("/")) {
+    const source = pat
+      .split("**")
+      .map((part) => part.split("*").map(escapeRegex).join("[^/]*"))
+      .join(".*");
+    return new RegExp(`^${source}$`, "i").test(tgt);
+  }
+  if (pat.endsWith("*")) return tgt.startsWith(pat.slice(0, -1));
+  return tgt === pat;
+}
+
+function escapeRegex(text: string): string {
+  return text.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export interface Rule {
+  toolName: string;
+  pattern: string;
+  action: "allow" | "deny";
+}
+
+/** 거부 규칙이 먼저, 그다음 허용 규칙. 맞는 것이 없으면 undefined (사람에게 묻는다) */
+export function evaluate(rules: Rule[], toolName: string, target: string): "allow" | "deny" | undefined {
+  const mine = rules.filter((r) => r.toolName === toolName);
+  if (mine.some((r) => r.action === "deny" && patternMatches(r.pattern, target))) return "deny";
+  if (mine.some((r) => r.action === "allow" && patternMatches(r.pattern, target))) return "allow";
+  return undefined;
+}
+
+/**
+ * 셸 문자열에서 "명령 이름이 올 수 있는 자리"만 뽑는다.
+ *
+ * 인용 구간은 데이터이므로 지운다 — `grep -E "shutdown|reboot" log`처럼 인자에 든 낱말 때문에 정상 조회가
+ * 막히는 일이 실제로 있었다. 다만 `sh -c "..."`의 인용 안은 실행될 명령이므로 먼저 꺼내 다시 본다.
+ */
+const SHELL_C_BODY = /\b(?:sh|bash|zsh|dash|ksh)\s+(?:-[a-z]+\s+)*-c\s+(['"])([\s\S]*?)\1/gi;
+const QUOTED = /'[^']*'|"[^"]*"/g;
+const SEPARATORS =
+  /[\n;|&()`]+|\$\(|\bxargs\s+(?:-\S+\s+)*|\s-exec\s+|\b(?:time|nohup|env|nice|watch|sudo|doas|pkexec|runas|command|exec)\s+/gi;
+
+function commandHeads(command: string, depth = 0): string[] {
+  const heads: string[] = [];
+  if (depth < 3) {
+    for (const m of command.matchAll(SHELL_C_BODY)) heads.push(...commandHeads(m[2] ?? "", depth + 1));
+  }
+  const bare = command.replace(SHELL_C_BODY, " ").replace(QUOTED, " ");
+  for (const part of bare.split(SEPARATORS)) {
+    const head = part.trim();
+    if (head) heads.push(head);
+  }
+  return heads;
+}
+
+/** 명령 자리에 왔을 때만 파괴적인 것들 */
+const DESTRUCTIVE_HEAD = [
+  /^(?:shutdown|reboot|poweroff|halt)\b/i,
+  /^systemctl\s+(?:-\S+\s+)*(?:reboot|poweroff|halt|kexec)\b/i,
+  /^init\s+[06]\b/i,
+  /^mkfs(?:\.\S+)?\b/i,
+  /^dd\s+[^|]*\bif=/i,
+  /^rm\s+(?:-[a-z]*\s+)*(?:\/|~\/?$|\/\*)/i,
+  /^format\s+[a-z]:/i,
+  /^del\s+\/[sq]\s+[a-z]:\\/i,
+  /^(?:Stop-Computer|Restart-Computer|Format-Volume)\b/i,
+];
+
+/** 조각내면 형태가 깨져 명령 전체에서 봐야 하는 것 (포크 폭탄) */
+const DESTRUCTIVE_WHOLE = [/:\(\)\s*\{\s*:\|:&\s*\}/];
+
+/**
+ * 권한 상승 시도. 상승 실행은 P5의 별도 도구로만 연다 (설계 §4 "권한 상승").
+ * `su''do`처럼 인용으로 쪼갠 우회도 잡도록 따옴표·백슬래시를 지운 것도 한 번 더 본다.
+ */
+const ELEVATION =
+  /(^|[\s;&|(){}'"`$=])(sudo|doas|pkexec|runas|su)(\s|$)|Start-Process[^|]*-Verb\s+RunAs|with\s+administrator\s+privileges/i;
+
+/** 승인으로도 열 수 없는 명령이면 그 이유, 아니면 undefined */
+export function hardBlockReason(command: string): string | undefined {
+  if (ELEVATION.test(command) || ELEVATION.test(command.replace(/['"\\]/g, ""))) {
+    return "권한 상승(sudo·runas 등)은 이 도구로 실행할 수 없다";
+  }
+  if (DESTRUCTIVE_WHOLE.some((re) => re.test(command)) || commandHeads(command).some((h) => DESTRUCTIVE_HEAD.some((re) => re.test(h)))) {
+    return "시스템을 끄거나 디스크·파일 시스템 전체를 지우는 명령은 실행할 수 없다";
+  }
+  return undefined;
+}
