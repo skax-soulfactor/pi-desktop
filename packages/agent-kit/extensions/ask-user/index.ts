@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { attended } from "../../src/runtime";
 
 /** 선택지 끝에 붙여 사용자가 직접 답을 쓸 수 있게 한다 */
 export const FREE_ANSWER = "직접 입력";
@@ -26,7 +27,7 @@ export default function askUser(pi: ExtensionAPI): void {
     // 질문 창은 한 번에 하나만 띄운다
     executionMode: "sequential",
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      if (!ctx.hasUI) {
+      if (!attended(ctx.hasUI)) {
         throw new Error("지금은 사람이 지켜보지 않는 실행이라 물을 수 없다. 가장 그럴듯한 가정을 밝히고 진행하거나, 할 수 없다고 답하라.");
       }
       const options = (params.options ?? []).map((o) => o.trim()).filter(Boolean).slice(0, 6);

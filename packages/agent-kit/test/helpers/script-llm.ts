@@ -23,12 +23,18 @@ export interface ScriptLlm {
   requests: Array<Record<string, unknown>>;
   /** 다음 실행에 쓸 단계를 바꾼다 */
   setScript(steps: ScriptStep[]): void;
+  /**
+   * 사용자 메시지가 match에 맞는 대화(예: 워커)는 따로 이 단계들로 답한다. 메인 세션과 워커가
+   * 같은 서버에 동시에 요청해도 순서가 섞이지 않게 한다.
+   */
+  route(match: (userText: string) => boolean, steps: ScriptStep[]): void;
   close(): Promise<void>;
 }
 
 export async function startScriptLlm(model: string, ollama: OllamaInfo = {}): Promise<ScriptLlm> {
   const requests: Array<Record<string, unknown>> = [];
   let steps: ScriptStep[] = [];
+  let routes: Array<{ match: (userText: string) => boolean; steps: ScriptStep[] }> = [];
   let callSeq = 0;
 
   const server: Server = createServer(async (req, res) => {
@@ -49,14 +55,20 @@ export async function startScriptLlm(model: string, ollama: OllamaInfo = {}): Pr
       res.writeHead(404).end();
       return;
     }
-    requests.push(JSON.parse(await readBody(req)) as Record<string, unknown>);
+    const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
+    requests.push(body);
+    const userText = ((body.messages as Array<{ role?: string; content?: unknown }> | undefined) ?? [])
+      .filter((m) => m.role === "user")
+      .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)))
+      .join("\n");
+    const queue = routes.find((r) => r.match(userText))?.steps ?? steps;
 
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
     const send = (delta: Record<string, unknown>, finish: string | null = null) =>
       res.write(
         `data: ${JSON.stringify({ id: "s", object: "chat.completion.chunk", created: 0, model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`,
       );
-    const step = steps.shift() ?? { text: "끝" };
+    const step = queue.shift() ?? { text: "끝" };
     if ("tool" in step) {
       const id = `call_${++callSeq}`;
       send({ role: "assistant", tool_calls: [{ index: 0, id, type: "function", function: { name: step.tool, arguments: "" } }] });
@@ -79,6 +91,9 @@ export async function startScriptLlm(model: string, ollama: OllamaInfo = {}): Pr
     requests,
     setScript: (next) => {
       steps = [...next];
+    },
+    route: (match, next) => {
+      routes = [...routes, { match, steps: [...next] }];
     },
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
