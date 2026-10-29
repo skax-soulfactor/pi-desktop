@@ -128,6 +128,10 @@ Workspace = { id, hostId, cwd, title, pinned, lastSessionFile, layout }
 - 탭 하나 = 렌더러의 `Workspace` 하나. 숨긴 탭도 언마운트하지 않아 호스트 연결·세션 구독·확장 UI 상태를 그대로 유지한다.
 - 탭 목록과 활성 탭, 탭별 호스트·마지막 세션은 렌더러 `localStorage`에 저장한다 (`pi-desktop.tabs`, `pi-desktop.tab.<id>.*`). 첫 탭은 기존 키를 그대로 써서 이전 설정이 이어진다. 탭을 닫으면 그 탭의 키를 지우고, Pi 세션은 데몬에서 계속 돈다.
 - 새 탭은 지금 탭의 호스트로 시작하고 최근 세션을 자동으로 열지 않는다.
+- 단일 인스턴스(v0.70, `single-instance.ts`): 설치본은 `app.requestSingleInstanceLock()`을 잡는다. 못 잡은 두 번째 실행은 창·연결기·업데이트 확인 없이 바로 끝나고, 처음 실행이 `second-instance`를 받아 기존 창을 복원·포커스한다(macOS에서 창을 다 닫았으면 새로 연다).
+  - 잠금은 Electron이 userData 폴더마다 잡는다. 그래서 `--user-data-dir`로 격리한 검증용 설치본은 평소 설치본과 함께 뜬다.
+  - 개발 실행은 잠그지 않는다. 개발 실행의 userData가 설치본과 같은 `Pi Desktop`이라, 잠그면 설치본이 떠 있을 때 개발 실행이 바로 끝나고 여러 worktree의 dev:mock도 함께 못 띄운다.
+  - Mate처럼 개발 실행의 userData를 `(dev)`로 옮기지 않았다. 옮기면 개발 실행이 쓰던 SSH 호스트·가져오기·복사 기록을 잃는다.
 - 숨긴 탭이 실행 중→끝남이 되면 "완료", 확장 다이얼로그·끼어들기·열기 선택이 생기면 "입력 필요"를 탭에 표시하고 OS 알림을 띄운다. 탭을 열면 표시를 지운다.
 - 같은 세션을 두 탭에서 열 수 있다. main 프로세스는 attach 중에도 실시간 이벤트를 모든 탭에 보내고, attach 결과의 재생 이벤트와는 seq로 중복을 거른다.
 
