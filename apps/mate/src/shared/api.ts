@@ -16,6 +16,8 @@ export const IpcChannels = {
   readSession: "mate:read-session",
   applyChange: "mate:apply-change",
   discardChange: "mate:discard-change",
+  getAutostart: "mate:get-autostart",
+  setAutostart: "mate:set-autostart",
   changed: "mate:changed",
 } as const;
 
@@ -27,6 +29,12 @@ export interface DutyView extends Duty {
   queued: boolean;
   /** 변화 계기: 감지해서 실행을 기다리는 변화 */
   pendingChange?: { cause: string; since: number };
+}
+
+export interface AutostartView {
+  supported: boolean;
+  enabled: boolean;
+  reason?: string;
 }
 
 /** 실행 세션을 읽기 전용으로 보여 줄 때의 한 줄 */
@@ -80,6 +88,9 @@ export interface MateApi {
   applyChange(itemId: string): Promise<void>;
   /** act 변경과 그 작업 공간을 버린다 */
   discardChange(itemId: string): Promise<void>;
+  /** 로그인할 때 실행기 시작 (설치본만) */
+  getAutostart(): Promise<AutostartView>;
+  setAutostart(enabled: boolean): Promise<AutostartView>;
   /** Mate 홈의 파일이 바뀌면 불린다. 해제 함수를 돌려준다 */
   onChanged(listener: () => void): () => void;
 }

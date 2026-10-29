@@ -31,6 +31,7 @@ import {
   type MateConfig,
 } from "@pi-desktop/mate-runner";
 import { IpcChannels, type DutyDraft, type Overview, type RunnerView } from "../shared/api";
+import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
 import { runnerCommand } from "./runner-process";
 import { parseTranscript } from "./session-transcript";
 
@@ -158,6 +159,8 @@ function registerIpc(): void {
     return runnerView();
   });
   ipcMain.handle(IpcChannels.revealHome, () => shell.openPath(paths.home));
+  ipcMain.handle(IpcChannels.getAutostart, () => getAutostart());
+  ipcMain.handle(IpcChannels.setAutostart, (_e, enabled: boolean) => setAutostart(enabled === true));
   ipcMain.handle(IpcChannels.applyChange, (_e, itemId: string) => applyInboxChange(paths, String(itemId)));
   ipcMain.handle(IpcChannels.discardChange, (_e, itemId: string) => discardInboxChange(paths, String(itemId)));
   ipcMain.handle(IpcChannels.readSession, async (_e, runId: string) => {
@@ -213,10 +216,17 @@ function createWindow(): void {
   else void mainWindow.loadFile(join(here, "../renderer/index.html"));
 }
 
-if (!app.requestSingleInstanceLock()) {
+if (isRunnerOnlyLaunch()) {
+  // 로그인 때 띄운 실행: 창 없이 실행기만 확인하고 끝낸다 (실행기는 분리된 프로세스라 남는다)
+  void app.whenReady().then(async () => {
+    await ensureRunner();
+    app.quit();
+  });
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, argv) => {
+    if (argv.includes(RUNNER_ONLY_ARG)) return;
     if (mainWindow?.isMinimized()) mainWindow.restore();
     mainWindow?.focus();
   });
