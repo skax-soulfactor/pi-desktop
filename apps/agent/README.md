@@ -4,7 +4,7 @@ Pi를 엔진으로 쓰는 데스크톱 에이전트입니다. Pi Desktop과는 *
 [`packages/agent-kit`](../../packages/agent-kit)(확장·스킬)으로 구현합니다.
 
 - 설계: [docs/DESIGN-AGENT.md](../../docs/DESIGN-AGENT.md)
-- 현재 단계: **P1** — 쓰기·실행 도구 승인 (permissions 확장 + 승인 화면)
+- 현재 단계: **P2** — 로컬 모델 대응(local-model)과 제자리 돌기 차단(loop-guard). qwen3.5:9b 실측은 설계 §7 절차로
 
 ## 구조
 

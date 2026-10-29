@@ -1,4 +1,4 @@
-# Pi Desktop Agent — 설계 문서 (v0.2)
+# Pi Desktop Agent — 설계 문서 (v0.3)
 
 > 관련 문서: [Pi Desktop 설계](DESIGN.md) — 이 문서는 그 위에 올라가는 두 번째 앱을 다룬다.
 
@@ -118,8 +118,8 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | 큰 입력 처리 | 확장 `documents` | 원문은 파일로, `read`의 offset/limit로 읽기. 분할 요약·번역은 워커 세션 |
 | docx 등 첨부 변환 | 확장 `attachments` | `input` 이벤트에서 변환 후 파일 경로 전달 |
 | 되묻기 | 확장 `ask-user` | `ctx.ui.select`/`input`을 도구로 노출 |
-| 로컬 모델 대응 | 확장 `local-model` + `models.json` | 도구 결과 축소(`tool_result`), 도구 줄이기, 서버 창 크기 실측. 압축 설정(`reserveTokens`, `keepRecentTokens`)을 창에 맞게 |
-| 반복·제자리 돌기 차단 | 확장 `loop-guard` | `tool_call`에서 반복 조회·거절 무시 차단, `turn_end`에서 문단 반복 감지 |
+| 로컬 모델 대응 | 확장 `local-model` + `models.json` | 도구 결과 축소(`tool_result`), 서버 창 크기·사고 지원 실측, 사고 끄기(`reasoning_effort: "none"`), 압축 설정(`compaction.modelOverrides`)을 창에 맞게. 도구 줄이기는 하지 않는다 — Pi 기본 도구가 4개뿐이라 desktop-agent처럼 정의만으로 창을 먹지 않는다 |
+| 반복·제자리 돌기 차단 | 확장 `loop-guard` (+ `permissions`) | `tool_call`에서 같은 조회 반복 차단, `turn_end`에서 문단 반복 감지, 신호가 쌓이면 멈춤. 거부한 호출의 반복은 `permissions`가 다시 묻지 않고 거부 |
 | 에이전트 네트워크(A2A) | 앱/데몬 + 확장 `peers` | 전송·카드·중계는 앱/데몬, 피어 호출 도구는 확장 |
 | 사용량 | **Pi 기본** | 세션의 `usage` 엔트리를 집계해 화면에 보인다 |
 
@@ -131,7 +131,8 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | | **구현 메모 (P0 완료)**: 실제 Pi 1.3.0 계약 테스트(`packages/agent-kit/test/real-pi.test.ts`)와 dev:mock 앱에서 데몬 연결 → agent-kit 확인 → `/agent:status` 알림 → 스트리밍 응답 → read 도구 카드까지 확인. 프로젝트 신뢰는 묻지 않으므로(RPC) 처음 연 폴더의 `.pi/` 리소스는 건너뛴다. 설치본 묶음(extraResources의 agent-kit·host-agent)은 아직 없음 | |
 | **P1 승인** | `permissions` 확장, 앱 승인 화면, Pi Desktop 모듈 복사(§2.3) | 승인 없이는 쓰기·실행이 일어나지 않는다 |
 | | **구현 메모 (P1 완료)**: 읽기 도구(read·grep·find·ls)는 묻지 않고, 쓰기(write·edit)·실행(bash·powershell·모르는 도구)은 `ctx.ui.select`로 묻는다. 선택지는 이번만·이 세션에서 계속·항상(규칙 저장)·거부이고, 취소와 시간 초과는 거부다. 위험 명령과 권한 상승은 묻지 않고 막는다. 규칙은 `permissions.json`, 판단은 `audit.jsonl`. 앱은 select 제목의 승인 형식(`agent-kit/approval`)을 읽어 전용 화면을 띄운다. 실제 Pi 계약 테스트(`permissions-real-pi.test.ts`)와 dev:mock 앱에서 허용·거부 흐름을 확인 | |
-| P2 로컬 모델 | `local-model`, `loop-guard`, 압축 설정 | qwen3.5:9b로 desktop-agent와 같은 시나리오 비교 |
+| **P2 로컬 모델** | `local-model`, `loop-guard`, 압축 설정 | qwen3.5:9b로 desktop-agent와 같은 시나리오 비교 |
+| | **구현 메모 (P2, 실측 전)**: loop-guard는 실행 단위로 같은 읽기 조회(성공한 것만, 쓰기·실행 성공 시 잊음)와 30자 이상 문단 반복을 세고, 3번 쌓이면 남은 호출을 terminate로 막은 뒤 알리고 멈춘다. permissions는 같은 실행에서 거부한 호출을 다시 묻지 않는다(repeat-deny). local-model은 첫 요청 때 Ollama `/api/ps`·`/api/show`로 실제 창·사고 지원을 묻고 설정과 다르면 알린다. 결과는 창의 1/4(토큰당 3글자 어림)을 넘으면 앞부분만 보내고, read는 범위를 좁혀 다시 읽게, 그 밖은 전문을 `pi-desktop-agent/outputs/`에 남긴다. `/agent:local-setup`은 확인 뒤 창의 25%·35%를 reserve·keepRecent로 저장한다. Ollama를 흉내 낸 스크립트 LLM으로 계약 테스트를 했고, **이 개발 PC에는 Ollama가 없어 qwen3.5:9b 실측은 아직이다** (아래 절차) | |
 | P3 기본 기능 | `memory`, `documents`, `attachments`, `ask-user`, `web`, 키체인 연동 | |
 | P4 백그라운드 | `tasks`(워커 세션), 데몬 스케줄러, 알림 | 앱을 닫아도 예약 작업이 돈다 |
 | P5 확장 | `peers`/네트워크, 권한 상승, 배포 설정 | |
@@ -143,5 +144,19 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | Pi 변경이 빠름 (1.x에서 주 2회 수준 릴리스) | 저장소의 Pi devDependency로 계약 테스트. agent-kit이 쓰는 이벤트만 검사한다 |
 | RPC 확장 UI의 표현력이 낮음 (문자열 선택지 수준) | P1은 승인 정보를 select 제목에 정해진 형식으로 싣고, agent-kit의 같은 함수로 만들고 읽는다. 터미널 pi에서도 그대로 읽힌다. 더 많은 정보가 필요해지면 앱 전용 경로를 검토 |
 | 복사한 Pi Desktop 모듈이 원본과 멀어짐 | 되도록 고치지 않고, 고친 곳에는 `// agent:` 주석. 다시 가져올 때 출처 커밋을 갱신 (vendor/README.md) |
-| Windows 셸 | Pi 기본 `bash`는 Git Bash가 필요하다. 회사 PC를 고려해 `powershell` 도구를 켜는 설정을 P2에서 기본값으로 검토 |
-| 9B 로컬 모델의 지시 따르기 | 엔진을 바꿔도 해결되지 않는다. `loop-guard`처럼 코드로 강제하는 장치를 유지하고 P2에서 측정한다 |
+| Windows 셸 | Pi 기본 `bash`는 Git Bash가 필요하다. `powershell` 도구를 기본으로 켤지는 실측 때 함께 본다 (P2에서는 바꾸지 않음) |
+| 9B 로컬 모델의 지시 따르기 | 엔진을 바꿔도 해결되지 않는다. `loop-guard`처럼 코드로 강제하는 장치를 유지하고, 아래 절차로 측정한다 |
+
+## 7. 로컬 모델 실측 절차 (P2)
+
+Ollama가 있는 PC에서 한다. desktop-agent 실측과 같은 조건(qwen3.5:9b, `OLLAMA_CONTEXT_LENGTH=8192`)으로 맞춘다.
+
+1. `~/.pi/agent/models.json`에 Ollama를 등록한다. 사고 지원 모델이지만 `reasoning`은 두지 않는다(사고 수준 off → local-model이 사고를 끈다).
+   ```json
+   { "providers": { "ollama": { "baseUrl": "http://localhost:11434/v1", "api": "openai-completions", "apiKey": "ollama",
+     "models": [{ "id": "qwen3.5:9b", "contextWindow": 8192 }] } } }
+   ```
+2. 에이전트 앱에서 이 모델로 세션을 열고 아무 말이나 보낸다. 경고가 뜨면 `/agent:local-setup`으로 압축 설정을 저장하고 새 세션을 연다.
+3. desktop-agent에서 실패했던 시나리오를 그대로 돌린다: 디렉터리 목록에 답이 있는데 없는 경로를 다시 찾던 과제, 같은 문단을 되풀이하던 과제, 거부한 명령을 다시 시도하던 과제, 큰 파일 요약.
+4. 볼 것: 감사 로그(`audit.jsonl`)의 repeat-deny, loop-guard 멈춤 알림 횟수, 답이 문장 중간에서 끊기는지, 압축이 매 턴 일어나지 않는지, 응답 시간.
+
