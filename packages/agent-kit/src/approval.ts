@@ -7,7 +7,7 @@
  * 확장은 대상 호스트의 Pi가 jiti로 불러오므로 이 파일은 다른 모듈을 import하지 않는다.
  */
 
-export type Risk = "read" | "write" | "exec";
+export type Risk = "read" | "write" | "exec" | "network";
 
 export interface ApprovalRequest {
   toolName: string;
@@ -32,7 +32,7 @@ export const ApprovalChoice = {
 
 export type ApprovalDecision = keyof typeof ApprovalChoice;
 
-const RISK_LABEL: Record<ApprovalRequest["risk"], string> = { write: "쓰기", exec: "실행" };
+const RISK_LABEL: Record<ApprovalRequest["risk"], string> = { write: "쓰기", exec: "실행", network: "네트워크" };
 
 export function formatApprovalTitle(request: ApprovalRequest): string {
   return [

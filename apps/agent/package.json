@@ -14,7 +14,8 @@
     "dev": "electron-vite dev",
     "dev:mock": "node scripts/dev-mock.mjs",
     "build": "electron-vite build",
-    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json"
+    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@pi-desktop/agent-kit": "*",
