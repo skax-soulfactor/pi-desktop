@@ -135,6 +135,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | | **구현 메모 (P2, 실측 전)**: loop-guard는 실행 단위로 같은 읽기 조회(성공한 것만, 쓰기·실행 성공 시 잊음)와 30자 이상 문단 반복을 세고, 3번 쌓이면 남은 호출을 terminate로 막은 뒤 알리고 멈춘다. permissions는 같은 실행에서 거부한 호출을 다시 묻지 않는다(repeat-deny). local-model은 첫 요청 때 Ollama `/api/ps`·`/api/show`로 실제 창·사고 지원을 묻고 설정과 다르면 알린다. 결과는 창의 1/4(토큰당 3글자 어림)을 넘으면 앞부분만 보내고, read는 범위를 좁혀 다시 읽게, 그 밖은 전문을 `pi-desktop-agent/outputs/`에 남긴다. `/agent:local-setup`은 확인 뒤 창의 25%·35%를 reserve·keepRecent로 저장한다. Ollama를 흉내 낸 스크립트 LLM으로 계약 테스트를 했고, **이 개발 PC에는 Ollama가 없어 qwen3.5:9b 실측은 아직이다** (아래 절차) | |
 | **P3 기본 기능** | `memory`, `documents`, `attachments`, `ask-user`, `web`, 키체인 연동 | PR을 기능 단위로 나눈다: ① ask-user·web ② memory ③ documents·attachments ④ 키체인 |
 | | **구현 메모 (P3-①)**: `ask_user`·`web_fetch` 도구와 승인 위험도 "네트워크"를 추가. 실제 Pi 계약 테스트로 선택지·직접 입력·네트워크 승인·본문 추출·HTTP 오류를 확인 | |
+| | **구현 메모 (P3-②)**: 기억 하나 = `pi-desktop-agent/memory/<id>.md`(frontmatter `kind`·`created`). SQLite·벡터 대신 사람이 고칠 수 있는 파일. 매 요청 전 `before_agent_start`에서 선호는 늘, 사실·교훈은 요청과 글자 2-gram이 겹치는 것만 골라 `agent_memory` 섹션으로 싣는다(Pi가 시스템 메시지 하나를 고쳐 보내므로 대화에 쌓이지 않음). 로컬 모델은 창의 10%만. 도구 `memory_save`·`memory_forget`(승인 없이, 할 때마다 알림), 명령 `/agent:remember`·`/agent:memories`. 잊은 기억은 `forgotten/`으로 옮겨 되돌릴 수 있다. desktop-agent의 "턴 뒤 LLM으로 기억 뽑기"와 실패 교훈 자동 기록은 아직 옮기지 않았다 | |
 | P4 백그라운드 | `tasks`(워커 세션), 데몬 스케줄러, 알림 | 앱을 닫아도 예약 작업이 돈다 |
 | P5 확장 | `peers`/네트워크, 권한 상승, 배포 설정 | |
 

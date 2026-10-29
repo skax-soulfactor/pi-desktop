@@ -12,8 +12,8 @@ export interface Classified {
   request?: ApprovalRequest;
 }
 
-/** 바깥을 바꾸지 않는 도구. Pi 기본 읽기 도구와, 사용자에게 묻기만 하는 ask_user */
-const READ_TOOLS = new Set(["read", "grep", "find", "ls", "ask_user"]);
+/** 바깥을 바꾸지 않는 도구. Pi 기본 읽기 도구, 묻기만 하는 ask_user, 에이전트 자신의 기억만 바꾸는 memory_* (저장할 때마다 알린다) */
+const READ_TOOLS = new Set(["read", "grep", "find", "ls", "ask_user", "memory_save", "memory_forget"]);
 /** 바깥으로 요청을 보내는 도구. 주소에 데이터를 실어 내보낼 수 있으므로 묻는다 */
 const NETWORK_TOOLS = new Set(["web_fetch"]);
 const SHELL_TOOLS = new Set(["bash", "powershell"]);
