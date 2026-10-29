@@ -39,6 +39,7 @@ import { IpcChannels, type DutyDraft, type Overview, type PiReadiness, type PiSe
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
 import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
 import { runnerCommand } from "./runner-process";
+import { Updater } from "./updater";
 import { parseTranscript } from "./session-transcript";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -316,6 +317,18 @@ if (isRunnerOnlyLaunch()) {
     createWindow();
     const watcher = watchHome();
     app.on("will-quit", () => watcher?.close());
+    // 자동 업데이트: 설치 직전에는 실행기를 멈춘다 (실행기가 Electron을 Node로 쓰는 경우 설치 파일을 잡고 있지 않게)
+    const updater = new Updater(
+      (state) => mainWindow?.webContents.send(IpcChannels.updateStateChanged, state),
+      () => mainWindow,
+      async () => {
+        await runnerCommand(runnerScript(), "stop", runnerEnv());
+      },
+    );
+    ipcMain.handle(IpcChannels.updateState, () => updater.current);
+    ipcMain.handle(IpcChannels.checkForUpdates, (_e, interactive: boolean) => updater.check(interactive === true));
+    ipcMain.handle(IpcChannels.confirmUpdate, () => updater.confirmUpdate());
+    updater.start();
     // 창을 먼저 띄우고 실행기를 확인한다. 실행기는 앱을 닫아도 남는다.
     await ensureRunner();
     mainWindow?.webContents.send(IpcChannels.changed);
