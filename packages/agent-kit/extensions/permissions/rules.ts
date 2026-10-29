@@ -26,6 +26,8 @@ const READ_TOOLS = new Set([
   "delegate_task",
   "list_tasks",
   "cancel_task",
+  "list_schedules",
+  "cancel_schedule",
 ]);
 /** 바깥으로 요청을 보내는 도구. 주소에 데이터를 실어 내보낼 수 있으므로 묻는다 */
 const NETWORK_TOOLS = new Set(["web_fetch"]);
@@ -61,6 +63,12 @@ export function classify(toolName: string, input: Record<string, unknown>): Clas
     if (mode === "reduce") return { risk: "read" };
     const output = String(input.output ?? defaultOutputPath(String(input.path ?? "")));
     return { risk: "write", request: { toolName, risk: "write", summary: "문서 처리 결과 쓰기", target: output, pattern: folderPattern(output) } };
+  }
+  if (toolName === "schedule_task") {
+    // 앞으로 사람 없이 되풀이될 실행을 남기는 일이라 묻는다 (실행 자체는 쓰기·실행이 거부된 채 돈다)
+    const when = input.kind === "once" ? `한 번 ${String(input.at ?? "")}` : input.kind === "interval" ? `${String(input.minutes ?? "")}분마다` : `매일 ${String(input.time ?? "")}`;
+    const target = `${when}: ${String(input.instruction ?? "")}`;
+    return { risk: "write", request: { toolName, risk: "write", summary: "예약 등록", target, pattern: "*" } };
   }
   if (NETWORK_TOOLS.has(toolName)) {
     const url = String(input.url ?? "");
