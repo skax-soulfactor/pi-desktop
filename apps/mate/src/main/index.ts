@@ -57,6 +57,10 @@ function runnerEnv(): Record<string, string> {
   return { MATE_HOME: paths.home, PI_DESKTOP_MATE_KIT: kitDir() };
 }
 
+// 개발 실행은 설치본과 userData(창 상태·단일 인스턴스 잠금)를 나눈다.
+// 같으면 설치본이 켜져 있을 때 개발 실행이 잠금에 걸려 바로 끝나고, 설치본 창을 앞으로 불러낸다.
+if (!app.isPackaged) app.setPath("userData", join(app.getPath("appData"), "Pi Desktop Mate (dev)"));
+
 // 개발·E2E 검증용 Chrome DevTools Protocol. 설치본은 환경 변수로 열지 않는다 (Pi Desktop과 같은 이유).
 if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
   app.commandLine.appendSwitch("remote-debugging-port", process.env.PI_DESKTOP_REMOTE_DEBUG_PORT);
