@@ -6,3 +6,4 @@ export { changeReadyAt, isDue, nextRunAt, parseTime } from "./schedule";
 export { findSessionFile, isAlive, readPid } from "./daemon";
 export { pollCommandError } from "./watchers";
 export { applyInboxChange, discardInboxChange } from "./inbox-change";
+export type { PiReadiness } from "./pi-readiness";
