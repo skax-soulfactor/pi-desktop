@@ -12,16 +12,10 @@ Pi를 업데이트하면 앱도 그대로 따라갑니다.
 apps/desktop/          Electron 앱 (main · preload · React 렌더러)
 packages/host-protocol 앱 ↔ Host Agent 메시지 형식 (JSONL, JSON-RPC 2.0)
 packages/host-agent    대상 호스트에서 도는 상주 데몬(agentd)과 연결기(connect)
-apps/agent/            Pi Desktop Agent: Pi를 엔진으로 쓰는 데스크톱 에이전트 (P0)
-packages/agent-kit     에이전트 기능 묶음 (Pi 패키지: 확장·스킬)
 ```
 
 앱은 `host-agent connect`를 띄워 데몬에 붙고, 데몬이 `pi --mode rpc` 프로세스와 이벤트 저널을 소유합니다.
 그래서 앱을 닫아도 Pi는 계속 작업하고, 다시 열면 놓친 이벤트를 재생해 이어서 보여줍니다 (설계 §3.4).
-
-Pi Desktop Agent는 같은 Host Agent를 데몬 홈만 나눠(`~/.pi-desktop-agent`) 쓰고, 세션을 열 때 agent-kit 확장을 `-e`로 올립니다.
-설계는 [docs/DESIGN-AGENT.md](docs/DESIGN-AGENT.md)에 있습니다. API 키 없이 실행해 보려면 `npm run dev:mock -w @pi-desktop/agent`를 씁니다
-(mock LLM 포트 18912, 프롬프트 `/agent:status`로 agent-kit 확인).
 
 ## 설치와 업데이트
 
