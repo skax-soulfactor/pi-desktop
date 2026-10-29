@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from "electron";
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -25,10 +25,12 @@ import { devSessionOverrides } from "../vendor/main/dev-overrides";
 import { HostConnection } from "../vendor/main/host-connection";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";
 import { ReplayCollector } from "../vendor/main/replay-collector";
-import { IpcChannels, type AttachResult, type MemoryView, type RuleView } from "../shared/api";
+import { IpcChannels, type AttachResult, type ChatSummary, type MemoryView, type RuleView } from "../shared/api";
 import { findPiDesktop, installPiDesktop, openPiDesktop } from "./pi-desktop";
 import type { PiSetupView } from "../shared/pi-setup";
 import { TaskWatcher } from "./task-watcher";
+import { appMenuTemplate } from "./app-menu";
+import { OWNER, REPO, Updater } from "./updater";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -182,9 +184,21 @@ function registerIpc(connection: HostConnection): void {
   ipcMain.handle(IpcChannels.listRules, () => loadRules(agentDataDir()));
   ipcMain.handle(IpcChannels.removeRule, (_event, rule: RuleView) => removeRule(agentDataDir(), rule));
   ipcMain.handle(IpcChannels.listAudit, () => loadAudit(agentDataDir(), 100));
-  ipcMain.handle(IpcChannels.listSessions, async () => {
+  ipcMain.handle(IpcChannels.listSessions, async (): Promise<ChatSummary[]> => {
     const sessions = await connection.request<SessionSummary[]>(Methods.sessionList);
-    return sessions.filter((s) => s.state === "running" && s.cwd !== schedulerDir()).sort((a, b) => b.startedAt - a.startedAt);
+    const chats = sessions.filter((s) => s.state === "running" && s.cwd !== schedulerDir()).sort((a, b) => b.startedAt - a.startedAt);
+    // 이름은 Pi 세션 파일에 있다 (set_session_name). 이름을 못 읽어도 목록은 보인다
+    return Promise.all(
+      chats.map(async (s): Promise<ChatSummary> => {
+        try {
+          const state = await connection.request<PiResponse>(Methods.sessionSend, { sessionId: s.sessionId, command: { type: "get_state" } }, 3000);
+          const name = (state.data as { sessionName?: string } | undefined)?.sessionName;
+          return name ? { ...s, name } : s;
+        } catch {
+          return s;
+        }
+      }),
+    );
   });
   ipcMain.handle(IpcChannels.closeSession, async (_event, sessionId: string) => {
     await connection.request(Methods.sessionClose, { sessionId });
@@ -280,6 +294,31 @@ app.whenReady().then(() => {
   });
   connection = created;
   registerIpc(connection);
+
+  // 자동 업데이트 (Pi Desktop Mate와 같은 방식: 가장 높은 agent-v* 릴리스를 generic으로)
+  const updater = new Updater((state) => sendToRenderer(IpcChannels.updateStateChanged, state), () => mainWindow);
+  ipcMain.handle(IpcChannels.updateState, () => updater.current);
+  ipcMain.handle(IpcChannels.checkForUpdates, (_event, interactive?: boolean) => updater.check(interactive === true));
+  ipcMain.handle(IpcChannels.confirmUpdate, () => updater.confirmUpdate());
+  updater.start();
+
+  // 기능 화면은 사이드바가 아니라 메뉴바에서 연다 (app-menu.ts)
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      appMenuTemplate(process.platform, app.isPackaged, {
+        command: (id) => sendToRenderer(IpcChannels.menuCommand, id),
+        checkForUpdates: () => void updater.check(true),
+        openReleases: () => void shell.openExternal(`https://github.com/${OWNER}/${REPO}/releases`),
+        about: () =>
+          void dialog.showMessageBox({
+            type: "info",
+            title: "Pi Desktop Agent 정보",
+            message: `Pi Desktop Agent ${app.getVersion()}`,
+            detail: `Pi를 엔진으로 쓰는 데스크톱 에이전트 (기능은 agent-kit)\nElectron ${process.versions.electron} · Node ${process.versions.node}\nhttps://github.com/${OWNER}/${REPO}`,
+          }),
+      }),
+    ),
+  );
   // Windows 작업 표시줄·알림의 앱 식별자. 설치 프로그램이 만든 바로 가기는 electron-builder의 appId를 쓰므로
   // 같은 값이어야 한다. 다르면 실행 중인 창이 다른 앱으로 묶여 기본 Electron 아이콘이 보인다.
   app.setAppUserModelId("dev.pi-desktop.agent");
