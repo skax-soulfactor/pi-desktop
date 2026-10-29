@@ -41,7 +41,7 @@ describe("store", () => {
 
   it("임무를 검사해 저장하고, 간격은 15분보다 짧게 못 한다", async () => {
     expect(normalizeDuty({ ...raw, id: "../x" })).toMatch(/id/);
-    expect(normalizeDuty({ ...raw, profile: "act" })).toMatch(/권한/);
+    expect(normalizeDuty({ ...raw, profile: "root" })).toMatch(/권한/);
     expect(normalizeDuty({ ...raw, trigger: { kind: "daily", time: "25:00" } })).toMatch(/실행 시점/);
     const saved = await saveDuty(paths, { ...raw, trigger: { kind: "interval", minutes: 1 } });
     expect(saved.trigger).toEqual({ kind: "interval", minutes: 15 });

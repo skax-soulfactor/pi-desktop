@@ -6,7 +6,8 @@ import { appendProposal, extensionEntries, makeProposal } from "@pi-desktop/mate
 import { runPi, type PiLaunch, type RunOutcome } from "./executor";
 import type { MatePaths } from "./paths";
 import { isDue, localDateKey } from "./schedule";
-import { ChangeWatchers, type Exec } from "./watchers";
+import { ChangeWatchers, execCommand, type Exec } from "./watchers";
+import { collectChange, prepareWorkspace, removeWorkspace, type Workspace } from "./workspace";
 import {
   getDuty,
   listDuties,
@@ -64,6 +65,31 @@ export async function log(paths: MatePaths, message: string): Promise<void> {
 }
 
 /**
+ * act 실행의 변경을 "승인 대기" 제안으로 인박스에 올린다. 올렸으면 true (작업 공간을 남김).
+ * 변경이 없거나, 같은 패치를 이미 올렸으면 false (작업 공간을 지움).
+ */
+async function offerChange(options: RunnerOptions, duty: Duty, runId: string, ws: Workspace, outcome: RunOutcome): Promise<boolean> {
+  const change = await collectChange(options.exec ?? execCommand, ws).catch(() => undefined);
+  if (!change) return false;
+  const n = change.info.files.length;
+  const item = makeProposal(
+    {
+      title: `${duty.name}: 파일 ${n}개 고침`,
+      summary: outcome.summary ?? "작업 공간에서 파일을 고쳤습니다. 내용을 보고 적용할지 정하세요.",
+      detail: `\`\`\`\n${change.stat}\n\`\`\`\n\n\`\`\`diff\n${change.patch}\n\`\`\``,
+      severity: "action",
+    },
+    { dutyId: duty.id, runId },
+  );
+  item.hash = createHash("sha256").update(`${duty.id}\n${change.patch}`).digest("hex").slice(0, 16);
+  item.change = change.info;
+  if (!(await appendProposal(options.paths.inbox, item))) return false;
+  outcome.proposals += 1;
+  outcome.changeFiles = n;
+  return true;
+}
+
+/**
  * 임무 한 번을 실행하고 기록을 남긴다.
  * observe 단계는 제안 도구가 없으므로 마지막 답변을 인박스에 결과로 남긴다 (실행마다 한 건, 같은 내용은 중복 제거).
  */
@@ -92,8 +118,12 @@ export async function runDuty(
   await writeRun(paths, record);
   await log(paths, `run start ${runId} duty=${duty.id} reason=${reason} model=${record.model}`);
 
+  const exec = options.exec ?? execCommand;
   let outcome: RunOutcome;
+  let workspace: Workspace | undefined;
   try {
+    // act는 사용자 폴더 대신 별도 작업 공간에서 돈다
+    if (duty.profile === "act") workspace = await prepareWorkspace(exec, duty.cwd, paths.worktrees, runId);
     const [launch, extensions] = await Promise.all([options.locatePi(), extensionEntries(options.kitDir)]);
     outcome = await runPi(
       launch,
@@ -107,11 +137,17 @@ export async function runDuty(
         sessionsDir: paths.sessions,
         timeoutSec: duty.timeoutSec ?? DEFAULT_TIMEOUT_SEC,
         maxCostUsd: duty.maxCostUsd ?? config.maxCostUsd,
+        ...(workspace ? { workspace: { cwd: workspace.cwd, root: workspace.worktree } } : {}),
       },
       signal,
     );
   } catch (error) {
     outcome = { status: "failed", error: (error as Error).message, costUsd: 0, tokens: 0, proposals: 0 };
+  }
+
+  if (workspace) {
+    const kept = outcome.status === "done" && (await offerChange(options, duty, runId, workspace, outcome));
+    if (!kept) await removeWorkspace(exec, workspace.repo, workspace.worktree).catch(() => undefined);
   }
 
   if (duty.profile === "observe" && outcome.status === "done" && outcome.summary) {
