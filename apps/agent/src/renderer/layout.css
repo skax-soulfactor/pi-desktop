@@ -421,12 +421,13 @@ code.copy {
 }
 
 .folder-menu-list {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 20;
+  /* 자리는 FolderMenu가 버튼 위치로 계산한다 (넘침을 자르는 사이드바 밖으로 나가도 보이게) */
+  position: fixed;
+  z-index: 50;
   min-width: 280px;
-  max-width: 420px;
+  max-width: min(420px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   padding: 6px;
