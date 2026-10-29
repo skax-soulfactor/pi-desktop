@@ -196,8 +196,10 @@ describe("실행기 + 실제 Pi", () => {
 
     const runner = await start();
     try {
-      for (let i = 0; i < 100 && !(await loadState(paths)).duties.repo?.watch?.signature; i++) await new Promise((r) => setTimeout(r, 100));
-      expect((await loadState(paths)).duties.repo?.watch?.signature).toMatch(/^main@/);
+      // 느린 Windows CI에서는 실행기 시작(WMI)과 첫 git 확인이 10초를 넘기도 해 넉넉히 기다린다
+      for (let i = 0; i < 300 && !(await loadState(paths)).duties.repo?.watch?.signature; i++) await new Promise((r) => setTimeout(r, 100));
+      const baseline = (await loadState(paths)).duties.repo?.watch?.signature;
+      expect(baseline, baseline ? "" : await readFile(paths.log, "utf8").catch(() => "(로그 없음)")).toMatch(/^main@/);
       expect((await listRuns(paths)).some((r) => r.dutyId === "repo")).toBe(false);
 
       await git("commit", "-q", "--allow-empty", "-m", "second");
