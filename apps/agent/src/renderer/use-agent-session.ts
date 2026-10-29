@@ -122,23 +122,44 @@ export function useAgentSession() {
       } finally {
         attachQueueRef.current = undefined;
       }
-      if (truncated) {
-        const messages = await api().sendCommand(target.sessionId, { type: "get_messages" });
-        const list = (messages.data as { messages?: unknown[] } | undefined)?.messages ?? [];
-        setChat((prev) => snapshotState(list, Math.max(prev.lastSeq, lastSeq), prev.running));
-      }
+      // 저널 앞부분이 잘렸거나, 다른 세션에서 분기해 연 대화(저널에는 분기 전 대화가 없다)면 Pi가 가진 대화 전체로 다시 그린다
+      const messages = await api().sendCommand(target.sessionId, { type: "get_messages" });
+      const list = (messages.data as { messages?: unknown[] } | undefined)?.messages ?? [];
+      setChat((prev) => (truncated || (prev.items.length === 0 && list.length > 0) ? snapshotState(list, Math.max(prev.lastSeq, lastSeq), prev.running) : prev));
       await Promise.all([checkKit(target.sessionId), refreshModel(target.sessionId).catch(() => undefined)]);
     },
     [applyNotification, checkKit, refreshModel],
   );
 
-  /** 새 세션을 열고 붙는다 */
+  /** 새 세션을 열고 붙는다. forkFrom을 주면 그 세션 파일의 대화를 이어 가는 새 세션으로 연다 (pi --fork) */
   const open = useCallback(
-    async (cwd: string) => {
-      const opened = await api().openSession(cwd);
+    async (cwd: string, forkFrom?: string) => {
+      const opened = await api().openSession(cwd, forkFrom);
       await attachTo(opened);
     },
     [attachTo],
+  );
+
+  /**
+   * 지금 대화를 다른 폴더로 옮긴다 (설계 DESIGN-AGENT.md §4 "작업 폴더").
+   * Pi 세션의 폴더는 프로세스마다 고정이라, 대화가 있으면 지금 세션 파일에서 분기한 새 세션을 그 폴더에서 연다.
+   * 지금까지의 대화를 이어 가고, 원래 대화는 그대로 남는다. 아직 아무 말도 없으면 새로 열고 빈 원래 대화는 닫는다.
+   */
+  const moveTo = useCallback(
+    async (folder: string) => {
+      const current = sessionRef.current;
+      if (!current) return open(folder);
+      const state = await api().sendCommand(current.sessionId, { type: "get_state" });
+      const data = state.data as { sessionFile?: string; messageCount?: number; isStreaming?: boolean } | undefined;
+      if (data?.isStreaming) throw new Error("응답하는 중에는 폴더를 바꿀 수 없습니다. 끝난 뒤 다시 시도하세요.");
+      if (!data?.messageCount || !data.sessionFile) {
+        await open(folder);
+        await api().closeSession(current.sessionId);
+        return;
+      }
+      await open(folder, data.sessionFile);
+    },
+    [open],
   );
 
   /** 이 세션의 모델을 바꾼다 (Pi의 기본 모델·프로바이더 설정은 Pi Desktop에서) */
@@ -198,5 +219,5 @@ export function useAgentSession() {
 
   const dismiss = useCallback((key: string) => setUi((prev) => dismissToast(prev, key)), []);
 
-  return { connection, session, chat, ui, kit, model, models, open, attachTo, changeModel, close, send, abort, answer, dismiss, notice };
+  return { connection, session, chat, ui, kit, model, models, open, attachTo, moveTo, changeModel, close, send, abort, answer, dismiss, notice };
 }
