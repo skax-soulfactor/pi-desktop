@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
 import { appendFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { appendProposal, extensionEntries, makeProposal } from "@pi-desktop/mate-kit";
 import { runPi, type PiLaunch, type RunOutcome } from "./executor";
 import type { MatePaths } from "./paths";
 import { isDue, localDateKey } from "./schedule";
-import { ChangeWatchers, execCommand, type Exec } from "./watchers";
+import { ChangeWatchers, execCommand, notePending, type Exec } from "./watchers";
+import { Observer, observerDuty } from "./observer";
+import type { SessionAggregate } from "./activity-types";
 import { collectChange, prepareWorkspace, removeWorkspace, type Workspace } from "./workspace";
 import {
   getDuty,
@@ -41,6 +43,29 @@ interface Pick {
   duty: Duty;
   reason: RunRecord["reason"];
   cause?: string;
+  /** 관찰자 실행: 제안에 붙일 주제 */
+  topic?: string;
+}
+
+/** 끝난 Pi 세션을, 그 폴더(또는 상위 폴더)의 "작업을 마치면" 임무에 기다리는 변화로 남긴다 */
+export function markSessionEnds(duties: Duty[], state: RunnerState, ended: SessionAggregate[], now: number): void {
+  for (const session of ended) {
+    for (const duty of duties) {
+      if (!duty.enabled || duty.trigger.kind !== "session") continue;
+      if (!isSameOrInside(session.cwd, duty.cwd)) continue;
+      const entry = (state.duties[duty.id] ??= {});
+      if (!entry.watch) continue; // 감시가 아직 자리 잡지 않음 (다음 확인부터)
+      const edits = session.editedFiles.length;
+      const cause = `Pi 세션이 끝남: "${session.firstPrompt ?? ""}"${edits ? ` (파일 ${edits}개 고침)` : ""}`;
+      entry.watch = notePending(entry.watch, cause, now);
+    }
+  }
+}
+
+function isSameOrInside(child: string, parent: string): boolean {
+  const norm = (p: string) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
+  const rel = relative(norm(parent), norm(child));
+  return rel === "" || (!rel.startsWith("..") && !/^[a-zA-Z]:/.test(rel));
 }
 
 /** Pi가 --session-dir에 만든 세션 파일(`<시각>_<id>.jsonl`)을 찾는다 */
@@ -96,7 +121,7 @@ async function offerChange(options: RunnerOptions, duty: Duty, runId: string, ws
 export async function runDuty(
   options: RunnerOptions,
   duty: Duty,
-  run: { reason: RunRecord["reason"]; cause?: string; runId?: string },
+  run: { reason: RunRecord["reason"]; cause?: string; runId?: string; topic?: string },
   signal?: AbortSignal,
 ): Promise<RunRecord> {
   const { paths } = options;
@@ -130,6 +155,7 @@ export async function runDuty(
       {
         duty,
         ...(cause ? { cause } : {}),
+        ...(run.topic ? { topic: run.topic } : {}),
         runId,
         model: record.model,
         extensions,
@@ -177,9 +203,11 @@ export class Runner {
   /** "지금 실행" 요청 중 아직 실행하지 않은 임무 */
   private queue: string[] = [];
   private readonly watchers: ChangeWatchers;
+  private readonly observer: Observer;
 
   constructor(private readonly options: RunnerOptions) {
     this.watchers = new ChangeWatchers(options.exec, (message) => void log(options.paths, message));
+    this.observer = new Observer(options.paths, options.exec ?? execCommand);
   }
 
   private now(): number {
@@ -255,6 +283,12 @@ export class Runner {
     // 일시 정지·상한 중에도 변화는 기록해 둔다 (기준이 어긋나지 않게)
     await this.watchers.refresh(duties, () => this.state, this.now());
     const config = await loadConfig(paths);
+    // 활동 관찰: 끝난 Pi 세션을 "작업을 마치면" 임무에 변화로 알린다
+    const observed = await this.observer.tick(this.state, config, this.now()).catch(async (error: Error) => {
+      await log(paths, `observe error ${error.stack ?? error.message}`);
+      return { ended: [] };
+    });
+    markSessionEnds(duties, this.state, observed.ended, this.now());
     if (config.paused || this.state.today.count >= config.dailyRunLimit) return undefined;
     for (const duty of duties) {
       const entry = this.state.duties[duty.id];
@@ -262,10 +296,13 @@ export class Runner {
       if (!isChangeTrigger(duty.trigger)) return { duty, reason: "schedule" };
       return { duty, reason: "change", ...(entry?.watch?.pending ? { cause: entry.watch.pending.cause } : {}) };
     }
+    // 할 임무가 없고 사용자가 쉬는 중이면 관찰자가 후보 하나를 살펴본다
+    const job = this.observer.nextJob(this.state, config, this.now());
+    if (job) return { duty: observerDuty(job, this.now()), reason: "observe", cause: job.title, topic: job.topic };
     return undefined;
   }
 
-  private async execute({ duty, reason, cause }: Pick): Promise<void> {
+  private async execute({ duty, reason, cause, topic }: Pick): Promise<void> {
     const { paths } = this.options;
     const startedAt = this.now();
     // 실패해도 마지막 실행 시각을 남겨, 같은 임무를 곧바로 다시 돌리지 않는다
@@ -274,7 +311,7 @@ export class Runner {
     const runId = newRunId(startedAt);
     this.state.current = { runId, dutyId: duty.id, startedAt };
     await saveState(paths, this.state);
-    const record = await runDuty(this.options, duty, { reason, ...(cause ? { cause } : {}), runId }, this.abort.signal);
+    const record = await runDuty(this.options, duty, { reason, ...(cause ? { cause } : {}), ...(topic ? { topic } : {}), runId }, this.abort.signal);
     // 실행하는 동안 생긴 변화는 남기고, 실행 전 변화만 처리한 것으로 본다
     const entry = this.state.duties[duty.id] ?? {};
     const watch = entry.watch && entry.watch.pending && entry.watch.pending.lastAt <= startedAt ? { ...entry.watch, pending: undefined } : entry.watch;

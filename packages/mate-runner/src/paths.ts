@@ -25,6 +25,8 @@ export function matePaths(home: string) {
     runDir: join(home, "run"),
     pid: join(home, "run", "mated.pid"),
     log: join(home, "run", "mated.log"),
+    /** 활동 관찰 기록 (요약만, M4) */
+    activity: join(home, "activity.jsonl"),
   };
 }
 

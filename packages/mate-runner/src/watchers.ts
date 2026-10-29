@@ -39,6 +39,11 @@ function addPending(pending: WatchState["pending"], cause: string, now: number):
 
 const MAX_FILES = 20;
 
+/** 바깥(예: 활동 관찰)에서 알린 변화를 기다리는 변화로 더한다 */
+export function notePending(watch: WatchState, cause: string, now: number): WatchState {
+  return { ...watch, pending: addPending(watch.pending, cause, now) };
+}
+
 /** 파일 변경 하나를 기록한다 (잦은 저장은 묶임: 마지막 변경 시각만 늦추고, 같은 파일은 한 번만 센다) */
 export function noteFileChange(watch: WatchState, relative: string, now: number): WatchState {
   const known = watch.pending?.files ?? [];
