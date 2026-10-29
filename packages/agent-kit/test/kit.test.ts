@@ -15,8 +15,11 @@ describe("agent-kit 매니페스트", () => {
 
   it("pi.extensions를 절대 경로로 읽고 -e 인자로 바꾼다", async () => {
     const entries = await extensionEntries(kitDir);
-    expect(entries).toEqual([join(kitDir, "extensions", "agent-core", "index.ts")]);
-    expect(extensionArgs(entries)).toEqual(["-e", entries[0]]);
+    expect(entries).toEqual([
+      join(kitDir, "extensions", "agent-core", "index.ts"),
+      join(kitDir, "extensions", "permissions", "index.ts"),
+    ]);
+    expect(extensionArgs(entries)).toEqual(["-e", entries[0], "-e", entries[1]]);
   });
 
   it("pi.extensions가 없거나 절대 경로면 거절한다", async () => {

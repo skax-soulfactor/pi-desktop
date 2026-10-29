@@ -6,7 +6,7 @@ import type {
   SessionSummary,
   SessionUiResolvedNotification,
 } from "@pi-desktop/host-protocol/messages";
-import type { ConnectionState } from "@desktop/shared/api";
+import type { ConnectionState } from "../vendor/shared/api";
 
 /**
  * 에이전트 앱의 main ↔ renderer IPC.

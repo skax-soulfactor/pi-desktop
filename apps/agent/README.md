@@ -4,7 +4,7 @@ Pi를 엔진으로 쓰는 데스크톱 에이전트입니다. Pi Desktop과는 *
 [`packages/agent-kit`](../../packages/agent-kit)(확장·스킬)으로 구현합니다.
 
 - 설계: [docs/DESIGN-AGENT.md](../../docs/DESIGN-AGENT.md)
-- 현재 단계: **P0** — 로컬 세션에 agent-kit을 올려 채팅
+- 현재 단계: **P1** — 쓰기·실행 도구 승인 (permissions 확장 + 승인 화면)
 
 ## 구조
 
@@ -26,7 +26,7 @@ API 키 없이 mock LLM으로 실행합니다 (포트 18912, Pi Desktop의 dev:m
 npm run dev:mock -w @pi-desktop/agent
 ```
 
-- 프롬프트 예: `안녕` → echo, `read:package.json` → read 툴 호출, `/agent:status` → agent-kit 버전 알림
+- 프롬프트 예: `안녕` → echo, `read:package.json` → read 툴 호출(묻지 않음), `bash:echo hi` → 승인 화면, `/agent:status` → agent-kit 버전 알림
 - 데몬 홈은 저장소의 `.dev/agent-home`, Pi 설정은 `.dev/pi-agent`로 격리됩니다.
 
 설치된 Pi로 실행할 때는 `npm run dev -w @pi-desktop/agent`를 씁니다.

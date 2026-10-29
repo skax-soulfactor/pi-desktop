@@ -10,11 +10,13 @@
   ],
   "exports": {
     ".": "./src/index.ts",
-    "./constants": "./src/constants.ts"
+    "./constants": "./src/constants.ts",
+    "./approval": "./src/approval.ts"
   },
   "pi": {
     "extensions": [
-      "./extensions/agent-core/index.ts"
+      "./extensions/agent-core/index.ts",
+      "./extensions/permissions/index.ts"
     ]
   },
   "scripts": {
