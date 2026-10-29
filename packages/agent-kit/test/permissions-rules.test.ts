@@ -104,3 +104,21 @@ describe("승인 요청 형식", () => {
     expect(decisionOf("엉뚱한 값")).toBe("deny");
   });
 });
+
+describe("규칙 파일과 감사 기록", () => {
+  it("규칙을 더하고 지우며, 감사 기록은 최근 것부터 읽는다", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { addRule, loadAudit, loadRules, removeRule } = await import("../extensions/permissions/store");
+    const dir = mkdtempSync(join(tmpdir(), "rules-"));
+    const rule = { toolName: "bash", pattern: "git status*", action: "allow" as const };
+    await addRule(dir, rule);
+    await addRule(dir, rule);
+    expect(await loadRules(dir)).toEqual([rule]);
+    await removeRule(dir, rule);
+    expect(await loadRules(dir)).toEqual([]);
+    writeFileSync(join(dir, "audit.jsonl"), '{"decision":"once"}\n깨진 줄\n{"decision":"deny"}\n');
+    expect((await loadAudit(dir)).map((r) => r.decision)).toEqual(["deny", "once"]);
+  });
+});

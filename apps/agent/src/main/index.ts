@@ -5,7 +5,9 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   Methods,
+  type PiModelsResult,
   type PiResponse,
+  type PiStatus,
   type SessionAttachResult,
   type SessionEventNotification,
   type SessionOpenParams,
@@ -16,13 +18,17 @@ import { extensionArgs, extensionEntries } from "@pi-desktop/agent-kit";
 import { loadTasks, tasksDir } from "@pi-desktop/agent-kit/tasks";
 import { loadSchedules, schedulesPath, updateSchedules } from "@pi-desktop/agent-kit/schedules";
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
+import { forgetMemory, loadMemories, memoryDir, saveMemory } from "@pi-desktop/agent-kit/memory";
+import { loadAudit, loadRules, removeRule } from "@pi-desktop/agent-kit/permissions";
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
 import { HostConnection } from "../vendor/main/host-connection";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";
 import { ReplayCollector } from "../vendor/main/replay-collector";
-import { IpcChannels, type AttachResult } from "../shared/api";
+import { IpcChannels, type AttachResult, type MemoryView, type RuleView } from "../shared/api";
 import { KeyStore } from "./key-store";
+import { findPiDesktop, installPiDesktop, openPiDesktop } from "./pi-desktop";
+import type { PiSetupView } from "../shared/pi-setup";
 import { TaskWatcher } from "./task-watcher";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -144,6 +150,46 @@ function createConnection(onConnected: () => void): HostConnection {
 
 function registerIpc(connection: HostConnection, keys: KeyStore): void {
   ipcMain.handle(IpcChannels.connectionState, () => connection.current);
+  ipcMain.handle(IpcChannels.piSetup, async (): Promise<PiSetupView> => {
+    // Pi 관리는 Pi Desktop이 맡는다. 여기서는 데몬이 아는 상태를 모아 안내만 한다 (설계 DESIGN-AGENT.md §0)
+    const status = await connection.request<PiStatus>(Methods.piStatus);
+    const models = status.pi ? await connection.request<PiModelsResult>(Methods.piModels, undefined, 60_000).catch((e: unknown) => ({ models: [], error: String(e) })) : { models: [] };
+    return {
+      ...(status.pi ? { piVersion: status.pi.version } : {}),
+      ...(status.piError ? { piError: status.piError } : {}),
+      node: { version: status.node.version, required: status.node.required, ok: status.node.ok },
+      ...(status.gitBash ? { gitBash: { found: status.gitBash.found } } : {}),
+      authProviders: status.data.authProviders,
+      models: models.models,
+      ...(models.error ? { modelsError: models.error } : {}),
+      ...(findPiDesktop() ? { piDesktopPath: findPiDesktop() } : {}),
+      platform: status.platform,
+    };
+  });
+  ipcMain.handle(IpcChannels.openPiDesktop, () => openPiDesktop());
+  ipcMain.handle(IpcChannels.installPiDesktop, async () => {
+    const result = await installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total));
+    return { status: result.status };
+  });
+  // 기억·승인 규칙은 agent-kit의 같은 함수로 같은 파일을 읽고 고친다 (사람이 직접 고쳐도 되는 파일)
+  ipcMain.handle(IpcChannels.listMemories, async () => (await loadMemories(memoryDir(agentDataDir()))).reverse());
+  ipcMain.handle(IpcChannels.addMemory, async (_event, kind: MemoryView["kind"], text: string) => {
+    if (!text.trim()) throw new Error("기억할 내용이 비어 있습니다");
+    await saveMemory(memoryDir(agentDataDir()), kind, text);
+  });
+  ipcMain.handle(IpcChannels.forgetMemory, async (_event, id: string) => {
+    await forgetMemory(memoryDir(agentDataDir()), id);
+  });
+  ipcMain.handle(IpcChannels.listRules, () => loadRules(agentDataDir()));
+  ipcMain.handle(IpcChannels.removeRule, (_event, rule: RuleView) => removeRule(agentDataDir(), rule));
+  ipcMain.handle(IpcChannels.listAudit, () => loadAudit(agentDataDir(), 100));
+  ipcMain.handle(IpcChannels.listSessions, async () => {
+    const sessions = await connection.request<SessionSummary[]>(Methods.sessionList);
+    return sessions.filter((s) => s.state === "running" && s.cwd !== schedulerDir()).sort((a, b) => b.startedAt - a.startedAt);
+  });
+  ipcMain.handle(IpcChannels.closeSession, async (_event, sessionId: string) => {
+    await connection.request(Methods.sessionClose, { sessionId });
+  });
   ipcMain.handle(IpcChannels.defaultCwd, () => homedir());
   ipcMain.handle(IpcChannels.pickDirectory, async () => {
     const options = { properties: ["openDirectory" as const, "createDirectory" as const] };
@@ -189,6 +235,12 @@ function registerIpc(connection: HostConnection, keys: KeyStore): void {
   });
 }
 
+/** 창 아이콘. 개발 실행은 build/icon.png, Linux 설치본은 실행 파일에 아이콘이 없어 리소스의 것을 준다 (Pi Desktop과 같음) */
+function windowIcon(): { icon?: string } {
+  if (!app.isPackaged) return { icon: join(app.getAppPath(), "build", "icon.png") };
+  return process.platform === "linux" ? { icon: join(process.resourcesPath, "icon.png") } : {};
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1000,
@@ -197,6 +249,7 @@ function createWindow(): void {
     minHeight: 480,
     title: "Pi Desktop Agent",
     backgroundColor: "#16171d",
+    ...windowIcon(),
     webPreferences: {
       preload: join(here, "../preload/index.cjs"),
       contextIsolation: true,
@@ -232,8 +285,9 @@ app.whenReady().then(() => {
   });
   connection = created;
   registerIpc(connection, keys);
-  // Windows 알림에 앱 이름이 보이게 한다
-  app.setAppUserModelId("Pi Desktop Agent");
+  // Windows 작업 표시줄·알림의 앱 식별자. 설치 프로그램이 만든 바로 가기는 electron-builder의 appId를 쓰므로
+  // 같은 값이어야 한다. 다르면 실행 중인 창이 다른 앱으로 묶여 기본 Electron 아이콘이 보인다.
+  app.setAppUserModelId("dev.pi-desktop.agent");
   new TaskWatcher(
     () => loadTasks(tasksDir(agentDataDir())),
     notifyTask,

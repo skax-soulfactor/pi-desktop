@@ -15,7 +15,9 @@
     "./tasks": "./extensions/tasks/store.ts",
     "./task-types": "./extensions/tasks/types.ts",
     "./schedules": "./extensions/schedule/store.ts",
-    "./schedule-plan": "./extensions/schedule/plan.ts"
+    "./schedule-plan": "./extensions/schedule/plan.ts",
+    "./memory": "./extensions/memory/store.ts",
+    "./permissions": "./extensions/permissions/store.ts"
   },
   "pi": {
     "extensions": [

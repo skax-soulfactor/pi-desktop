@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionEventNotification, SessionSummary } from "@pi-desktop/host-protocol/messages";
 import { STATUS_COMMAND } from "@pi-desktop/agent-kit/constants";
-import { addNotice, applyEvent, initialChatState, type ChatState } from "../vendor/renderer/chat-state";
+import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState } from "../vendor/renderer/chat-state";
 import {
   applyUiEvent,
   dialogResponse,
@@ -14,6 +14,13 @@ import {
 } from "../vendor/renderer/extension-ui-state";
 import type { ConnectionState } from "../shared/api";
 
+/** 모델 하나 (프로바이더·ID·이름) */
+export interface ModelRef {
+  provider: string;
+  id: string;
+  name?: string;
+}
+
 /** agent-kit이 세션에 올라갔는지 (설계 DESIGN-AGENT.md §2.1) */
 export type KitState = "checking" | "ready" | "missing";
 
@@ -22,7 +29,7 @@ const api = () => window.piAgent;
 /**
  * 에이전트 앱의 세션 하나.
  *
- * Pi Desktop의 use-session을 줄인 것이다. 로컬 호스트 하나, 탭 하나, 새 세션만 다루고
+ * Pi Desktop의 use-session을 줄인 것이다. 로컬 호스트 하나, 한 번에 세션 하나(새로 열기·돌고 있는 세션으로 바꾸기)를 다루고
  * 팔로우·여러 앱 입력 권한·신뢰 묻기는 두지 않는다. 이벤트 해석은 Pi Desktop의 리듀서(chat-state,
  * extension-ui-state)를 그대로 쓴다.
  */
@@ -32,6 +39,8 @@ export function useAgentSession() {
   const [chat, setChat] = useState<ChatState>(initialChatState);
   const [ui, setUi] = useState<ExtensionUiState>(initialExtensionUiState);
   const [kit, setKit] = useState<KitState>();
+  const [model, setModel] = useState<ModelRef>();
+  const [models, setModels] = useState<ModelRef[]>([]);
   const sessionRef = useRef<SessionSummary>(undefined);
   /** attach 중에 알림으로 온 이벤트. 결과를 적용한 뒤에 순번으로 걸러 적용한다 */
   const attachQueueRef = useRef<SessionEventNotification[]>(undefined);
@@ -77,32 +86,85 @@ export function useAgentSession() {
     setKit(commands.some((c) => c.name === STATUS_COMMAND) ? "ready" : "missing");
   }, []);
 
-  /** 새 세션을 열고 처음부터 붙는다 */
-  const open = useCallback(
-    async (cwd: string) => {
+  /** 세션의 지금 모델과 고를 수 있는 모델을 읽는다 */
+  const refreshModel = useCallback(async (sessionId: string) => {
+    const state = await api().sendCommand(sessionId, { type: "get_state" });
+    const current = (state.data as { model?: ModelRef } | undefined)?.model;
+    setModel(current ? { provider: current.provider, id: current.id, name: current.name } : undefined);
+    const available = await api().sendCommand(sessionId, { type: "get_available_models" });
+    const list = (available.data as { models?: ModelRef[] } | undefined)?.models ?? [];
+    setModels(list.map((m) => ({ provider: m.provider, id: m.id, name: m.name })));
+  }, []);
+
+  /** 세션에 처음부터 붙는다. 저널 앞부분이 잘렸으면 Pi가 가진 대화 전체로 다시 그린다 */
+  const attachTo = useCallback(
+    async (target: SessionSummary) => {
       setChat(initialChatState);
       setUi(initialExtensionUiState);
       setKit(undefined);
-      const opened = await api().openSession(cwd);
+      setModel(undefined);
       // attach 이후의 실시간 이벤트가 걸러지지 않도록 대상 세션을 먼저 지정한다.
-      sessionRef.current = opened;
-      setSession(opened);
+      sessionRef.current = target;
+      setSession(target);
       const queued: SessionEventNotification[] = [];
       attachQueueRef.current = queued;
+      let truncated = false;
+      let lastSeq = 0;
       try {
-        const result = await api().attachSession(opened.sessionId, 0);
+        const result = await api().attachSession(target.sessionId, 0);
         // 재생 이벤트를 먼저, 그 사이 알림으로 온 것을 나중에 적용한다 (리듀서가 순번으로 중복을 거름).
         for (const n of result.events) applyNotification(n, true);
         for (const n of queued) applyNotification(n, false);
         setUi((prev) => prunePending(prev, result.pendingUi ?? []));
         setSession(result.session);
+        truncated = result.truncated;
+        lastSeq = result.session.lastSeq;
       } finally {
         attachQueueRef.current = undefined;
       }
-      await checkKit(opened.sessionId);
+      if (truncated) {
+        const messages = await api().sendCommand(target.sessionId, { type: "get_messages" });
+        const list = (messages.data as { messages?: unknown[] } | undefined)?.messages ?? [];
+        setChat((prev) => snapshotState(list, Math.max(prev.lastSeq, lastSeq), prev.running));
+      }
+      await Promise.all([checkKit(target.sessionId), refreshModel(target.sessionId).catch(() => undefined)]);
     },
-    [applyNotification, checkKit],
+    [applyNotification, checkKit, refreshModel],
   );
+
+  /** 새 세션을 열고 붙는다 */
+  const open = useCallback(
+    async (cwd: string) => {
+      const opened = await api().openSession(cwd);
+      await attachTo(opened);
+    },
+    [attachTo],
+  );
+
+  /** 이 세션의 모델을 바꾼다 (Pi의 기본 모델·프로바이더 설정은 Pi Desktop에서) */
+  const changeModel = useCallback(
+    async (provider: string, id: string) => {
+      const current = sessionRef.current;
+      if (!current) return;
+      const response = await api().sendCommand(current.sessionId, { type: "set_model", provider, modelId: id });
+      if (response.success === false) throw new Error(String(response.error ?? "모델을 바꾸지 못했습니다"));
+      await refreshModel(current.sessionId);
+    },
+    [refreshModel],
+  );
+
+  /** 지금 세션을 닫는다 (Pi 프로세스를 끝낸다. 대화 기록 파일은 Pi 세션 폴더에 남는다) */
+  const close = useCallback(async () => {
+    const current = sessionRef.current;
+    if (!current) return;
+    await api().closeSession(current.sessionId);
+    sessionRef.current = undefined;
+    setSession(undefined);
+    setChat(initialChatState);
+    setUi(initialExtensionUiState);
+    setKit(undefined);
+    setModel(undefined);
+  }, []);
 
   /** 프롬프트를 보낸다. 응답 중이면 끝난 뒤에 이어서 처리하도록 follow-up으로 넣는다 */
   const send = useCallback(
@@ -136,5 +198,5 @@ export function useAgentSession() {
 
   const dismiss = useCallback((key: string) => setUi((prev) => dismissToast(prev, key)), []);
 
-  return { connection, session, chat, ui, kit, open, send, abort, answer, dismiss, notice };
+  return { connection, session, chat, ui, kit, model, models, open, attachTo, changeModel, close, send, abort, answer, dismiss, notice };
 }
