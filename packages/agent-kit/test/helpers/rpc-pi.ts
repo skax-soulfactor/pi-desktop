@@ -24,6 +24,9 @@ function findPiCli(): string {
   }
 }
 
+/** 저장소의 Pi devDependency CLI */
+export const PI_CLI = findPiCli();
+
 export type RpcRecord = Record<string, unknown>;
 
 /** Pi RPC 프로세스 하나. 응답은 id로, 이벤트는 조건으로 기다린다 */
@@ -102,6 +105,10 @@ export interface StartOptions {
   settings?: Record<string, unknown>;
   /** 작업 폴더에 미리 만들 파일 */
   files?: Record<string, string>;
+  /** Pi 프로세스에 더할 환경 변수 */
+  env?: Record<string, string>;
+  /** agent-kit 상태 폴더에 미리 만들 파일 (상대 경로 → 내용) */
+  dataFiles?: Record<string, string>;
 }
 
 /**
@@ -123,8 +130,9 @@ export async function startPi(llmBaseUrl = "http://127.0.0.1:9/v1", options: Sta
   const projectDir = mkdtempSync(join(tmpdir(), "agent-kit-project-"));
   for (const [name, content] of Object.entries(options.files ?? {})) writeFileSync(join(projectDir, name), content);
   const dataDir = mkdtempSync(join(tmpdir(), "agent-kit-data-"));
+  for (const [name, content] of Object.entries(options.dataFiles ?? {})) writeFileSync(join(dataDir, name), content);
   const args = [
-    findPiCli(),
+    PI_CLI,
     "--mode",
     "rpc",
     "--no-session",
@@ -141,6 +149,7 @@ export async function startPi(llmBaseUrl = "http://127.0.0.1:9/v1", options: Sta
       PI_CODING_AGENT_DIR: piAgentDir,
       PI_CODING_AGENT_SESSION_DIR: join(piAgentDir, "sessions"),
       PI_DESKTOP_AGENT_DATA: dataDir,
+      ...options.env,
     },
   });
   return { pi: new RpcPi(child), projectDir, dataDir, piAgentDir };

@@ -1,12 +1,14 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { APPROVAL_MARKER, parseApprovalTitle } from "../src/approval";
 import { attended, isWorker } from "../src/runtime";
 import { classify } from "../extensions/permissions/rules";
 import { taskNotice } from "../extensions/tasks/index";
-import { extensionArgsOf, labelTitle, piCommand } from "../extensions/tasks/worker";
-import { startPi, type RpcPi, type RpcRecord } from "./helpers/rpc-pi";
+import { extensionArgsOf, labelTitle, piCommand, runWorker } from "../extensions/tasks/worker";
+import { extensionArgs, extensionEntries } from "../src/index";
+import { kitDir, PI_CLI, startPi, type RpcPi, type RpcRecord } from "./helpers/rpc-pi";
 import { startScriptLlm, type ScriptLlm } from "./helpers/script-llm";
 
 describe("워커 준비", () => {
@@ -80,5 +82,27 @@ describe("tasks (실제 Pi + 워커)", () => {
     const files = readdirSync(join(dataDir, "tasks")).filter((n) => n.endsWith(".json"));
     const record = JSON.parse(readFileSync(join(dataDir, "tasks", files[0]!), "utf8"));
     expect(record).toMatchObject({ title: "파일 세기", status: "done", result: "워커 결과: 셋을 찾았다" });
+  }, 60_000);
+});
+
+describe("워커 — 모델 오류", () => {
+  it("글 없이 모델 오류로 끝난 실행은 실패로 기록한다", async () => {
+    // 아무것도 듣지 않는 주소로 보내 모델 호출을 실패시킨다 (재시도는 끈다)
+    const argv = ["node", PI_CLI, ...extensionArgs(await extensionEntries(kitDir))];
+    const models = JSON.stringify({ providers: { mock: { baseUrl: "http://127.0.0.1:9/v1", api: "openai-completions", apiKey: "mock", models: [{ id: "mock-model" }] } } });
+    const agentDir = mkdtempSync(join(tmpdir(), "worker-err-"));
+    writeFileSync(join(agentDir, "models.json"), models);
+    writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ retry: { enabled: false } }));
+    await expect(
+      runWorker({
+        label: "t",
+        prompt: "안녕",
+        cwd: tmpdir(),
+        provider: "mock",
+        model: "mock-model",
+        argv,
+        env: { ...process.env, PI_CODING_AGENT_DIR: agentDir, PI_CODING_AGENT_SESSION_DIR: join(agentDir, "s") },
+      }),
+    ).rejects.toThrow(/모델 호출이 실패했다/);
   }, 60_000);
 });

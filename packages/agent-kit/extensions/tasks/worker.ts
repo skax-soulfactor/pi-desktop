@@ -81,6 +81,8 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
     let buffer = "";
     let stderr = "";
     let lastText = "";
+    /** 마지막 응답이 모델 오류로 끝났으면 그 내용. 글 없이 오류로 끝난 실행은 실패로 본다 */
+    let lastError: string | undefined;
     let settled = false;
     let aborted = false;
     const write = (record: Record<string, unknown>) => {
@@ -93,6 +95,7 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
       child.stdin.end();
       setTimeout(() => child.kill(), 2000).unref();
       if (error) reject(error);
+      else if (!lastText && lastError && !aborted) reject(new Error(`모델 호출이 실패했다: ${lastError}`));
       else resolve({ text: lastText, aborted });
     };
     const onAbort = () => {
@@ -143,10 +146,17 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
     const receive = (record: Record<string, unknown>) => {
       if (record.type === "extension_ui_request") void answer(record);
       else if (record.type === "message_end") {
-        const message = record.message as { role?: string; content?: Array<{ type?: string; text?: string }> } | undefined;
+        const message = record.message as
+          | { role?: string; content?: Array<{ type?: string; text?: string }>; stopReason?: string; errorMessage?: string }
+          | undefined;
         if (message?.role === "assistant" && Array.isArray(message.content)) {
           const text = message.content.filter((p) => p.type === "text").map((p) => p.text ?? "").join("").trim();
-          if (text) lastText = text;
+          if (text) {
+            lastText = text;
+            lastError = undefined;
+          } else if (message.stopReason === "error") {
+            lastError = message.errorMessage ?? "알 수 없는 오류";
+          }
         }
       } else if (record.type === "agent_settled") finish();
       else if (record.type === "response" && record.id === "worker-prompt" && record.success === false) {
