@@ -16,7 +16,8 @@
   "pi": {
     "extensions": [
       "./extensions/agent-core/index.ts",
-      "./extensions/permissions/index.ts"
+      "./extensions/permissions/index.ts",
+      "./extensions/loop-guard/index.ts"
     ]
   },
   "scripts": {
