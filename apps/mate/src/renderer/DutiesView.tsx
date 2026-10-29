@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { DutyDraft, DutyView, Overview } from "../shared/api";
+import type { DutyDraft, DutyView, Overview, PiSetupView } from "../shared/api";
+import { ModelOptions } from "./PiSetup";
 import type { Act } from "./App";
 import {
   defaultTrigger,
@@ -16,7 +17,7 @@ import {
 } from "./mate-view";
 
 /** 임무 목록과 만들기·고치기 폼 */
-export function DutiesView({ overview, now, act }: { overview: Overview; now: number; act: Act }) {
+export function DutiesView({ overview, now, act, setup }: { overview: Overview; now: number; act: Act; setup: PiSetupView | undefined }) {
   const [editing, setEditing] = useState<DutyDraft>();
 
   if (editing) {
@@ -24,6 +25,7 @@ export function DutiesView({ overview, now, act }: { overview: Overview; now: nu
       <DutyForm
         initial={editing}
         defaultModel={overview.config.model}
+        setup={setup}
         defaultMaxCost={overview.config.maxCostUsd}
         onCancel={() => setEditing(undefined)}
         onSave={async (draft) => {
@@ -110,12 +112,14 @@ function DutyCard({ duty, now, paused, act, onEdit }: { duty: DutyView; now: num
 function DutyForm({
   initial,
   defaultModel,
+  setup,
   defaultMaxCost,
   onSave,
   onCancel,
 }: {
   initial: DutyDraft;
   defaultModel: string;
+  setup: PiSetupView | undefined;
   defaultMaxCost: number;
   onSave: (draft: DutyDraft) => Promise<void>;
   onCancel: () => void;
@@ -239,7 +243,13 @@ function DutyForm({
         <summary>고급</summary>
         <label>
           모델
-          <input value={draft.model ?? ""} onChange={(e) => set({ model: e.target.value || undefined })} placeholder={`기본: ${defaultModel}`} />
+          <input
+            list="duty-models"
+            value={draft.model ?? ""}
+            onChange={(e) => set({ model: e.target.value || undefined })}
+            placeholder={`기본: ${defaultModel}`}
+          />
+          <ModelOptions id="duty-models" setup={setup} />
         </label>
         <label>
           시간 제한(초)

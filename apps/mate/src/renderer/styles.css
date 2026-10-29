@@ -433,3 +433,35 @@ textarea {
 .t-error summary code {
   color: var(--bad);
 }
+
+/* Pi 준비 안내 */
+.setup-banner {
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.setup-issue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  border-left: 3px solid var(--warn);
+  padding-left: 8px;
+}
+.setup-issue.bad {
+  border-left-color: var(--bad);
+}
+.small-link {
+  color: var(--accent);
+  font-size: 13px;
+}
+code.copy {
+  background: var(--panel-2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: copy;
+}

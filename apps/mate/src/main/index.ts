@@ -30,8 +30,9 @@ import {
   type InboxStatus,
   type MateConfig,
 } from "@pi-desktop/mate-runner";
-import { IpcChannels, type DutyDraft, type Overview, type RunnerView } from "../shared/api";
+import { IpcChannels, type DutyDraft, type Overview, type PiReadiness, type PiSetupView, type RunnerView } from "../shared/api";
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
+import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
 import { runnerCommand } from "./runner-process";
 import { parseTranscript } from "./session-transcript";
 
@@ -71,6 +72,34 @@ async function ensureRunner(): Promise<void> {
   } catch (error) {
     runnerError = `실행기를 띄우지 못했습니다: ${(error as Error).message}`;
   }
+}
+
+/** Pi 준비 상태. pi --list-models가 몇 초 걸려 5분 동안 기억해 둔다 */
+let readinessCache: Promise<PiSetupView> | undefined;
+let readinessAt = 0;
+
+function readiness(refresh = false): Promise<PiSetupView> {
+  if (refresh || !readinessCache || Date.now() - readinessAt > 5 * 60_000) {
+    readinessAt = Date.now();
+    readinessCache = runnerCommand(runnerScript(), "status", runnerEnv()).then(
+      (status) => ({ ...(status as unknown as PiReadiness), ...piDesktopInfoView(), checkedAt: Date.now() }),
+      (error: Error) => ({
+        stage: "no-pi" as const,
+        piError: `Pi 상태를 확인하지 못했습니다: ${error.message}`,
+        node: { path: "", ok: false },
+        authProviders: [],
+        models: [],
+        ...piDesktopInfoView(),
+        checkedAt: Date.now(),
+      }),
+    );
+  }
+  return readinessCache;
+}
+
+function piDesktopInfoView(): { piDesktopPath?: string } {
+  const info = piDesktopInfo();
+  return info.installedPath ? { piDesktopPath: info.installedPath } : {};
 }
 
 async function runnerView(): Promise<RunnerView> {
@@ -160,6 +189,11 @@ function registerIpc(): void {
   });
   ipcMain.handle(IpcChannels.revealHome, () => shell.openPath(paths.home));
   ipcMain.handle(IpcChannels.getAutostart, () => getAutostart());
+  ipcMain.handle(IpcChannels.piReadiness, (_e, refresh: boolean) => readiness(refresh === true));
+  ipcMain.handle(IpcChannels.installPiDesktop, () =>
+    installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total)),
+  );
+  ipcMain.handle(IpcChannels.openPiDesktop, () => openPiDesktop());
   ipcMain.handle(IpcChannels.setAutostart, (_e, enabled: boolean) => setAutostart(enabled === true));
   ipcMain.handle(IpcChannels.applyChange, (_e, itemId: string) => applyInboxChange(paths, String(itemId)));
   ipcMain.handle(IpcChannels.discardChange, (_e, itemId: string) => discardInboxChange(paths, String(itemId)));

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Overview } from "../shared/api";
+import type { Overview, PiSetupView } from "../shared/api";
+import { PiSetupBanner } from "./PiSetup";
 import { DutiesView } from "./DutiesView";
 import { InboxPanel } from "./InboxPanel";
 import { splitInbox, STATUS_LABELS } from "./mate-view";
@@ -15,6 +16,11 @@ export function App() {
   const [actionError, setActionError] = useState<string>();
   const [tab, setTab] = useState<Tab>("inbox");
   const [now, setNow] = useState(Date.now());
+  const [setup, setSetup] = useState<PiSetupView>();
+  const checkSetup = useCallback((refresh = false) => {
+    void window.mate.piReadiness(refresh).then(setSetup);
+  }, []);
+  useEffect(() => checkSetup(), [checkSetup]);
 
   const refresh = useCallback(async () => {
     try {
@@ -99,11 +105,20 @@ export function App() {
         </div>
       </header>
       {(actionError ?? error ?? runner.error) && <div className="banner bad">{actionError ?? error ?? runner.error}</div>}
+      {setup && (
+        <PiSetupBanner
+          setup={setup}
+          model={overview.config.model}
+          act={act}
+          onRefresh={() => checkSetup(true)}
+          onUsePiDefault={() => void act(() => window.mate.saveConfig({ model: setup.piDefaultModel! }))}
+        />
+      )}
       <main className="content">
         {tab === "inbox" && <InboxPanel overview={overview} now={now} act={act} />}
-        {tab === "duties" && <DutiesView overview={overview} now={now} act={act} />}
+        {tab === "duties" && <DutiesView overview={overview} now={now} act={act} setup={setup} />}
         {tab === "runs" && <RunsView overview={overview} now={now} />}
-        {tab === "settings" && <SettingsView overview={overview} act={act} />}
+        {tab === "settings" && <SettingsView overview={overview} act={act} setup={setup} onRefreshSetup={() => checkSetup(true)} />}
       </main>
     </div>
   );

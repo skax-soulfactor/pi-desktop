@@ -16,6 +16,14 @@ const api: MateApi = {
   discardChange: (itemId) => ipcRenderer.invoke(IpcChannels.discardChange, itemId),
   getAutostart: () => ipcRenderer.invoke(IpcChannels.getAutostart),
   setAutostart: (enabled) => ipcRenderer.invoke(IpcChannels.setAutostart, enabled),
+  piReadiness: (refresh) => ipcRenderer.invoke(IpcChannels.piReadiness, refresh === true),
+  installPiDesktop: () => ipcRenderer.invoke(IpcChannels.installPiDesktop),
+  openPiDesktop: () => ipcRenderer.invoke(IpcChannels.openPiDesktop),
+  onInstallProgress: (listener) => {
+    const handler = (_e: unknown, received: number, total: number) => listener(received, total);
+    ipcRenderer.on(IpcChannels.installProgress, handler);
+    return () => ipcRenderer.removeListener(IpcChannels.installProgress, handler);
+  },
   onChanged: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(IpcChannels.changed, handler);

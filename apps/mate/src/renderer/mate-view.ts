@@ -1,4 +1,4 @@
-import type { DutyDraft, DutyView, InboxView, RunRecord, RunStatus } from "../shared/api";
+import type { DutyDraft, DutyView, InboxView, PiSetupView, RunRecord, RunStatus } from "../shared/api";
 
 type Trigger = DutyDraft["trigger"];
 
@@ -134,6 +134,51 @@ export function nextRunLabel(duty: DutyView, now: number, paused: boolean): stri
   if (duty.trigger.kind === "git" || duty.trigger.kind === "files" || duty.trigger.kind === "poll") return "변화를 지켜보는 중";
   if (duty.nextRunAt === undefined) return "";
   return duty.nextRunAt <= now ? "곧 실행" : `다음: ${relativeTime(duty.nextRunAt, now)}`;
+}
+
+export interface SetupIssue {
+  kind: "no-pi" | "no-models" | "git-bash" | "model";
+  level: "bad" | "warn";
+  title: string;
+  detail: string;
+}
+
+/** Pi 준비 상태에서 사용자에게 알릴 것 (없으면 빈 배열) */
+export function piSetupIssues(setup: PiSetupView, model: string): SetupIssue[] {
+  const issues: SetupIssue[] = [];
+  if (setup.stage === "no-pi") {
+    issues.push({
+      kind: "no-pi",
+      level: "bad",
+      title: "Pi가 설치되어 있지 않습니다",
+      detail: "Mate는 이 PC의 Pi로 일합니다. Pi Desktop을 설치하면 Pi 설치·로그인·모델 관리를 화면에서 할 수 있습니다.",
+    });
+    return issues;
+  }
+  if (setup.stage === "no-models") {
+    issues.push({
+      kind: "no-models",
+      level: "bad",
+      title: "쓸 수 있는 모델이 없습니다",
+      detail: `Pi ${setup.pi?.version ?? ""}는 있지만 로그인한 프로바이더가 없습니다. Pi Desktop의 "프로바이더"에서 로그인하세요.${setup.modelsError ? ` (${setup.modelsError})` : ""}`,
+    });
+  } else if (model && !setup.models.some((m) => `${m.provider}/${m.id}` === model)) {
+    issues.push({
+      kind: "model",
+      level: "warn",
+      title: `기본 모델 ${model}을(를) Pi에서 쓸 수 없습니다`,
+      detail: "로그인하지 않은 프로바이더이거나 이름이 다릅니다. 설정에서 목록의 모델을 고르세요.",
+    });
+  }
+  if (setup.gitBash && !setup.gitBash.found) {
+    issues.push({
+      kind: "git-bash",
+      level: "warn",
+      title: "Git Bash가 없어 bash 명령을 쓸 수 없습니다",
+      detail: "Windows에서 Pi의 bash 도구는 Git for Windows가 필요합니다. 없으면 git·gh로 살펴보는 임무가 실패합니다.",
+    });
+  }
+  return issues;
 }
 
 /** 새 임무 폼의 빈 값과 템플릿 (설계 DESIGN-MATE.md §1의 쓰임 예) */

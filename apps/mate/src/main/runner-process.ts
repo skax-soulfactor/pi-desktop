@@ -26,19 +26,21 @@ export async function resolveNodeRuntime(): Promise<NodeRuntime> {
 }
 
 /**
- * 실행기 명령(start·stop)을 부른다. start는 실행기가 없거나 번들이 바뀌었으면 분리된 프로세스로 새로 띄우고 끝난다.
+ * 실행기 명령(start·stop·status)을 부른다. status는 Pi 준비 상태를 읽기만 한다. start는 실행기가 없거나 번들이 바뀌었으면 분리된 프로세스로 새로 띄우고 끝난다.
  * 실행기는 앱을 닫아도 남아 시간표를 지킨다.
  */
 export async function runnerCommand(
   script: string,
-  command: "start" | "stop",
+  command: "start" | "stop" | "status",
   env: Record<string, string>,
-): Promise<{ status: string; pid?: number }> {
+): Promise<Record<string, unknown>> {
   const runtime = await resolveNodeRuntime();
   const { stdout } = await execFileAsync(runtime.command, [script, command], {
     env: { ...process.env, ...runtime.env, ...env },
-    timeout: 30_000,
+    // status는 pi --list-models를 돌리므로 길게 기다린다
+    timeout: command === "status" ? 90_000 : 30_000,
+    maxBuffer: 4 * 1024 * 1024,
     windowsHide: true,
   });
-  return JSON.parse(stdout.trim().split(/\r?\n/).at(-1) ?? "{}") as { status: string; pid?: number };
+  return JSON.parse(stdout.trim().split(/\r?\n/).at(-1) ?? "{}") as Record<string, unknown>;
 }

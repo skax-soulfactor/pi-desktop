@@ -1,5 +1,14 @@
 import type { InboxItem } from "@pi-desktop/mate-kit/shared";
 import type { Duty, InboxStatus, MateConfig, RunnerState, RunRecord, RunStatus } from "@pi-desktop/mate-runner/types";
+import type { PiReadiness } from "@pi-desktop/mate-runner/pi-readiness";
+
+export type { PiReadiness };
+
+/** Pi 준비 상태 + 설치된 Pi Desktop 위치 */
+export interface PiSetupView extends PiReadiness {
+  piDesktopPath?: string;
+  checkedAt: number;
+}
 
 export type { Duty, InboxItem, InboxStatus, MateConfig, RunRecord, RunStatus };
 
@@ -18,6 +27,10 @@ export const IpcChannels = {
   discardChange: "mate:discard-change",
   getAutostart: "mate:get-autostart",
   setAutostart: "mate:set-autostart",
+  piReadiness: "mate:pi-readiness",
+  installPiDesktop: "mate:install-pi-desktop",
+  openPiDesktop: "mate:open-pi-desktop",
+  installProgress: "mate:install-progress",
   changed: "mate:changed",
 } as const;
 
@@ -91,6 +104,13 @@ export interface MateApi {
   /** 로그인할 때 실행기 시작 (설치본만) */
   getAutostart(): Promise<AutostartView>;
   setAutostart(enabled: boolean): Promise<AutostartView>;
+  /** Pi 준비 상태 (설치·로그인·모델). refresh면 캐시를 버리고 다시 확인 */
+  piReadiness(refresh?: boolean): Promise<PiSetupView>;
+  /** Pi Desktop을 내려받아 설치 프로그램을 연다 */
+  installPiDesktop(): Promise<{ status: "opened" | "cancelled" | "page"; path?: string }>;
+  /** 설치된 Pi Desktop을 연다. 없으면 false */
+  openPiDesktop(): Promise<boolean>;
+  onInstallProgress(listener: (received: number, total: number) => void): () => void;
   /** Mate 홈의 파일이 바뀌면 불린다. 해제 함수를 돌려준다 */
   onChanged(listener: () => void): () => void;
 }
