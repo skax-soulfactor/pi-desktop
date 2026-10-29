@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,7 @@ import { readInbox } from "@pi-desktop/mate-kit";
 import { PI_CLI, setupRealPi, type RealPiFixture } from "../../host-agent/test/helpers/real-pi";
 import { isAlive, readPid } from "../src/daemon";
 import { matePaths, type MatePaths } from "../src/paths";
-import { addRequest, listRuns, saveConfig, saveDuty } from "../src/store";
+import { addRequest, listRuns, loadState, saveConfig, saveDuty } from "../src/store";
 import type { Duty, RunRecord } from "../src/types";
 
 /**
@@ -29,7 +29,8 @@ describe("실행기 + 실제 Pi", () => {
     fixture = await setupRealPi();
     paths = matePaths(await mkdtemp(join(tmpdir(), "mate-home-")));
     await saveConfig(paths, { model: "mock/mock-model" });
-    env = { ...process.env, ...fixture.piEnv, MATE_HOME: paths.home, PI_DESKTOP_PI_CLI: PI_CLI };
+    // 상주 실행기의 주기 확인을 줄여 변화 계기를 빨리 본다
+    env = { ...process.env, ...fixture.piEnv, MATE_HOME: paths.home, PI_DESKTOP_PI_CLI: PI_CLI, PI_DESKTOP_MATE_TICK_MS: "300" };
   });
 
   afterAll(async () => {
@@ -76,32 +77,100 @@ describe("실행기 + 실제 Pi", () => {
     expect(existsSync(join(fixture.projectDir, "new.txt"))).toBe(false);
   });
 
+  it("비용 상한을 넘으면 실행을 멈추고 '비용 상한'으로 남긴다", async () => {
+    // 토큰 하나에 $1인 mock 모델 (mock 응답은 입력 10·출력 5 토큰 → $15)
+    await writeFile(
+      join(fixture.piEnv.PI_CODING_AGENT_DIR!, "models.json"),
+      JSON.stringify({
+        providers: {
+          mock: {
+            baseUrl: fixture.llm.baseUrl,
+            api: "openai-completions",
+            apiKey: "mock",
+            models: [{ id: "mock-model" }, { id: "mock-costly", cost: { input: 1e6, output: 1e6, cacheRead: 0, cacheWrite: 0 } }],
+          },
+        },
+      }),
+    );
+    await saveDuty(paths, {
+      id: "costly",
+      name: "비싼 임무",
+      cwd: fixture.projectDir,
+      prompt: "비싼 질문",
+      profile: "observe",
+      trigger: { kind: "manual" },
+      model: "mock/mock-costly",
+      maxCostUsd: 1,
+    });
+    const record = await run("costly");
+    expect(record).toMatchObject({ status: "budget" });
+    expect(record.error).toMatch(/비용 상한 \$1/);
+    expect(record.costUsd).toBeGreaterThan(1);
+    // 세션 파일을 기록해 화면에서 열 수 있다
+    expect(record.sessionFile && existsSync(record.sessionFile)).toBe(true);
+  });
+
+  const start = async () => JSON.parse((await execFileAsync(process.execPath, [RUNNER, "start"], { env })).stdout) as { status: string; pid: number };
+
+  async function stopRunner(pid: number): Promise<void> {
+    await execFileAsync(process.execPath, [RUNNER, "stop"], { env });
+    for (let i = 0; i < 50 && isAlive(pid); i++) await new Promise((r) => setTimeout(r, 100));
+  }
+
+  /** 조건에 맞는 실행 기록을 기다린다. 실패하면 실행기 로그·기록·상태를 함께 보여 준다 (분리된 프로세스라 출력이 테스트에 남지 않음) */
+  async function waitForRun(match: (r: RunRecord) => boolean, ms = 30_000): Promise<RunRecord> {
+    let found: RunRecord | undefined;
+    for (const end = Date.now() + ms; !found && Date.now() < end; ) {
+      await new Promise((r) => setTimeout(r, 100));
+      found = (await listRuns(paths)).find(match);
+    }
+    if (found) return found;
+    const diagnostics = [
+      await readFile(paths.log, "utf8").catch(() => "(로그 없음)"),
+      JSON.stringify(await listRuns(paths), null, 1),
+      await readFile(paths.state, "utf8").catch(() => "(상태 없음)"),
+    ].join("\n---\n");
+    throw new Error(`실행 기록을 기다리다 시간이 지났습니다\n${diagnostics}`);
+  }
+
   it("상주 실행기가 지금 실행 요청을 처리하고, 두 번 띄워도 하나만 돈다", async () => {
-    const start = async () => JSON.parse((await execFileAsync(process.execPath, [RUNNER, "start"], { env })).stdout) as { status: string; pid: number };
     const first = await start();
     expect(first.status).toBe("started");
     expect(await start()).toMatchObject({ status: "running", pid: first.pid });
 
     await addDuty("echo", "observe", "상주 확인");
     await addRequest(paths, "echo");
-    let done: RunRecord | undefined;
-    for (let i = 0; i < 300 && !done; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-      done = (await listRuns(paths)).find((r) => r.dutyId === "echo" && r.status === "done");
-    }
-    // 실패하면 실행기 로그·기록·상태를 함께 보여 준다 (분리된 프로세스라 출력이 테스트에 남지 않음)
-    const diagnostics = async () =>
-      [
-        await readFile(paths.log, "utf8").catch(() => "(로그 없음)"),
-        JSON.stringify(await listRuns(paths), null, 1),
-        await readFile(paths.state, "utf8").catch(() => "(상태 없음)"),
-      ].join("\n---\n");
-    expect(done, done ? "" : await diagnostics()).toMatchObject({ reason: "manual", summary: "echo: 상주 확인" });
+    const done = await waitForRun((r) => r.dutyId === "echo" && r.status === "done");
+    expect(done).toMatchObject({ reason: "manual", summary: "echo: 상주 확인" });
 
-    await execFileAsync(process.execPath, [RUNNER, "stop"], { env });
-    for (let i = 0; i < 50 && isAlive(first.pid); i++) await new Promise((r) => setTimeout(r, 100));
+    await stopRunner(first.pid);
     expect(isAlive(first.pid)).toBe(false);
     // pid 파일이 남아도 죽은 pid라 다음 start가 새로 띄운다
     expect(isAlive(await readPid(paths))).toBe(false);
+  });
+
+  it("git 계기: 처음 본 커밋은 기준만 잡고, 새 커밋이 생기면 돈다", async () => {
+    const repo = await mkdtemp(join(tmpdir(), "mate-git-"));
+    const gitEnv = { ...env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+    const git = (...args: string[]) => execFileAsync("git", args, { cwd: repo, env: gitEnv });
+    await git("init", "-q", "-b", "main");
+    await git("commit", "-q", "--allow-empty", "-m", "first");
+    await saveDuty(paths, { id: "repo", name: "저장소", cwd: repo, prompt: "새 커밋 확인", profile: "observe", trigger: { kind: "git" } });
+
+    const runner = await start();
+    try {
+      for (let i = 0; i < 100 && !(await loadState(paths)).duties.repo?.watch?.signature; i++) await new Promise((r) => setTimeout(r, 100));
+      expect((await loadState(paths)).duties.repo?.watch?.signature).toMatch(/^main@/);
+      expect((await listRuns(paths)).some((r) => r.dutyId === "repo")).toBe(false);
+
+      await git("commit", "-q", "--allow-empty", "-m", "second");
+      const { stdout: sha } = await git("rev-parse", "--short", "HEAD");
+      const changed = await waitForRun((r) => r.dutyId === "repo" && r.status === "done");
+      expect(changed).toMatchObject({ reason: "change", cause: `커밋 ${sha.trim()} (main)` });
+      expect((await loadState(paths)).duties.repo?.watch?.pending).toBeUndefined();
+    } finally {
+      await stopRunner(runner.pid);
+      await rm(repo, { recursive: true, force: true }).catch(() => {});
+    }
   });
 });

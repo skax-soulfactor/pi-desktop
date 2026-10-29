@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
-import { appendFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { appendProposal, extensionEntries, makeProposal } from "@pi-desktop/mate-kit";
 import { runPi, type PiLaunch, type RunOutcome } from "./executor";
 import type { MatePaths } from "./paths";
 import { isDue, localDateKey } from "./schedule";
+import { ChangeWatchers, type Exec } from "./watchers";
 import {
   getDuty,
   listDuties,
@@ -16,9 +18,10 @@ import {
   takeRequests,
   writeRun,
 } from "./store";
-import { DEFAULT_TIMEOUT_SEC, type Duty, type RunRecord, type RunnerState } from "./types";
+import { DEFAULT_TIMEOUT_SEC, isChangeTrigger, type Duty, type RunRecord, type RunnerState } from "./types";
 
-const TICK_MS = 30_000;
+// 테스트에서는 PI_DESKTOP_MATE_TICK_MS로 줄인다
+const TICK_MS = Number(process.env.PI_DESKTOP_MATE_TICK_MS) || 30_000;
 const LOG_LIMIT = 1_000_000;
 
 export interface RunnerOptions {
@@ -29,6 +32,24 @@ export interface RunnerOptions {
   locatePi: () => Promise<PiLaunch>;
   build?: string;
   now?: () => number;
+  /** 변화 계기의 git·poll 명령 실행 (테스트에서 바꿔 끼움) */
+  exec?: Exec;
+}
+
+interface Pick {
+  duty: Duty;
+  reason: RunRecord["reason"];
+  cause?: string;
+}
+
+/** Pi가 --session-dir에 만든 세션 파일(`<시각>_<id>.jsonl`)을 찾는다 */
+export async function findSessionFile(paths: MatePaths, sessionId: string): Promise<string | undefined> {
+  try {
+    const name = (await readdir(paths.sessions)).find((n) => n.endsWith(`_${sessionId}.jsonl`));
+    return name ? join(paths.sessions, name) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function log(paths: MatePaths, message: string): Promise<void> {
@@ -49,18 +70,20 @@ export async function log(paths: MatePaths, message: string): Promise<void> {
 export async function runDuty(
   options: RunnerOptions,
   duty: Duty,
-  reason: RunRecord["reason"],
+  run: { reason: RunRecord["reason"]; cause?: string; runId?: string },
   signal?: AbortSignal,
-  runId = newRunId((options.now ?? Date.now)()),
 ): Promise<RunRecord> {
   const { paths } = options;
   const now = options.now ?? Date.now;
+  const { reason, cause } = run;
+  const runId = run.runId ?? newRunId(now());
   const config = await loadConfig(paths);
   const record: RunRecord = {
     id: runId,
     dutyId: duty.id,
     dutyName: duty.name,
     reason,
+    ...(cause ? { cause } : {}),
     status: "running",
     startedAt: now(),
     model: duty.model ?? config.model,
@@ -76,12 +99,14 @@ export async function runDuty(
       launch,
       {
         duty,
+        ...(cause ? { cause } : {}),
         runId,
         model: record.model,
         extensions,
         inboxPath: paths.inbox,
         sessionsDir: paths.sessions,
         timeoutSec: duty.timeoutSec ?? DEFAULT_TIMEOUT_SEC,
+        maxCostUsd: duty.maxCostUsd ?? config.maxCostUsd,
       },
       signal,
     );
@@ -94,7 +119,8 @@ export async function runDuty(
     if (await appendProposal(paths.inbox, item)) outcome.proposals += 1;
   }
 
-  const finished: RunRecord = { ...record, ...outcome, endedAt: now() };
+  const sessionFile = outcome.sessionId ? await findSessionFile(paths, outcome.sessionId) : undefined;
+  const finished: RunRecord = { ...record, ...outcome, ...(sessionFile ? { sessionFile } : {}), endedAt: now() };
   await writeRun(paths, finished);
   await pruneRuns(paths);
   await log(paths, `run end ${runId} status=${finished.status}${finished.error ? ` error=${finished.error.split("\n")[0]}` : ""}`);
@@ -114,8 +140,11 @@ export class Runner {
   private abort = new AbortController();
   /** "지금 실행" 요청 중 아직 실행하지 않은 임무 */
   private queue: string[] = [];
+  private readonly watchers: ChangeWatchers;
 
-  constructor(private readonly options: RunnerOptions) {}
+  constructor(private readonly options: RunnerOptions) {
+    this.watchers = new ChangeWatchers(options.exec, (message) => void log(options.paths, message));
+  }
 
   private now(): number {
     return (this.options.now ?? Date.now)();
@@ -142,6 +171,7 @@ export class Runner {
   async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.watcher?.close();
+    this.watchers.dispose();
     // 도는 실행이 있으면 abort 신호로 Pi 프로세스 트리를 끝낸다
     this.abort.abort();
     await log(this.options.paths, `runner stop pid=${process.pid}`);
@@ -164,7 +194,7 @@ export class Runner {
         const next = await this.pickNext();
         await this.heartbeat();
         if (next) {
-          await this.execute(next.duty, next.reason);
+          await this.execute(next);
           this.again = true;
         }
       } while (this.again && !this.abort.signal.aborted);
@@ -175,7 +205,7 @@ export class Runner {
     }
   }
 
-  private async pickNext(): Promise<{ duty: Duty; reason: RunRecord["reason"] } | undefined> {
+  private async pickNext(): Promise<Pick | undefined> {
     const { paths } = this.options;
     const requests = await takeRequests(paths);
     for (const request of requests) this.queue.push(request.dutyId);
@@ -183,28 +213,37 @@ export class Runner {
       const duty = await getDuty(paths, this.queue.shift()!);
       if (duty) return { duty, reason: "manual" };
     }
-    const config = await loadConfig(paths);
-    if (config.paused) return undefined;
     const today = localDateKey(this.now());
-    if (this.state.today.date !== today) this.state.today = { date: today, count: 0 };
-    if (this.state.today.count >= config.dailyRunLimit) return undefined;
-    for (const duty of await listDuties(paths)) {
-      if (isDue(duty, this.state.duties[duty.id]?.lastRunAt, this.now())) return { duty, reason: "schedule" };
+    if (this.state.today.date !== today) this.state.today = { date: today, count: 0, costUsd: 0 };
+    const duties = await listDuties(paths);
+    // 일시 정지·상한 중에도 변화는 기록해 둔다 (기준이 어긋나지 않게)
+    await this.watchers.refresh(duties, () => this.state, this.now());
+    const config = await loadConfig(paths);
+    if (config.paused || this.state.today.count >= config.dailyRunLimit) return undefined;
+    for (const duty of duties) {
+      const entry = this.state.duties[duty.id];
+      if (!isDue(duty, entry?.lastRunAt, this.now(), entry?.watch)) continue;
+      if (!isChangeTrigger(duty.trigger)) return { duty, reason: "schedule" };
+      return { duty, reason: "change", ...(entry?.watch?.pending ? { cause: entry.watch.pending.cause } : {}) };
     }
     return undefined;
   }
 
-  private async execute(duty: Duty, reason: RunRecord["reason"]): Promise<void> {
+  private async execute({ duty, reason, cause }: Pick): Promise<void> {
     const { paths } = this.options;
     const startedAt = this.now();
     // 실패해도 마지막 실행 시각을 남겨, 같은 임무를 곧바로 다시 돌리지 않는다
     this.state.duties[duty.id] = { ...this.state.duties[duty.id], lastRunAt: startedAt };
-    if (reason === "schedule") this.state.today.count += 1;
+    if (reason !== "manual") this.state.today.count += 1;
     const runId = newRunId(startedAt);
     this.state.current = { runId, dutyId: duty.id, startedAt };
     await saveState(paths, this.state);
-    const record = await runDuty(this.options, duty, reason, this.abort.signal, runId);
-    this.state.duties[duty.id] = { lastRunAt: startedAt, lastStatus: record.status };
+    const record = await runDuty(this.options, duty, { reason, ...(cause ? { cause } : {}), runId }, this.abort.signal);
+    // 실행하는 동안 생긴 변화는 남기고, 실행 전 변화만 처리한 것으로 본다
+    const entry = this.state.duties[duty.id] ?? {};
+    const watch = entry.watch && entry.watch.pending && entry.watch.pending.lastAt <= startedAt ? { ...entry.watch, pending: undefined } : entry.watch;
+    this.state.duties[duty.id] = { ...entry, lastRunAt: startedAt, lastStatus: record.status, ...(watch ? { watch } : {}) };
+    this.state.today.costUsd = (this.state.today.costUsd ?? 0) + (record.costUsd ?? 0);
     delete this.state.current;
     await saveState(paths, this.state);
   }
