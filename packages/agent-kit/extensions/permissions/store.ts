@@ -29,12 +29,43 @@ export async function loadRules(dir: string): Promise<Rule[]> {
 
 export async function addRule(dir: string, rule: Rule): Promise<void> {
   const rules = await loadRules(dir);
-  if (rules.some((r) => r.toolName === rule.toolName && r.pattern === rule.pattern && r.action === rule.action)) return;
+  if (rules.some((r) => sameRule(r, rule))) return;
+  await saveRules(dir, [...rules, rule]);
+}
+
+/** 규칙 하나를 지운다 (앱의 승인 규칙 화면) */
+export async function removeRule(dir: string, rule: Rule): Promise<void> {
+  await saveRules(dir, (await loadRules(dir)).filter((r) => !sameRule(r, rule)));
+}
+
+function sameRule(a: Rule, b: Rule): boolean {
+  return a.toolName === b.toolName && a.pattern === b.pattern && a.action === b.action;
+}
+
+async function saveRules(dir: string, rules: Rule[]): Promise<void> {
   await mkdir(dir, { recursive: true });
   const path = join(dir, "permissions.json");
   const tmp = `${path}.${process.pid}.tmp`;
-  await writeFile(tmp, `${JSON.stringify({ rules: [...rules, rule] }, null, 2)}\n`, "utf8");
+  await writeFile(tmp, `${JSON.stringify({ rules }, null, 2)}\n`, "utf8");
   await rename(tmp, path);
+}
+
+/** 최근 감사 기록 (최근 것부터). 읽지 못하면 빈 목록 */
+export async function loadAudit(dir: string, limit = 50): Promise<AuditRecord[]> {
+  try {
+    const lines = (await readFile(join(dir, "audit.jsonl"), "utf8")).trim().split("\n").filter(Boolean);
+    const records: AuditRecord[] = [];
+    for (const line of lines.slice(-limit).reverse()) {
+      try {
+        records.push(JSON.parse(line) as AuditRecord);
+      } catch {
+        // 깨진 줄은 건너뛴다
+      }
+    }
+    return records;
+  } catch {
+    return [];
+  }
 }
 
 export interface AuditRecord {
