@@ -1,4 +1,7 @@
 import type { MateProfile } from "@pi-desktop/mate-kit/shared";
+import type { ObserverState } from "./activity-types";
+
+export * from "./activity-types";
 
 /** 언제 돌릴지 (설계 DESIGN-MATE.md §3) */
 export type Trigger =
@@ -11,12 +14,14 @@ export type Trigger =
   /** 작업 폴더 파일 변화: 저장이 잠잠해진 뒤 한 번 (M2) */
   | { kind: "files"; quietSeconds?: number; cooldownMinutes?: number }
   /** 읽기 명령을 주기적으로 돌려 결과가 바뀌면 (M2). 명령은 mate-guard의 읽기 허용 목록을 통과해야 한다 */
-  | { kind: "poll"; command: string; minutes: number };
+  | { kind: "poll"; command: string; minutes: number }
+  /** 작업을 마치면: 이 폴더에서 사용자의 Pi 세션이 끝났을 때 (M4, 활동 관찰이 켜져 있어야 함) */
+  | { kind: "session"; cooldownMinutes?: number };
 
-export type ChangeTrigger = Extract<Trigger, { kind: "git" | "files" | "poll" }>;
+export type ChangeTrigger = Extract<Trigger, { kind: "git" | "files" | "poll" | "session" }>;
 
 export function isChangeTrigger(trigger: Trigger): trigger is ChangeTrigger {
-  return trigger.kind === "git" || trigger.kind === "files" || trigger.kind === "poll";
+  return trigger.kind === "git" || trigger.kind === "files" || trigger.kind === "poll" || trigger.kind === "session";
 }
 
 export interface Duty {
@@ -47,6 +52,21 @@ export interface MateConfig {
   dailyRunLimit: number;
   /** 실행당 비용 상한(USD). 넘으면 그 실행을 멈춘다. 0이면 없음 */
   maxCostUsd: number;
+  /** 활동 관찰 (M4) */
+  observe: ObserveConfig;
+}
+
+/**
+ * 활동 관찰 설정 (설계 DESIGN-MATE.md §10). 기본은 꺼짐: 사용자가 켜야 Pi 세션 기록을 읽는다.
+ */
+export interface ObserveConfig {
+  enabled: boolean;
+  /** Pi 세션이 이만큼 조용하면 "작업이 끝남"으로 본다 */
+  quietMinutes: number;
+  /** 하루 관찰 제안 상한 (규칙·분석 합계) */
+  dailySuggestionLimit: number;
+  /** 관찰하지 않을 폴더 (이 안의 세션·저장소는 보지 않음) */
+  excluded: string[];
 }
 
 export const DEFAULT_CONFIG: MateConfig = {
@@ -54,6 +74,7 @@ export const DEFAULT_CONFIG: MateConfig = {
   paused: false,
   dailyRunLimit: 20,
   maxCostUsd: 0.5,
+  observe: { enabled: false, quietMinutes: 5, dailySuggestionLimit: 5, excluded: [] },
 };
 
 export const DEFAULT_TIMEOUT_SEC = 300;
@@ -71,8 +92,8 @@ export interface RunRecord {
   id: string;
   dutyId: string;
   dutyName: string;
-  /** schedule: 시간표, change: 변화 감지, manual: 지금 실행 */
-  reason: "schedule" | "change" | "manual";
+  /** schedule: 시간표, change: 변화 감지, manual: 지금 실행, observe: 활동 관찰자 */
+  reason: "schedule" | "change" | "manual" | "observe";
   /** 변화 감지로 돌았을 때 무엇이 바뀌었는지 */
   cause?: string;
   status: RunStatus;
@@ -123,6 +144,8 @@ export interface RunnerState {
   /** 오늘(로컬 날짜) 자동 실행 수와 비용 (지금 실행 포함한 비용) */
   today: { date: string; count: number; costUsd?: number };
   current?: { runId: string; dutyId: string; startedAt: number };
+  /** 활동 관찰 (M4) */
+  observer?: ObserverState;
 }
 
 /** "지금 실행" 요청 (requests/<시각>-<id>.json) */

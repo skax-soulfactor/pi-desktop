@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DutyView, InboxView } from "../src/shared/api";
-import { costLabel, nextRunLabel, relativeTime, splitInbox, triggerLabel } from "../src/renderer/mate-view";
+import type { DutyView, InboxView } from "../../src/shared/api";
+import { costLabel, nextRunLabel, piSetupIssues, relativeTime, splitInbox, triggerLabel } from "../../src/renderer/mate-view";
 
 const at = (d: number, h: number, mi = 0) => new Date(2026, 9, d, h, mi).getTime();
 
@@ -58,5 +58,23 @@ describe("mate-view", () => {
     expect(costLabel(0.0031)).toBe("$0.0031");
     expect(costLabel(0.42)).toBe("$0.42");
     expect(costLabel(0)).toBe("");
+  });
+});
+
+describe("piSetupIssues", () => {
+  const base = { node: { path: "node", ok: true }, authProviders: [], models: [], checkedAt: 0 };
+  it("Pi가 없으면 그것만, 모델이 없으면 로그인 안내", () => {
+    expect(piSetupIssues({ ...base, stage: "no-pi" }, "a/b").map((i) => i.kind)).toEqual(["no-pi"]);
+    expect(piSetupIssues({ ...base, stage: "no-models", pi: { version: "1.4.0", cliPath: "x", source: "npm-global" } }, "a/b")[0]).toMatchObject({
+      kind: "no-models",
+      level: "bad",
+    });
+  });
+
+  it("준비됐으면 기본 모델이 목록에 있는지와 Git Bash를 본다", () => {
+    const ready = { ...base, stage: "ready" as const, models: [{ provider: "anthropic", id: "claude-haiku-5-5" }] };
+    expect(piSetupIssues(ready, "anthropic/claude-haiku-5-5")).toEqual([]);
+    expect(piSetupIssues(ready, "openai/gpt-x").map((i) => i.kind)).toEqual(["model"]);
+    expect(piSetupIssues({ ...ready, gitBash: { found: false } }, "anthropic/claude-haiku-5-5").map((i) => i.kind)).toEqual(["git-bash"]);
   });
 });

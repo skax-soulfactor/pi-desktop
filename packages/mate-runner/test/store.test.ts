@@ -34,7 +34,16 @@ const raw = { id: "brief", name: "아침 브리핑", cwd: "C:/p", prompt: "요�
 
 describe("store", () => {
   it("설정이 없으면 기본 모델은 haiku 5.5, 바꾼 값은 남는다", async () => {
-    expect(await loadConfig(paths)).toEqual({ model: "anthropic/claude-haiku-5-5", paused: false, dailyRunLimit: 20, maxCostUsd: 0.5 });
+    expect(await loadConfig(paths)).toEqual({
+      model: "anthropic/claude-haiku-5-5",
+      paused: false,
+      dailyRunLimit: 20,
+      maxCostUsd: 0.5,
+      // 활동 관찰은 사용자가 켜야 한다
+      observe: { enabled: false, quietMinutes: 5, dailySuggestionLimit: 5, excluded: [] },
+    });
+    // 관찰 설정은 일부만 바꿔도 나머지가 남는다
+    expect((await saveConfig(paths, { observe: { enabled: true } })).observe).toMatchObject({ enabled: true, quietMinutes: 5 });
     expect((await saveConfig(paths, { paused: true })).paused).toBe(true);
     expect((await loadConfig(paths)).model).toBe("anthropic/claude-haiku-5-5");
   });

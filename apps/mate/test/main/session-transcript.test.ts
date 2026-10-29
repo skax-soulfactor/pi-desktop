@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTranscript } from "../src/main/session-transcript";
+import { parseTranscript } from "../../src/main/session-transcript";
 
 const lines = [
   { type: "session", version: 3, id: "s1", cwd: "/p" },

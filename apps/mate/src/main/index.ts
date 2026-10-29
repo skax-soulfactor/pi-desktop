@@ -8,6 +8,11 @@ import {
   addRequest,
   applyInboxChange,
   discardInboxChange,
+  execCommand,
+  OBSERVER_DUTY_ID,
+  OBSERVER_NAME,
+  readActivity,
+  topicFeedback,
   deleteDuty,
   dutyIdFrom,
   findSessionFile,
@@ -27,11 +32,12 @@ import {
   saveConfig,
   saveDuty,
   setInboxStatus,
+  type ConfigPatch,
   type InboxStatus,
-  type MateConfig,
 } from "@pi-desktop/mate-runner";
-import { IpcChannels, type DutyDraft, type Overview, type RunnerView } from "../shared/api";
+import { IpcChannels, type DutyDraft, type Overview, type PiReadiness, type PiSetupView, type RunnerView } from "../shared/api";
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
+import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
 import { runnerCommand } from "./runner-process";
 import { parseTranscript } from "./session-transcript";
 
@@ -56,6 +62,10 @@ function runnerEnv(): Record<string, string> {
   return { MATE_HOME: paths.home, PI_DESKTOP_MATE_KIT: kitDir() };
 }
 
+// 개발 실행은 설치본과 userData(창 상태·단일 인스턴스 잠금)를 나눈다.
+// 같으면 설치본이 켜져 있을 때 개발 실행이 잠금에 걸려 바로 끝나고, 설치본 창을 앞으로 불러낸다.
+if (!app.isPackaged) app.setPath("userData", join(app.getPath("appData"), "Pi Desktop Mate (dev)"));
+
 // 개발·E2E 검증용 Chrome DevTools Protocol. 설치본은 환경 변수로 열지 않는다 (Pi Desktop과 같은 이유).
 if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
   app.commandLine.appendSwitch("remote-debugging-port", process.env.PI_DESKTOP_REMOTE_DEBUG_PORT);
@@ -71,6 +81,34 @@ async function ensureRunner(): Promise<void> {
   } catch (error) {
     runnerError = `실행기를 띄우지 못했습니다: ${(error as Error).message}`;
   }
+}
+
+/** Pi 준비 상태. pi --list-models가 몇 초 걸려 5분 동안 기억해 둔다 */
+let readinessCache: Promise<PiSetupView> | undefined;
+let readinessAt = 0;
+
+function readiness(refresh = false): Promise<PiSetupView> {
+  if (refresh || !readinessCache || Date.now() - readinessAt > 5 * 60_000) {
+    readinessAt = Date.now();
+    readinessCache = runnerCommand(runnerScript(), "status", runnerEnv()).then(
+      (status) => ({ ...(status as unknown as PiReadiness), ...piDesktopInfoView(), checkedAt: Date.now() }),
+      (error: Error) => ({
+        stage: "no-pi" as const,
+        piError: `Pi 상태를 확인하지 못했습니다: ${error.message}`,
+        node: { path: "", ok: false },
+        authProviders: [],
+        models: [],
+        ...piDesktopInfoView(),
+        checkedAt: Date.now(),
+      }),
+    );
+  }
+  return readinessCache;
+}
+
+function piDesktopInfoView(): { piDesktopPath?: string } {
+  const info = piDesktopInfo();
+  return info.installedPath ? { piDesktopPath: info.installedPath } : {};
 }
 
 async function runnerView(): Promise<RunnerView> {
@@ -97,8 +135,9 @@ async function overview(): Promise<Overview> {
     listRuns(paths, 100),
     runnerView(),
   ]);
+  const [activity, feedback] = await Promise.all([readActivity(paths, 150), topicFeedback(paths)]);
   const now = Date.now();
-  const names = new Map(duties.map((d) => [d.id, d.name]));
+  const names = new Map<string, string>([[OBSERVER_DUTY_ID, OBSERVER_NAME], ...duties.map((d) => [d.id, d.name] as [string, string])]);
   const queued = new Set(requests.map((r) => r.dutyId));
   return {
     home: paths.home,
@@ -121,7 +160,40 @@ async function overview(): Promise<Overview> {
       .sort((a, b) => b.createdAt - a.createdAt),
     runs,
     runner,
+    observe: {
+      activity: activity.reverse(),
+      queue: state.observer?.queue.length ?? 0,
+      today: state.observer?.today ?? { date: "", count: 0 },
+      projects: Object.values(state.observer?.projects ?? {}),
+      feedback,
+      ...(state.observer ? { since: state.observer.since } : {}),
+    },
   };
+}
+
+/**
+ * "Mate에게 맡기기": 제안의 맡길 일을 그 폴더에서 바로 실행한다 (설계 DESIGN-MATE.md §10).
+ * git 저장소면 고치기(act: 별도 작업 공간, 적용은 사용자가), 아니면 제안 단계로. 임무로 남겨 다시 돌릴 수 있게 한다.
+ */
+async function delegate(itemId: string): Promise<void> {
+  const item = (await readInbox(paths.inbox)).find((i) => i.id === itemId);
+  if (!item?.followUp) throw new Error("맡길 일이 없는 제안입니다");
+  const repo = await execCommand("git", ["rev-parse", "--is-inside-work-tree"], item.followUp.cwd);
+  const now = Date.now();
+  const duty = await saveDuty(paths, {
+    id: `delegated-${now.toString(36)}`,
+    name: `맡긴 일: ${item.title}`.slice(0, 80),
+    enabled: true,
+    cwd: item.followUp.cwd,
+    // 관찰자에게 맡길 일을 그것만으로 실행할 수 있게 쓰라고 했으므로 그대로 쓴다
+    prompt: item.followUp.prompt,
+    profile: repo.code === 0 && repo.stdout.trim() === "true" ? "act" : "propose",
+    trigger: { kind: "manual" },
+    createdAt: now,
+  });
+  await addRequest(paths, duty.id);
+  await setInboxStatus(paths, [item.id], "accepted");
+  if (!isAlive(await readPid(paths))) await ensureRunner();
 }
 
 async function saveDraft(draft: DutyDraft) {
@@ -148,7 +220,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannels.setInbox, async (_e, ids: string[], status: InboxStatus | undefined) => {
     await setInboxStatus(paths, ids.filter((id) => typeof id === "string"), status);
   });
-  ipcMain.handle(IpcChannels.saveConfig, (_e, patch: Partial<MateConfig>) => saveConfig(paths, patch));
+  ipcMain.handle(IpcChannels.saveConfig, (_e, patch: ConfigPatch) => saveConfig(paths, patch));
   ipcMain.handle(IpcChannels.pickDirectory, async () => {
     const result = await dialog.showOpenDialog(mainWindow!, { properties: ["openDirectory"] });
     return result.canceled ? undefined : result.filePaths[0];
@@ -160,7 +232,13 @@ function registerIpc(): void {
   });
   ipcMain.handle(IpcChannels.revealHome, () => shell.openPath(paths.home));
   ipcMain.handle(IpcChannels.getAutostart, () => getAutostart());
+  ipcMain.handle(IpcChannels.piReadiness, (_e, refresh: boolean) => readiness(refresh === true));
+  ipcMain.handle(IpcChannels.installPiDesktop, () =>
+    installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total)),
+  );
+  ipcMain.handle(IpcChannels.openPiDesktop, () => openPiDesktop());
   ipcMain.handle(IpcChannels.setAutostart, (_e, enabled: boolean) => setAutostart(enabled === true));
+  ipcMain.handle(IpcChannels.delegate, (_e, itemId: string) => delegate(String(itemId)));
   ipcMain.handle(IpcChannels.applyChange, (_e, itemId: string) => applyInboxChange(paths, String(itemId)));
   ipcMain.handle(IpcChannels.discardChange, (_e, itemId: string) => discardInboxChange(paths, String(itemId)));
   ipcMain.handle(IpcChannels.readSession, async (_e, runId: string) => {

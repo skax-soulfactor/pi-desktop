@@ -64,11 +64,29 @@ export async function loadConfig(paths: MatePaths): Promise<MateConfig> {
     dailyRunLimit:
       typeof raw.dailyRunLimit === "number" && raw.dailyRunLimit >= 0 ? Math.floor(raw.dailyRunLimit) : DEFAULT_CONFIG.dailyRunLimit,
     maxCostUsd: typeof raw.maxCostUsd === "number" && raw.maxCostUsd >= 0 ? raw.maxCostUsd : DEFAULT_CONFIG.maxCostUsd,
+    observe: normalizeObserve(raw.observe),
   };
 }
 
-export async function saveConfig(paths: MatePaths, patch: Partial<MateConfig>): Promise<MateConfig> {
-  const next = { ...(await loadConfig(paths)), ...patch };
+function normalizeObserve(raw: unknown): MateConfig["observe"] {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<string, unknown>>;
+  const d = DEFAULT_CONFIG.observe;
+  const int = (v: unknown, fallback: number, min: number, max: number) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : fallback;
+  return {
+    enabled: o.enabled === true,
+    quietMinutes: int(o.quietMinutes, d.quietMinutes, 1, 120),
+    dailySuggestionLimit: int(o.dailySuggestionLimit, d.dailySuggestionLimit, 0, 50),
+    excluded: Array.isArray(o.excluded) ? o.excluded.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim()) : [],
+  };
+}
+
+/** 설정 일부를 바꾼다. 관찰 설정도 일부만 줄 수 있다 */
+export type ConfigPatch = Partial<Omit<MateConfig, "observe">> & { observe?: Partial<MateConfig["observe"]> };
+
+export async function saveConfig(paths: MatePaths, patch: ConfigPatch): Promise<MateConfig> {
+  const current = await loadConfig(paths);
+  const next = { ...current, ...patch, observe: { ...current.observe, ...patch.observe } };
   await writeJsonAtomic(paths.config, next);
   return loadConfig(paths);
 }
@@ -97,9 +115,10 @@ const minutesOr = (value: unknown, fallback: number, min: number) =>
 function normalizeTrigger(raw: unknown): Trigger | string {
   const t = raw as Partial<Record<string, unknown>> | undefined;
   if (!t || typeof t !== "object") return "실행 시점이 잘못되었습니다";
-  if (t.kind === "git" || t.kind === "files") {
+  if (t.kind === "git" || t.kind === "files" || t.kind === "session") {
     const cooldownMinutes = minutesOr(t.cooldownMinutes, DEFAULT_COOLDOWN_MINUTES, MIN_COOLDOWN_MINUTES);
     if (t.kind === "git") return { kind: "git", cooldownMinutes };
+    if (t.kind === "session") return { kind: "session", cooldownMinutes };
     const quietSeconds = minutesOr(t.quietSeconds, DEFAULT_QUIET_SECONDS, 10);
     return { kind: "files", quietSeconds, cooldownMinutes };
   }

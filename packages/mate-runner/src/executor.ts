@@ -18,6 +18,8 @@ export interface RunInput {
   duty: Duty;
   /** 변화 감지로 돌 때 무엇이 바뀌었는지 (모델에 알린다) */
   cause?: string;
+  /** 관찰자 실행: 제안에 붙일 주제 (mate_propose가 환경 변수로 받음) */
+  topic?: string;
   runId: string;
   model: string;
   /** mate-kit 확장 진입 파일들 */
@@ -83,6 +85,7 @@ export function piEnv(input: RunInput, profile: MateProfile): Record<string, str
     [MATE_ENV.dutyId]: input.duty.id,
     [MATE_ENV.runId]: input.runId,
     ...(input.workspace ? { [MATE_ENV.writeRoot]: input.workspace.root } : {}),
+    ...(input.topic ? { [MATE_ENV.topic]: input.topic } : {}),
   };
 }
 

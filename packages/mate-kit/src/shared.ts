@@ -11,6 +11,8 @@ export const MATE_ENV = {
   runId: "PI_DESKTOP_MATE_RUN",
   /** act: write·edit를 허용하는 작업 공간(git worktree) 루트 */
   writeRoot: "PI_DESKTOP_MATE_WRITE_ROOT",
+  /** 관찰자 실행: 제안에 붙일 주제 */
+  topic: "PI_DESKTOP_MATE_TOPIC",
 } as const;
 
 export const PROPOSE_TOOL = "mate_propose";
@@ -66,4 +68,8 @@ export interface InboxItem {
   createdAt: number;
   /** act 실행의 변경. 있으면 인박스에서 "적용"할 수 있다 */
   change?: ChangeInfo;
+  /** 활동 관찰이 남긴 제안의 주제 (사용자가 계속 버리는 주제는 덜 알린다) */
+  topic?: string;
+  /** 사용자가 "Mate에게 맡기기"를 누르면 이 지시로 고치기를 실행한다 (cwd 폴더에서) */
+  followUp?: { prompt: string; cwd: string };
 }

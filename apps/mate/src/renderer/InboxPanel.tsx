@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { TOPIC_LABELS, type InsightTopic } from "@pi-desktop/mate-runner/activity-types";
 import type { InboxView, Overview } from "../shared/api";
 import type { Act } from "./App";
 import { relativeTime, splitInbox } from "./mate-view";
@@ -60,6 +61,7 @@ function InboxCard({ item, now, act }: { item: InboxView; now: number; act: Act 
     <li className={`card inbox-card sev-${item.severity}`}>
       <div className="card-head">
         <span className={`chip sev-${item.severity}`}>{SEVERITY_LABELS[item.severity]}</span>
+        {item.topic && <span className="chip">{TOPIC_LABELS[item.topic as InsightTopic] ?? item.topic}</span>}
         <strong className="title">{item.title}</strong>
         <span className="muted">
           {item.dutyName} · {relativeTime(item.createdAt, now)}
@@ -116,12 +118,23 @@ function InboxCard({ item, now, act }: { item: InboxView; now: number; act: Act 
           </>
         ) : (
           <>
-            <button className="primary small" onClick={() => void act(() => window.mate.setInbox([item.id], "accepted"))}>
+            {item.followUp && (
+              <button
+                className="primary small"
+                title={item.followUp.prompt}
+                onClick={() => void act(() => window.mate.delegate(item.id))}
+              >
+                Mate에게 맡기기
+              </button>
+            )}
+            <button className={`${item.followUp ? "" : "primary "}small`} onClick={() => void act(() => window.mate.setInbox([item.id], "accepted"))}>
               확인함
             </button>
             <button className="small" onClick={() => void act(() => window.mate.setInbox([item.id], "dismissed"))}>
               버리기
             </button>
+            {item.followUp && <span className="muted small-text">맡기면 별도 작업 공간에서 고치고, 적용은 다시 묻습니다</span>}
+            {item.topic && !item.followUp && <span className="muted small-text">버린 주제는 Mate가 덜 알립니다</span>}
           </>
         )}
       </div>

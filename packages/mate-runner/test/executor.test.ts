@@ -33,6 +33,9 @@ describe("piArgs", () => {
     expect(propose[propose.indexOf("--tools") + 1]).toBe("read,grep,find,ls,bash,mate_propose");
     expect(propose[propose.indexOf("--append-system-prompt") + 1]).toContain("mate_propose");
     expect(piEnv(input, "observe")).toMatchObject({ PI_DESKTOP_MATE_PROFILE: "observe", PI_DESKTOP_MATE_DUTY: "ci" });
+    // 관찰자 실행은 제안에 붙일 주제를 넘긴다
+    expect(piEnv({ ...input, topic: "untested-edit" }, "propose")).toMatchObject({ PI_DESKTOP_MATE_TOPIC: "untested-edit" });
+    expect(piEnv(input, "observe")).not.toHaveProperty("PI_DESKTOP_MATE_TOPIC");
   });
 });
 

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Overview } from "../shared/api";
+import type { Overview, PiSetupView } from "../shared/api";
+import { PiSetupBanner } from "./PiSetup";
+import { ActivityView } from "./ActivityView";
 import { DutiesView } from "./DutiesView";
 import { InboxPanel } from "./InboxPanel";
 import { splitInbox, STATUS_LABELS } from "./mate-view";
 import { RunsView } from "./RunsView";
 import { SettingsView } from "./SettingsView";
 
-type Tab = "inbox" | "duties" | "runs" | "settings";
+type Tab = "inbox" | "duties" | "activity" | "runs" | "settings";
 
 /** 화면 전체. Mate 홈의 파일이 바뀔 때마다(실행기·확장이 쓴 것 포함) 다시 읽는다 */
 export function App() {
@@ -15,6 +17,11 @@ export function App() {
   const [actionError, setActionError] = useState<string>();
   const [tab, setTab] = useState<Tab>("inbox");
   const [now, setNow] = useState(Date.now());
+  const [setup, setSetup] = useState<PiSetupView>();
+  const checkSetup = useCallback((refresh = false) => {
+    void window.mate.piReadiness(refresh).then(setSetup);
+  }, []);
+  useEffect(() => checkSetup(), [checkSetup]);
 
   const refresh = useCallback(async () => {
     try {
@@ -77,6 +84,9 @@ export function App() {
           <button className={tab === "duties" ? "active" : ""} onClick={() => setTab("duties")}>
             임무 <span className="count">{overview.duties.length}</span>
           </button>
+          <button className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>
+            활동{overview.config.observe.enabled && <span className="count"> 관찰 중</span>}
+          </button>
           <button className={tab === "runs" ? "active" : ""} onClick={() => setTab("runs")}>
             실행 기록
           </button>
@@ -99,11 +109,21 @@ export function App() {
         </div>
       </header>
       {(actionError ?? error ?? runner.error) && <div className="banner bad">{actionError ?? error ?? runner.error}</div>}
+      {setup && (
+        <PiSetupBanner
+          setup={setup}
+          model={overview.config.model}
+          act={act}
+          onRefresh={() => checkSetup(true)}
+          onUsePiDefault={() => void act(() => window.mate.saveConfig({ model: setup.piDefaultModel! }))}
+        />
+      )}
       <main className="content">
         {tab === "inbox" && <InboxPanel overview={overview} now={now} act={act} />}
-        {tab === "duties" && <DutiesView overview={overview} now={now} act={act} />}
+        {tab === "duties" && <DutiesView overview={overview} now={now} act={act} setup={setup} />}
+        {tab === "activity" && <ActivityView overview={overview} now={now} act={act} />}
         {tab === "runs" && <RunsView overview={overview} now={now} />}
-        {tab === "settings" && <SettingsView overview={overview} act={act} />}
+        {tab === "settings" && <SettingsView overview={overview} act={act} setup={setup} onRefreshSetup={() => checkSetup(true)} />}
       </main>
     </div>
   );

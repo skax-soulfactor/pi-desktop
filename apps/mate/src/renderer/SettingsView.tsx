@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
-import type { AutostartView, Overview } from "../shared/api";
+import type { AutostartView, Overview, PiSetupView } from "../shared/api";
+import { ModelOptions } from "./PiSetup";
 import type { Act } from "./App";
 import { relativeTime } from "./mate-view";
 
 /** Mate 전체 설정과 실행기 상태 */
-export function SettingsView({ overview, act }: { overview: Overview; act: Act }) {
+export function SettingsView({
+  overview,
+  act,
+  setup,
+  onRefreshSetup,
+}: {
+  overview: Overview;
+  act: Act;
+  setup: PiSetupView | undefined;
+  onRefreshSetup: () => void;
+}) {
   const { config, runner } = overview;
   const [model, setModel] = useState(config.model);
   const [limit, setLimit] = useState(String(config.dailyRunLimit));
@@ -29,8 +40,17 @@ export function SettingsView({ overview, act }: { overview: Overview; act: Act }
       </label>
       <label>
         기본 모델
-        <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="provider/model-id" />
-        <span className="muted small-text">임무에서 따로 정하지 않으면 이 모델을 씁니다. Pi에 로그인된 프로바이더여야 합니다.</span>
+        <input list="config-models" value={model} onChange={(e) => setModel(e.target.value)} placeholder="provider/model-id" />
+        <ModelOptions id="config-models" setup={setup} />
+        <span className="muted small-text">
+          임무에서 따로 정하지 않으면 이 모델을 씁니다. 칸을 누르면 Pi에서 쓸 수 있는 모델({setup?.models.length ?? "…"}개)이 나옵니다.
+          {setup?.piDefaultModel && (
+            <>
+              {" "}
+              Pi 기본 모델: <button className="link" onClick={() => setModel(setup.piDefaultModel!)}>{setup.piDefaultModel}</button>
+            </>
+          )}
+        </span>
       </label>
       <label>
         하루 자동 실행 상한 (시간표·변화 감지, 모든 임무 합계)
@@ -53,6 +73,26 @@ export function SettingsView({ overview, act }: { overview: Overview; act: Act }
         >
           저장
         </button>
+      </div>
+
+      <h2>Pi</h2>
+      <div className="kv">
+        <span>Pi</span>
+        <span>{setup ? (setup.pi ? `${setup.pi.version} (${setup.pi.source})` : "없음") : "확인 중…"}</span>
+        <span>로그인</span>
+        <span>{setup ? setup.authProviders.join(", ") || "없음 (환경 변수·models.json으로 쓰는 프로바이더는 모델 수에 들어감)" : "…"}</span>
+        <span>쓸 수 있는 모델</span>
+        <span>{setup ? `${setup.models.length}개` : "…"}</span>
+        <span>Pi Desktop</span>
+        <span className="path">{setup?.piDesktopPath ?? "찾지 못함 (기본 위치)"}</span>
+      </div>
+      <div className="row">
+        <button onClick={onRefreshSetup}>다시 확인</button>
+        {setup?.piDesktopPath ? (
+          <button onClick={() => void act(() => window.mate.openPiDesktop())}>Pi Desktop 열기 (Pi 설치·로그인·모델 관리)</button>
+        ) : (
+          <button onClick={() => void act(() => window.mate.installPiDesktop())}>Pi Desktop 설치</button>
+        )}
       </div>
 
       <h2>실행기</h2>

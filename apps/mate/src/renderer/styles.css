@@ -433,3 +433,62 @@ textarea {
 .t-error summary code {
   color: var(--bad);
 }
+
+/* Pi 준비 안내 */
+.setup-banner {
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.setup-issue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  border-left: 3px solid var(--warn);
+  padding-left: 8px;
+}
+.setup-issue.bad {
+  border-left-color: var(--bad);
+}
+.small-link {
+  color: var(--accent);
+  font-size: 13px;
+}
+code.copy {
+  background: var(--panel-2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: copy;
+}
+
+/* 활동 관찰 */
+.privacy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.form label.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.form label.inline input {
+  width: 70px;
+}
+.excluded {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.card.activity {
+  padding: 6px 12px;
+}

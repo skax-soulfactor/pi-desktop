@@ -2,6 +2,7 @@
 //
 // - start: 실행기가 없거나 번들이 바뀌었으면(도는 실행이 없을 때) 새로 띄운다. 앱이 켜질 때 부른다.
 // - daemon: 상주 실행기 본체 (start가 분리된 프로세스로 띄움)
+// - status: Pi 준비 상태(설치·버전·로그인한 프로바이더·쓸 수 있는 모델·Pi 기본 모델)를 JSON으로
 // - run: 임무 하나를 지금 이 프로세스에서 실행하고 기록을 출력한다 (확인·테스트용)
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +11,7 @@ import { spawnDaemon } from "../../host-agent/src/spawn-daemon";
 import { acquirePid, fileHash, isAlive, log, readPid, releasePid, Runner, runDuty, type RunnerOptions } from "./daemon";
 import type { PiLaunch } from "./executor";
 import { mateHome, matePaths } from "./paths";
+import { piReadiness } from "./pi-readiness";
 import { getDuty, loadState } from "./store";
 
 const script = fileURLToPath(import.meta.url);
@@ -86,10 +88,14 @@ async function runOnce(id: string | undefined): Promise<void> {
 }
 
 const [command, arg] = process.argv.slice(2);
-const commands: Record<string, () => Promise<void>> = { start, daemon, stop, run: () => runOnce(arg) };
+async function status(): Promise<void> {
+  console.log(JSON.stringify(await piReadiness()));
+}
+
+const commands: Record<string, () => Promise<void>> = { start, daemon, stop, status, run: () => runOnce(arg) };
 const handler = command ? commands[command] : undefined;
 if (!handler) {
-  console.error("사용법: mate-runner <start|daemon|stop|run <임무 id>>");
+  console.error("사용법: mate-runner <start|daemon|stop|status|run <임무 id>>");
   process.exitCode = 2;
 } else {
   handler().catch((error: Error) => {
