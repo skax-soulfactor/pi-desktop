@@ -137,7 +137,8 @@ export interface AgentApi {
   removeRule(rule: RuleView): Promise<void>;
   listAudit(): Promise<AuditView[]>;
   /** agent-kit 확장을 올린 새 Pi 세션을 연다 */
-  openSession(cwd: string): Promise<SessionSummary>;
+  /** 새 세션을 연다. forkFrom(세션 파일)을 주면 그 대화를 이어 가는 분기 세션으로 연다 */
+  openSession(cwd: string, forkFrom?: string): Promise<SessionSummary>;
   attachSession(sessionId: string, lastSeq: number): Promise<AttachResult>;
   /** 응답을 기다리는 Pi RPC 명령 (prompt, abort, get_commands …) */
   sendCommand(sessionId: string, command: Record<string, unknown>): Promise<PiResponse>;

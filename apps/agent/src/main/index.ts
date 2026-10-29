@@ -222,8 +222,10 @@ function registerIpc(connection: HostConnection): void {
   ipcMain.handle(IpcChannels.removeSchedule, async (_event, id: string) => {
     await updateSchedules(schedulesPath(agentDataDir()), (all) => all.filter((s) => s.id !== id));
   });
-  ipcMain.handle(IpcChannels.openSession, async (_event, cwd: string) => {
-    const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, await sessionParams(cwd));
+  ipcMain.handle(IpcChannels.openSession, async (_event, cwd: string, forkFrom?: string) => {
+    // forkFrom: 다른 폴더로 대화를 옮길 때 지금 세션 파일에서 분기한다 (pi --fork, 원래 세션 파일은 그대로)
+    const params = await sessionParams(cwd);
+    const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, forkFrom ? { ...params, forkFrom } : params);
     return result.session;
   });
   ipcMain.handle(IpcChannels.attachSession, async (_event, sessionId: string, lastSeq: number) => {
