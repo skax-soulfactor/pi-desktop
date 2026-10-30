@@ -4,7 +4,7 @@ export * from "./types";
 export * from "./store";
 export { emptyTrash, listTrash, restoreTrash } from "./trash";
 export { changeReadyAt, isDue, nextRunAt, parseTime } from "./schedule";
-export { findSessionFile, isAlive, readPid } from "./daemon";
+export { isAlive, readPid } from "./daemon";
 export { pollCommandError } from "./watchers";
 export { applyInboxChange, discardInboxChange } from "./inbox-change";
 export { applyInstall, describeInstall } from "./install";

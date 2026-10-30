@@ -1,4 +1,4 @@
-import type { TranscriptItem } from "../shared/api";
+import type { TranscriptItem } from "./view-types";
 
 const TEXT_LIMIT = 4000;
 

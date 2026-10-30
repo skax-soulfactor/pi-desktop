@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./types": "./src/types.ts",
+    "./view-types": "./src/view-types.ts",
     "./pi-readiness": "./src/pi-readiness-types.ts",
     "./activity-types": "./src/activity-types.ts"
   },
@@ -17,6 +18,7 @@
     "test": "npm run build && vitest run"
   },
   "dependencies": {
+    "@pi-desktop/agent-kit": "*",
     "@pi-desktop/host-protocol": "*",
     "@pi-desktop/mate-kit": "*",
     "@pi-desktop/pi-isolation": "*"
