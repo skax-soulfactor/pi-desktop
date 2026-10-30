@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { InboxItem, Severity } from "./shared";
+import type { InboxItem, InstallProposal, Severity } from "./shared";
 
 export interface ProposalInput {
   title: string;
@@ -12,6 +12,24 @@ export interface ProposalInput {
   topic?: string;
   /** "Mate에게 맡기기"로 실행할 지시와 폴더 */
   followUp?: { prompt: string; cwd: string };
+  install?: InstallProposal;
+}
+
+/** 모델이 넘긴 설치 제안을 검사한다. 잘못되면 이유를 돌려준다 (목록·충돌 검사는 적용할 때 실행기가 한다) */
+export function installError(install: InstallProposal): string | undefined {
+  const skillName = (name: string) => name.length <= 64 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(name);
+  switch (install.kind) {
+    case "skill":
+      if (!skillName(install.name)) return "스킬 이름은 영어 소문자·숫자·하이픈만 쓴다 (예: hn-summary)";
+      if (!/^---\r?\n[\s\S]*?\bdescription:\s*\S[\s\S]*?\r?\n---/.test(install.content)) return "content는 frontmatter(name·description)가 있는 SKILL.md 전체여야 한다";
+      if (install.content.length > 20_000) return "스킬이 너무 길다 (20,000자까지)";
+      return undefined;
+    case "mcp":
+      return /^[a-z0-9-]{1,40}$/.test(install.preset) ? undefined : "preset은 정해 둔 MCP 서버 목록의 id다";
+    case "copy":
+      if (install.from !== "pi-desktop" && install.from !== "agent") return "from은 pi-desktop 또는 agent다";
+      return skillName(install.name) ? undefined : "복사할 스킬 이름이 올바르지 않다";
+  }
 }
 
 /** 같은 임무에서 제목과 요약이 같으면 같은 제안으로 본다 (공백 차이는 무시) */
@@ -32,6 +50,7 @@ export function makeProposal(input: ProposalInput, ids: { dutyId: string; runId:
     severity: input.severity ?? "info",
     ...(input.topic ? { topic: input.topic } : {}),
     ...(input.followUp?.prompt.trim() ? { followUp: { prompt: input.followUp.prompt.trim(), cwd: input.followUp.cwd } } : {}),
+    ...(input.install ? { install: input.install } : {}),
     createdAt: now,
   };
 }

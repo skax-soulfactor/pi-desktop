@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { extensionEntries, readBlocked } from "@pi-desktop/mate-kit";
+import { extensionEntries, readBlocked, readInbox } from "@pi-desktop/mate-kit";
 import { isolationDirOf, runPi, type RunInput } from "../src/executor";
 import type { Duty } from "../src/types";
 import { startMockLlm, type MockLlm } from "../../host-agent/test/fixtures/mock-llm";
@@ -33,7 +33,7 @@ describe("임무의 MCP 도구 (실제 Pi)", () => {
     await llm?.close();
   });
 
-  const run = async (grants: string[], runId: string) => {
+  const run = async (grants: string[], runId: string, override: Partial<Duty> = {}) => {
     const duty: Duty = {
       id: "mcp-test",
       name: "MCP 시험",
@@ -45,6 +45,7 @@ describe("임무의 MCP 도구 (실제 Pi)", () => {
       mcpServers: ["fake"],
       ...(grants.length ? { grants } : {}),
       createdAt: 0,
+      ...override,
     };
     const blockedPath = join(home, "blocked", `${runId}.jsonl`);
     const input: RunInput = {
@@ -75,5 +76,14 @@ describe("임무의 MCP 도구 (실제 Pi)", () => {
     expect(second.blocked).toEqual([]);
     // mock LLM은 도구 결과를 그대로 답한다
     expect(second.outcome.summary).toContain("echo: 안녕");
+  });
+
+  it("제안 단계에서 install을 붙인 mate_propose는 인박스에 설치 제안으로 남는다", async () => {
+    const install = { kind: "skill", name: "hn-summary", content: "---\nname: hn-summary\ndescription: HN 요약\n---\n1. 본다" };
+    const prompt = `tool:mate_propose ${JSON.stringify({ title: "HN 요약 스킬", summary: "요약 규칙이 없어 초안을 만들었다", install })}`;
+    const { outcome } = await run([], "r3", { profile: "propose", prompt, mcpServers: [] });
+    expect(outcome.status, outcome.error).toBe("done");
+    const item = (await readInbox(join(home, "inbox.jsonl"))).find((i) => i.title === "HN 요약 스킬");
+    expect(item?.install).toEqual(install);
   });
 });

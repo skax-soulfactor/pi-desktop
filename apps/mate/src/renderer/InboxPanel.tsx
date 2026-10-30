@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TOPIC_LABELS, type InsightTopic } from "@pi-desktop/mate-runner/activity-types";
@@ -31,8 +31,8 @@ export function InboxPanel({ overview, now, act }: { overview: Overview; now: nu
           </button>
         </div>
         {/* 고친 변경(act)은 적용·버리기를 하나씩 정해야 하므로 "모두 확인함"에서 뺀다 */}
-        {!showHandled && fresh.filter((i) => !i.change).length > 1 && (
-          <button onClick={() => void act(() => window.mate.setInbox(fresh.filter((i) => !i.change).map((i) => i.id), "accepted"))}>
+        {!showHandled && fresh.filter((i) => !i.change && !i.install).length > 1 && (
+          <button onClick={() => void act(() => window.mate.setInbox(fresh.filter((i) => !i.change && !i.install).map((i) => i.id), "accepted"))}>
             모두 확인함
           </button>
         )}
@@ -57,6 +57,11 @@ export function InboxPanel({ overview, now, act }: { overview: Overview; now: nu
 
 export function InboxCard({ item, now, act }: { item: InboxView; now: number; act: Act }) {
   const [open, setOpen] = useState(false);
+  /** 설치 제안이면 적용하기 전에 무엇이 들어가는지 보인다 (스킬 내용, 서버 명령, 복사할 원본) */
+  const [preview, setPreview] = useState<string>();
+  useEffect(() => {
+    if (item.install && !item.status) void window.mate.describeInstall(item.id).then(setPreview, (e: Error) => setPreview(`내용을 읽지 못했습니다: ${e.message}`));
+  }, [item.id, item.install, item.status]);
   return (
     <li className={`card inbox-card sev-${item.severity}`}>
       <div className="card-head">
@@ -82,6 +87,11 @@ export function InboxCard({ item, now, act }: { item: InboxView; now: number; ac
           )}
         </>
       )}
+      {preview && (
+        <div className="detail markdown">
+          <Markdown remarkPlugins={[remarkGfm]}>{preview}</Markdown>
+        </div>
+      )}
       {item.change && (
         <div className="muted small-text path" title={item.change.files.join("\n")}>
           {item.change.repo} · {item.change.files.slice(0, 5).join(", ")}
@@ -93,11 +103,21 @@ export function InboxCard({ item, now, act }: { item: InboxView; now: number; ac
           <>
             <span className="muted">{STATUS_TEXT[item.status]}</span>
             {/* 고친 변경은 적용하거나 버리면 작업 공간이 지워져 되돌릴 수 없다 */}
-            {!item.change && (
+            {!item.change && item.status !== "applied" && (
               <button className="small" onClick={() => void act(() => window.mate.setInbox([item.id], undefined))}>
                 새 제안으로 되돌리기
               </button>
             )}
+          </>
+        ) : item.install ? (
+          <>
+            <button className="primary small" onClick={() => void act(() => window.mate.applyInstall(item.id))}>
+              적용
+            </button>
+            <button className="small" onClick={() => void act(() => window.mate.setInbox([item.id], "dismissed"))}>
+              버리기
+            </button>
+            <span className="muted small-text">적용하면 Mate 홈에 넣고 이 임무가 쓰게 합니다. 같은 이름이 있으면 덮어쓰지 않습니다</span>
           </>
         ) : item.change ? (
           <>
