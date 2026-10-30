@@ -1,6 +1,6 @@
 # Pi Desktop Mate — 설계 문서 (v0.1)
 
-> **데이터 경계와 원격 실행 방향은 [세 앱의 역할과 데이터 경계](DESIGN-APPS.md)를 따른다.** Mate는 개인화된 데이터를 능동적으로 처리하는 Pi 기반 비서다.
+> **데이터 경계와 원격 실행 방향은 [세 앱의 역할과 데이터 경계](DESIGN-APPS.md)를 따른다.** 원격 실행기(D5)는 [Mate 원격 실행기](DESIGN-MATE-REMOTE.md)에 따로 적는다. Mate는 개인화된 데이터를 능동적으로 처리하는 Pi 기반 비서다.
 >
 > 관련 문서: [Pi Desktop 설계](DESIGN.md), [Pi Desktop Agent 설계](DESIGN-AGENT.md), [개발 방식](CONTRIBUTING.md). 사용법은 [apps/mate/README.md](../apps/mate/README.md)
 
