@@ -2,6 +2,7 @@
 export { mateHome, matePaths, type MatePaths } from "./paths";
 export * from "./types";
 export * from "./store";
+export { emptyTrash, listTrash, restoreTrash } from "./trash";
 export { changeReadyAt, isDue, nextRunAt, parseTime } from "./schedule";
 export { findSessionFile, isAlive, readPid } from "./daemon";
 export { pollCommandError } from "./watchers";

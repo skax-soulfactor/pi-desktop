@@ -16,8 +16,13 @@ import {
   OBSERVER_NAME,
   readActivity,
   topicFeedback,
+  clearChat,
   deleteDuty,
+  deleteRun,
   dutyIdFrom,
+  emptyTrash,
+  listTrash,
+  restoreTrash,
   findSessionFile,
   getDuty,
   isAlive,
@@ -155,6 +160,7 @@ async function overview(): Promise<Overview> {
     listRuns(paths, 100),
     runnerView(),
   ]);
+  const trash = await listTrash(paths);
   const [activity, feedback, chatLines, chatState] = await Promise.all([readActivity(paths, 150), topicFeedback(paths), readChat(paths.chat), loadChatState(paths)]);
   const now = Date.now();
   const names = new Map<string, string>([[OBSERVER_DUTY_ID, OBSERVER_NAME], ...duties.map((d) => [d.id, d.name] as [string, string])]);
@@ -193,6 +199,7 @@ async function overview(): Promise<Overview> {
       feedback,
       ...(state.observer ? { since: state.observer.since } : {}),
     },
+    trash,
   };
 }
 
@@ -229,6 +236,13 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannels.overview, () => overview());
   ipcMain.handle(IpcChannels.saveDuty, (_e, draft: DutyDraft) => saveDraft(draft));
   ipcMain.handle(IpcChannels.deleteDuty, (_e, id: string) => deleteDuty(paths, id));
+  // 휴지통 (설계 DESIGN-APPS.md §3.2): 지운 것은 Mate 홈의 trash/에 두었다가 되살리거나 비운다
+  ipcMain.handle(IpcChannels.deleteRun, (_e, id: string) => deleteRun(paths, id));
+  ipcMain.handle(IpcChannels.clearChat, () => clearChat(paths));
+  ipcMain.handle(IpcChannels.restoreTrash, async (_e, id: string) => {
+    await restoreTrash(paths, id);
+  });
+  ipcMain.handle(IpcChannels.emptyTrash, (_e, ids?: string[]) => emptyTrash(paths, ids));
   ipcMain.handle(IpcChannels.runNow, async (_e, id: string) => {
     if (!isDutyId(id)) throw new Error("잘못된 임무 id입니다");
     await addRequest(paths, id);

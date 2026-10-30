@@ -4,6 +4,7 @@ import type {
   Duty,
   InboxStatus,
   MateConfig,
+  MateTrashItem,
   ProjectSnapshot,
   RunnerState,
   RunRecord,
@@ -19,12 +20,16 @@ export interface PiSetupView extends PiReadiness {
   checkedAt: number;
 }
 
-export type { ActivityRecord, ChatLine, Duty, InboxItem, InboxStatus, MateConfig, ProjectSnapshot, RunRecord, RunStatus };
+export type { ActivityRecord, ChatLine, Duty, InboxItem, InboxStatus, MateConfig, MateTrashItem, ProjectSnapshot, RunRecord, RunStatus };
 
 export const IpcChannels = {
   overview: "mate:overview",
   saveDuty: "mate:save-duty",
   deleteDuty: "mate:delete-duty",
+  deleteRun: "mate:delete-run",
+  clearChat: "mate:clear-chat",
+  restoreTrash: "mate:restore-trash",
+  emptyTrash: "mate:empty-trash",
   runNow: "mate:run-now",
   setInbox: "mate:set-inbox",
   saveConfig: "mate:save-config",
@@ -142,6 +147,8 @@ export interface Overview {
   runs: RunRecord[];
   runner: RunnerView;
   observe: ObserveView;
+  /** 휴지통 (지운 임무·실행 기록·대화, 최근 것부터) */
+  trash: MateTrashItem[];
 }
 
 /** 활동 관찰 화면 (M4) */
@@ -163,7 +170,16 @@ export type DutyDraft = Omit<Duty, "id" | "createdAt" | "updatedAt"> & { id?: st
 export interface MateApi {
   overview(): Promise<Overview>;
   saveDuty(draft: DutyDraft): Promise<Duty>;
+  /** 임무를 휴지통으로 옮긴다 */
   deleteDuty(id: string): Promise<void>;
+  /** 실행 기록을 세션 파일과 함께 휴지통으로 옮긴다 */
+  deleteRun(id: string): Promise<void>;
+  /** 대화 기록을 휴지통으로 옮긴다 (다음 말부터 새 대화). 지울 것이 없었으면 false */
+  clearChat(): Promise<boolean>;
+  /** 휴지통 항목을 원래 자리로 되살린다 */
+  restoreTrash(id: string): Promise<void>;
+  /** 휴지통을 비운다 (ids가 없으면 전부). 정말 지운 항목 수 */
+  emptyTrash(ids?: string[]): Promise<number>;
   runNow(id: string): Promise<void>;
   setInbox(ids: string[], status: InboxStatus | undefined): Promise<void>;
   saveConfig(

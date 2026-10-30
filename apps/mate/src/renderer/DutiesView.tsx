@@ -99,7 +99,7 @@ function DutyCard({ duty, now, paused, act, onEdit }: { duty: DutyView; now: num
         <button
           className="small danger"
           onClick={() => {
-            if (confirm(`"${duty.name}" 임무를 지울까요? 이미 쌓인 제안과 실행 기록은 남습니다.`)) void act(() => window.mate.deleteDuty(duty.id));
+            if (confirm(`"${duty.name}" 임무를 지울까요? 휴지통으로 옮겨져 되살릴 수 있고, 이미 쌓인 제안과 실행 기록은 남습니다.`)) void act(() => window.mate.deleteDuty(duty.id));
           }}
         >
           지우기
