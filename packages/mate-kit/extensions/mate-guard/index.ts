@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { checkCommand } from "../../src/guard";
-import { isProfile, MATE_ENV, profileTools } from "../../src/shared";
+import { isGuardProfile, MATE_ENV, profileTools } from "../../src/shared";
 import { writeScopeError } from "../../src/write-scope";
 
 /** Windows Git Bash 출력이 UTF-8로 오도록 (Pi Desktop bridge와 같은 처리, Mate는 bridge를 쓰지 않는다) */
@@ -17,7 +17,7 @@ const UTF8_PREFIX = "chcp.com 65001 > /dev/null 2>&1";
  */
 export default function mateGuard(pi: ExtensionAPI): void {
   const profile = process.env[MATE_ENV.profile];
-  if (!isProfile(profile)) return;
+  if (!isGuardProfile(profile)) return;
   const allowed = new Set(profileTools(profile));
   const writeRoot = process.env[MATE_ENV.writeRoot];
 

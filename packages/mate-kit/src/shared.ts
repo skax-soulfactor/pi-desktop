@@ -13,9 +13,15 @@ export const MATE_ENV = {
   writeRoot: "PI_DESKTOP_MATE_WRITE_ROOT",
   /** 관찰자 실행: 제안에 붙일 주제 */
   topic: "PI_DESKTOP_MATE_TOPIC",
+  /** Mate 대화 기록(chat.jsonl). mate_ask가 질문을 여기에 남긴다 */
+  chat: "PI_DESKTOP_MATE_CHAT",
+  /** 대화 한 차례에서 mate_do가 남기는 할 일 목록 (실행기가 대화가 끝난 뒤 처리) */
+  actions: "PI_DESKTOP_MATE_ACTIONS",
 } as const;
 
 export const PROPOSE_TOOL = "mate_propose";
+export const ASK_TOOL = "mate_ask";
+export const DO_TOOL = "mate_do";
 
 /** observe: 읽기만, propose: 읽기 + 제안, act: 별도 작업 공간에서 고치고 승인을 기다림 (M3) */
 export type MateProfile = "observe" | "propose" | "act";
@@ -26,17 +32,52 @@ export function isProfile(value: unknown): value is MateProfile {
   return typeof value === "string" && (PROFILES as readonly string[]).includes(value);
 }
 
-/** 권한 단계마다 모델에 선언하는 도구. 실행기는 이 목록으로 `--tools`를 만든다 */
-export function profileTools(profile: MateProfile): string[] {
+/** 임무 단계 + Mate 대화(chat). 대화는 임무로 만들 수 없어 PROFILES에는 없다 */
+export type GuardProfile = MateProfile | "chat";
+
+export function isGuardProfile(value: unknown): value is GuardProfile {
+  return value === "chat" || isProfile(value);
+}
+
+/**
+ * 권한 단계마다 모델에 선언하는 도구. 실행기는 이 목록으로 `--tools`를 만든다.
+ * - 제안·고치기 실행은 mate_ask로 사용자에게 대화로 물을 수 있다
+ * - 대화(chat)는 읽기와 mate_do(실행기에 할 일 맡기기)만. 파일을 직접 바꾸지 않는다
+ */
+export function profileTools(profile: GuardProfile): string[] {
   const read = ["read", "grep", "find", "ls", "bash"];
   switch (profile) {
     case "observe":
       return read;
     case "propose":
-      return [...read, PROPOSE_TOOL];
+      return [...read, PROPOSE_TOOL, ASK_TOOL];
     case "act":
-      return [...read, "edit", "write", PROPOSE_TOOL];
+      return [...read, "edit", "write", PROPOSE_TOOL, ASK_TOOL];
+    case "chat":
+      return [...read, DO_TOOL];
   }
+}
+
+/** Mate 대화 한 줄 (chat.jsonl, 추가만 한다) */
+export interface ChatLine {
+  id: string;
+  at: number;
+  /** user: 사용자, mate: Mate 답·알림·질문 */
+  role: "user" | "mate";
+  text: string;
+  /** reply: 대화 답, question: Mate가 먼저 묻는 질문, notice: 할 일 처리 알림, result: 실행 결과, divider: 새 대화 */
+  kind?: "reply" | "question" | "notice" | "result" | "divider";
+  /** 어디서 온 말인지 / 답을 어디로 보낼지 */
+  source?: "app" | "telegram";
+  /** 질문의 선택지 (버튼) */
+  options?: string[];
+  /** 이 말이 답하는 질문 */
+  answerTo?: string;
+  /** 질문을 남긴 실행·임무 (맥락) */
+  runId?: string;
+  dutyId?: string;
+  /** 질문을 남긴 폴더 (답에 따라 그 폴더에서 일을 맡길 수 있게) */
+  cwd?: string;
 }
 
 export type Severity = "info" | "warn" | "action";

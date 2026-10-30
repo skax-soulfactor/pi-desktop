@@ -21,3 +21,4 @@ export async function extensionEntries(kitDir: string): Promise<string[]> {
     return resolve(kitDir, entry);
   });
 }
+export { appendChat, appendChatAction, appendChatQuestion, readChat, readChatActions } from "./chat";
