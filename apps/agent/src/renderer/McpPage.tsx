@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { WEB_SEARCH_PRESETS, type McpCheckResult, type McpServerView } from "../shared/mcp";
+import { WEB_SEARCH_PRESETS, type McpCheckResult, type McpServerView } from "@pi-desktop/pi-isolation/mcp-presets";
 
 /**
  * 웹 검색·MCP (설계 DESIGN-AGENT.md §4 "웹 페이지 읽기, 웹 검색"). 앱 홈의 MCP 설정(mcp.json)을 보여 주고,

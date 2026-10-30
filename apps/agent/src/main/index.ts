@@ -53,8 +53,8 @@ import { DEFAULT_PEER_PORT, type CardDraft, type PeerPolicy, type PeerSettings }
 import { normalizeAddress } from "@pi-desktop/agent-kit/peers-protocol";
 import { approvePeerTask, rejectPeerTask } from "@pi-desktop/agent-kit/peer-tasks";
 import { generateCardDraft } from "@pi-desktop/agent-kit/card-draft";
-import { readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "./mcp-config";
-import { WEB_SEARCH_PRESETS, type McpCheckResult } from "../shared/mcp";
+import { readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "@pi-desktop/pi-isolation/mcp-file";
+import { WEB_SEARCH_PRESETS, type McpCheckResult } from "@pi-desktop/pi-isolation/mcp-presets";
 import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
 import { HostConnection } from "../vendor/main/host-connection";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";

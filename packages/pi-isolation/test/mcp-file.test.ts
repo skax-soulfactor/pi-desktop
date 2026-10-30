@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseMcpFile, readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "../src/main/mcp-config";
-import { WEB_SEARCH_PRESETS, validServerName } from "../src/shared/mcp";
+import { parseMcpFile, readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "../src/mcp-file";
+import { WEB_SEARCH_PRESETS, validServerName } from "../src/mcp-presets";
 
 const preset = (id: string) => WEB_SEARCH_PRESETS.find((p) => p.id === id)!;
 

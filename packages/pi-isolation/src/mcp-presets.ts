@@ -1,6 +1,7 @@
 /**
- * 웹 검색·MCP 설정 화면이 쓰는 모양과 미리 정한 웹 검색 서버 (설계 DESIGN-AGENT.md §4 "웹 페이지 읽기, 웹 검색").
- * 검색은 Pi 방식대로 MCP 서버에 맡기고, 이 앱은 앱 홈의 설정 파일(`<앱 홈>/mcp.json`)을 고친다 (DESIGN-APPS.md §3.1).
+ * MCP 설정 화면이 쓰는 모양과 미리 정한 서버 목록 (설계 DESIGN-AGENT.md §4 "웹 페이지 읽기, 웹 검색", DESIGN-APPS.md §3.4).
+ * Agent와 Mate가 함께 쓴다. 두 앱 모두 앱 홈의 설정 파일(`<앱 홈>/mcp.json`)을 고친다 (DESIGN-APPS.md §3.1).
+ * Mate가 제안할 수 있는 MCP 서버도 이 목록 안의 것뿐이다.
  * 렌더러도 쓰므로 node 모듈을 import하지 않는다.
  */
 

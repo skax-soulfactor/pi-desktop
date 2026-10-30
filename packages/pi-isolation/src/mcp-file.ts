@@ -1,9 +1,9 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { validServerName, type McpPreset, type McpServerView } from "../shared/mcp";
+import { validServerName, type McpPreset, type McpServerView } from "./mcp-presets";
 
 /**
- * 앱 홈의 MCP 설정(`~/.pi-desktop-agent/mcp.json`, Pi와 같은 형식)을 읽고 고친다. 모르는 칸과 다른 서버는 그대로 둔다.
+ * 앱 홈의 MCP 설정(`<앱 홈>/mcp.json`, Pi와 같은 형식)을 읽고 고친다 (Agent·Mate). 모르는 칸과 다른 서버는 그대로 둔다.
  * 파일이 깨져 있으면 덮어쓰지 않고 오류를 낸다 (사람이 고치던 파일을 날리지 않게).
  */
 
