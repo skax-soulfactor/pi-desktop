@@ -36,6 +36,8 @@ export interface RunnerView {
   heartbeatAt?: number;
   current?: RunnerState["current"];
   today: RunnerState["today"];
+  /** 휴대폰 연결(텔레그램)이 켜져 있다. 토큰이 있어도 원격 실행기가 다시 뜬 뒤 앱이 붙기 전에는 꺼져 있다 */
+  phone?: boolean;
   /** 실행기를 띄우지 못했을 때 이유 */
   error?: string;
 }

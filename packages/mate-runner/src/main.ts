@@ -89,11 +89,13 @@ async function daemon(): Promise<void> {
           ...(state.heartbeatAt ? { heartbeatAt: state.heartbeatAt } : {}),
           ...(state.current ? { current: state.current } : {}),
           today: state.today,
+          phone: runner.phoneActive,
         };
       },
       wake: () => void runner.tick(),
       locatePi: findPi,
       shutdown: () => void shutdown(),
+      setTelegramToken: (token) => runner.setTelegramToken(token),
     }),
     (message) => void log(paths, message),
   );
