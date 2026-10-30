@@ -53,11 +53,18 @@ export function piCommand(argv: string[] = process.argv, env: NodeJS.ProcessEnv 
   return { command: "pi", args: [] };
 }
 
-/** 지금 Pi에 붙은 확장(-e, --extension)을 그대로 물려줄 인자 */
-export function extensionArgsOf(argv: string[]): string[] {
+/** 값을 하나 받는 옵션 중 물려줄 것 */
+const INHERITED_WITH_VALUE = new Set(["-e", "--extension", "--skill", "--prompt-template"]);
+/** 물려줄 끄기 옵션. 앱이 Pi 기본 폴더의 확장·스킬·프롬프트·문맥 파일을 끄고 띄웠으면 워커도 같아야 한다 (DESIGN-APPS.md §3.1) */
+const INHERITED_FLAGS = new Set(["-ne", "--no-extensions", "-ns", "--no-skills", "-np", "--no-prompt-templates", "-nc", "--no-context-files"]);
+
+/** 지금 Pi에 붙은 확장·스킬·프롬프트 경로와 끄기 옵션을 그대로 물려줄 인자. 세션 폴더는 물려주지 않는다 (워커는 세션을 남기지 않음) */
+export function inheritedArgsOf(argv: string[]): string[] {
   const args: string[] = [];
-  for (let i = 0; i < argv.length - 1; i++) {
-    if (argv[i] === "-e" || argv[i] === "--extension") args.push("-e", argv[i + 1]!);
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    if (INHERITED_FLAGS.has(arg)) args.push(arg);
+    else if (INHERITED_WITH_VALUE.has(arg) && i + 1 < argv.length) args.push(arg, argv[++i]!);
   }
   return args;
 }
@@ -78,7 +85,7 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
     "rpc",
     "--no-session",
     ...(options.provider && options.model ? ["--provider", options.provider, "--model", options.model] : []),
-    ...extensionArgsOf(argv),
+    ...inheritedArgsOf(argv),
     ...(options.extraArgs ?? []),
   ];
   const env = { ...(options.env ?? process.env), [WORKER_ENV]: "1", ...(options.ui ? {} : { [UNATTENDED_ENV]: "1" }) };
@@ -166,7 +173,7 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
           | undefined;
         // 워커는 --no-session이라 세션 파일에 남지 않는다. 응답마다 사용량을 따로 적는다
         if (message?.role === "assistant" && message.usage)
-          void recordUsage(dataDir(), options.usageSource ?? "worker", { provider: message.provider ?? "?", id: message.model ?? "?" }, message.usage);
+          void recordUsage(dataDir(env), options.usageSource ?? "worker", { provider: message.provider ?? "?", id: message.model ?? "?" }, message.usage);
         if (message?.role === "assistant" && Array.isArray(message.content)) {
           const text = message.content.filter((p) => p.type === "text").map((p) => p.text ?? "").join("").trim();
           if (text) {

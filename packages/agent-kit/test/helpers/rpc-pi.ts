@@ -7,7 +7,7 @@ import { extensionArgs, extensionEntries } from "../../src/index";
 
 /**
  * 실제 Pi(devDependency)를 앱과 같은 방식(`pi --mode rpc -e <agent-kit 확장>`)으로 띄우는 계약 테스트 공용 코드.
- * 사용자 ~/.pi를 건드리지 않도록 Pi 설정 폴더와 agent-kit 상태 폴더를 임시 폴더로 격리한다.
+ * 사용자 ~/.pi·~/.pi-desktop-agent를 건드리지 않도록 Pi 설정 폴더와 앱 홈·agent-kit 상태 폴더를 임시 폴더로 격리한다.
  */
 
 export const kitDir = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -96,6 +96,8 @@ export interface StartedPi {
   dataDir: string;
   /** Pi 설정 폴더 (PI_CODING_AGENT_DIR) */
   piAgentDir: string;
+  /** 앱 홈 (PI_DESKTOP_AGENT_HOME). 스킬은 이 아래 skills/ */
+  agentHome: string;
 }
 
 export interface StartOptions {
@@ -130,6 +132,7 @@ export async function startPi(llmBaseUrl = "http://127.0.0.1:9/v1", options: Sta
   const projectDir = mkdtempSync(join(tmpdir(), "agent-kit-project-"));
   for (const [name, content] of Object.entries(options.files ?? {})) writeFileSync(join(projectDir, name), content);
   const dataDir = mkdtempSync(join(tmpdir(), "agent-kit-data-"));
+  const agentHome = mkdtempSync(join(tmpdir(), "agent-kit-home-"));
   for (const [name, content] of Object.entries(options.dataFiles ?? {})) writeFileSync(join(dataDir, name), content);
   const args = [
     PI_CLI,
@@ -149,10 +152,11 @@ export async function startPi(llmBaseUrl = "http://127.0.0.1:9/v1", options: Sta
       PI_CODING_AGENT_DIR: piAgentDir,
       PI_CODING_AGENT_SESSION_DIR: join(piAgentDir, "sessions"),
       PI_DESKTOP_AGENT_DATA: dataDir,
+      PI_DESKTOP_AGENT_HOME: agentHome,
       // 턴 뒤 기억 추출은 기본으로 끈다. 추출 요청이 다른 테스트의 스크립트 단계를 가로채지 않게 한다
       PI_DESKTOP_AGENT_LEARN: "0",
       ...options.env,
     },
   });
-  return { pi: new RpcPi(child), projectDir, dataDir, piAgentDir };
+  return { pi: new RpcPi(child), projectDir, dataDir, piAgentDir, agentHome };
 }

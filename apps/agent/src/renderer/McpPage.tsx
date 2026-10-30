@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { WEB_SEARCH_PRESETS, type McpCheckResult, type McpServerView } from "../shared/mcp";
 
 /**
- * 웹 검색·MCP (설계 DESIGN-AGENT.md §4 "웹 페이지 읽기, 웹 검색"). Pi의 사용자 MCP 설정(mcp.json)을 보여 주고,
+ * 웹 검색·MCP (설계 DESIGN-AGENT.md §4 "웹 페이지 읽기, 웹 검색"). 앱 홈의 MCP 설정(mcp.json)을 보여 주고,
  * 웹 검색 서버를 골라 넣거나 켜고 끈다. 바꾼 설정은 새 대화부터 적용된다(열린 대화는 Pi를 다시 띄워야 함).
  * 연결 확인은 `pi mcp list`로 한다.
  */
@@ -26,7 +26,7 @@ export function McpPage({ onError }: { onError: (message: string) => void }) {
     <div className="page">
       <header className="page-head">
         <h2>웹 검색·MCP</h2>
-        <span className="muted">Pi의 MCP 서버 설정(mcp.json). 웹 검색은 검색 서버를 하나 넣으면 에이전트가 씁니다</span>
+        <span className="muted">이 앱의 MCP 서버 설정(mcp.json). 웹 검색은 검색 서버를 하나 넣으면 에이전트가 씁니다</span>
       </header>
       <div className="page-body">
         {changed && <p className="notice-line small-text">바꾼 설정은 새 대화부터 적용됩니다. 열린 대화는 닫고 다시 여세요.</p>}
@@ -72,7 +72,7 @@ export function McpPage({ onError }: { onError: (message: string) => void }) {
               );
             })}
           </ul>
-          <p className="muted small-text">API 키는 Pi 설정 폴더의 mcp.json에 저장됩니다. 화면에는 다시 보이지 않습니다.</p>
+          <p className="muted small-text">API 키는 앱 폴더(~/.pi-desktop-agent)의 mcp.json에 저장됩니다. 화면에는 다시 보이지 않습니다.</p>
         </section>
 
         <section className="card">

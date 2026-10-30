@@ -51,6 +51,7 @@ feat(host-agent): 세션 이벤트 저널과 seq 기반 재연결 추가
 | `packages/host-agent`, `packages/host-protocol` | `host-agent`, `host-protocol` |
 | `packages/agent-kit` | `agent-kit` |
 | `packages/mate-kit`, `packages/mate-runner` | `mate-kit`, `mate-runner` |
+| `packages/pi-isolation` | `pi-isolation` |
 
 ## 4. 브랜치와 PR
 

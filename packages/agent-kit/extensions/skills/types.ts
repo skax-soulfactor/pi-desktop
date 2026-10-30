@@ -16,8 +16,6 @@ export interface SkillInput {
 export interface SkillView extends SkillInput {
   /** 폴더 이름 (보통 name과 같다) */
   folder: string;
-  /** user: <Pi 설정 폴더>/skills (고칠 수 있음), shared: ~/.agents/skills (보기만) */
-  scope: "user" | "shared";
   /** SKILL.md 경로 */
   path: string;
   /** SKILL.md 말고 함께 든 파일·폴더 (scripts/, references/ 등) */

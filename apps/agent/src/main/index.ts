@@ -16,7 +16,9 @@ import {
   type SessionSummary,
   type StoredSession,
 } from "@pi-desktop/host-protocol";
-import { extensionArgs, extensionEntries } from "@pi-desktop/agent-kit";
+import { extensionEntries } from "@pi-desktop/agent-kit";
+import { AGENT_HOME_ENV } from "@pi-desktop/agent-kit/home";
+import { isolatedPaths, isolationArgs, isolationEnv } from "@pi-desktop/pi-isolation";
 import { loadTasks, tasksDir } from "@pi-desktop/agent-kit/tasks";
 import { loadSchedules, schedulesPath, updateSchedules } from "@pi-desktop/agent-kit/schedules";
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
@@ -65,11 +67,11 @@ import { OWNER, REPO, Updater } from "./updater";
 const here = fileURLToPath(new URL(".", import.meta.url));
 
 /**
- * 에이전트 앱이 쓰는 Host Agent 데몬 홈 (설계 DESIGN-AGENT.md §2.2).
+ * 에이전트 앱의 홈 (설계 DESIGN-AGENT.md §2.2, DESIGN-APPS.md §3). Host Agent 데몬 홈이기도 하다.
  * Pi Desktop의 `~/.pi-desktop`과 나눠, 따로 배포된 두 앱이 서로의 데몬을 교체하지 않게 한다.
- * Pi 설정과 세션(`~/.pi/agent`)은 나누지 않는다.
+ * 세션·스킬·프롬프트·MCP·AGENTS.md·agent-kit 상태도 여기 둔다. Pi의 로그인·모델·설정(`~/.pi/agent`)만 함께 쓴다.
  */
-function daemonHome(): string {
+function agentHome(): string {
   return process.env.PI_DESKTOP_HOME || join(homedir(), ".pi-desktop-agent");
 }
 
@@ -78,6 +80,13 @@ function agentScriptPath(): string {
   if (process.env.PI_DESKTOP_AGENT_SCRIPT) return process.env.PI_DESKTOP_AGENT_SCRIPT;
   if (app.isPackaged) return join(process.resourcesPath, "host-agent", "host-agent.mjs");
   return resolve(app.getAppPath(), "../../packages/host-agent/dist/host-agent.mjs");
+}
+
+/** pi-isolation 폴더. 앱 홈의 MCP·문맥 파일을 읽는 확장이 여기 있다 (agent-kit과 같은 방식으로 싣는다) */
+function isolationDir(): string {
+  if (process.env.PI_DESKTOP_PI_ISOLATION) return process.env.PI_DESKTOP_PI_ISOLATION;
+  if (app.isPackaged) return join(process.resourcesPath, "pi-isolation");
+  return resolve(app.getAppPath(), "../../packages/pi-isolation");
 }
 
 /** agent-kit 폴더. 확장은 대상 호스트(지금은 로컬)의 Pi가 이 경로에서 불러온다 */
@@ -92,27 +101,21 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
   app.commandLine.appendSwitch("remote-debugging-port", process.env.PI_DESKTOP_REMOTE_DEBUG_PORT);
 }
 
+/** 앱 홈의 세션·스킬·MCP 위치 (pi-isolation과 같은 규칙) */
+const homePaths = () => isolatedPaths(agentHome());
+
+/** agent-kit이 앱 홈을 알도록 주는 환경. 앱이 직접 부르는 agent-kit 함수에도 같은 값을 준다 */
+function kitEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, [AGENT_HOME_ENV]: agentHome() };
+}
+
 /**
- * agent-kit 상태 폴더 (agent-kit permissions/store.ts의 dataDir와 같은 규칙). 지금은 로컬 호스트만 다루므로 앱이 직접 읽는다.
+ * agent-kit 상태 폴더 (agent-kit permissions/store.ts의 dataDir와 같은 규칙: 앱 홈의 data/).
+ * 지금은 로컬 호스트만 다루므로 앱이 직접 읽는다 (DESIGN-APPS.md §4: D4에서 데몬 명령으로 옮긴다).
  */
-/** Pi 세션 폴더 (Pi의 getSessionsDir와 같은 규칙. 데몬이 띄운 Pi도 이 환경을 물려받는다) */
-/** Pi 설정 폴더 (PI_CODING_AGENT_DIR, 없으면 ~/.pi/agent) */
-function piAgentDir(): string {
-  return process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
-}
-
-function piSessionsDir(): string {
-  return process.env.PI_CODING_AGENT_SESSION_DIR || join(piAgentDir(), "sessions");
-}
-
-/** Pi 사용자 MCP 설정 (Pi docs/mcp.md) */
-function mcpFile(): string {
-  return join(piAgentDir(), "mcp.json");
-}
-
 function agentDataDir(): string {
   if (process.env.PI_DESKTOP_AGENT_DATA) return process.env.PI_DESKTOP_AGENT_DATA;
-  return join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "pi-desktop-agent");
+  return join(agentHome(), "data");
 }
 
 /** 끝난 작업을 OS 알림으로 알린다. 창을 보고 있으면 목록이 바뀌는 것으로 충분하다 */
@@ -133,18 +136,21 @@ function notifyTask(task: TaskRecord): void {
 
 /** 데몬에 상주시키는 스케줄러 세션의 작업 폴더. 이 폴더로 연 세션이 있으면 이미 떠 있는 것으로 본다 */
 function schedulerDir(): string {
-  return join(daemonHome(), "scheduler");
+  return join(agentHome(), "scheduler");
 }
 
 /**
- * 세션 열기 파라미터. 개발용 덮어쓰기(저장소의 Pi, 격리된 Pi 설정, mock 프로바이더)를 먼저 깔고 agent-kit 확장을 뒤에 붙인다.
+ * 세션 열기 파라미터. 개발용 덮어쓰기(저장소의 Pi, 격리된 Pi 설정, mock 프로바이더)를 먼저 깔고 앱 홈 옵션과 agent-kit 확장을 뒤에 붙인다.
+ * 세션·스킬·프롬프트·MCP·AGENTS.md는 앱 홈에서만 올린다 (DESIGN-APPS.md §3.1).
  * API 키·프로바이더 로그인은 Pi Desktop이 Pi 설정(auth.json)에 두므로 여기서 따로 넘기지 않는다 (설계 DESIGN-AGENT.md §0).
  */
 async function sessionParams(cwd: string, extraEnv: Record<string, string> = {}): Promise<SessionOpenParams> {
   const overrides = devSessionOverrides();
-  const kitArgs = extensionArgs(await extensionEntries(kitDir()));
-  const env = { ...overrides.env, ...extraEnv };
-  return { ...overrides, cwd, piArgs: [...(overrides.piArgs ?? []), ...kitArgs], env };
+  const home = agentHome();
+  const homeArgs = isolationArgs({ home, isolationDir: isolationDir(), extensions: await extensionEntries(kitDir()), sessionDir: homePaths().sessions });
+  const data: Record<string, string> = process.env.PI_DESKTOP_AGENT_DATA ? { PI_DESKTOP_AGENT_DATA: process.env.PI_DESKTOP_AGENT_DATA } : {};
+  const env = { ...overrides.env, ...isolationEnv(home), [AGENT_HOME_ENV]: home, ...data, ...extraEnv };
+  return { ...overrides, cwd, piArgs: [...(overrides.piArgs ?? []), ...homeArgs], env };
 }
 
 /**
@@ -177,7 +183,7 @@ function createConnection(onConnected: () => void): HostConnection {
       return {
         command: runtime.command,
         args: [script, "connect"],
-        env: { ...runtime.env, PI_DESKTOP_HOME: daemonHome() },
+        env: { ...runtime.env, PI_DESKTOP_HOME: agentHome() },
         agentBuild,
       };
     },
@@ -226,15 +232,16 @@ function registerIpc(connection: HostConnection): void {
   });
   // 지식베이스·승인 규칙은 agent-kit의 같은 함수로 같은 파일을 읽고 고친다 (사람이 직접 고쳐도 되는 파일)
   const kb = () => memoryDir(agentDataDir());
-  // 스킬: Pi 사용자 스킬 폴더를 고친다. 지운 것은 agent-kit 상태 폴더의 skills-trash/로
-  ipcMain.handle(IpcChannels.skillsList, () => listSkills());
+  // 스킬: 앱 홈의 skills/를 고친다. 지운 것은 agent-kit 상태 폴더의 skills-trash/로
+  const skillsDir = () => userSkillsDir(kitEnv());
+  ipcMain.handle(IpcChannels.skillsList, () => listSkills(kitEnv()));
   ipcMain.handle(IpcChannels.skillSave, async (_event, previous: string | undefined, input: SkillInput) => {
-    await saveSkill(userSkillsDir(), input, previous);
+    await saveSkill(skillsDir(), input, previous);
   });
-  ipcMain.handle(IpcChannels.skillDelete, (_event, name: string) => deleteSkill(userSkillsDir(), name, join(agentDataDir(), "skills-trash")));
+  ipcMain.handle(IpcChannels.skillDelete, (_event, name: string) => deleteSkill(skillsDir(), name, join(agentDataDir(), "skills-trash")));
   ipcMain.handle(IpcChannels.skillOpenFolder, async () => {
-    await mkdir(userSkillsDir(), { recursive: true });
-    const error = await shell.openPath(userSkillsDir());
+    await mkdir(skillsDir(), { recursive: true });
+    const error = await shell.openPath(skillsDir());
     if (error) throw new Error(error);
   });
   ipcMain.handle(IpcChannels.kbList, (_event, includeArchived: boolean) => loadEntries(kb(), { includeArchived: includeArchived === true }));
@@ -274,6 +281,7 @@ function registerIpc(connection: HostConnection): void {
   ipcMain.handle(IpcChannels.listRules, () => loadRules(agentDataDir()));
   ipcMain.handle(IpcChannels.removeRule, (_event, rule: RuleView) => removeRule(agentDataDir(), rule));
   ipcMain.handle(IpcChannels.listAudit, () => loadAudit(agentDataDir(), 100));
+  const mcpFile = () => homePaths().mcp;
   ipcMain.handle(IpcChannels.listMcp, async () => serverViews(await readMcpFile(mcpFile())));
   ipcMain.handle(IpcChannels.addMcpPreset, (_event, id: string, key?: string) => {
     const preset = WEB_SEARCH_PRESETS.find((p) => p.id === id);
@@ -290,15 +298,24 @@ function registerIpc(connection: HostConnection): void {
     if (error) throw new Error(error);
   });
   ipcMain.handle(IpcChannels.checkMcp, async (): Promise<McpCheckResult> => {
-    // pi mcp list: 켜진 서버마다 연결해 상태·도구·오류를 찍고, 연결 안 된 것이 있으면 1로 끝난다 (세션 없이 돈다)
+    // pi mcp list: 켜진 서버마다 연결해 상태·도구·오류를 찍고, 연결 안 된 것이 있으면 1로 끝난다 (세션 없이 돈다).
+    // pi mcp는 Pi 설정 폴더의 mcp.json만 읽으므로 이 실행에서만 설정 폴더를 앱 홈으로 바꾼다.
+    // 그래서 OAuth 로그인이 필요한 서버는 로그인 안 됨으로 보일 수 있다 (세션은 Pi의 mcp-auth.json을 쓴다, pi-isolation 참고)
     const status = await connection.request<PiStatus>(Methods.piStatus);
     if (!status.pi) throw new Error(status.piError ?? "Pi를 찾지 못했습니다");
     const node = status.pi.nodePath ?? status.node.path;
+    await mkdir(agentHome(), { recursive: true });
     return new Promise((resolve) => {
       execFile(
         node,
         [status.pi!.cliPath, "mcp", "list"],
-        { env: { ...process.env, ...status.pi!.env, ...devSessionOverrides().env }, timeout: 120_000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+        {
+          cwd: agentHome(),
+          env: { ...process.env, ...status.pi!.env, ...devSessionOverrides().env, PI_CODING_AGENT_DIR: agentHome() },
+          timeout: 120_000,
+          windowsHide: true,
+          maxBuffer: 4 * 1024 * 1024,
+        },
         (error, stdout, stderr) => resolve({ ok: !error, output: `${stdout}${stderr ? `\n${stderr}` : ""}` }),
       );
     });
@@ -320,7 +337,7 @@ function registerIpc(connection: HostConnection): void {
   ipcMain.handle(IpcChannels.usageSummary, async (_event, range: UsageRange) => {
     const now = new Date();
     const { from } = rangeBuckets(range, now);
-    const [sessions, offSession] = await Promise.all([readSessionUsage(piSessionsDir(), from), readUsageLog(agentDataDir(), from)]);
+    const [sessions, offSession] = await Promise.all([readSessionUsage(homePaths().sessions, from), readUsageLog(agentDataDir(), from)]);
     return summarizeUsage([...sessions, ...offSession], range, now);
   });
   ipcMain.handle(IpcChannels.listSessions, async (): Promise<ChatSummary[]> => {
@@ -383,12 +400,12 @@ function registerIpc(connection: HostConnection): void {
     const result = await connection.request<SessionOpenResult>(Methods.sessionOpen, { ...params, ...from });
     return result.session;
   });
-  /** 지난 대화. 세션 폴더는 Pi 설정을 따르되, 개발 실행처럼 폴더를 바꾼 경우를 위해 직접 준다 */
+  /** 지난 대화. 앱 홈의 세션 폴더만 본다 (Pi Desktop·터미널 pi의 세션은 섞지 않는다) */
   const history = async (): Promise<StoredSession[]> => {
     const overrides = devSessionOverrides();
     const stored = await connection.request<StoredSession[]>(
       Methods.sessionHistory,
-      { sessionDir: piSessionsDir(), limit: 300, ...(overrides.piCliPath ? { piCliPath: overrides.piCliPath } : {}) },
+      { sessionDir: homePaths().sessions, limit: 300, ...(overrides.piCliPath ? { piCliPath: overrides.piCliPath } : {}) },
       30_000,
     );
     return stored.filter((s) => s.cwd !== schedulerDir());

@@ -55,8 +55,9 @@ Pi의 설정 폴더(`PI_CODING_AGENT_DIR`)는 바꾸지 않는다. 바꾸면 로
 | `-ne -e <kit 확장들> -e builtin:codemode -e builtin:tool-search` | Pi 기본·패키지 확장을 끄고 앱의 확장만 올린다. 내장 MCP(`builtin:mcp`)는 올리지 않는다 |
 | `-nc` | Pi의 문맥 파일 찾기를 끈다. 사용자 수준 `~/.pi/agent/AGENTS.md`가 끼어들지 않게 하기 위해서다 |
 
-- **MCP**: Pi의 내장 MCP는 Pi 설정 폴더의 `mcp.json`만 읽는다(`loadMcpConfig({ agentDir })`). 그래서 Agent와 Mate는 Pi SDK의 `createMcpExtension({ loadConfig, credentials, logPath })`로 **자기 `mcp.json`을 읽는 MCP 확장**을 각자 kit(agent-kit·mate-kit)에 둔다. MCP 서버 로그인 정보(`mcp-auth.json`)와 로그도 앱 홈에 둔다. 이 확장은 두 kit이 같은 코드를 쓰므로 한 곳에 두고 가져다 쓴다 (예: `packages/pi-isolation`).
-- **문맥 파일**: `-nc`로 끈 대신, kit 확장이 Pi와 같은 규칙(작업 폴더에서 위로 올라가며 `AGENTS.md`·`CLAUDE.md`)으로 작업 폴더의 파일을 찾고, 앱 홈의 `AGENTS.md`를 더해 시스템 안내에 붙인다. 작업 폴더의 파일은 프로젝트 신뢰를 따른다.
+- **MCP**: Pi의 내장 MCP는 Pi 설정 폴더의 `mcp.json`만 읽는다(`loadMcpConfig({ agentDir })`). 그래서 Agent와 Mate는 Pi SDK의 `createMcpExtension({ loadConfig, logPath })`로 **자기 `mcp.json`을 읽는 MCP 확장**을 쓴다. 두 앱이 같은 코드를 쓰므로 `packages/pi-isolation`에 두고, 앱이 kit 확장과 함께 `-e`로 올린다. 앱 홈은 `PI_ISOLATION_HOME`으로 알린다. 로그는 앱 홈의 `mcp.log`에 쓴다. 프로젝트의 `.pi/mcp.json`은 읽지 않는다.
+  - **아직 남은 것**: OAuth로 로그인하는 MCP 서버의 자격 증명(`mcp-auth.json`)은 Pi 설정 폴더의 것을 쓴다. Pi SDK가 자격 증명 저장소(`McpOAuthCredentialStore`)를 공개하지 않아 위치를 바꿀 수 없다. 서버 이름·주소로 나뉘므로 다른 앱의 다른 서버와 섞이지는 않는다. Pi가 공개하면 앱 홈으로 옮긴다.
+- **문맥 파일**: `-nc`로 끈 대신, pi-isolation의 확장이 Pi와 같은 규칙(작업 폴더에서 위로 올라가며 폴더마다 `AGENTS.override.md`·`AGENTS.md`·`CLAUDE.md` 중 하나)으로 작업 폴더의 파일을 찾고, 앱 홈의 `AGENTS.md`를 앞에 더해 Pi와 같은 자리(project_context)에 붙인다. Pi처럼 프로젝트 신뢰와 관계없이 읽는다 (Pi docs/configuration.md "Context-file discovery does not require project trust").
 - **Pi Desktop**은 위 옵션을 쓰지 않는다. Pi를 있는 그대로 보여 주는 것이 컨셉이기 때문이다.
 
 ### 3.2 휴지통·아카이브

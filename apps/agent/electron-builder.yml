@@ -34,6 +34,13 @@ extraResources:
       - package.json
       - src/**
       - extensions/**
+  # pi-isolation: 앱 홈의 mcp.json·AGENTS.md를 읽는 확장. agent-kit과 같은 이유로 소스 그대로 싣는다
+  - from: ../../packages/pi-isolation
+    to: pi-isolation
+    filter:
+      - package.json
+      - src/**
+      - extensions/**
   # Linux 창 아이콘. 실행 파일에 아이콘이 없어 창에 직접 준다.
   - from: build/icon.png
     to: icon.png
