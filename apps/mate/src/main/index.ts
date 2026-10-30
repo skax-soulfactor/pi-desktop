@@ -7,6 +7,7 @@ import { IpcChannels, type CurrentHost, type HostView, type DutyDraft, type McpC
 import { RunnerConnection, type RunnerConnectionState } from "./runner-connection";
 import { listWslDistros, LOCAL_HOST_ID, readHostChoice, SSH_PREFIX, SshHostStore, WSL_PREFIX, writeHostChoice, type SshHostConfig } from "@pi-desktop/host-deploy";
 import { prepareMateSsh, prepareMateWsl, type RemoteMate } from "./hosts";
+import { placeRunnerFiles } from "./stable-runtime";
 
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
 import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
@@ -42,6 +43,20 @@ function kitDir(): string {
 
 function runnerEnv(): Record<string, string> {
   return { MATE_HOME: paths.home, PI_DESKTOP_MATE_KIT: kitDir() };
+}
+
+/**
+ * 로컬 실행기를 띄울 때 쓰는 실행기 번들과 mate-kit. AppImage는 앱이 끝나면 리소스(`/tmp/.mount_…`)가 사라지는데
+ * 실행기는 남아 임무를 돌리므로, Mate 홈에 복사한 것을 쓴다 (stable-runtime.ts).
+ */
+let placedFiles: Promise<{ runnerScript: string; kitDir: string }> | undefined;
+function localRunnerFiles(): Promise<{ runnerScript: string; kitDir: string }> {
+  if (!app.isPackaged || !process.env.APPIMAGE) return Promise.resolve({ runnerScript: runnerScript(), kitDir: kitDir() });
+  placedFiles ??= placeRunnerFiles(paths.home, { runnerScript: runnerScript(), kitDir: kitDir(), version: app.getVersion() }).catch((error: unknown) => {
+    placedFiles = undefined;
+    throw error;
+  });
+  return placedFiles;
 }
 
 // 개발 실행은 설치본과 userData(창 상태·단일 인스턴스 잠금)를 나눈다.
@@ -126,13 +141,13 @@ async function pushTelegramToken(): Promise<void> {
 
 async function launchFor(hostId: string) {
   if (hostId === LOCAL_HOST_ID) {
-    const runtime = await resolveNodeRuntime();
+    const [runtime, files] = await Promise.all([resolveNodeRuntime(), localRunnerFiles()]);
     remoteMate = undefined;
     // 휴대폰 연결 토큰은 실행기를 띄울 때만 풀어서 넘긴다 (connect가 실행기를 띄우는 경우)
     return {
       command: runtime.command,
-      args: [runnerScript(), "connect"],
-      env: { ...process.env, ...runtime.env, ...runnerEnv(), ...(await telegramEnv(localStore)) },
+      args: [files.runnerScript, "connect"],
+      env: { ...process.env, ...runtime.env, ...runnerEnv(), PI_DESKTOP_MATE_KIT: files.kitDir, ...(await telegramEnv(localStore)) },
     };
   }
   const options = { runnerScript: runnerScript(), version: app.getVersion(), kitDir: kitDir() };
@@ -192,7 +207,8 @@ async function restartRunner(): Promise<void> {
 /** 로그인할 때 실행: 창 없이 실행기만 확인한다 */
 async function ensureRunner(): Promise<void> {
   try {
-    const result = await runnerCommand(runnerScript(), "start", { ...runnerEnv(), ...(await telegramEnv(localStore)) });
+    const files = await localRunnerFiles();
+    const result = await runnerCommand(files.runnerScript, "start", { ...runnerEnv(), PI_DESKTOP_MATE_KIT: files.kitDir, ...(await telegramEnv(localStore)) });
     runnerError = result.status === "failed" ? "실행기를 띄우지 못했습니다. 로그를 확인하세요." : undefined;
   } catch (error) {
     runnerError = `실행기를 띄우지 못했습니다: ${(error as Error).message}`;
