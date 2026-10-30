@@ -27,6 +27,8 @@ export function matePaths(home: string) {
     log: join(home, "run", "mated.log"),
     /** 활동 관찰 기록 (요약만, M4) */
     activity: join(home, "activity.jsonl"),
+    /** 휴대폰 연결 상태 (실행기가 씀) */
+    remote: join(home, "remote.json"),
   };
 }
 

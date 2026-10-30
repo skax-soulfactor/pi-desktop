@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { readInbox } from "@pi-desktop/mate-kit";
 import {
   addRequest,
+  delegateInboxItem,
   applyInboxChange,
   discardInboxChange,
   execCommand,
@@ -39,6 +40,15 @@ import { IpcChannels, type DutyDraft, type Overview, type PiReadiness, type PiSe
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
 import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
 import { runnerCommand } from "./runner-process";
+import {
+  createPairingCode,
+  removeTelegram,
+  saveTelegramToken,
+  sendTelegramTest,
+  telegramEnv,
+  telegramView,
+  unpairTelegram,
+} from "./telegram-setup";
 import { Updater } from "./updater";
 import { parseTranscript } from "./session-transcript";
 
@@ -75,9 +85,16 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
 let mainWindow: BrowserWindow | undefined;
 let runnerError: string | undefined;
 
+/** 실행기를 멈췄다가 다시 띄운다 (토큰이 바뀌어 환경 변수를 다시 넘겨야 할 때) */
+async function restartRunner(): Promise<void> {
+  await runnerCommand(runnerScript(), "stop", runnerEnv()).catch(() => undefined);
+  await ensureRunner();
+}
+
 async function ensureRunner(): Promise<void> {
   try {
-    const result = await runnerCommand(runnerScript(), "start", runnerEnv());
+    // 휴대폰 연결 토큰은 실행기를 띄울 때만 풀어서 넘긴다
+    const result = await runnerCommand(runnerScript(), "start", { ...runnerEnv(), ...(await telegramEnv(paths)) });
     runnerError = result.status === "failed" ? "실행기를 띄우지 못했습니다. 로그를 확인하세요." : undefined;
   } catch (error) {
     runnerError = `실행기를 띄우지 못했습니다: ${(error as Error).message}`;
@@ -177,23 +194,7 @@ async function overview(): Promise<Overview> {
  * git 저장소면 고치기(act: 별도 작업 공간, 적용은 사용자가), 아니면 제안 단계로. 임무로 남겨 다시 돌릴 수 있게 한다.
  */
 async function delegate(itemId: string): Promise<void> {
-  const item = (await readInbox(paths.inbox)).find((i) => i.id === itemId);
-  if (!item?.followUp) throw new Error("맡길 일이 없는 제안입니다");
-  const repo = await execCommand("git", ["rev-parse", "--is-inside-work-tree"], item.followUp.cwd);
-  const now = Date.now();
-  const duty = await saveDuty(paths, {
-    id: `delegated-${now.toString(36)}`,
-    name: `맡긴 일: ${item.title}`.slice(0, 80),
-    enabled: true,
-    cwd: item.followUp.cwd,
-    // 관찰자에게 맡길 일을 그것만으로 실행할 수 있게 쓰라고 했으므로 그대로 쓴다
-    prompt: item.followUp.prompt,
-    profile: repo.code === 0 && repo.stdout.trim() === "true" ? "act" : "propose",
-    trigger: { kind: "manual" },
-    createdAt: now,
-  });
-  await addRequest(paths, duty.id);
-  await setInboxStatus(paths, [item.id], "accepted");
+  await delegateInboxItem(paths, itemId);
   if (!isAlive(await readPid(paths))) await ensureRunner();
 }
 
@@ -227,12 +228,31 @@ function registerIpc(): void {
     return result.canceled ? undefined : result.filePaths[0];
   });
   ipcMain.handle(IpcChannels.restartRunner, async () => {
-    await runnerCommand(runnerScript(), "stop", runnerEnv()).catch(() => undefined);
-    await ensureRunner();
+    await restartRunner();
     return runnerView();
   });
   ipcMain.handle(IpcChannels.revealHome, () => shell.openPath(paths.home));
   ipcMain.handle(IpcChannels.getAutostart, () => getAutostart());
+  ipcMain.handle(IpcChannels.telegramView, () => telegramView(paths));
+  ipcMain.handle(IpcChannels.telegramSetToken, async (_e, token: string) => {
+    await saveTelegramToken(paths, String(token));
+    await restartRunner();
+    return telegramView(paths);
+  });
+  ipcMain.handle(IpcChannels.telegramRemove, async () => {
+    await removeTelegram(paths);
+    await restartRunner();
+    return telegramView(paths);
+  });
+  ipcMain.handle(IpcChannels.telegramPair, async () => {
+    await createPairingCode(paths);
+    return telegramView(paths);
+  });
+  ipcMain.handle(IpcChannels.telegramUnpair, async () => {
+    await unpairTelegram(paths);
+    return telegramView(paths);
+  });
+  ipcMain.handle(IpcChannels.telegramTest, () => sendTelegramTest(paths));
   ipcMain.handle(IpcChannels.piReadiness, (_e, refresh: boolean) => readiness(refresh === true));
   ipcMain.handle(IpcChannels.installPiDesktop, () =>
     installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total)),
