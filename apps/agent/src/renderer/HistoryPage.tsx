@@ -3,7 +3,8 @@ import type { TrashItem } from "@pi-desktop/host-protocol/messages";
 import type { HistoryHit, StoredChat } from "../shared/api";
 import { folderName } from "./recent-folders";
 
-type View = "history" | "archive" | "trash";
+export type HistoryView = "history" | "archive" | "trash";
+type View = HistoryView;
 
 const VIEWS: Array<{ id: View; label: string }> = [
   { id: "history", label: "지난 대화" },
@@ -21,16 +22,19 @@ const titleOf = (c: { name?: string; firstMessage: string }) => c.name?.trim() |
  * - 🗑 삭제: 휴지통으로 옮긴다. "휴지통"에서 되살리거나 정말 지운다
  */
 export function HistoryPage({
+  initialView = "history",
   openFiles,
   onOpen,
   onError,
 }: {
+  /** 처음 보일 보기 (왼쪽 목록의 지난 대화·아카이브·휴지통) */
+  initialView?: View;
   /** 지금 열려 있는 대화의 세션 파일 (열림 표시) */
   openFiles: Set<string>;
   onOpen: (chat: StoredChat) => void;
   onError: (message: string) => void;
 }) {
-  const [view, setView] = useState<View>("history");
+  const [view, setView] = useState<View>(initialView);
   const [chats, setChats] = useState<StoredChat[]>();
   const [trash, setTrash] = useState<TrashItem[]>();
   const [query, setQuery] = useState("");

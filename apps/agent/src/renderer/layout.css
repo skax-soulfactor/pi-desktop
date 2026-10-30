@@ -676,8 +676,25 @@ code.copy {
 
 /* 지난 대화 */
 .nav-history {
-  align-self: flex-start;
+  display: flex;
+  gap: 10px;
   margin: 6px 4px 0;
+}
+
+/* 열린 대화의 아카이브·삭제는 그 줄에 올리거나 고른 대화에서만 보인다 */
+.nav-sessions li .nav-act {
+  visibility: hidden;
+  padding: 2px 4px;
+}
+
+.nav-sessions li:hover .nav-act,
+.nav-sessions li.active .nav-act {
+  visibility: visible;
+}
+
+.nav-close:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .history-list li {

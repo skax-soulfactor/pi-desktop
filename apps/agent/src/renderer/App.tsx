@@ -12,7 +12,7 @@ import { SkillsPage } from "./SkillsPage";
 import { PiSetupBanner } from "./PiSetupBanner";
 import { RulesPage } from "./RulesPage";
 import { UsagePage } from "./UsagePage";
-import { HistoryPage } from "./HistoryPage";
+import { HistoryPage, type HistoryView } from "./HistoryPage";
 import { McpPage } from "./McpPage";
 import { NetworkPage } from "./NetworkPage";
 import { SettingsPage } from "./SettingsPage";
@@ -40,6 +40,7 @@ export function App() {
   const agent = useAgentSession();
   const { connection, session, ui } = agent;
   const [page, setPage] = useState<Page>("chat");
+  const [historyView, setHistoryView] = useState<HistoryView>("history");
   const [sessions, setSessions] = useState<ChatSummary[]>([]);
   const [setup, setSetup] = useState<PiSetupView>();
   const [update, setUpdate] = useState<UpdateState>();
@@ -151,6 +152,7 @@ export function App() {
   // 메뉴바 명령. 최신 상태를 쓰도록 ref로 넘긴다
   const menu = useRef<(id: string) => void>(() => {});
   menu.current = (id: string) => {
+    if (id === "page:history") setHistoryView("history");
     if (id.startsWith("page:")) setPage(id.slice(5) as Page);
     else if (id === "new-chat") guard(() => newChat());
     else if (id === "new-chat-folder") guard(newChatInFolder);
@@ -160,6 +162,34 @@ export function App() {
     } else if (id === "close-chat" && session) guard(async () => (await agent.close(), await refreshSessions()));
   };
   useEffect(() => window.piAgent.onMenuCommand((id) => menu.current(id)), []);
+
+  /** 지난 대화 화면을 그 보기(지난 대화·아카이브·휴지통)로 연다 */
+  const openHistory = (view: HistoryView) => {
+    setHistoryView(view);
+    setPage("history");
+  };
+
+  /** 열린 대화를 닫는다. 기록 파일은 지난 대화에 남는다 */
+  const closeOpen = async (s: ChatSummary) => {
+    if (s.sessionId === session?.sessionId) await agent.close();
+    else await window.piAgent.closeSession(s.sessionId);
+    await refreshSessions();
+  };
+
+  /** 열린 대화를 닫고 아카이브한다 (설계 DESIGN-APPS.md §3.2) */
+  const archiveOpen = async (s: ChatSummary) => {
+    if (!s.sessionFile) return;
+    await closeOpen(s);
+    await window.piAgent.setArchived(s.sessionFile, true);
+  };
+
+  /** 열린 대화를 닫고 휴지통으로 옮긴다 */
+  const trashOpen = async (s: ChatSummary) => {
+    if (!s.sessionFile) return;
+    if (!confirm(`"${chatTitle(s)}" 대화를 닫고 지울까요? 휴지통으로 옮겨져 되살릴 수 있습니다.`)) return;
+    await closeOpen(s);
+    await window.piAgent.deleteChat(s.sessionFile);
+  };
 
   const current = sessions.find((s) => s.sessionId === session?.sessionId);
   const label = connectionLabel(connection);
@@ -226,16 +256,22 @@ export function App() {
                       {s.pendingUi > 0 && <span className="badge warn">입력 필요</span>}
                     </button>
                     <button
-                      className="nav-close"
-                      title="이 대화 닫기"
-                      onClick={() =>
-                        guard(async () => {
-                          if (s.sessionId === session?.sessionId) await agent.close();
-                          else await window.piAgent.closeSession(s.sessionId);
-                          await refreshSessions();
-                        })
-                      }
+                      className="nav-close nav-act"
+                      title={s.sessionFile ? "아카이브: 대화를 닫고 지난 대화 목록에서 숨깁니다 (아카이브에서 되돌릴 수 있습니다)" : "아직 기록 파일이 없는 대화입니다"}
+                      disabled={!s.sessionFile}
+                      onClick={() => guard(() => archiveOpen(s))}
                     >
+                      📦
+                    </button>
+                    <button
+                      className="nav-close nav-act"
+                      title={s.sessionFile ? "삭제: 대화를 닫고 휴지통으로 옮깁니다 (휴지통에서 되살릴 수 있습니다)" : "아직 기록 파일이 없는 대화입니다"}
+                      disabled={!s.sessionFile}
+                      onClick={() => guard(() => trashOpen(s))}
+                    >
+                      🗑
+                    </button>
+                    <button className="nav-close" title="이 대화 닫기 (기록은 지난 대화에 남습니다)" onClick={() => guard(() => closeOpen(s))}>
                       ×
                     </button>
                   </li>
@@ -244,9 +280,24 @@ export function App() {
             </li>
           ))}
         </ul>
-        <button className="link-button muted small-text nav-history" onClick={() => setPage("history")} title="지난 대화 찾기·다시 열기 (Ctrl+Shift+O)">
-          지난 대화…
-        </button>
+        <div className="nav-history">
+          {(
+            [
+              ["history", "지난 대화", "지난 대화 찾기·다시 열기 (Ctrl+Shift+O)"],
+              ["archive", "아카이브", "아카이브한 대화 (되돌리기)"],
+              ["trash", "휴지통", "지운 대화 (되살리기·비우기)"],
+            ] as const
+          ).map(([view, label, title]) => (
+            <button
+              key={view}
+              className={`link-button small-text ${page === "history" && historyView === view ? "" : "muted"}`}
+              title={title}
+              onClick={() => openHistory(view)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         <div className="nav-foot">
           {update && (update.status === "available" || update.status === "downloaded") && (
@@ -353,6 +404,8 @@ export function App() {
         {page === "network" && <NetworkPage onError={onError} pickFolder={pickFolder} />}
         {page === "history" && (
           <HistoryPage
+            key={historyView}
+            initialView={historyView}
             openFiles={new Set(sessions.flatMap((s) => (s.sessionFile ? [s.sessionFile] : [])))}
             onOpen={(chat) => guard(() => reopen(chat))}
             onError={onError}
