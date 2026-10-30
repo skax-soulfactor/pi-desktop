@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { approvalOptions, decisionOf, formatApprovalTitle } from "../../src/approval";
-import { attended } from "../../src/runtime";
-import { classify, evaluate, hardBlockReason, type Rule } from "./rules";
+import { attended, confinedTo } from "../../src/runtime";
+import { classify, confinementViolation, evaluate, hardBlockReason, insideRoot, type Rule } from "./rules";
 import { addRule, appendAudit, dataDir, loadRules, type AuditRecord } from "./store";
 
 /**
@@ -34,6 +34,15 @@ export default function permissions(pi: ExtensionAPI): void {
 
   pi.on("tool_call", async (event, ctx) => {
     const input = (event.input ?? {}) as Record<string, unknown>;
+    // 피어가 맡긴 작업: 승인된 폴더 밖은 읽기도 막는다 (읽은 것이 상대에게 돌아가므로)
+    const root = confinedTo();
+    if (root) {
+      const violation = confinementViolation(event.toolName, input, ctx.cwd, root);
+      if (violation) {
+        await appendAudit(dir, { at: new Date().toISOString(), toolName: event.toolName, target: JSON.stringify(input).slice(0, 300), decision: "blocked", cwd: ctx.cwd });
+        return { block: true, reason: `${violation}. 폴더 안에서 할 수 있는 일만 하고, 못 한 것은 결과에 적어라.` };
+      }
+    }
     const { request, invalid } = classify(event.toolName, input);
     if (!request) return undefined;
 
@@ -70,6 +79,11 @@ export default function permissions(pi: ExtensionAPI): void {
       return undefined;
     }
 
+    // 피어 작업은 사람이 폴더를 골라 승인했으므로 그 안의 쓰기는 묻지 않고 허용한다 (실행·네트워크는 아래에서 거부)
+    if (root && request.risk === "write" && insideRoot(request.target, root)) {
+      await audit("peer-folder");
+      return undefined;
+    }
     // 예약 실행·피어 요청처럼 사람이 지켜보지 않는 실행에서는 묻지 못하므로 거부한다 (설계 §1).
     if (!attended(ctx.hasUI)) return deny("unattended", "사람이 확인할 수 없는 실행이라 쓰기·실행 도구를 쓸 수 없다.");
 

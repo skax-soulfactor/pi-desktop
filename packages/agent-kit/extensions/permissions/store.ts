@@ -74,7 +74,8 @@ export interface AuditRecord {
   target: string;
   /**
    * allow-rule·deny-rule: 저장된 규칙, once·session·always·deny: 사람이 고름,
-   * repeat-deny: 이번 실행에서 거부한 것과 같은 호출, blocked: 위험 명령, unattended: 사람이 없음
+   * repeat-deny: 이번 실행에서 거부한 것과 같은 호출, blocked: 위험 명령·폴더 밖, unattended: 사람이 없음,
+   * peer-folder: 피어가 맡긴 작업이 승인된 폴더 안에 씀
    */
   decision:
     | "allow-rule"
@@ -86,7 +87,8 @@ export interface AuditRecord {
     | "deny"
     | "repeat-deny"
     | "blocked"
-    | "unattended";
+    | "unattended"
+    | "peer-folder";
   cwd: string;
 }
 

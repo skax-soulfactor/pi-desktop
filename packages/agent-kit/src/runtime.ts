@@ -42,3 +42,13 @@ export const PEER_ENV = "PI_DESKTOP_AGENT_PEER";
 export function isPeerAnswer(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[PEER_ENV] === "1";
 }
+
+/**
+ * 피어가 맡긴 작업의 워커에 주는 환경 변수: 읽기·쓰기를 이 폴더 안으로 가둔다.
+ * 이 PC의 다른 파일(예: 키·설정)을 읽어 상대에게 돌려주지 않게 한다.
+ */
+export const CONFINE_ENV = "PI_DESKTOP_AGENT_CONFINE";
+
+export function confinedTo(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return env[CONFINE_ENV] || undefined;
+}

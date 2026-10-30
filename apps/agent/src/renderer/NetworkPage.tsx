@@ -12,6 +12,8 @@ export function NetworkPage({ onError }: { onError: (message: string) => void })
   const [address, setAddress] = useState("");
   const [preview, setPreview] = useState<AgentCard>();
   const [busy, setBusy] = useState(false);
+  /** 들어온 작업마다 고른 폴더 */
+  const [folders, setFolders] = useState<Record<string, string>>({});
 
   const run = (action: () => Promise<void>) =>
     action().catch((error: unknown) => onError(error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "") : String(error)));
@@ -40,6 +42,70 @@ export function NetworkPage({ onError }: { onError: (message: string) => void })
         <span className="muted">다른 사람의 에이전트와 연결해 서로 물어봅니다. 지식은 넘기지 않고 답만 줍니다</span>
       </header>
       <div className="page-body">
+        {/* 사람이 답해야 하는 요청을 맨 위에 둔다 */}
+        {state.taskRequests.length > 0 && (
+          <section className="card">
+            <h3>들어온 작업 요청</h3>
+            <p className="muted small-text">
+              승인하면 고른 폴더 안에서만 파일을 읽고 씁니다. 명령 실행·웹 요청·기억 바꾸기는 막혀 있고, 결과는 맡긴 쪽으로 돌아갑니다. 맡길 일에 필요한 파일만 있는 폴더를 고르세요.
+            </p>
+            <ul className="list">
+              {state.taskRequests.map((t) => (
+                <li key={t.id} className="network-task">
+                  <div className="grow">
+                    <strong>{t.title}</strong> <span className="muted small-text">{t.peerName}가 맡김</span>
+                    <pre className="network-instruction">{t.instruction}</pre>
+                    <button
+                      className="small link-button"
+                      onClick={() =>
+                        run(async () => {
+                          const folder = await window.piAgent.pickDirectory();
+                          if (folder) setFolders((prev) => ({ ...prev, [t.id]: folder }));
+                        })
+                      }
+                    >
+                      📁 {folders[t.id] ?? "작업할 폴더 고르기"}
+                    </button>
+                  </div>
+                  <button
+                    className="small primary"
+                    disabled={!folders[t.id]}
+                    title={folders[t.id] ? "" : "먼저 작업할 폴더를 고르세요"}
+                    onClick={() => run(async () => (await window.piAgent.approvePeerTask(t.id, folders[t.id]!), await refresh()))}
+                  >
+                    승인
+                  </button>
+                  <button className="small" onClick={() => run(async () => (await window.piAgent.rejectPeerTask(t.id), await refresh()))}>
+                    거절
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {state.inbound.length > 0 && (
+          <section className="card">
+            <h3>들어온 페어링 요청</h3>
+            <ul className="list">
+              {state.inbound.map((r) => (
+                <li key={r.requestId}>
+                  <div className="grow">
+                    <strong>{r.name}</strong> <span className="muted small-text">{r.address}</span>
+                    <div className="muted small-text">{r.description}</div>
+                  </div>
+                  <button className="small primary" onClick={() => run(async () => (await window.piAgent.approvePairing(r.requestId), await refresh()))}>
+                    승인
+                  </button>
+                  <button className="small" onClick={() => run(async () => (await window.piAgent.rejectPairing(r.requestId), await refresh()))}>
+                    거절
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section className="card">
           <h3>받기</h3>
           <label className="check-row">
@@ -149,32 +215,10 @@ export function NetworkPage({ onError }: { onError: (message: string) => void })
           )}
         </section>
 
-        {state.inbound.length > 0 && (
-          <section className="card">
-            <h3>들어온 페어링 요청</h3>
-            <ul className="list">
-              {state.inbound.map((r) => (
-                <li key={r.requestId}>
-                  <div className="grow">
-                    <strong>{r.name}</strong> <span className="muted small-text">{r.address}</span>
-                    <div className="muted small-text">{r.description}</div>
-                  </div>
-                  <button className="small primary" onClick={() => run(async () => (await window.piAgent.approvePairing(r.requestId), await refresh()))}>
-                    승인
-                  </button>
-                  <button className="small" onClick={() => run(async () => (await window.piAgent.rejectPairing(r.requestId), await refresh()))}>
-                    거절
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         <section className="card">
           <h3>피어</h3>
           {state.peers.length === 0 ? (
-            <p className="muted">아직 연결된 에이전트가 없습니다. 대화에서 "○○에게 물어봐"라고 하면 연결된 피어에게 묻습니다.</p>
+            <p className="muted">아직 연결된 에이전트가 없습니다. 연결하면 대화에서 "○○에게 물어봐", "○○에게 맡겨"라고 할 수 있습니다.</p>
           ) : (
             <ul className="list">
               {state.peers.map((p) => (
@@ -191,6 +235,14 @@ export function NetworkPage({ onError }: { onError: (message: string) => void })
                       onChange={(e) => run(async () => (await window.piAgent.setPeerPolicy(p.id, { ...p.policy, question: e.target.checked ? "auto" : "deny" }), await refresh()))}
                     />
                     <span className="small-text">질문 받기</span>
+                  </label>
+                  <label className="check-row" title="이 피어가 맡기는 작업을 받을지 (받으면 승인해야 시작)">
+                    <input
+                      type="checkbox"
+                      checked={p.policy.task !== "deny"}
+                      onChange={(e) => run(async () => (await window.piAgent.setPeerPolicy(p.id, { ...p.policy, task: e.target.checked ? "ask" : "deny" }), await refresh()))}
+                    />
+                    <span className="small-text">작업 받기</span>
                   </label>
                   <label className="small-text" title="하루에 답할 질문 수">
                     하루{" "}
@@ -235,6 +287,7 @@ export function NetworkPage({ onError }: { onError: (message: string) => void })
 
 const LOG_LABEL: Record<NetworkState["log"][number]["status"], string> = {
   answered: "답함",
+  task: "작업 받음",
   denied: "받지 않음",
   limit: "하루 상한",
   loop: "너무 많이 거침",

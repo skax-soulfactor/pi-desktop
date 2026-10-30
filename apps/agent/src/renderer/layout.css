@@ -788,3 +788,21 @@ code.copy {
   align-items: center;
   gap: 8px;
 }
+
+.network-instruction {
+  margin: 4px 0;
+  padding: 6px 8px;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  font: inherit;
+}
+
+.list li.network-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
