@@ -1,4 +1,4 @@
-import type { InboxItem } from "@pi-desktop/mate-kit/shared";
+import type { ChatLine, InboxItem } from "@pi-desktop/mate-kit/shared";
 import type {
   ActivityRecord,
   Duty,
@@ -19,7 +19,7 @@ export interface PiSetupView extends PiReadiness {
   checkedAt: number;
 }
 
-export type { ActivityRecord, Duty, InboxItem, InboxStatus, MateConfig, ProjectSnapshot, RunRecord, RunStatus };
+export type { ActivityRecord, ChatLine, Duty, InboxItem, InboxStatus, MateConfig, ProjectSnapshot, RunRecord, RunStatus };
 
 export const IpcChannels = {
   overview: "mate:overview",
@@ -51,6 +51,7 @@ export const IpcChannels = {
   telegramPair: "mate:telegram-pair",
   telegramUnpair: "mate:telegram-unpair",
   telegramTest: "mate:telegram-test",
+  chatSend: "mate:chat-send",
   changed: "mate:changed",
 } as const;
 
@@ -122,8 +123,19 @@ export interface RunnerView {
   error?: string;
 }
 
+/** Mate 대화 (설계 DESIGN-MATE.md §13) */
+export interface ChatView {
+  /** 최근 대화 줄 (오래된 것부터) */
+  lines: ChatLine[];
+  /** 실행기가 답을 만드는 중 */
+  busy?: { since: number; source: "app" | "telegram" };
+  /** 대화에서 시작해 결과를 기다리는 실행 수 */
+  pending: number;
+}
+
 export interface Overview {
   home: string;
+  chat: ChatView;
   config: MateConfig;
   duties: DutyView[];
   inbox: InboxView[];
@@ -197,6 +209,8 @@ export interface MateApi {
   telegramPair(): Promise<TelegramView>;
   telegramUnpair(): Promise<TelegramView>;
   telegramTest(): Promise<void>;
+  /** Mate에게 말한다 ("/"로 시작하면 명령). answerTo는 Mate 질문에 답할 때 그 질문 줄 id */
+  chatSend(text: string, answerTo?: string): Promise<void>;
   /** Mate 홈의 파일이 바뀌면 불린다. 해제 함수를 돌려준다 */
   onChanged(listener: () => void): () => void;
 }

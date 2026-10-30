@@ -3,9 +3,11 @@ import { watch, type FSWatcher } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readInbox } from "@pi-desktop/mate-kit";
+import { appendChat, readChat, readInbox } from "@pi-desktop/mate-kit";
 import {
+  addChatRequest,
   addRequest,
+  loadChatState,
   delegateInboxItem,
   applyInboxChange,
   discardInboxChange,
@@ -153,12 +155,17 @@ async function overview(): Promise<Overview> {
     listRuns(paths, 100),
     runnerView(),
   ]);
-  const [activity, feedback] = await Promise.all([readActivity(paths, 150), topicFeedback(paths)]);
+  const [activity, feedback, chatLines, chatState] = await Promise.all([readActivity(paths, 150), topicFeedback(paths), readChat(paths.chat), loadChatState(paths)]);
   const now = Date.now();
   const names = new Map<string, string>([[OBSERVER_DUTY_ID, OBSERVER_NAME], ...duties.map((d) => [d.id, d.name] as [string, string])]);
   const queued = new Set(requests.map((r) => r.dutyId));
   return {
     home: paths.home,
+    chat: {
+      lines: chatLines.slice(-300),
+      ...(chatState.busy ? { busy: chatState.busy } : {}),
+      pending: Object.keys(chatState.pending).length,
+    },
     config,
     duties: duties.map((duty) => {
       const last = state.duties[duty.id];
@@ -195,6 +202,15 @@ async function overview(): Promise<Overview> {
  */
 async function delegate(itemId: string): Promise<void> {
   await delegateInboxItem(paths, itemId);
+  if (!isAlive(await readPid(paths))) await ensureRunner();
+}
+
+/** 사용자의 말을 대화 기록에 남기고 실행기에 넘긴다 (답은 실행기가 남김) */
+async function chatSend(text: string, answerTo?: string): Promise<void> {
+  const t = text.trim().slice(0, 4000);
+  if (!t) return;
+  const line = await appendChat(paths.chat, { role: "user", text: t, source: "app", ...(answerTo ? { answerTo } : {}) });
+  await addChatRequest(paths, { text: t, source: "app", lineId: line.id, ...(answerTo ? { answerTo } : {}) });
   if (!isAlive(await readPid(paths))) await ensureRunner();
 }
 
@@ -253,6 +269,9 @@ function registerIpc(): void {
     return telegramView(paths);
   });
   ipcMain.handle(IpcChannels.telegramTest, () => sendTelegramTest(paths));
+  ipcMain.handle(IpcChannels.chatSend, (_e, text: string, answerTo?: string) =>
+    chatSend(String(text ?? ""), typeof answerTo === "string" ? answerTo : undefined),
+  );
   ipcMain.handle(IpcChannels.piReadiness, (_e, refresh: boolean) => readiness(refresh === true));
   ipcMain.handle(IpcChannels.installPiDesktop, () =>
     installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total)),
@@ -282,8 +301,8 @@ function watchHome(): FSWatcher | undefined {
   };
   try {
     return watch(paths.home, { recursive: true }, (_event, name) => {
-      // Pi 세션 파일·로그는 실행 중 계속 바뀌므로 화면 갱신에서 뺀다
-      if (name && /^(sessions|run)[\\/]/.test(name)) return;
+      // Pi 세션 파일·로그(대화 세션·할 일 포함)는 실행 중 계속 바뀌므로 화면 갱신에서 뺀다
+      if (name && /^(sessions|run|chat[\\/](sessions|actions))[\\/]/.test(name)) return;
       notify();
     });
   } catch {

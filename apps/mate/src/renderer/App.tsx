@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Overview, PiSetupView, UpdateState } from "../shared/api";
 import { PiSetupBanner } from "./PiSetup";
 import { ActivityView } from "./ActivityView";
+import { ChatView } from "./ChatView";
 import { DutiesView } from "./DutiesView";
 import { PhoneView } from "./PhoneView";
 import { InboxPanel } from "./InboxPanel";
@@ -9,14 +10,14 @@ import { splitInbox, STATUS_LABELS } from "./mate-view";
 import { RunsView } from "./RunsView";
 import { SettingsView } from "./SettingsView";
 
-type Tab = "inbox" | "duties" | "activity" | "runs" | "phone" | "settings";
+type Tab = "chat" | "inbox" | "duties" | "activity" | "runs" | "phone" | "settings";
 
 /** 화면 전체. Mate 홈의 파일이 바뀔 때마다(실행기·확장이 쓴 것 포함) 다시 읽는다 */
 export function App() {
   const [overview, setOverview] = useState<Overview>();
   const [error, setError] = useState<string>();
   const [actionError, setActionError] = useState<string>();
-  const [tab, setTab] = useState<Tab>("inbox");
+  const [tab, setTab] = useState<Tab>("chat");
   const [now, setNow] = useState(Date.now());
   const [setup, setSetup] = useState<PiSetupView>();
   const [update, setUpdate] = useState<UpdateState>();
@@ -76,6 +77,9 @@ export function App() {
 
   if (!overview) return <div className="loading">{error ?? "불러오는 중…"}</div>;
   const freshCount = splitInbox(overview.inbox).fresh.length;
+  // 답하지 않은 Mate 질문 수 (대화 탭 배지)
+  const answeredIds = new Set(overview.chat.lines.map((l) => l.answerTo).filter(Boolean));
+  const openQuestions = overview.chat.lines.filter((l) => l.kind === "question" && !answeredIds.has(l.id)).length;
   const { runner } = overview;
   const current = runner.current ? overview.duties.find((d) => d.id === runner.current!.dutyId) : undefined;
 
@@ -84,6 +88,10 @@ export function App() {
       <header className="top">
         <div className="brand">Pi Desktop Mate</div>
         <nav className="tabs">
+          <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
+            대화{openQuestions > 0 && <span className="badge">{openQuestions}</span>}
+            {overview.chat.busy && <span className="count"> …</span>}
+          </button>
           <button className={tab === "inbox" ? "active" : ""} onClick={() => setTab("inbox")}>
             인박스{freshCount > 0 && <span className="badge">{freshCount}</span>}
           </button>
@@ -137,6 +145,7 @@ export function App() {
         />
       )}
       <main className="content">
+        {tab === "chat" && <ChatView overview={overview} now={now} act={act} />}
         {tab === "inbox" && <InboxPanel overview={overview} now={now} act={act} />}
         {tab === "duties" && <DutiesView overview={overview} now={now} act={act} setup={setup} />}
         {tab === "activity" && <ActivityView overview={overview} now={now} act={act} />}
