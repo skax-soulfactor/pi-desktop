@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { createJsonlReader, encodeJsonl, JsonRpcPeer, Methods, Notifications, type SessionOpenResult, type StoredSession } from "@pi-desktop/host-protocol";
-import { collectKit, prepareRemote } from "../src/main/hosts";
+import { prepareRemote } from "@pi-desktop/host-deploy";
+import { agentRemoteApp, hostPathsOf } from "../src/main/hosts";
 import { sessionParamsFor, sessionsDirFor } from "../src/main/host-session";
 import { startMockLlm, type MockLlm } from "../../../packages/host-agent/test/fixtures/mock-llm";
 import { PI_CLI } from "../../../packages/host-agent/test/helpers/real-pi";
@@ -43,11 +44,14 @@ describe.skipIf(process.platform === "win32" || !existsSync(agentScript))("원�
 
   it("Host Agent·kit을 올리고 Agent 홈으로 데몬에 붙어, 원격 경로로 연 대화가 그 홈에 남는다", async () => {
     const home = mkdtempSync(join(tmpdir(), "agent-remote-home-"));
-    const prepared = await prepareRemote("흉내", (script, input) => run(home, script, input), (script) => ({ command: "sh", args: ["-c", script] }), "", {
-      agentScript,
-      agentVersion: "0.0.0",
-      kit: () => collectKit(kitDir, isolationDir),
-    });
+    const remote = await prepareRemote(
+      "흉내",
+      (script, input) => run(home, script, input),
+      (script) => ({ command: "sh", args: ["-c", script] }),
+      "",
+      agentRemoteApp({ agentScript, agentVersion: "0.0.0", kitDir, isolationDir }),
+    );
+    const prepared = { spec: remote.spec, paths: hostPathsOf(remote.placed) };
     expect(prepared.paths).toMatchObject({ remote: true, home: `${home}/.pi-desktop-agent`, userHome: home });
     expect(existsSync(join(prepared.paths.kitDir, "extensions/agent-core/index.ts"))).toBe(true);
     expect(prepared.spec.args.join(" ")).toContain("PI_DESKTOP_HOME=");

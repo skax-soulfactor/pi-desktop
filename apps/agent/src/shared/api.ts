@@ -9,7 +9,7 @@ import type {
   TrashItem,
   FsListDirResult,
 } from "@pi-desktop/host-protocol/messages";
-import type { SshHostConfig } from "../vendor/shared/api";
+import type { SshHostConfig } from "@pi-desktop/host-deploy/types";
 
 export type { SshHostConfig };
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";

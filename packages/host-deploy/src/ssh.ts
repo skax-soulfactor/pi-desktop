@@ -2,14 +2,9 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { runCommand, shQuote, type RemoteRunner } from "./bundle";
 
-export interface SshHostConfig {
-  /** 화면에 보일 이름. 호스트 id("ssh:<이름>")에도 쓰여 겹칠 수 없다 */
-  name: string;
-  /** ssh에 넘기는 대상: user@host 또는 ~/.ssh/config의 Host 이름 */
-  target: string;
-  /** 비우면 ssh 기본값(22 또는 ~/.ssh/config) */
-  port?: number;
-}
+import type { SshHostConfig } from "./types";
+
+export type { SshHostConfig };
 
 /**
  * SSH 호스트 지원 (설계 §3.2 SSH transport, §5.6).

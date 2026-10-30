@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@pi-desktop/agent-kit": "*",
+    "@pi-desktop/host-deploy": "*",
     "@pi-desktop/host-protocol": "*",
     "@pi-desktop/pi-isolation": "*",
     "@types/react": "^19.3.0",

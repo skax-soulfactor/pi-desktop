@@ -26,12 +26,9 @@ import type { CardDraft } from "@pi-desktop/agent-kit/peers";
 import type { McpCheckResult } from "@pi-desktop/pi-isolation/mcp-presets";
 import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
 import { HostConnection, type LaunchSpec } from "../vendor/main/host-connection";
-import { SshHostStore } from "../vendor/main/ssh-hosts";
-import { listWslDistros } from "../vendor/main/wsl";
-import type { SshHostConfig } from "../vendor/shared/api";
-import { collectKit, LOCAL_HOST_ID, prepareSsh, prepareWsl, SSH_PREFIX, WSL_PREFIX, type HostPaths, type Prepared } from "./hosts";
+import { listWslDistros, readHostChoice, SshHostStore, writeHostChoice, type SshHostConfig } from "@pi-desktop/host-deploy";
+import { LOCAL_HOST_ID, prepareAgentSsh, prepareAgentWsl, SSH_PREFIX, WSL_PREFIX, type HostPaths, type Prepared } from "./hosts";
 import { schedulerDirFor, sessionParamsFor, sessionsDirFor } from "./host-session";
-import { readHostChoice, writeHostChoice } from "./host-choice";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";
 import { ReplayCollector } from "../vendor/main/replay-collector";
 import { IpcChannels, type AttachResult, type ChatSummary, type CurrentHost, type HostView, type SessionSource, type ImageAttachment } from "../shared/api";
@@ -193,13 +190,13 @@ async function prepareHost(hostId: string): Promise<LaunchSpec> {
     hostPaths = localPaths();
     return { command: runtime.command, args: [script, "connect"], env: { ...runtime.env, PI_DESKTOP_HOME: agentHome() }, agentBuild };
   }
-  const options = { agentScript: script, agentVersion: agentVersion(script), kit: () => collectKit(kitDir(), isolationDir()) };
+  const options = { agentScript: script, agentVersion: agentVersion(script), kitDir: kitDir(), isolationDir: isolationDir() };
   let prepared: Prepared;
-  if (hostId.startsWith(WSL_PREFIX)) prepared = await prepareWsl(hostId.slice(WSL_PREFIX.length), options);
+  if (hostId.startsWith(WSL_PREFIX)) prepared = await prepareAgentWsl(hostId.slice(WSL_PREFIX.length), options);
   else if (hostId.startsWith(SSH_PREFIX)) {
     const host = sshHosts().get(hostId.slice(SSH_PREFIX.length));
     if (!host) throw new Error(`등록되지 않은 SSH 호스트입니다: ${hostId.slice(SSH_PREFIX.length)}`);
-    prepared = await prepareSsh(host, options);
+    prepared = await prepareAgentSsh(host, options);
   } else throw new Error(`알 수 없는 호스트입니다: ${hostId}`);
   hostPaths = prepared.paths;
   return prepared.spec;
