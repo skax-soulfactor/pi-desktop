@@ -74,7 +74,8 @@ PC의 실행기가 텔레그램에 바깥으로만 연결하므로 포트를 열
 
 ## 설치와 릴리스
 
-- 설치 파일: GitHub Releases의 `mate-v*` 릴리스 (Windows `Pi-Desktop-Mate-Setup-*.exe`, macOS dmg, Linux AppImage/deb). 코드 서명이 없어 처음 실행할 때 경고가 나올 수 있다.
+- 설치 파일: GitHub Releases의 `mate-v*` 릴리스 (Windows `Pi-Desktop-Mate-Setup-*.exe`, macOS dmg, Linux AppImage/deb). 코드 서명이 없어 처음 실행할 때 경고가 나올 수 있다 ([루트 README의 "코드 서명"](../../README.md#코드-서명)).
+- 릴리스 만들기: `mate-v`로 시작하는 태그(예: `mate-v0.5.2`)를 올리면 `.github/workflows/mate-release.yml`이 세 OS에서 만들어 올린다. Actions에서 손으로 돌리면 만들기만 한다.
 - Pi Desktop과 별도 앱이다. Mate 릴리스는 GitHub에서 Latest로 표시하지 않아 Pi Desktop 자동 업데이트에 섞이지 않는다.
 - **자동 업데이트**(v0.3.0부터): 새 버전이 나오면 상단에 "새 버전" 배지가 뜨고, 누르면 내려받아 다시 시작할 때 설치한다(Windows·AppImage. macOS는 릴리스 페이지 안내). 설정의 "업데이트 확인"으로 바로 확인할 수 있다. v0.2.0 이하는 v0.3.0을 한 번 직접 설치해야 한다.
 - 로컬에서 만들기: `npm run dist -w @pi-desktop/mate` (지금 OS용, 결과는 `apps/mate/release/`)
