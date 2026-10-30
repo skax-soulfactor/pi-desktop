@@ -7,6 +7,7 @@ import { IpcChannels, type CurrentHost, type HostView, type DutyDraft, type McpC
 import { RunnerConnection, type RunnerConnectionState } from "./runner-connection";
 import { listWslDistros, LOCAL_HOST_ID, readHostChoice, SSH_PREFIX, SshHostStore, WSL_PREFIX, writeHostChoice, type SshHostConfig } from "@pi-desktop/host-deploy";
 import { prepareMateSsh, prepareMateWsl, type RemoteMate } from "./hosts";
+import { placeRunnerFiles } from "./stable-runtime";
 
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
 import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
@@ -44,6 +45,20 @@ function runnerEnv(): Record<string, string> {
   return { MATE_HOME: paths.home, PI_DESKTOP_MATE_KIT: kitDir() };
 }
 
+/**
+ * 로컬 실행기를 띄울 때 쓰는 실행기 번들과 mate-kit. AppImage는 앱이 끝나면 리소스(`/tmp/.mount_…`)가 사라지는데
+ * 실행기는 남아 임무를 돌리므로, Mate 홈에 복사한 것을 쓴다 (stable-runtime.ts).
+ */
+let placedFiles: Promise<{ runnerScript: string; kitDir: string }> | undefined;
+function localRunnerFiles(): Promise<{ runnerScript: string; kitDir: string }> {
+  if (!app.isPackaged || !process.env.APPIMAGE) return Promise.resolve({ runnerScript: runnerScript(), kitDir: kitDir() });
+  placedFiles ??= placeRunnerFiles(paths.home, { runnerScript: runnerScript(), kitDir: kitDir(), version: app.getVersion() }).catch((error: unknown) => {
+    placedFiles = undefined;
+    throw error;
+  });
+  return placedFiles;
+}
+
 // 개발 실행은 설치본과 userData(창 상태·단일 인스턴스 잠금)를 나눈다.
 // 같으면 설치본이 켜져 있을 때 개발 실행이 잠금에 걸려 바로 끝나고, 설치본 창을 앞으로 불러낸다.
 if (!app.isPackaged) app.setPath("userData", join(app.getPath("appData"), "Pi Desktop Mate (dev)"));
@@ -54,6 +69,15 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
 }
 
 let mainWindow: BrowserWindow | undefined;
+
+/**
+ * 창에 알린다. 앱을 닫는 중에는 창이 먼저 없어지고 연결 정리·업데이트 알림이 뒤에 올 수 있다.
+ * 없어진 창에 보내면 "Object has been destroyed"로 main 프로세스 오류 창이 뜨므로 건너뛴다.
+ */
+function sendToWindow(channel: string, ...args: unknown[]): void {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+  mainWindow.webContents.send(channel, ...args);
+}
 let runnerError: string | undefined;
 
 /**
@@ -117,13 +141,13 @@ async function pushTelegramToken(): Promise<void> {
 
 async function launchFor(hostId: string) {
   if (hostId === LOCAL_HOST_ID) {
-    const runtime = await resolveNodeRuntime();
+    const [runtime, files] = await Promise.all([resolveNodeRuntime(), localRunnerFiles()]);
     remoteMate = undefined;
     // 휴대폰 연결 토큰은 실행기를 띄울 때만 풀어서 넘긴다 (connect가 실행기를 띄우는 경우)
     return {
       command: runtime.command,
-      args: [runnerScript(), "connect"],
-      env: { ...process.env, ...runtime.env, ...runnerEnv(), ...(await telegramEnv(localStore)) },
+      args: [files.runnerScript, "connect"],
+      env: { ...process.env, ...runtime.env, ...runnerEnv(), PI_DESKTOP_MATE_KIT: files.kitDir, ...(await telegramEnv(localStore)) },
     };
   }
   const options = { runnerScript: runnerScript(), version: app.getVersion(), kitDir: kitDir() };
@@ -159,11 +183,11 @@ function startConnection(): void {
   const hostId = currentHostId;
   connection = new RunnerConnection({
     launch: () => launchFor(hostId),
-    onChanged: () => mainWindow?.webContents.send(IpcChannels.changed),
+    onChanged: () => sendToWindow(IpcChannels.changed),
     onState: (state: RunnerConnectionState) => {
       runnerError = state.status === "disconnected" ? `실행기에 연결하지 못했습니다: ${state.reason}` : undefined;
       if (state.status === "connected") void pushTelegramToken().catch(() => undefined);
-      mainWindow?.webContents.send(IpcChannels.changed);
+      sendToWindow(IpcChannels.changed);
     },
   });
   connection.start();
@@ -183,7 +207,8 @@ async function restartRunner(): Promise<void> {
 /** 로그인할 때 실행: 창 없이 실행기만 확인한다 */
 async function ensureRunner(): Promise<void> {
   try {
-    const result = await runnerCommand(runnerScript(), "start", { ...runnerEnv(), ...(await telegramEnv(localStore)) });
+    const files = await localRunnerFiles();
+    const result = await runnerCommand(files.runnerScript, "start", { ...runnerEnv(), PI_DESKTOP_MATE_KIT: files.kitDir, ...(await telegramEnv(localStore)) });
     runnerError = result.status === "failed" ? "실행기를 띄우지 못했습니다. 로그를 확인하세요." : undefined;
   } catch (error) {
     runnerError = `실행기를 띄우지 못했습니다: ${(error as Error).message}`;
@@ -321,7 +346,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannels.chatSend, (_e, text: string, answerTo?: string) => call("chatSend", String(text ?? ""), typeof answerTo === "string" ? answerTo : undefined));
   ipcMain.handle(IpcChannels.piReadiness, (_e, refresh: boolean) => readiness(refresh === true));
   ipcMain.handle(IpcChannels.installPiDesktop, () =>
-    installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total)),
+    installPiDesktop(mainWindow, (received, total) => sendToWindow(IpcChannels.installProgress, received, total)),
   );
   ipcMain.handle(IpcChannels.openPiDesktop, () => openPiDesktop());
   ipcMain.handle(IpcChannels.setAutostart, (_e, enabled: boolean) => {
@@ -351,6 +376,7 @@ function createWindow(): void {
       contextIsolation: true,
     },
   });
+  mainWindow.on("closed", () => (mainWindow = undefined));
   // 링크는 앱 안이 아니라 기본 브라우저로 연다
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) void shell.openExternal(url);
@@ -384,7 +410,7 @@ if (isRunnerOnlyLaunch()) {
     app.on("will-quit", () => connection?.dispose());
     // 자동 업데이트: 설치 직전에는 실행기를 멈춘다 (실행기가 Electron을 Node로 쓰는 경우 설치 파일을 잡고 있지 않게)
     const updater = new Updater(
-      (state) => mainWindow?.webContents.send(IpcChannels.updateStateChanged, state),
+      (state) => sendToWindow(IpcChannels.updateStateChanged, state),
       () => mainWindow,
       async () => {
         await runnerCommand(runnerScript(), "stop", runnerEnv());

@@ -42,10 +42,14 @@ export class RunnerConnection {
     void this.connect();
   }
 
+  /** 연결을 끝낸다 (앱 종료·호스트 바꾸기). 끝난 뒤에는 상태 알림을 보내지 않는다 (창이 이미 없을 수 있다) */
   dispose(): void {
     this.disposed = true;
     clearTimeout(this.retry);
-    this.child?.kill();
+    const child = this.child;
+    this.child = undefined;
+    this.peer = undefined;
+    child?.kill();
   }
 
   /** 실행기의 app-api 함수를 부른다. 붙는 중이면 붙을 때까지 기다린다 */
@@ -119,6 +123,7 @@ export class RunnerConnection {
   }
 
   private lost(reason: string): void {
+    if (this.disposed) return;
     if (this.state.status === "disconnected" && !this.child) return;
     this.child = undefined;
     this.peer = undefined;

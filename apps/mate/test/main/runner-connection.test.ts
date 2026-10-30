@@ -49,4 +49,11 @@ describe.skipIf(!existsSync(script))("RunnerConnection", () => {
     const again = await connection.call<{ duties: unknown[] }>("overview");
     expect(again.duties).toHaveLength(1);
   }, 60_000);
+
+  it("끝낸 뒤에는 상태 알림을 보내지 않는다 (앱을 닫을 때 창이 이미 없을 수 있다)", async () => {
+    const count = states.length;
+    connection.dispose();
+    await new Promise((r) => setTimeout(r, 1000));
+    expect(states.length).toBe(count);
+  });
 });
