@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Overview, PiSetupView, UpdateState } from "../shared/api";
+import type { CurrentHost, Overview, PiSetupView, UpdateState } from "../shared/api";
+import { FolderPicker } from "./FolderPicker";
+import { setFolderPickOpener } from "./folder-pick";
 import { PiSetupBanner } from "./PiSetup";
 import { ActivityView } from "./ActivityView";
 import { ChatView } from "./ChatView";
@@ -23,6 +25,13 @@ export function App() {
   const [now, setNow] = useState(Date.now());
   const [setup, setSetup] = useState<PiSetupView>();
   const [update, setUpdate] = useState<UpdateState>();
+  /** 지금 호스트 (원격이면 머리에 보이고, 폴더는 그 호스트에서 고른다) */
+  const [host, setHost] = useState<CurrentHost>();
+  const [folderPick, setFolderPick] = useState<{ resolve: (folder: string | undefined) => void }>();
+  useEffect(() => {
+    setFolderPickOpener((resolve) => setFolderPick({ resolve }));
+    return () => setFolderPickOpener(undefined);
+  }, []);
   useEffect(() => {
     void window.mate.updateState().then(setUpdate);
     return window.mate.onUpdateState(setUpdate);
@@ -35,6 +44,7 @@ export function App() {
   const refresh = useCallback(async () => {
     try {
       setOverview(await window.mate.overview());
+      void window.mate.currentHost().then(setHost);
       // 실행기가 방금 쓴 시각이 화면의 "지금"보다 뒤로 보이지 않게 함께 갱신한다
       setNow(Date.now());
       setError(undefined);
@@ -88,7 +98,7 @@ export function App() {
   return (
     <div className="app">
       <header className="top">
-        <div className="brand">Pi Desktop Mate</div>
+        <div className="brand">Pi Desktop Mate{host?.remote && <span className="count"> · {hostLabel(host.id)}</span>}</div>
         <nav className="tabs">
           <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
             대화{openQuestions > 0 && <span className="badge">{openQuestions}</span>}
@@ -162,15 +172,41 @@ export function App() {
         {tab === "trash" && <TrashView overview={overview} now={now} act={act} />}
         {tab === "phone" && (
           <section>
-            <PhoneView overview={overview} act={act} />
+            {host?.remote ? (
+              <div className="empty">원격 호스트({hostLabel(host.id)})의 휴대폰 연결은 아직 지원하지 않습니다. 휴대폰 연결은 로컬 호스트에서 설정하세요.</div>
+            ) : (
+              <PhoneView overview={overview} act={act} />
+            )}
           </section>
         )}
         {tab === "settings" && (
           <SettingsView overview={overview} act={act} setup={setup} onRefreshSetup={() => checkSetup(true)} update={update} />
         )}
       </main>
+      {folderPick && host && (
+        <FolderPicker
+          hostLabel={hostLabel(host.id)}
+          initial={host.userHome}
+          onPick={(folder) => {
+            folderPick.resolve(folder);
+            setFolderPick(undefined);
+          }}
+          onClose={() => {
+            folderPick.resolve(undefined);
+            setFolderPick(undefined);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+/** 호스트 id를 사람이 읽는 이름으로 ("wsl:Ubuntu" → "WSL: Ubuntu") */
+export function hostLabel(id: string): string {
+  if (id === "local") return "로컬";
+  if (id.startsWith("wsl:")) return `WSL: ${id.slice(4)}`;
+  if (id.startsWith("ssh:")) return `SSH: ${id.slice(4)}`;
+  return id;
 }
 
 export type Act = (job: () => Promise<unknown>) => Promise<boolean>;

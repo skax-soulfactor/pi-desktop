@@ -58,4 +58,19 @@ describe("실행기 JSON-RPC (connect)", () => {
     await expect(call("nope")).rejects.toThrow(/모르는 Mate 함수/);
     await expect(call("constructor")).rejects.toThrow(/모르는 Mate 함수/);
   });
+
+  it("stopRunner로 실행기가 스스로 멈춘다", async () => {
+    const { pid } = (await call<Overview>("overview")).runner;
+    expect(await call("stopRunner")).toBeNull();
+    let alive = true;
+    for (let i = 0; i < 50 && alive; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      try {
+        process.kill(pid!, 0);
+      } catch {
+        alive = false;
+      }
+    }
+    expect(alive).toBe(false);
+  });
 });

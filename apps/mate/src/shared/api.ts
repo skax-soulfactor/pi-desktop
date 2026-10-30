@@ -16,6 +16,25 @@ import type { ChatView, DutyDraft, DutyView, InboxView, ObserveView, Overview, R
 export type { ChatView, DutyDraft, DutyView, InboxView, ObserveView, Overview, RunnerView, TranscriptItem };
 import type { SkillInput, SkillView } from "@pi-desktop/agent-kit/skill-types";
 import type { McpCheckResult, McpServerView } from "@pi-desktop/pi-isolation/mcp-presets";
+import type { SshHostConfig } from "@pi-desktop/host-deploy/types";
+import type { FsListDirResult } from "@pi-desktop/host-protocol/messages";
+
+export type { FsListDirResult, SshHostConfig };
+
+/** 고를 수 있는 호스트 (DESIGN-MATE-REMOTE.md §3.1) */
+export interface HostView {
+  id: string;
+  kind: "local" | "wsl" | "ssh";
+  label: string;
+}
+
+/** 지금 호스트. 원격이면 실행기가 붙은 뒤 그 호스트의 Mate 홈·사용자 홈이 채워진다 */
+export interface CurrentHost {
+  id: string;
+  remote: boolean;
+  home?: string;
+  userHome?: string;
+}
 
 export type { McpCheckResult, McpServerView, SkillInput, SkillView };
 
@@ -64,6 +83,14 @@ export const IpcChannels = {
   telegramUnpair: "mate:telegram-unpair",
   telegramTest: "mate:telegram-test",
   chatSend: "mate:chat-send",
+  listHosts: "mate:list-hosts",
+  currentHost: "mate:current-host",
+  setHost: "mate:set-host",
+  listSshHosts: "mate:list-ssh-hosts",
+  saveSshHost: "mate:save-ssh-host",
+  removeSshHost: "mate:remove-ssh-host",
+  listDir: "mate:list-dir",
+  makeDir: "mate:make-dir",
   applyInstall: "mate:apply-install",
   describeInstall: "mate:describe-install",
   skillsList: "mate:skills-list",
@@ -139,6 +166,17 @@ export interface MateApi {
   applyInstall(itemId: string): Promise<string>;
   /** 설치 제안을 적용하기 전에 보일 내용 (Markdown) */
   describeInstall(itemId: string): Promise<string>;
+  /** 호스트 목록 (로컬, WSL 배포판, 등록한 SSH 호스트) */
+  listHosts(): Promise<HostView[]>;
+  currentHost(): Promise<CurrentHost>;
+  /** 호스트를 바꾼다. stopPrevious면 앞 호스트의 실행기를 멈춘다. 다시 붙고 화면을 새로 읽는다 */
+  setHost(hostId: string, stopPrevious: boolean): Promise<void>;
+  listSshHosts(): Promise<SshHostConfig[]>;
+  saveSshHost(host: SshHostConfig, previousName?: string): Promise<SshHostConfig>;
+  removeSshHost(name: string): Promise<void>;
+  /** 그 호스트의 폴더를 실행기로 훑는다 (원격 호스트의 폴더 고르기) */
+  listDir(path?: string): Promise<FsListDirResult>;
+  makeDir(parent: string, name: string): Promise<string>;
   /** Mate 홈 skills/의 스킬 (DESIGN-APPS.md §3.4) */
   skillsList(): Promise<SkillView[]>;
   /** 스킬을 만들거나 고친다. previous가 있으면 그 이름의 스킬을 고친다(이름 바꾸기 포함) */

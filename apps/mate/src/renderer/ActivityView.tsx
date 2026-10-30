@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { ActivityRecord, Overview } from "../shared/api";
 import type { Act } from "./App";
 import { relativeTime } from "./mate-view";
+import { pickFolder } from "./folder-pick";
 
 /**
  * 활동 관찰 (설계 DESIGN-MATE.md §10, M4).
@@ -177,7 +178,7 @@ function ExcludedFolders({ excluded, onChange }: { excluded: string[]; onChange:
       <button
         className="small"
         onClick={async () => {
-          const dir = await window.mate.pickDirectory();
+          const dir = await pickFolder();
           if (dir && !excluded.includes(dir)) onChange([...excluded, dir]);
         }}
       >
