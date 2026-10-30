@@ -2,13 +2,14 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { appendChat, appendChatQuestion, appendProposal, makeProposal, readChat } from "@pi-desktop/mate-kit";
+import { appendBlocked, appendChat, appendChatQuestion, appendProposal, makeProposal, PERMISSION_OPTIONS, readChat } from "@pi-desktop/mate-kit";
+import { askPermission } from "../src/daemon";
 import { addChatRequest, ChatAgent, loadChatState } from "../src/chat/chat-agent";
 import { chatSystemPrompt, openQuestions } from "../src/chat/context";
 import { parseSchedulePhrase } from "../src/chat/schedule-phrase";
 import type { RunInput, RunOutcome } from "../src/executor";
 import { matePaths, type MatePaths } from "../src/paths";
-import { listDuties, loadConfig, loadInboxState, saveDuty } from "../src/store";
+import { listDuties, loadConfig, loadInboxState, saveDuty, takeRequests } from "../src/store";
 
 describe("실행 시점 표현", () => {
   it("대화에서 쓰는 표현을 계기로 바꾼다", () => {
@@ -99,6 +100,54 @@ describe("ChatAgent", () => {
     expect(await chatSystemPrompt(paths, Date.now())).toContain("테스트를 추가할까요?");
     await appendChat(paths.chat, { role: "user", text: "예", answerTo: lines[0]!.id });
     expect(openQuestions(await readChat(paths.chat))).toHaveLength(0);
+  });
+
+  it("막힌 명령은 허용을 묻고, 허용하면 임무에 더해 다시 실행한다 (모델 없이)", async () => {
+    const duty = (await listDuties(paths)).find((d) => d.id === "brief")!;
+    const blocked = join(paths.runDir, "blocked", "r1.jsonl");
+    await appendBlocked(blocked, { name: "curl", command: "curl -s https://hacker-news.firebaseio.com/v0/topstories.json", at: 1 });
+    await appendBlocked(blocked, { name: "curl", command: "curl -s https://b", at: 2 });
+    expect(await askPermission(paths, duty, "r1", blocked, Date.now())).toBe(true);
+    const question = (await readChat(paths.chat)).find((l) => l.kind === "question")!;
+    expect(question).toMatchObject({ options: [...PERMISSION_OPTIONS], permission: { dutyId: "brief", commands: ["curl"] } });
+    expect(question.text).toContain("hacker-news.firebaseio.com");
+    // 기록 파일은 지우고, 답하지 않은 같은 질문은 다시 묻지 않는다
+    await appendBlocked(blocked, { name: "curl", command: "curl -s https://hacker-news.firebaseio.com/v0/topstories.json", at: 3 });
+    expect(await askPermission(paths, duty, "r2", blocked, Date.now())).toBe(false);
+
+    agent.submit({ text: PERMISSION_OPTIONS[0], source: "telegram", answerTo: question.id });
+    await agent.whenIdle();
+    expect(calls).toHaveLength(0);
+    expect((await listDuties(paths)).find((d) => d.id === "brief")!.grants).toEqual(["curl"]);
+    expect((await takeRequests(paths)).map((r) => r.dutyId)).toEqual(["brief"]);
+    expect((await loadChatState(paths)).pending.brief?.source).toBe("telegram");
+    expect((await readChat(paths.chat)).at(-1)!.text).toContain("curl을(를) 허용했어요");
+
+    // 같은 질문에 또 답하면 처음 답만 따른다
+    agent.submit({ text: PERMISSION_OPTIONS[0], source: "app", answerTo: question.id });
+    await agent.whenIdle();
+    expect((await readChat(paths.chat)).at(-1)!.text).toBe("이미 답한 질문이에요.");
+    expect(await takeRequests(paths)).toEqual([]);
+
+    // 이미 허용한 명령은 다시 묻지 않는다
+    const granted = (await listDuties(paths)).find((d) => d.id === "brief")!;
+    await appendBlocked(blocked, { name: "curl", command: "curl -o x https://a", at: 4 });
+    expect(await askPermission(paths, granted, "r3", blocked, Date.now())).toBe(false);
+  });
+
+  it("허용하지 않으면 임무를 그대로 두고, 예·아니요가 아닌 답은 모델이 받는다", async () => {
+    const duty = (await listDuties(paths)).find((d) => d.id === "brief")!;
+    const blocked = join(paths.runDir, "blocked", "r1.jsonl");
+    await appendBlocked(blocked, { name: "dig", command: "dig +short example.com", at: 1 });
+    await askPermission(paths, duty, "r1", blocked, Date.now());
+    const question = (await readChat(paths.chat)).find((l) => l.kind === "question")!;
+    agent.submit({ text: "왜 필요한데?", source: "app", answerTo: question.id });
+    await agent.whenIdle();
+    expect(calls).toHaveLength(1);
+    agent.submit({ text: PERMISSION_OPTIONS[1], source: "app", answerTo: question.id });
+    await agent.whenIdle();
+    expect((await listDuties(paths)).find((d) => d.id === "brief")!.grants).toBeUndefined();
+    expect(await takeRequests(paths)).toEqual([]);
   });
 
   it("/new는 대화 번호를 올리고 구분선을 남긴다", async () => {

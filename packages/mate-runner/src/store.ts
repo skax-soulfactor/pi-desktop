@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { isProfile } from "@pi-desktop/mate-kit";
+import { isGrantableName, isProfile } from "@pi-desktop/mate-kit";
 import type { MatePaths } from "./paths";
 import { parseTime } from "./schedule";
 import { pollCommandError } from "./watchers";
@@ -192,6 +192,10 @@ export function normalizeDuty(raw: unknown): Duty | string {
   if (typeof d.model === "string" && d.model.trim()) duty.model = d.model.trim();
   if (typeof d.timeoutSec === "number" && d.timeoutSec > 0) duty.timeoutSec = Math.min(3600, Math.round(d.timeoutSec));
   if (typeof d.maxCostUsd === "number" && d.maxCostUsd > 0) duty.maxCostUsd = d.maxCostUsd;
+  if (Array.isArray(d.grants)) {
+    const grants = [...new Set(d.grants.filter((g): g is string => typeof g === "string" && isGrantableName(g)))];
+    if (grants.length) duty.grants = grants;
+  }
   if (typeof d.updatedAt === "number") duty.updatedAt = d.updatedAt;
   return duty;
 }
