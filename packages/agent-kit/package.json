@@ -17,6 +17,8 @@
     "./schedules": "./extensions/schedule/store.ts",
     "./schedule-plan": "./extensions/schedule/plan.ts",
     "./memory": "./extensions/memory/store.ts",
+    "./memory-types": "./extensions/memory/types.ts",
+    "./memory-recall": "./extensions/memory/recall.ts",
     "./permissions": "./extensions/permissions/store.ts",
     "./usage": "./src/usage.ts",
     "./usage-types": "./src/usage-types.ts",

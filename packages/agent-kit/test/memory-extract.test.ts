@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { digestRun, extractPrompt, looksSecret, parseOps } from "../extensions/memory/extract";
-import { loadAutoLearn, loadMemories, saveAutoLearn, saveMemory, updateMemory } from "../extensions/memory/store";
+import { loadAutoLearn, saveAutoLearn } from "../extensions/memory/store";
 import { startPi, type RpcPi, type RpcRecord } from "./helpers/rpc-pi";
 import { startScriptLlm, type ScriptLlm } from "./helpers/script-llm";
 
@@ -45,9 +45,9 @@ describe("실행 정리 (digestRun)", () => {
 });
 
 describe("추출 요청과 응답 읽기", () => {
-  it("요청 본문: 기존 기억 id, 실패 신호, 긴 기록은 끝을 남긴다", () => {
+  it("요청 본문: 기존 항목 id·종류·제목, 실패 신호, 긴 기록은 끝을 남긴다", () => {
     const prompt = extractPrompt(
-      [{ id: "m1", kind: "fact", created: "", text: "회사 PC는 Windows" }],
+      [{ id: "m1", type: "user", title: "회사 PC는 Windows", content: "본문", tags: [], status: "active", pinned: false, origin: "agent", created: "", updated: "" }],
       {
         transcript: `${"앞".repeat(5000)}마지막 말`,
         failures: [{ kind: "tool-error", detail: "bash — 실패" }],
@@ -56,7 +56,7 @@ describe("추출 요청과 응답 읽기", () => {
       },
       1000,
     );
-    expect(prompt).toContain("id=m1 [fact] 회사 PC는 Windows");
+    expect(prompt).toContain("id=m1 [user] 회사 PC는 Windows");
     expect(prompt).toContain("(tool-error) bash — 실패");
     expect(prompt).toContain("마지막 말");
     expect(prompt.length).toBeLessThan(1500);
@@ -64,19 +64,20 @@ describe("추출 요청과 응답 읽기", () => {
 
   it("사고 블록·코드 펜스를 걷어 내고, 모르는 id·형식이 틀린 op·민감 정보는 버린다", () => {
     const raw =
-      '<think>음</think>```json\n{"ops":[{"op":"create","kind":"preference","text":"답은 짧게"},' +
-      '{"op":"create","kind":"weird","text":"x"},{"op":"update","id":"nope","text":"y"},{"op":"update","id":"m1","text":"회사 PC는 Windows 11"},' +
-      '{"op":"forget","id":"m1"},{"op":"create","kind":"fact","text":"API key: sk-abcdefghijklmnop1234"}]}\n```';
+      '<think>음</think>```json\n{"ops":[{"op":"create","type":"user","title":"답은 짧게","content":"세 줄 이내","tags":["답"]},' +
+      '{"op":"create","type":"weird","title":"x","content":"x"},{"op":"create","type":"user","content":"제목 없음"},{"op":"update","id":"nope","content":"y"},' +
+      '{"op":"update","id":"m1","content":"회사 PC는 Windows 11"},{"op":"forget","id":"m1"},' +
+      '{"op":"create","type":"reference","title":"키","content":"API key: sk-abcdefghijklmnop1234"}]}\n```';
     expect(parseOps(raw, new Set(["m1"]))).toEqual([
-      { op: "create", kind: "preference", text: "답은 짧게" },
-      { op: "update", id: "m1", text: "회사 PC는 Windows 11" },
-      { op: "forget", id: "m1" },
+      { op: "create", type: "user", title: "답은 짧게", content: "세 줄 이내", tags: ["답"] },
+      { op: "update", id: "m1", content: "회사 PC는 Windows 11" },
+      { op: "archive", id: "m1" },
     ]);
   });
 
   it("출력이 중간에 끊겨도 앞의 온전한 op는 살린다", () => {
-    const raw = '{"ops":[{"op":"create","kind":"fact","text":"하나"},{"op":"create","kind":"fact","text":"둘';
-    expect(parseOps(raw, new Set())).toEqual([{ op: "create", kind: "fact", text: "하나" }]);
+    const raw = '{"ops":[{"op":"create","type":"user","title":"하나","content":"일"},{"op":"create","type":"user","title":"둘","content":"이';
+    expect(parseOps(raw, new Set())).toEqual([{ op: "create", type: "user", title: "하나", content: "일", tags: [] }]);
     expect(parseOps("저장할 것 없음", new Set())).toEqual([]);
     expect(() => parseOps('{"ops":[', new Set())).toThrow(/JSON/);
   });
@@ -89,35 +90,18 @@ describe("추출 요청과 응답 읽기", () => {
   });
 });
 
-describe("기억 고치기", () => {
-  it("만든 때·출처는 그대로 두고 내용·고친 때를 바꾼다", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "memory-"));
-    const saved = await saveMemory(dir, "fact", "처음", new Date("2026-01-01T00:00:00Z"), "auto");
-    const updated = await updateMemory(dir, saved.id, { kind: "lesson", text: "고침" }, new Date("2026-02-01T00:00:00Z"));
-    expect(updated).toMatchObject({
-      kind: "lesson",
-      text: "고침",
-      source: "auto",
-      created: "2026-01-01T00:00:00.000Z",
-      updated: "2026-02-01T00:00:00.000Z",
-    });
-    expect((await loadMemories(dir))[0]).toEqual(updated);
-    expect(await updateMemory(dir, "missing", { text: "x" })).toBeUndefined();
-  });
-});
-
 describe("턴 뒤 기억 추출 (실제 Pi)", () => {
   let llm: ScriptLlm;
   let pi: RpcPi;
   let dataDir: string;
-  const isExtract = (text: string) => text.includes("## 기존 기억");
+  const isExtract = (text: string) => text.includes("## 기존 항목");
 
   beforeAll(async () => {
     llm = await startScriptLlm("mock-model");
     // 추출 요청은 차례로 이 답을 받는다
     llm.route(isExtract, [
       {
-        text: '{"ops":[{"op":"create","kind":"lesson","text":"없는 파일을 읽기 전에 ls로 이름을 확인한다"}]}',
+        text: '{"ops":[{"op":"create","type":"lesson","title":"없는 파일 읽기","content":"**재발 방지:** 읽기 전에 ls로 이름을 확인한다","tags":["read"]}]}',
       },
       { text: '{"ops":[]}' },
     ]);
@@ -141,12 +125,15 @@ describe("턴 뒤 기억 추출 (실제 Pi)", () => {
     llm.setScript([{ tool: "read", args: { path: "no-such-file.txt" } }, { text: "파일이 없네요" }]);
     const from = pi.mark;
     await pi.request({ type: "prompt", message: "no-such-file.txt 읽어 줘" });
-    await pi.waitFor((r) => r.type === "extension_ui_request" && r.method === "notify" && String(r.message).startsWith("자동으로 기억했습니다"), from);
-    expect(notices(from)).toContain("자동으로 기억했습니다: 없는 파일을 읽기 전에 ls로 이름을 확인한다");
+    await pi.waitFor((r) => r.type === "extension_ui_request" && r.method === "notify" && String(r.message).startsWith("지식베이스에 남겼습니다"), from);
+    expect(notices(from)).toContain("지식베이스에 남겼습니다: [교훈] 없는 파일 읽기");
 
     const files = readdirSync(join(dataDir, "memory")).filter((n) => n.endsWith(".md"));
     expect(files).toHaveLength(1);
-    expect(readFileSync(join(dataDir, "memory", files[0]!), "utf8")).toContain("source: auto");
+    const saved = readFileSync(join(dataDir, "memory", files[0]!), "utf8");
+    expect(saved).toContain("origin: agent");
+    // 관찰 도구가 성공하지 않은 대화에서 나온 항목이라 "확인 안 됨"이 붙는다
+    expect(saved).toContain("unverified: true");
     // 추출 호출은 세션에 남지 않으므로 usage.jsonl에 따로 적힌다
     expect(readFileSync(join(dataDir, "usage.jsonl"), "utf8")).toContain('"source":"memory"');
 
@@ -167,7 +154,7 @@ describe("턴 뒤 기억 추출 (실제 Pi)", () => {
     for (let i = 0; i < 50 && llm.requests.length < before + 2; i++) await new Promise((r) => setTimeout(r, 100));
     await new Promise((r) => setTimeout(r, 300));
     expect(llm.requests.length).toBe(before + 2);
-    expect(notices(from).filter((m) => m.includes("기억"))).toEqual([]);
+    expect(notices(from).filter((m) => m.includes("지식"))).toEqual([]);
   });
 
   it("기억 화면에서 끄면(settings.json autoLearn: false) 추출 요청을 보내지 않는다", async () => {

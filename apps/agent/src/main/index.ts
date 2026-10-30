@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from "electron";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,7 +22,23 @@ import { loadSchedules, schedulesPath, updateSchedules } from "@pi-desktop/agent
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
 import { loadElevationEnabled, saveElevationEnabled } from "@pi-desktop/agent-kit/elevation";
 import { readSessionUsage, readUsageLog, summarizeUsage, rangeBuckets, type UsageRange } from "@pi-desktop/agent-kit/usage";
-import { forgetMemory, loadAutoLearn, loadMemories, memoryDir, saveAutoLearn, saveMemory } from "@pi-desktop/agent-kit/memory";
+import {
+  bulkUpdate,
+  createEntry,
+  exportMarkdown,
+  knowledgeStats,
+  loadAutoLearn,
+  loadEntries,
+  markReviewed,
+  memoryDir,
+  mergeEntries,
+  needsReview,
+  saveAutoLearn,
+  updateEntry,
+  type BulkAction,
+  type EntryInput,
+} from "@pi-desktop/agent-kit/memory";
+import { buildKnowledgeSection } from "@pi-desktop/agent-kit/memory-recall";
 import { loadAudit, loadRules, removeRule } from "@pi-desktop/agent-kit/permissions";
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
@@ -38,7 +54,7 @@ import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
 import { HostConnection } from "../vendor/main/host-connection";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";
 import { ReplayCollector } from "../vendor/main/replay-collector";
-import { IpcChannels, type AttachResult, type ChatSummary, type MemoryView, type RuleView, type SessionSource, type ImageAttachment } from "../shared/api";
+import { IpcChannels, type AttachResult, type ChatSummary, type RuleView, type SessionSource, type ImageAttachment } from "../shared/api";
 import { findPiDesktop, installPiDesktop, openPiDesktop } from "./pi-desktop";
 import type { PiSetupView } from "../shared/pi-setup";
 import { TaskWatcher } from "./task-watcher";
@@ -207,19 +223,42 @@ function registerIpc(connection: HostConnection): void {
     const result = await installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total));
     return { status: result.status };
   });
-  // 기억·승인 규칙은 agent-kit의 같은 함수로 같은 파일을 읽고 고친다 (사람이 직접 고쳐도 되는 파일)
-  ipcMain.handle(IpcChannels.listMemories, async () => (await loadMemories(memoryDir(agentDataDir()))).reverse());
-  ipcMain.handle(IpcChannels.addMemory, async (_event, kind: MemoryView["kind"], text: string) => {
-    if (!text.trim()) throw new Error("기억할 내용이 비어 있습니다");
-    await saveMemory(memoryDir(agentDataDir()), kind, text);
+  // 지식베이스·승인 규칙은 agent-kit의 같은 함수로 같은 파일을 읽고 고친다 (사람이 직접 고쳐도 되는 파일)
+  const kb = () => memoryDir(agentDataDir());
+  ipcMain.handle(IpcChannels.kbList, (_event, includeArchived: boolean) => loadEntries(kb(), { includeArchived: includeArchived === true }));
+  ipcMain.handle(IpcChannels.kbSave, async (_event, id: string | undefined, input: EntryInput) => {
+    if (!input.title?.trim() || !input.content?.trim()) throw new Error("제목과 본문을 적어 주세요");
+    if (!id) return createEntry(kb(), { ...input, origin: "user" });
+    // 사람이 고친 것은 확인된 것으로 본다
+    const entry = await updateEntry(kb(), id, { ...input, unverified: false });
+    if (!entry) throw new Error("그 항목을 찾지 못했습니다 (다른 곳에서 지웠을 수 있습니다)");
+    return entry;
+  });
+  ipcMain.handle(IpcChannels.kbBulk, (_event, ids: string[], action: BulkAction, tag?: string) => bulkUpdate(kb(), ids, action, tag));
+  ipcMain.handle(IpcChannels.kbMerge, async (_event, keepId: string, dropIds: string[]) => {
+    await mergeEntries(kb(), keepId, dropIds);
+  });
+  ipcMain.handle(IpcChannels.kbReviewed, async (_event, id: string) => {
+    await markReviewed(kb(), id);
+  });
+  ipcMain.handle(IpcChannels.kbReview, async () => needsReview(await loadEntries(kb())));
+  ipcMain.handle(IpcChannels.kbStats, async () => knowledgeStats(await loadEntries(kb(), { includeArchived: true })));
+  ipcMain.handle(IpcChannels.kbPreview, async (_event, prompt: string) => {
+    // 클라우드 모델의 예산(8,000자)으로 보인다. 로컬 모델이면 창에 맞춰 더 줄어든다
+    const { text, injected } = buildKnowledgeSection(await loadEntries(kb()), prompt ?? "", 8000);
+    return { text: text ?? "", chars: text?.length ?? 0, injected: injected.length };
+  });
+  ipcMain.handle(IpcChannels.kbExport, async () => {
+    const options = { defaultPath: join(homedir(), "지식베이스.md"), filters: [{ name: "Markdown", extensions: ["md"] }] };
+    const result = mainWindow ? await dialog.showSaveDialog(mainWindow, options) : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) return undefined;
+    await writeFile(result.filePath, exportMarkdown(await loadEntries(kb(), { includeArchived: true })), "utf8");
+    return result.filePath;
   });
   ipcMain.handle(IpcChannels.getElevation, () => loadElevationEnabled(agentDataDir()));
   ipcMain.handle(IpcChannels.setElevation, (_event, on: boolean) => saveElevationEnabled(agentDataDir(), on === true));
   ipcMain.handle(IpcChannels.getAutoLearn, () => loadAutoLearn(memoryDir(agentDataDir())));
   ipcMain.handle(IpcChannels.setAutoLearn, (_event, on: boolean) => saveAutoLearn(memoryDir(agentDataDir()), on === true));
-  ipcMain.handle(IpcChannels.forgetMemory, async (_event, id: string) => {
-    await forgetMemory(memoryDir(agentDataDir()), id);
-  });
   ipcMain.handle(IpcChannels.listRules, () => loadRules(agentDataDir()));
   ipcMain.handle(IpcChannels.removeRule, (_event, rule: RuleView) => removeRule(agentDataDir(), rule));
   ipcMain.handle(IpcChannels.listAudit, () => loadAudit(agentDataDir(), 100));
@@ -347,7 +386,7 @@ function registerIpc(connection: HostConnection): void {
     // 카드 초안: Pi를 한 번(--print, 도구·확장 없음) 불러 만든다. 재료는 사실·교훈 기억과 사용자가 붙인 대화 이름뿐
     const status = await connection.request<PiStatus>(Methods.piStatus);
     if (!status.pi) throw new Error(status.piError ?? "Pi를 찾지 못했습니다");
-    const memories = (await loadMemories(memoryDir(agentDataDir()))).map((m) => ({ kind: m.kind, text: m.text }));
+    const memories = (await loadEntries(memoryDir(agentDataDir()))).map((m) => ({ type: m.type, title: m.title, tags: m.tags }));
     const sessionNames = (await history().catch(() => [])).flatMap((h) => (h.name ? [h.name] : [])).slice(0, 50);
     const cwd = await mkdtemp(join(tmpdir(), "agent-card-"));
     return generateCardDraft(
