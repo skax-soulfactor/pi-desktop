@@ -106,6 +106,11 @@ export async function listSkills(env: NodeJS.ProcessEnv = process.env): Promise<
   return scan(userSkillsDir(env));
 }
 
+/** 다른 앱 홈의 스킬 폴더를 읽는다 (Mate가 자기 홈의 skills/를 같은 형식으로 다룬다, DESIGN-APPS.md §3.4) */
+export function listSkillsIn(dir: string): Promise<SkillView[]> {
+  return scan(dir);
+}
+
 /**
  * 사용자 스킬을 만들거나 고친다. 이름을 바꾸면 폴더도 바꾼다(딸린 파일은 그대로 따라간다).
  * 다른 스킬과 이름이 겹치면 오류.
