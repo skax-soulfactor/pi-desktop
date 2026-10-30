@@ -1,5 +1,7 @@
 # Pi Desktop Mate — 설계 문서 (v0.1)
 
+> **데이터 경계와 원격 실행 방향은 [세 앱의 역할과 데이터 경계](DESIGN-APPS.md)를 따른다.** Mate는 개인화된 데이터를 능동적으로 처리하는 Pi 기반 비서다.
+>
 > 관련 문서: [Pi Desktop 설계](DESIGN.md), [Pi Desktop Agent 설계](DESIGN-AGENT.md), [개발 방식](CONTRIBUTING.md). 사용법은 [apps/mate/README.md](../apps/mate/README.md)
 
 Pi Desktop Mate는 **사용자가 묻기 전에 Pi가 스스로 살펴보고, 알릴 것은 알리고, 할 일은 허락을 받은 뒤 하는** 능동형 코딩 동료다.
@@ -15,7 +17,7 @@ Pi를 포크하지 않는다는 원칙은 같다. Pi는 그대로 두고, 확장
 | 저장소 | pi-desktop 모노레포에 추가. `apps/mate`(Electron 앱) + `packages/mate-kit`(Pi 확장) + `packages/mate-runner`(상주 실행기) |
 | 기존 코드와의 분리 | `apps/desktop`, `packages/host-agent`, 루트 README, `DESIGN.md`는 **고치지 않는다**. host-agent의 Pi 찾기·데몬 띄우기 코드는 읽기만 하고 번들에 넣어 쓴다. 겹치는 파일은 `package-lock.json`뿐 |
 | Pi Desktop Agent와의 분리 | 이름(`mate`)·폴더·데이터 홈·포트·태그를 모두 나눈다 (§7). 작업은 별도 worktree(`../pi-desktop-mate`)의 `feat/mate-*` 브랜치에서 한다 |
-| 메타 파일 | **`~/.pi-desktop-mate/`** 에 따로 둔다 (`MATE_HOME`으로 바꿈). Pi 설정·인증·모델(`~/.pi/agent`)은 같이 쓴다 (API 키를 다시 넣지 않도록) |
+| 메타 파일 | **`~/.pi-desktop-mate/`** 에 따로 둔다 (`MATE_HOME`으로 바꿈). Pi 설치본·로그인·모델·설정(`~/.pi/agent`)만 같이 쓴다 (API 키를 다시 넣지 않도록). Pi를 띄울 때 `-ns -np -ne -nc`로 Pi Desktop의 스킬·프롬프트·확장·사용자 지침이 임무에 끼어들지 않게 한다 (DESIGN-APPS.md §3.1) |
 | 기본 모델 | `anthropic/claude-haiku-5-5` (설정에서 목록으로 바꿈. "Pi 기본 모델 따르기"를 고르면 `--model`을 넘기지 않아 Pi Desktop에서 바꾼 기본 모델을 따름. 임무마다 덮어쓸 수 있음) |
 | 알림 | 인박스에 쌓여 앱을 켰을 때 본다. 휴대폰(텔레그램)을 연결하면 바로 알림을 받고 버튼으로 처리·지시할 수 있다 (§12) |
 | 릴리스 | Pi Desktop의 `v*`, Agent의 `agent-v*`와 섞지 않고 `mate-v*` 태그와 별도 워크플로(`.github/workflows/mate-release.yml`)를 쓴다. Mate 릴리스는 GitHub에서 **Latest로 표시하지 않는다** (Pi Desktop 자동 업데이트가 Latest 릴리스를 보기 때문). Mate 자동 업데이트는 §11 |
@@ -222,7 +224,7 @@ Mate는 Pi 설치·로그인·모델 관리 화면을 따로 만들지 않는다
 
 ## 10. 활동 관찰 (M4)
 
-사용자가 켜야만 동작한다 (기본 꺼짐). 세 제품(Muse·Dots·Duet)이 "예약 + 연결된 데이터 관찰 + 기억"이라면, Mate는 코딩 작업의 흐름을 보고 **작업이 끝났을 때** 돕는다.
+사용자가 켜야만 동작한다 (기본 꺼짐). 같은 호스트의 Pi Desktop·터미널 `pi` 세션(`~/.pi/agent/sessions`)과 Agent 세션(`~/.pi-desktop-agent/sessions`)을 **읽기만** 한다 (DESIGN-APPS.md §3.3). 세 제품(Muse·Dots·Duet)이 "예약 + 연결된 데이터 관찰 + 기억"이라면, Mate는 코딩 작업의 흐름을 보고 **작업이 끝났을 때** 돕는다.
 
 | | 내용 |
 |---|---|
