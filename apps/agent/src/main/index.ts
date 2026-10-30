@@ -15,6 +15,8 @@ import {
   type SessionOpenResult,
   type SessionSummary,
   type StoredSession,
+  type TrashEmptyResult,
+  type TrashItem,
 } from "@pi-desktop/host-protocol";
 import { extensionEntries } from "@pi-desktop/agent-kit";
 import { AGENT_HOME_ENV } from "@pi-desktop/agent-kit/home";
@@ -424,7 +426,25 @@ function registerIpc(connection: HostConnection): void {
       cwd,
     );
   });
-  ipcMain.handle(IpcChannels.searchHistory, async (_event, query: string) => searchSessions(await history(), query, (path) => readFile(path, "utf8")));
+  // 아카이브·휴지통 (설계 DESIGN-APPS.md §3.2). 데몬 홈(~/.pi-desktop-agent)의 것이라 Pi Desktop과 섞이지 않는다
+  ipcMain.handle(IpcChannels.deleteChat, async (_event, path: string) => {
+    const sessions = await connection.request<SessionSummary[]>(Methods.sessionList);
+    if (sessions.some((s) => s.state === "running" && s.sessionFile === path)) throw new Error("열려 있는 대화입니다. 대화를 닫은 뒤 지우세요");
+    await connection.request(Methods.storedDelete, { path });
+  });
+  ipcMain.handle(IpcChannels.setArchived, async (_event, path: string, archived: boolean) => {
+    await connection.request(Methods.archiveSet, { path, archived: archived === true });
+  });
+  ipcMain.handle(IpcChannels.listTrash, () => connection.request<TrashItem[]>(Methods.trashList));
+  ipcMain.handle(IpcChannels.restoreTrash, async (_event, id: string) => {
+    await connection.request(Methods.trashRestore, { id });
+  });
+  ipcMain.handle(IpcChannels.emptyTrash, async (_event, ids?: string[]) =>
+    (await connection.request<TrashEmptyResult>(Methods.trashEmpty, ids ? { ids } : {})).removed,
+  );
+  ipcMain.handle(IpcChannels.searchHistory, async (_event, query: string) =>
+    searchSessions((await history()).filter((s) => !s.archived), query, (path) => readFile(path, "utf8")),
+  );
   ipcMain.handle(IpcChannels.attachSession, async (_event, sessionId: string, lastSeq: number) => {
     // attach 도중 알림으로 온 이벤트도 결과에 담는다. 렌더러는 순번으로 중복을 거른다 (replay-collector.ts).
     const events = replays.begin(sessionId);

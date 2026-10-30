@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import type { SessionSummary, StoredSession } from "@pi-desktop/host-protocol/messages";
 import { baseName, formatRelative } from "./format";
 import { matchesQuery, normalizeSessionName } from "./session-search";
+import { visibleHistory, type BinTab } from "./session-bin";
 
 type Scope = "folder" | "all";
 const SCOPE_KEY = "pi-desktop.historyScope";
@@ -19,6 +20,10 @@ interface Props {
   onClose: (session: SessionSummary) => void;
   /** 세션 파일을 지운다 (화면이 확인을 받은 뒤 백업 폴더로 옮김). 실행 중이면 닫은 뒤 지운다 */
   onDelete: (target: { path: string; title: string; running: boolean }) => void;
+  /** 기록에서 숨긴다 (아카이브). 파일은 그대로 */
+  onArchive: (path: string, title: string) => void;
+  /** 아카이브·휴지통 화면을 연다 */
+  onOpenBin: (tab: BinTab) => void;
   /** 보고 있는 세션의 이름 (get_state). 기록을 다시 읽기 전에도 바로 보이게 한다 */
   currentName?: string;
   /** 보고 있는 세션의 이름을 바꾼다. 실행 중인 세션만 바꿀 수 있다 */
@@ -38,10 +43,11 @@ interface Props {
  * - 검색: 두 목록을 이름·첫 메시지·폴더·파일 경로로 거른다
  * - 이름 변경: 보고 있는 실행 중 세션의 ✎ (set_session_name)
  * - 닫기: 실행 중 세션의 ✕. Pi를 끄고, 다시 쓰려면 기록에서 연다
- * - 삭제: 🗑. 세션 파일을 지운다 (확인을 받고, 데몬의 백업 폴더로 옮겨 되살릴 수 있음)
+ * - 삭제: 🗑. 세션 파일을 지운다 (확인을 받고, 데몬의 휴지통으로 옮겨 되살릴 수 있음)
+ * - 아카이브: 기록의 📦. 파일은 그대로 두고 기록에서만 숨긴다. 기록 아래 "아카이브·휴지통"에서 되돌린다
  */
 export function Sidebar(props: Props) {
-  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, onClose, onDelete, currentName, onRename, refreshKey, piMissing, onInstallPi } = props;
+  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, onClose, onDelete, onArchive, onOpenBin, currentName, onRename, refreshKey, piMissing, onInstallPi } = props;
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<string | undefined>();
   const [scope, setScope] = useState<Scope>(() => {
@@ -133,7 +139,7 @@ export function Sidebar(props: Props) {
   const ordered = [...sessions]
     .sort((a, b) => b.startedAt - a.startedAt)
     .filter((s) => matchesQuery(query, [liveTitle(s), s.cwd, s.sessionFile]));
-  const shownHistory = history.filter((h) => matchesQuery(query, [h.name, h.firstMessage, h.cwd, h.path]));
+  const shownHistory = visibleHistory(history).filter((h) => matchesQuery(query, [h.name, h.firstMessage, h.cwd, h.path]));
 
   const startRename = (s: SessionSummary) => setEditing(liveTitle(s));
   const commitRename = async (value: string) => {
@@ -219,7 +225,7 @@ export function Sidebar(props: Props) {
                   className="delete-session-button"
                   disabled={disabled}
                   onClick={() => onDelete({ path: s.sessionFile!, title: liveTitle(s), running: s.state === "running" })}
-                  title="세션 삭제 (Pi를 닫고 대화 기록 파일을 지웁니다. 백업 폴더로 옮겨 되살릴 수 있습니다)"
+                  title="세션 삭제 (Pi를 닫고 대화 기록 파일을 휴지통으로 옮깁니다. 휴지통에서 되살릴 수 있습니다)"
                   aria-label="세션 삭제"
                 >
                   🗑
@@ -270,8 +276,11 @@ export function Sidebar(props: Props) {
         ) : (
           error && <p className="sidebar-error">{error}</p>
         )}
-        {piMissing === false && !error && !loading && shownHistory.length === 0 && (
-          <p className="sidebar-empty">{query && history.length > 0 ? "검색 결과가 없습니다." : "저장된 세션이 없습니다."}</p>
+        {piMissing === false && !error && !loading && shownHistory.length === 0 && history.length === 0 && (
+          <p className="sidebar-empty">저장된 세션이 없습니다.</p>
+        )}
+        {piMissing === false && !error && !loading && shownHistory.length === 0 && history.length > 0 && (
+          <p className="sidebar-empty">{query ? "검색 결과가 없습니다." : "보이는 세션이 없습니다 (모두 아카이브함)."}</p>
         )}
         {shownHistory.map((h) => {
           const open = liveFiles.has(h.path);
@@ -296,10 +305,20 @@ export function Sidebar(props: Props) {
               </button>
               <button
                 type="button"
+                className="archive-session-button"
+                disabled={disabled}
+                onClick={() => onArchive(h.path, title)}
+                title="아카이브 (기록에서 숨깁니다. 파일은 그대로이고 아카이브에서 되돌릴 수 있습니다)"
+                aria-label="세션 아카이브"
+              >
+                📦
+              </button>
+              <button
+                type="button"
                 className="delete-session-button"
                 disabled={disabled}
                 onClick={() => onDelete({ path: h.path, title, running: open })}
-                title="세션 삭제 (대화 기록 파일을 지웁니다. 백업 폴더로 옮겨 되살릴 수 있습니다)"
+                title="세션 삭제 (대화 기록 파일을 휴지통으로 옮깁니다. 휴지통에서 되살릴 수 있습니다)"
                 aria-label="세션 삭제"
               >
                 🗑
@@ -307,6 +326,16 @@ export function Sidebar(props: Props) {
             </div>
           );
         })}
+        {piMissing === false && (
+          <div className="sidebar-bin-links">
+            <button type="button" className="link-button" disabled={!connected} onClick={() => onOpenBin("archive")}>
+              아카이브
+            </button>
+            <button type="button" className="link-button" disabled={!connected} onClick={() => onOpenBin("trash")}>
+              휴지통
+            </button>
+          </div>
+        )}
       </section>
     </aside>
   );

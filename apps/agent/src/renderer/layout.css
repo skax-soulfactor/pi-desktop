@@ -671,6 +671,33 @@ code.copy {
   padding: 0;
 }
 
+/* 지난 대화 줄: 내용 + 오른쪽 버튼 (아카이브·삭제·되살리기) */
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-row .history-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item.static {
+  cursor: default;
+}
+
+.history-item.static:hover {
+  background: none;
+}
+
+.history-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  padding-right: 6px;
+}
+
 .history-item {
   display: flex;
   flex-direction: column;

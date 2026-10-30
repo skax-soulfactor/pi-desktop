@@ -49,6 +49,9 @@ import {
   type SessionOpenResult,
   type SessionSummary,
   type StoredDeleteResult,
+  type TrashEmptyResult,
+  type TrashItem,
+  type TrashRestoreResult,
   type StoredInspectResult,
   type StoredReadResult,
   type StoredSession,
@@ -239,6 +242,16 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
   handle(IpcChannels.deleteStored, (_event, hostId: string, path: string) =>
     conn(hostId).request<StoredDeleteResult>(Methods.storedDelete, { path }),
   );
+  handle(IpcChannels.listTrash, (_event, hostId: string) => conn(hostId).request<TrashItem[]>(Methods.trashList));
+  handle(IpcChannels.restoreTrash, async (_event, hostId: string, id: string) =>
+    (await conn(hostId).request<TrashRestoreResult>(Methods.trashRestore, { id })).path,
+  );
+  handle(IpcChannels.emptyTrash, async (_event, hostId: string, ids?: string[]) =>
+    (await conn(hostId).request<TrashEmptyResult>(Methods.trashEmpty, ids ? { ids } : {})).removed,
+  );
+  handle(IpcChannels.setArchived, async (_event, hostId: string, path: string, archived: boolean) => {
+    await conn(hostId).request(Methods.archiveSet, { path, archived: archived === true });
+  });
   handle(IpcChannels.readStored, (_event, hostId: string, path: string) =>
     conn(hostId).request<StoredReadResult>(Methods.storedRead, storedParams(hostId, path)),
   );

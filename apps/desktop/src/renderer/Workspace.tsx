@@ -3,6 +3,8 @@ import type { ConfiguredPackageInfo, StoredSession } from "@pi-desktop/host-prot
 import type { PendingQueue } from "./chat-state";
 import { ChatView } from "./ChatView";
 import { ChoiceDialog } from "./ChoiceDialog";
+import { SessionBinDialog } from "./SessionBinDialog";
+import { visibleHistory, type BinTab } from "./session-bin";
 import { PiManager, usePiStatus } from "./PiManager";
 import { ResourcesPanel } from "./ResourcesPanel";
 import { MarketplacePanel } from "./MarketplacePanel";
@@ -193,6 +195,8 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [handoffAsk, setHandoffAsk] = useState(false);
   /** 지울지 확인을 묻는 세션 (사이드바 🗑, 폴더가 지워진 세션의 "세션 삭제") */
   const [deleteAsk, setDeleteAsk] = useState<{ path: string; title: string; running: boolean }>();
+  /** 열려 있는 아카이브·휴지통 화면 */
+  const [binTab, setBinTab] = useState<BinTab>();
   const confirmDelete = (target: { path: string; title: string; running: boolean }) =>
     void guard(async () => {
       setDeleteAsk(undefined);
@@ -200,7 +204,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       setHistoryRefresh((n) => n + 1);
       setInfo(
         result.backup
-          ? `"${target.title}" 세션을 지웠습니다. 되살리려면 이 파일을 원래 자리로 옮기세요.\n백업: ${result.backup}\n원래 자리: ${target.path}`
+          ? `"${target.title}" 세션을 휴지통으로 옮겼습니다. 기록 아래 "휴지통"에서 되살릴 수 있습니다.`
           : `"${target.title}" 세션을 닫았습니다. 아직 저장된 대화가 없어 지울 파일은 없었습니다.`,
       );
     });
@@ -489,7 +493,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     if (session && !commands) loadCommands();
     if (!connected) return;
     const history = await window.piDesktop.listHistory(hostId, undefined).catch(() => []);
-    setPalette((prev) => (prev ? { ...prev, history: history.slice(0, 15) } : prev));
+    setPalette((prev) => (prev ? { ...prev, history: visibleHistory(history).slice(0, 15) } : prev));
   }
 
   // 팔레트가 닫혀 화면에서 빠진 다음에 포커스를 준다 (같은 순간에 주면 사라지는 입력칸에 밀린다).
@@ -1049,6 +1053,14 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           onOpenStored={(stored) => void guard(() => openStored(stored))}
           onClose={(target) => void guard(() => closeSession(target))}
           onDelete={setDeleteAsk}
+          onArchive={(path, title) =>
+            void guard(async () => {
+              await window.piDesktop.setArchived(hostId, path, true);
+              setHistoryRefresh((n) => n + 1);
+              setInfo(`"${title}" 세션을 아카이브했습니다. 기록 아래 "아카이브"에서 되돌릴 수 있습니다.`);
+            })
+          }
+          onOpenBin={setBinTab}
           {...(piState.status ? { piMissing: !piState.status.pi } : piState.error ? { piMissing: false } : {})}
           onInstallPi={() => {
             setPiManagerTab("status");
@@ -1320,6 +1332,18 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           폴더에서 새 세션으로 이어 갑니다.
         </ChoiceDialog>
       )}
+      {binTab && (
+        <SessionBinDialog
+          hostId={hostId}
+          initialTab={binTab}
+          onClose={() => setBinTab(undefined)}
+          onChanged={() => setHistoryRefresh((n) => n + 1)}
+          onOpenStored={(stored) => {
+            setBinTab(undefined);
+            void guard(() => openStored(stored));
+          }}
+        />
+      )}
       {deleteAsk && (
         <ChoiceDialog
           title="세션을 삭제할까요?"
@@ -1327,8 +1351,8 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           choices={[{ label: deleteAsk.running ? "닫고 삭제" : "삭제", kind: "danger", onSelect: () => confirmDelete(deleteAsk) }]}
         >
           <strong>{deleteAsk.title}</strong>
-          {"\n"}대화 기록 파일을 지웁니다.{deleteAsk.running ? " 실행 중인 Pi를 먼저 닫습니다." : ""} 바로 지우지 않고 이 호스트의 백업
-          폴더(~/.pi-desktop/session-backups)로 옮기므로, 잘못 지웠으면 되살릴 수 있습니다.
+          {"\n"}대화 기록 파일을 지웁니다.{deleteAsk.running ? " 실행 중인 Pi를 먼저 닫습니다." : ""} 바로 지우지 않고 이 호스트의
+          휴지통(~/.pi-desktop/session-trash)으로 옮기므로, 기록 아래 "휴지통"에서 되살릴 수 있습니다.
           {"\n"}
           <code>{deleteAsk.path}</code>
         </ChoiceDialog>
