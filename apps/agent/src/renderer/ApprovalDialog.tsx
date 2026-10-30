@@ -23,6 +23,9 @@ export function ApprovalDialog({
   const options = dialog.options ?? [];
   const deny = options.find((o) => o === ApprovalChoice.deny);
   const allows = options.filter((o) => o !== ApprovalChoice.deny);
+  // 자주 고르는 "이번만 허용"은 "거부" 옆 아래 줄에, 범위를 넓히는 허용(세션·항상)은 그 위에 한 줄씩 둔다
+  const once = allows.find((o) => o === ApprovalChoice.once) ?? (allows.length === 1 ? allows[0] : undefined);
+  const wider = allows.filter((o) => o !== once);
   const tone = approval.riskLabel === "실행" ? "exec" : "write";
 
   // Enter를 습관적으로 눌러 허용하는 일을 막기 위해 기본 초점은 "거부"에 둔다.
@@ -46,19 +49,39 @@ export function ApprovalDialog({
           <code>{approval.toolName}</code> {approval.summary}
         </h2>
         <pre className="approval-target">{approval.target || "(대상 없음)"}</pre>
+        {wider.length > 0 && (
+          <div className="approval-wider">
+            <span className="muted small-text">더 넓게 허용</span>
+            {wider.map((option) => {
+              const { label, pattern } = splitOption(option);
+              return (
+                <button key={option} type="button" className="approval-scope" onClick={() => onAnswer({ value: option })}>
+                  <span>{label}</span>
+                  {pattern && <code>{pattern}</code>}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="approval-actions">
-          {allows.map((option, i) => (
-            <button key={option} type="button" className={i === 0 ? "primary" : undefined} onClick={() => onAnswer({ value: option })}>
-              {option}
-            </button>
-          ))}
           {deny && (
             <button ref={denyButton} type="button" className="danger" onClick={() => onAnswer({ value: deny })}>
               {deny}
+            </button>
+          )}
+          {once && (
+            <button type="button" className="primary" onClick={() => onAnswer({ value: once })}>
+              {once}
             </button>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+/** "이 세션에서 계속 허용: https://wttr.in/**"를 범위 설명과 허용 패턴으로 나눈다 */
+export function splitOption(option: string): { label: string; pattern?: string } {
+  const at = option.indexOf(": ");
+  return at < 0 ? { label: option } : { label: option.slice(0, at), pattern: option.slice(at + 2) };
 }

@@ -35,11 +35,44 @@
   word-break: break-all;
 }
 
+/* 범위를 넓히는 허용: 한 줄에 하나씩, 설명과 패턴을 나눠 보인다 */
+.approval-wider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.approval-scope {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.approval-scope span {
+  flex: none;
+}
+
+.approval-scope code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+/* 거부·이번만 허용: 같은 너비로 오른쪽 아래 */
 .approval-actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.approval-actions button {
+  min-width: 112px;
 }
 
 /* 작업·예약 (TasksPanel) */
