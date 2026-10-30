@@ -231,3 +231,17 @@ export const DUTY_TEMPLATES: Array<{ label: string; draft: Omit<DutyDraft, "cwd"
     },
   },
 ];
+
+/** 허용 이름을 화면에 보일 글로 (MCP 도구는 "MCP 서버 · 도구", 명령은 그대로) */
+export function grantLabel(name: string): string {
+  const match = /^mcp__(.+?)__(.+)$/.exec(name);
+  return match ? `MCP ${match[1]} · ${match[2]}` : name;
+}
+
+/** 임무의 스킬 고르기를 바꾼다: 전부(undefined) ↔ 고르기(목록), 고르기에서 하나 켜고 끄기 */
+export function toggleSkill(current: string[] | undefined, all: string[], name: string): string[] {
+  const picked = new Set(current ?? all);
+  if (picked.has(name)) picked.delete(name);
+  else picked.add(name);
+  return all.filter((n) => picked.has(n));
+}

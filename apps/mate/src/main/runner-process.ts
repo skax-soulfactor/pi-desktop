@@ -31,14 +31,14 @@ export async function resolveNodeRuntime(): Promise<NodeRuntime> {
  */
 export async function runnerCommand(
   script: string,
-  command: "start" | "stop" | "status",
+  command: "start" | "stop" | "status" | "mcp-check",
   env: Record<string, string>,
 ): Promise<Record<string, unknown>> {
   const runtime = await resolveNodeRuntime();
   const { stdout } = await execFileAsync(runtime.command, [script, command], {
     env: { ...process.env, ...runtime.env, ...env },
-    // status는 pi --list-models를 돌리므로 길게 기다린다
-    timeout: command === "status" ? 90_000 : 30_000,
+    // status는 pi --list-models, mcp-check는 서버마다 연결을 해 보므로 길게 기다린다
+    timeout: command === "status" ? 90_000 : command === "mcp-check" ? 150_000 : 30_000,
     maxBuffer: 4 * 1024 * 1024,
     windowsHide: true,
   });

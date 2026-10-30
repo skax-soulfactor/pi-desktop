@@ -1,15 +1,17 @@
-import { useState } from "react";
-import type { DutyDraft, DutyView, Overview, PiSetupView } from "../shared/api";
+import { useEffect, useState } from "react";
+import type { DutyDraft, DutyView, McpServerView, Overview, PiSetupView, SkillView } from "../shared/api";
 import { ModelSelect } from "./PiSetup";
 import type { Act } from "./App";
 import {
   defaultTrigger,
   DUTY_TEMPLATES,
   emptyDraft,
+  grantLabel,
   nextRunLabel,
   PROFILE_LABELS,
   relativeTime,
   STATUS_LABELS,
+  toggleSkill,
   TRIGGER_HINTS,
   TRIGGER_KINDS,
   triggerLabel,
@@ -126,6 +128,15 @@ function DutyForm({
 }) {
   const [draft, setDraft] = useState<DutyDraft>(initial);
   const set = (patch: Partial<DutyDraft>) => setDraft((d) => ({ ...d, ...patch }));
+  // 고를 수 있는 스킬·MCP 서버 (Mate 홈의 skills/·mcp.json, 스킬·MCP 탭에서 관리)
+  const [skills, setSkills] = useState<SkillView[]>([]);
+  const [servers, setServers] = useState<McpServerView[]>([]);
+  useEffect(() => {
+    void window.mate.skillsList().then(setSkills, () => setSkills([]));
+    void window.mate.listMcp().then(setServers, () => setServers([]));
+  }, []);
+  const skillNames = skills.map((s) => s.name);
+  const pickedServers = new Set(draft.mcpServers ?? []);
   const t = draft.trigger;
   const valid = draft.name.trim() && draft.cwd.trim() && draft.prompt.trim();
 
@@ -188,10 +199,10 @@ function DutyForm({
         </div>
         {draft.grants?.length ? (
           <div className="row">
-            <span className="muted">허용한 명령:</span>
+            <span className="muted">허용한 명령·도구:</span>
             {draft.grants.map((g) => (
               <span key={g} className="badge">
-                <code>{g}</code>{" "}
+                <code>{grantLabel(g)}</code>{" "}
                 <button
                   className="small"
                   title={`${g} 허용 빼기`}
@@ -206,6 +217,52 @@ function DutyForm({
             ))}
           </div>
         ) : null}
+      </fieldset>
+      <fieldset>
+        <legend>스킬·MCP</legend>
+        <div className="row">
+          <span className="muted">스킬:</span>
+          <label className="radio">
+            <input type="radio" checked={!draft.skills} onChange={() => set({ skills: undefined })} /> 전부
+          </label>
+          <label className="radio">
+            <input type="radio" checked={!!draft.skills} onChange={() => set({ skills: draft.skills ?? skillNames })} /> 고르기
+          </label>
+          {skillNames.length === 0 && <span className="muted small-text">스킬이 없습니다 (스킬·MCP 탭에서 만듭니다)</span>}
+        </div>
+        {draft.skills && skillNames.length > 0 && (
+          <div className="row">
+            {skills.map((s) => (
+              <label key={s.name} className="day" title={s.description}>
+                <input type="checkbox" checked={draft.skills!.includes(s.name)} onChange={() => set({ skills: toggleSkill(draft.skills, skillNames, s.name) })} /> {s.name}
+              </label>
+            ))}
+          </div>
+        )}
+        <div className="row">
+          <span className="muted">MCP 서버:</span>
+          {servers.length === 0 && <span className="muted small-text">없음 (스킬·MCP 탭에서 넣습니다)</span>}
+          {servers.map((s) => (
+            <label key={s.name} className="day" title={s.description ?? s.target}>
+              <input
+                type="checkbox"
+                checked={pickedServers.has(s.name)}
+                disabled={!s.enabled && !pickedServers.has(s.name)}
+                onChange={() => {
+                  const next = new Set(pickedServers);
+                  if (next.has(s.name)) next.delete(s.name);
+                  else next.add(s.name);
+                  set({ mcpServers: next.size ? [...next] : undefined });
+                }}
+              />{" "}
+              {s.name}
+              {!s.enabled && " (꺼짐)"}
+            </label>
+          ))}
+        </div>
+        <div className="muted small-text">
+          스킬은 지침일 뿐 권한을 넓히지 않습니다. 고른 MCP 서버의 도구도 처음 쓸 때는 막고, 실행이 끝나면 Mate가 도구마다 허용을 묻습니다.
+        </div>
       </fieldset>
       <fieldset>
         <legend>언제</legend>
