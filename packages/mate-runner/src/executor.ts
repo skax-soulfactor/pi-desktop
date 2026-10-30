@@ -1,7 +1,7 @@
 import { spawn, execFile } from "node:child_process";
 import { resolve } from "node:path";
 import { ASK_TOOL, MATE_ENV, PROPOSE_TOOL, profileTools, type MateProfile } from "@pi-desktop/mate-kit";
-import { isolationArgs, isolationEnv } from "@pi-desktop/pi-isolation";
+import { isolationArgs, isolationEnv, mcpToolPattern } from "@pi-desktop/pi-isolation";
 import type { Duty } from "./types";
 
 /**
@@ -91,15 +91,23 @@ export function mateSystemPrompt(duty: Duty, cause?: string): string {
 
 export function piArgs(input: RunInput): string[] {
   const { duty } = input;
+  const servers = duty.mcpServers ?? [];
   return [
     "--mode", "json",
     "--session-dir", input.sessionsDir,
     // 대화는 같은 세션을 이어 써서 앞의 말을 기억한다
     ...(input.chat ? ["--session-id", input.chat.sessionId] : []),
     // Pi Desktop의 스킬·프롬프트·확장·사용자 지침이 끼어들지 않게 Mate 홈의 것만 올린다.
-    // MCP는 임무마다 고르게 되면(D2.5) 켠다. 그전까지는 올리지 않는다
-    ...isolationArgs({ home: input.home, isolationDir: input.isolationDir, extensions: input.extensions, mcp: false }),
-    "--tools", profileTools(input.chat ? "chat" : duty.profile).join(","),
+    // 스킬은 임무가 고른 것만(없으면 전부), MCP는 임무가 고른 서버가 있을 때만 올린다 (DESIGN-APPS.md §3.4)
+    ...isolationArgs({
+      home: input.home,
+      isolationDir: input.isolationDir,
+      extensions: input.extensions,
+      mcp: servers.length > 0,
+      ...(duty.skills ? { skills: duty.skills } : {}),
+    }),
+    // 고른 서버의 도구는 이름 패턴으로 선언한다. 처음 쓰는 도구는 mate-guard가 막고 허용을 묻는다
+    "--tools", [...profileTools(input.chat ? "chat" : duty.profile), ...servers.map(mcpToolPattern)].join(","),
     // 모델을 정하지 않았으면 Pi 기본 모델(settings.json)을 따른다
     ...(input.model ? ["--model", input.model] : []),
     "--append-system-prompt", input.chat?.systemPrompt ?? mateSystemPrompt(duty, input.cause),
@@ -108,8 +116,10 @@ export function piArgs(input: RunInput): string[] {
 }
 
 export function piEnv(input: RunInput, profile: MateProfile): Record<string, string> {
+  const servers = input.duty.mcpServers ?? [];
   return {
-    ...isolationEnv(input.home),
+    // MCP 도구를 codemode가 아니라 도구 목록에 바로 선언해야 mate-guard가 도구마다 허용을 따진다
+    ...isolationEnv(input.home, servers.length > 0 ? { mcpServers: servers, mcpExposure: "direct" } : {}),
     [MATE_ENV.profile]: input.chat ? "chat" : profile,
     ...(input.chatPath ? { [MATE_ENV.chat]: input.chatPath } : {}),
     ...(input.chat ? { [MATE_ENV.actions]: input.chat.actionsPath } : {}),
@@ -118,8 +128,8 @@ export function piEnv(input: RunInput, profile: MateProfile): Record<string, str
     [MATE_ENV.runId]: input.runId,
     ...(input.workspace ? { [MATE_ENV.writeRoot]: input.workspace.root } : {}),
     ...(input.topic ? { [MATE_ENV.topic]: input.topic } : {}),
-    // 대화(chat)에는 임무의 허용 명령을 쓰지 않는다
-    ...(!input.chat && input.duty.grants?.length ? { [MATE_ENV.grants]: input.duty.grants.join(",") } : {}),
+    // 대화(chat)는 대화용 임무에 허용한 MCP 도구만 들어 있다 (chat-agent가 설정의 chatGrants로 채움)
+    ...(input.duty.grants?.length ? { [MATE_ENV.grants]: input.duty.grants.join(",") } : {}),
     ...(input.blockedPath ? { [MATE_ENV.blocked]: input.blockedPath } : {}),
   };
 }

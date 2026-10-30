@@ -44,6 +44,10 @@ export interface Duty {
    * 막힌 명령의 허용 질문에 "허용"으로 답하면 더해진다 (설계 DESIGN-MATE.md §4 "권한 요청")
    */
   grants?: string[];
+  /** 이 임무가 쓸 스킬 이름 (Mate 홈 skills/ 아래 폴더). 없으면 전부, 빈 배열이면 없음 (DESIGN-APPS.md §3.4) */
+  skills?: string[];
+  /** 이 임무가 쓸 MCP 서버 이름 (Mate 홈 mcp.json). 없거나 비면 MCP를 쓰지 않는다. 도구는 처음 쓸 때 허용을 묻는다 */
+  mcpServers?: string[];
   createdAt: number;
   updatedAt?: number;
 }
@@ -61,6 +65,10 @@ export interface MateConfig {
   observe: ObserveConfig;
   /** 휴대폰 연결 (텔레그램) */
   telegram: TelegramConfig;
+  /** Mate 대화에서 쓸 MCP 서버 (DESIGN-APPS.md §3.4). 비면 대화는 MCP를 쓰지 않는다 */
+  chatMcpServers: string[];
+  /** Mate 대화에서 허용한 MCP 도구 이름 (mcp__<서버>__<도구>) */
+  chatGrants: string[];
 }
 
 /**
@@ -113,9 +121,14 @@ export const DEFAULT_CONFIG: MateConfig = {
   maxCostUsd: 0.5,
   observe: { enabled: false, quietMinutes: 5, dailySuggestionLimit: 5, excluded: [] },
   telegram: { enabled: false, pairEpoch: 0, notify: "action", sendDetail: true, allowFix: false, mirrorApp: false },
+  chatMcpServers: [],
+  chatGrants: [],
 };
 
 export const DEFAULT_TIMEOUT_SEC = 300;
+
+/** Mate 대화 한 차례를 실행할 때 쓰는 임무 id (파일로 저장되지 않는다). 대화의 허용 질문도 이 id로 묻는다 */
+export const CHAT_DUTY_ID = "mate-chat";
 /** interval·poll 계기의 최소 간격 (비용·소음 방지) */
 export const MIN_INTERVAL_MINUTES = 15;
 /** 변화 계기: 한 번 돈 뒤 다음 실행까지 기본 쉬는 시간 */

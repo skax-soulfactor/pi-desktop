@@ -43,6 +43,9 @@ describe("store", () => {
       observe: { enabled: false, quietMinutes: 5, dailySuggestionLimit: 5, excluded: [] },
       // 휴대폰 연결도 사용자가 켜야 하고, 고치기는 따로 허용해야 한다
       telegram: { enabled: false, pairEpoch: 0, notify: "action", sendDetail: true, allowFix: false, mirrorApp: false },
+      // 대화는 MCP를 쓰지 않는 것이 기본이다
+      chatMcpServers: [],
+      chatGrants: [],
     });
     // 빈 모델은 "Pi 기본 모델 따르기"로 남는다
     expect((await saveConfig(paths, { model: "" })).model).toBe("");
@@ -65,6 +68,20 @@ describe("store", () => {
     expect((await listDuties(paths)).map((d) => d.id)).toEqual(["brief"]);
     await deleteDuty(paths, "brief");
     expect(await listDuties(paths)).toEqual([]);
+  });
+
+  it("임무의 스킬·MCP 서버·허용은 이름 규칙에 맞는 것만 남긴다", () => {
+    const duty = normalizeDuty({
+      ...raw,
+      skills: ["hn-summary", "Bad Name", "hn-summary"],
+      mcpServers: ["github", "../x", ""],
+      grants: ["curl", "rm", "mcp__github__list_prs", "a/b"],
+    });
+    expect(duty).toMatchObject({ skills: ["hn-summary"], mcpServers: ["github"], grants: ["curl", "mcp__github__list_prs"] });
+    // 스킬을 하나도 고르지 않은 것(빈 배열)은 "전부"와 다르므로 남긴다
+    expect(normalizeDuty({ ...raw, skills: [] })).toMatchObject({ skills: [] });
+    expect(normalizeDuty(raw)).not.toHaveProperty("skills");
+    expect(normalizeDuty({ ...raw, mcpServers: [] })).not.toHaveProperty("mcpServers");
   });
 
   it("변화 계기는 기본값을 채우고, 확인 명령은 읽기 명령 하나만 받는다", () => {

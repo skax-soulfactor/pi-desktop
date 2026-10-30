@@ -1,14 +1,15 @@
 import { watch, type FSWatcher } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
-import { appendChat, extensionEntries, PERMISSION_OPTIONS, readChat, readChatActions, readInbox, type ChatLine } from "@pi-desktop/mate-kit";
+import { appendChat, extensionEntries, isMcpToolName, PERMISSION_OPTIONS, readChat, readChatActions, readInbox, type ChatLine } from "@pi-desktop/mate-kit";
 import { delegateInboxItem } from "../delegate";
 import { isolationDirOf, runPi as defaultRunPi, type PiLaunch } from "../executor";
 import type { MatePaths } from "../paths";
 import { folderAlias, parseCommand } from "../remote/messages";
 import { addRequest, dutyIdFrom, listDuties, listRuns, loadConfig, readJson, saveConfig, saveDuty, setInboxStatus, writeJsonAtomic } from "../store";
 import { localDateKey } from "../schedule";
-import type { Duty } from "../types";
+import { CHAT_DUTY_ID, type Duty } from "../types";
+import { askPermission } from "../permission";
 import type { Exec } from "../watchers";
 import { COMMAND_HELP, findDuty, findFolder, instruct, runCommand, type ChatSource, type CommandContext } from "./commands";
 import { chatSystemPrompt } from "./context";
@@ -245,6 +246,14 @@ export class ChatAgent {
       await this.say(request.source, `알겠어요. ${permission.commands.join(", ")}은(는) 허용하지 않았어요.`, "notice");
       return true;
     }
+    if (permission.dutyId === CHAT_DUTY_ID) {
+      // 대화에서 막힌 MCP 도구: 설정에 더한다. 대화는 다시 실행하지 않으니 다시 말해 달라고 한다
+      const config = await loadConfig(paths);
+      await saveConfig(paths, { chatGrants: [...new Set([...config.chatGrants, ...permission.commands.filter(isMcpToolName)])] });
+      this.options.log(`chat permission granted chat tools=${permission.commands.join(",")}`);
+      await this.say(request.source, `✅ 대화에서 ${permission.commands.join(", ")}을(를) 허용했어요. 다시 말씀해 주시면 써 볼게요.`, "notice");
+      return true;
+    }
     const duty = (await listDuties(paths)).find((d) => d.id === permission.dutyId);
     if (!duty) {
       await this.say(request.source, "그 임무가 이제 없어요.", "notice");
@@ -281,7 +290,21 @@ export class ChatAgent {
       const cwd = dirname(paths.chatSessions);
       const actionsPath = join(paths.chatActions, `${now}.jsonl`);
       await mkdir(paths.chatActions, { recursive: true });
-      const duty: Duty = { id: "mate-chat", name: "Mate 대화", enabled: true, cwd, prompt, profile: "observe", trigger: { kind: "manual" }, createdAt: now };
+      // 대화는 설정에서 고른 MCP 서버를 쓰고, 대화에서 허용한 도구만 통과한다 (DESIGN-APPS.md §3.4)
+      const duty: Duty = {
+        id: CHAT_DUTY_ID,
+        name: "Mate 대화",
+        enabled: true,
+        cwd,
+        prompt,
+        profile: "observe",
+        trigger: { kind: "manual" },
+        createdAt: now,
+        ...(config.chatMcpServers.length ? { mcpServers: config.chatMcpServers } : {}),
+        ...(config.chatGrants.length ? { grants: config.chatGrants } : {}),
+      };
+      const runId = `chat-${now.toString(36)}`;
+      const blockedPath = join(paths.runDir, "blocked", `${runId}.jsonl`);
       const [launch, extensions, systemPrompt] = await Promise.all([
         this.options.locatePi(),
         extensionEntries(this.options.kitDir),
@@ -291,8 +314,9 @@ export class ChatAgent {
         launch,
         {
           duty,
-          runId: `chat-${now.toString(36)}`,
+          runId,
           model: config.model,
+          blockedPath,
           extensions,
           home: paths.home,
           isolationDir: isolationDirOf(this.options.kitDir),
@@ -308,6 +332,8 @@ export class ChatAgent {
       const text = outcome.status === "done" ? (outcome.summary ?? "(답이 비었어요)") : `⚠️ 답하지 못했어요: ${outcome.error ?? outcome.status}`;
       await this.say(request.source, text);
       this.options.log(`chat turn status=${outcome.status} cost=${outcome.costUsd.toFixed(4)}`);
+      // 처음 쓰는 MCP 도구가 막혔으면 대화에서 허용할지 묻는다
+      await askPermission(paths, duty, runId, blockedPath, this.now()).catch((error: Error) => this.options.log(`chat permission ask error ${error.message}`));
       const actions = await readChatActions(actionsPath);
       await rm(actionsPath, { force: true });
       const notes: string[] = [];
