@@ -56,6 +56,8 @@ export interface MateAppContext {
   wake: () => void;
   /** 그 호스트의 Pi (MCP 연결 확인) */
   locatePi: () => Promise<PiLaunch>;
+  /** 실행기를 멈춘다 (답을 보낸 뒤). 원격 실행기를 앱에서 멈추거나 다시 띄울 때 쓴다 */
+  shutdown?: () => void;
 }
 
 // 메서드마다 인자 모양이 달라 any로 받는다 (실행기는 이름으로만 찾는다)
@@ -219,6 +221,12 @@ export function mateAppApi(ctx: MateAppContext): MateAppApi {
 
     // 휴대폰 연결 상태 (실행기가 쓰는 remote.json)
     remoteState: () => loadRemoteState(paths),
+
+    /** 실행기를 멈춘다. 답을 보낸 뒤 끝나도록 조금 늦춘다 (원격 호스트를 바꾸거나 다시 띄울 때, DESIGN-MATE-REMOTE.md §3.1) */
+    stopRunner: async () => {
+      if (!ctx.shutdown) throw new Error("이 실행기는 멈출 수 없습니다");
+      setTimeout(ctx.shutdown, 100);
+    },
 
     // 그 호스트의 폴더 훑기 (임무 폴더 고르기)
     listDir: (path?: string) => listDirectories(path, homedir()),

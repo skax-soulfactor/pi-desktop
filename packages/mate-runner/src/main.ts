@@ -93,15 +93,16 @@ async function daemon(): Promise<void> {
       },
       wake: () => void runner.tick(),
       locatePi: findPi,
+      shutdown: () => void shutdown(),
     }),
     (message) => void log(paths, message),
   );
-  const shutdown = async () => {
+  async function shutdown(): Promise<void> {
     server.close();
     await runner.stop();
     await releasePid(paths);
     process.exit(0);
-  };
+  }
   process.on("SIGTERM", () => void shutdown());
   process.on("SIGINT", () => void shutdown());
   process.on("uncaughtException", (error) => void log(paths, `uncaught ${error.stack ?? error}`));
