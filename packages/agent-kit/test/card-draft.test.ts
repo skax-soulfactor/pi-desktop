@@ -9,13 +9,14 @@ import { startScriptLlm, type ScriptLlm } from "./helpers/script-llm";
 const current = { name: "준혁의 에이전트", description: "", skills: [] };
 
 describe("카드 초안: 재료와 읽기", () => {
-  it("재료에는 사실·교훈과 대화 이름만 싣고, 선호와 비밀은 뺀다", () => {
+  it("재료에는 사용자 항목·공유제외·비밀을 빼고 제목·태그와 대화 이름만 싣는다", () => {
     const text = cardMaterial({
       memories: [
-        { kind: "preference", text: "답은 짧게" },
-        { kind: "fact", text: "Maven 빌드 오류를 자주 다룬다" },
-        { kind: "lesson", text: "Gradle 캐시를 지우면 해결되는 경우가 많다" },
-        { kind: "fact", text: "API key: sk-abcdefghijklmnop1234" },
+        { type: "user", title: "답은 짧게", tags: [] },
+        { type: "requirement", title: "Maven 빌드 오류를 자주 다룬다", tags: ["maven"] },
+        { type: "lesson", title: "Gradle 캐시를 지우면 해결되는 경우가 많다", tags: [] },
+        { type: "reference", title: "API key: sk-abcdefghijklmnop1234", tags: [] },
+        { type: "reference", title: "사내 위키 주소", tags: ["공유제외"] },
       ],
       sessionNames: ["빌드 오류 정리", "빌드 오류 정리", " "],
       current,
@@ -25,6 +26,7 @@ describe("카드 초안: 재료와 읽기", () => {
     expect(text.match(/빌드 오류 정리/g)).toHaveLength(1);
     expect(text).not.toContain("답은 짧게");
     expect(text).not.toContain("sk-");
+    expect(text).not.toContain("사내 위키");
   });
 
   it("코드 펜스·사고 블록을 걷어 내고, 6개까지·글자 수를 자르고, 민감한 항목은 버린다", () => {
@@ -68,7 +70,7 @@ describe("카드 초안 (실제 Pi --print)", () => {
     llm.setScript([{ text: '{"description":"빌드 문제를 잘 푸는 에이전트","skills":[{"name":"빌드 오류 진단","description":"Maven·Gradle"}]}' }]);
     const draft = await generateCardDraft(
       { command: process.execPath, args: [PI_CLI, "--provider", "mock", "--model", "mock-model"], env: { ...process.env, PI_CODING_AGENT_DIR: agentDir } },
-      { memories: [{ kind: "fact", text: "CARD-MATERIAL Maven 빌드" }], sessionNames: [], current },
+      { memories: [{ type: "reference", title: "CARD-MATERIAL Maven 빌드", tags: [] }], sessionNames: [], current },
       mkdtempSync(join(tmpdir(), "card-cwd-")),
     );
     expect(draft).toEqual({ description: "빌드 문제를 잘 푸는 에이전트", skills: [{ id: "skill-1", name: "빌드 오류 진단", description: "Maven·Gradle" }] });

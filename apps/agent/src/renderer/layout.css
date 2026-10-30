@@ -322,7 +322,7 @@ code.copy {
   white-space: nowrap;
 }
 
-.tag.preference,
+.tag.user,
 .tag.allow {
   color: var(--ok);
   border-color: var(--ok);
@@ -805,4 +805,127 @@ code.copy {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+}
+
+/* 지식베이스 */
+.kb-tabs {
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+
+.kb-filters select {
+  max-width: 160px;
+}
+
+.kb-bulk {
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.kb-tag-input {
+  width: 120px;
+}
+
+.kb-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 1100px) {
+  .kb-layout:has(.kb-editor) {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr);
+  }
+}
+
+.list li.kb-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.kb-item.active {
+  border-color: var(--accent);
+}
+
+.kb-item.archived {
+  opacity: 0.6;
+}
+
+.kb-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.kb-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.kb-title,
+.kb-row-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.kb-editor {
+  align-self: start;
+}
+
+.kb-content {
+  width: 100%;
+  min-height: 200px;
+  margin: 6px 0;
+  font: inherit;
+}
+
+.list li.kb-review {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kb-preview {
+  max-height: 360px;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  font-size: 12px;
+}
+
+.kb-tag-link {
+  margin-right: 6px;
+}
+
+.tag.requirement {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+button.danger {
+  color: var(--bad);
+  border-color: var(--bad);
 }

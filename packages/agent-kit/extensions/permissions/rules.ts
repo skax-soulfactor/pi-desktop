@@ -27,6 +27,8 @@ const READ_TOOLS = new Set([
   "ask_user",
   "memory_save",
   "memory_forget",
+  "memory_read",
+  "memory_search",
   // 작업 맡기기는 그 자체로 바깥을 바꾸지 않는다. 워커가 하는 일은 워커 안에서 다시 승인을 받는다
   "delegate_task",
   "list_tasks",

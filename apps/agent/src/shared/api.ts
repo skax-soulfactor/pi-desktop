@@ -15,6 +15,7 @@ import type { Schedule } from "@pi-desktop/agent-kit/schedule-plan";
 import type { ConnectionState } from "../vendor/shared/api";
 import type { PiSetupView } from "./pi-setup";
 import type { McpCheckResult, McpServerView } from "./mcp";
+import type { BulkAction, EntryInput, KnowledgeEntry, KnowledgeStats, ReviewItem } from "@pi-desktop/agent-kit/memory-types";
 import type { AgentCard, CardDraft, NetworkState, PeerPolicy, PeerSettings } from "./network";
 
 /**
@@ -40,9 +41,15 @@ export const IpcChannels = {
   updateState: "agent:update-state",
   checkForUpdates: "agent:check-for-updates",
   confirmUpdate: "agent:confirm-update",
-  listMemories: "agent:list-memories",
-  addMemory: "agent:add-memory",
-  forgetMemory: "agent:forget-memory",
+  kbList: "agent:kb-list",
+  kbSave: "agent:kb-save",
+  kbBulk: "agent:kb-bulk",
+  kbMerge: "agent:kb-merge",
+  kbReviewed: "agent:kb-reviewed",
+  kbReview: "agent:kb-review",
+  kbStats: "agent:kb-stats",
+  kbPreview: "agent:kb-preview",
+  kbExport: "agent:kb-export",
   getAutoLearn: "agent:get-auto-learn",
   getElevation: "agent:get-elevation",
   setElevation: "agent:set-elevation",
@@ -131,17 +138,6 @@ export interface HistoryHit {
 /** 새 세션 대신 이어 열 곳: 그 세션 파일을 그대로(sessionFile), 또는 거기서 분기해서(forkFrom) */
 export type SessionSource = { sessionFile: string } | { forkFrom: string };
 
-/** 기억 하나 (agent-kit memory/store의 Memory와 같은 모양) */
-export interface MemoryView {
-  id: string;
-  kind: "preference" | "fact" | "lesson";
-  created: string;
-  text: string;
-  /** 대화가 끝난 뒤 자동으로 뽑은 기억이면 "auto" */
-  source?: "auto";
-  updated?: string;
-}
-
 /** 승인 규칙 (agent-kit permissions/rules의 Rule) */
 export interface RuleView {
   toolName: string;
@@ -189,9 +185,20 @@ export interface AgentApi {
   onUpdateState(listener: (state: UpdateState) => void): () => void;
   /** 앱 메뉴바에서 고른 명령 (app-menu.ts의 MenuCommand) */
   onMenuCommand(listener: (id: string) => void): () => void;
-  listMemories(): Promise<MemoryView[]>;
-  addMemory(kind: MemoryView["kind"], text: string): Promise<void>;
-  forgetMemory(id: string): Promise<void>;
+  /** 지식베이스 항목 (보관한 것 포함 여부) */
+  kbList(includeArchived: boolean): Promise<KnowledgeEntry[]>;
+  /** 새로 쓰거나(id 없음) 고친다 */
+  kbSave(id: string | undefined, input: EntryInput): Promise<KnowledgeEntry>;
+  kbBulk(ids: string[], action: BulkAction, tag?: string): Promise<number>;
+  kbMerge(keepId: string, dropIds: string[]): Promise<void>;
+  kbReviewed(id: string): Promise<void>;
+  /** 점검 대기함 */
+  kbReview(): Promise<ReviewItem[]>;
+  kbStats(): Promise<KnowledgeStats>;
+  /** 이 요청이면 프롬프트에 무엇이 실리는지 (회상 기록은 남기지 않는다) */
+  kbPreview(prompt: string): Promise<{ text: string; chars: number; injected: number }>;
+  /** Markdown 한 파일로 내보낸다. 저장한 경로 (취소하면 undefined) */
+  kbExport(): Promise<string | undefined>;
   /** 대화가 끝난 뒤 자동으로 기억을 뽑는가 */
   getAutoLearn(): Promise<boolean>;
   setAutoLearn(on: boolean): Promise<void>;

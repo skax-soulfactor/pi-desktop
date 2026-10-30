@@ -1,7 +1,7 @@
 import type { MenuItemConstructorOptions } from "electron";
 
 /**
- * 앱 메뉴바 (파일·편집·보기·도움말). 기능 화면(작업·예약·기억·승인·사용량·설정)은 왼쪽 사이드바가 아니라 여기서 연다.
+ * 앱 메뉴바 (파일·편집·보기·도움말). 기능 화면(작업·예약·지식베이스·승인·사용량·설정)은 왼쪽 사이드바가 아니라 여기서 연다.
  * 메뉴 항목은 화면에 명령 id를 보내고, 화면(App.tsx)이 처리한다. electron 없이 모양만 만드는 함수라 테스트한다.
  */
 export type MenuCommand =
@@ -54,7 +54,7 @@ export function appMenuTemplate(platform: NodeJS.Platform, isPackaged: boolean, 
       submenu: [
         cmd("대화", "page:chat", "CmdOrCtrl+1"),
         cmd("작업·예약", "page:tasks", "CmdOrCtrl+2"),
-        cmd("기억", "page:memory", "CmdOrCtrl+3"),
+        cmd("지식베이스", "page:memory", "CmdOrCtrl+3"),
         cmd("승인", "page:rules", "CmdOrCtrl+4"),
         cmd("사용량", "page:usage", "CmdOrCtrl+5"),
         cmd("지난 대화", "page:history", "CmdOrCtrl+6"),

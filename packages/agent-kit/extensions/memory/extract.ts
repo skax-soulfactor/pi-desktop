@@ -1,5 +1,4 @@
-import type { Memory, MemoryKind } from "./store";
-import { MEMORY_KINDS } from "./store";
+import { MEMORY_TYPES, type KnowledgeEntry, type MemoryType } from "./types";
 
 /**
  * 턴이 끝난 뒤 따로 모델을 불러 기억을 뽑는 패스의 순수 로직 (desktop-agent src/main/memory/extract.ts를 옮김).
@@ -13,7 +12,9 @@ export interface FailureSignal {
 }
 
 export type MemoryOp =
-  { op: "create"; kind: MemoryKind; text: string } | { op: "update"; id: string; kind?: MemoryKind; text: string } | { op: "forget"; id: string };
+  | { op: "create"; type: MemoryType; title: string; content: string; tags: string[] }
+  | { op: "update"; id: string; type?: MemoryType; title?: string; content: string; tags?: string[] }
+  | { op: "archive"; id: string };
 
 /** 바깥을 실제로 관찰하는 도구. 이것이 하나도 성공하지 않은 턴에서 에이전트가 한 말은 아직 주장이다 */
 const OBSERVING_TOOLS = new Set(["read", "grep", "find", "ls", "bash", "powershell", "web_fetch", "process_document"]);
@@ -88,17 +89,19 @@ export function digestRun(messages: readonly unknown[]): RunDigest {
   return { transcript: lines.join("\n"), failures, verified, hasUser };
 }
 
-export const EXTRACT_SYSTEM = `너는 데스크톱 에이전트의 기억 관리자다. 방금 끝난 대화를 검토해 다음 대화에서도 알아야 할 것만 장기 기억으로 남긴다.
+export const EXTRACT_SYSTEM = `너는 데스크톱 에이전트의 지식베이스 관리자다. 방금 끝난 대화를 검토해 다음 대화에서도 알아야 할 것만 지식베이스에 남긴다.
 
-기억 종류:
-- preference: 사용자의 선호·작업 규칙 (예: "커밋 메시지는 한글로 쓴다")
-- fact: 사용자 환경·진행 중인 일에 대한 사실 (예: "회사 PC는 Windows다")
-- lesson: 에이전트의 실수와 재발 방지 규칙. "무엇을 할 때 → 어떻게 해야 한다(또는 하지 말아야 한다), 이유" 꼴의 한두 문장
+종류(type):
+- user: 사용자의 역할·전문성·쓰는 환경·선호 (예: "커밋 메시지는 한글로", "회사 PC는 Windows")
+- requirement: 진행 중인 일·목표·제약·결정 사항
+- lesson: 에이전트의 실수와 재발 방지 규칙. 본문은 반드시 아래 네 항목을 빈 줄로 나눠 쓴다
+  "**상황:** ...\\n\\n**실수:** ...\\n\\n**원인:** ...\\n\\n**재발 방지:** ..."
+- reference: 자료·문서·저장소·주소 같은 외부 자원 위치
 
 규칙:
-- 한 기억은 한두 문장의 한국어로 짧게 쓴다.
-- 같은 주제의 기억이 이미 있으면 create 대신 update(id 포함)로 고친다. 중복 금지.
-- 사용자 말이 기존 기억과 어긋나면 그 기억을 update하거나 forget한다.
+- title은 한 줄 요약, content는 Markdown 본문, tags는 찾기 쉬운 낱말 몇 개. 모두 한국어로.
+- 같은 주제가 이미 있으면 create 대신 update(id 포함)로 고친다. 중복 금지.
+- 사용자 말이 기존 항목과 어긋나면 그 항목을 update하거나 archive한다.
 - 이번 대화에만 필요한 것, 일회성 내용은 저장하지 않는다.
 - 검증되지 않은 진단이나 해결책을 사실로 저장하지 않는다. "A로 B를 해결했다"는 사용자가 해결을 확인했을 때만.
 - 비밀번호·API 키·토큰 등 민감 정보는 절대 저장하지 않는다.
@@ -106,7 +109,7 @@ export const EXTRACT_SYSTEM = `너는 데스크톱 에이전트의 기억 관리
 - 저장할 것이 없으면 ops를 빈 배열로 반환한다. 대부분의 대화는 그렇다.
 
 출력: 아래 JSON만 출력한다. 설명·인사·코드 펜스 금지.
-{"ops":[{"op":"create","kind":"preference|fact|lesson","text":"내용"},{"op":"update","id":"기존 id","text":"고친 내용"},{"op":"forget","id":"기존 id"}]}`;
+{"ops":[{"op":"create","type":"user|requirement|lesson|reference","title":"한 줄 요약","content":"본문","tags":["태그"]},{"op":"update","id":"기존 id","content":"고친 본문"},{"op":"archive","id":"기존 id"}]}`;
 
 /** 관찰 도구가 하나도 성공하지 않은 턴에 덧붙인다. 사실이 아니라 출처를 기준으로 자른다 */
 export const UNVERIFIED_RULE = `
@@ -116,15 +119,15 @@ export const UNVERIFIED_RULE = `
 - 사용자가 직접 말한 것만 저장한다: 선호, 쓰는 환경·도구, 요구사항, 결정, 계획.`;
 
 /** 추출 요청 본문. 기록은 끝(가장 최근)을 남기고 앞을 자른다 */
-export function extractPrompt(existing: Memory[], digest: RunDigest, budgetChars: number): string {
+export function extractPrompt(existing: KnowledgeEntry[], digest: RunDigest, budgetChars: number): string {
   const failureText = digest.failures.length > 0 ? `\n\n## 실패 신호 (교훈 후보)\n${digest.failures.map((f) => `- (${f.kind}) ${f.detail}`).join("\n")}` : "";
-  const list = existing.map((m) => `- id=${m.id} [${m.kind}] ${m.text}`).join("\n");
+  const list = existing.map((m) => `- id=${m.id} [${m.type}] ${m.title}`).join("\n");
   const listBudget = Math.floor(budgetChars * 0.3);
   const existingText = list.length > listBudget ? list.slice(list.length - listBudget) : list;
   const transcriptBudget = Math.max(500, budgetChars - existingText.length - failureText.length);
   const transcript =
     digest.transcript.length > transcriptBudget ? `…${digest.transcript.slice(digest.transcript.length - transcriptBudget)}` : digest.transcript;
-  return `## 기존 기억\n${existingText || "(없음)"}\n\n## 이번 대화\n${transcript}${failureText}`;
+  return `## 기존 항목\n${existingText || "(없음)"}\n\n## 이번 대화\n${transcript}${failureText}`;
 }
 
 /**
@@ -181,14 +184,19 @@ export function parseOps(raw: string, knownIds: ReadonlySet<string>): MemoryOp[]
   if (!Array.isArray(list)) throw new Error("ops 배열이 없다");
 
   const ops: MemoryOp[] = [];
+  const str = (value: unknown) => (typeof value === "string" ? value.trim() : "");
   for (const item of list as Array<Record<string, unknown>>) {
-    const kind = MEMORY_KINDS.includes(item.kind as MemoryKind) ? (item.kind as MemoryKind) : undefined;
-    const body = typeof item.text === "string" ? item.text.trim() : "";
-    const id = typeof item.id === "string" ? item.id : "";
-    if (body && looksSecret(body)) continue;
-    if (item.op === "create" && kind && body) ops.push({ op: "create", kind, text: body });
-    else if (item.op === "update" && knownIds.has(id) && body) ops.push(kind ? { op: "update", id, kind, text: body } : { op: "update", id, text: body });
-    else if ((item.op === "forget" || item.op === "archive") && knownIds.has(id)) ops.push({ op: "forget", id });
+    const type = MEMORY_TYPES.includes(item.type as MemoryType) ? (item.type as MemoryType) : undefined;
+    const title = str(item.title);
+    // 예전 형식(text)도 본문으로 받는다
+    const content = str(item.content) || str(item.text);
+    const tags = Array.isArray(item.tags) ? item.tags.filter((t): t is string => typeof t === "string") : undefined;
+    const id = str(item.id);
+    if (looksSecret(`${title} ${content}`)) continue;
+    if (item.op === "create" && type && title && content) ops.push({ op: "create", type, title, content, tags: tags ?? [] });
+    else if (item.op === "update" && knownIds.has(id) && content)
+      ops.push({ op: "update", id, content, ...(type ? { type } : {}), ...(title ? { title } : {}), ...(tags ? { tags } : {}) });
+    else if ((item.op === "archive" || item.op === "forget") && knownIds.has(id)) ops.push({ op: "archive", id });
   }
   return ops;
 }

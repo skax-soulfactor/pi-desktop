@@ -6,7 +6,7 @@ import { connectionLabel } from "./connection-label";
 import { groupByFolder } from "./chat-groups";
 import { DialogHost } from "./dialog-host";
 import { FolderMenu } from "./FolderMenu";
-import { MemoryPage } from "./MemoryPage";
+import { KnowledgePage } from "./KnowledgePage";
 import { PiSetupBanner } from "./PiSetupBanner";
 import { RulesPage } from "./RulesPage";
 import { UsagePage } from "./UsagePage";
@@ -236,7 +236,7 @@ export function App() {
             <button className="small" onClick={() => setPage("chat")}>
               ← 대화로
             </button>
-            <span className="muted small-text">기능 화면(작업·기억·승인·사용량·지난 대화·웹 검색·네트워크·설정)은 메뉴바의 "보기"에서 엽니다</span>
+            <span className="muted small-text">기능 화면(작업·지식베이스·승인·사용량·지난 대화·웹 검색·네트워크·설정)은 메뉴바의 "보기"에서 엽니다</span>
           </div>
         )}
         {page === "chat" && (
@@ -266,7 +266,7 @@ export function App() {
             </div>
           </div>
         )}
-        {page === "memory" && <MemoryPage onError={onError} />}
+        {page === "memory" && <KnowledgePage onError={onError} />}
         {page === "rules" && <RulesPage onError={onError} />}
         {page === "usage" && <UsagePage onError={onError} />}
         {page === "mcp" && <McpPage onError={onError} />}

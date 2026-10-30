@@ -115,7 +115,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | 웹 검색·MCP 설정 화면 | 앱 | Pi의 사용자 MCP 설정(`<Pi 설정 폴더>/mcp.json`)을 고친다. 미리 정한 웹 검색 서버: Exa(원격 `https://mcp.exa.ai/mcp`, 키 없음), Brave(`npx -y @brave/brave-search-mcp-server`, `BRAVE_API_KEY`), Tavily(`npx -y tavily-mcp`, `TAVILY_API_KEY`). 키는 그 서버의 `env`에 넣고 화면으로 다시 보내지 않는다. 켜고 끄기는 `enabled`만, 빼기는 그 서버만 바꾸고 모르는 칸은 둔다. 깨진 파일은 덮어쓰지 않는다. 연결 확인은 `pi mcp list`(세션 없이). 바꾼 설정은 새 대화부터 적용 |
 | 메인/워커 분리, 작업 위임 | 확장 `tasks` | 워커는 확장이 띄우는 자식 `pi --mode rpc`(같은 모델·`-e` 확장·환경). 워커의 다이얼로그는 부모 `ctx.ui`로 넘기고, 완료는 `[작업 알림]` custom message + `triggerTurn`으로 주입 |
 | 예약·주기 작업 | 확장 `schedule` + 데몬의 상주 세션 | Host Agent(Pi Desktop과 공유)는 고치지 않는다. 대신 앱이 데몬에 **스케줄러 세션** 하나를 띄워 두고, 그 세션의 확장이 타이머를 돌려 도래한 예약을 "사람 없는" 워커로 실행한다. 데몬은 돌고 있는 세션이 있으면 꺼지지 않으므로 앱을 닫아도 돈다 (PC를 다시 켜면 앱을 한 번 열어야 다시 돈다) |
-| 지식베이스 (회상·추출·교훈) | 확장 `memory` | `before_agent_start`에서 관련 기억을 프롬프트 섹션으로, `agent_settled`에서 추출. 저장은 Markdown 파일 |
+| 지식베이스 (회상·추출·교훈) | 확장 `memory` + 앱 | desktop-agent의 지식베이스를 옮겼다. 항목 하나 = `pi-desktop-agent/memory/<id>.md`(frontmatter: type·title·tags·pinned·status·origin·unverified·created·updated·reviewed·source, 본문 Markdown). 종류는 사용자(user)·요구사항(requirement)·교훈(lesson)·참조(reference). 예전 형식(kind·한 줄)은 읽을 때 바꿔 읽는다(preference→고정 user, fact→user). 회상(`before_agent_start`): 전체 목록 한 줄씩 + 고정 항목 본문 + 요청과 관련된 항목 본문(2-gram, 제목·태그 가중), 예산은 클라우드 8,000자·로컬 창의 10%. 회상 횟수는 `recall-stats.json`에 따로 둔다. 도구: `memory_save`(같은 제목이면 고침)·`memory_read`·`memory_search`·`memory_forget`(보관), 모두 승인 없이 하고 알린다. 턴 뒤 추출은 같은 형식으로 남기고, 도구로 확인한 것이 없는 대화에서 나온 항목에 "확인 안 됨"을 붙인다. 앱의 지식베이스 화면: 목록(찾기·종류·태그·보관함), 고치기, 일괄(보관·되살리기·고정·태그·합치기·지우기→forgotten/), 점검 대기함(중복 의심·30일 안 쓰임·재발 방지 없는 교훈·확인 안 됨, 합치기·확인함), 통계·주입 미리보기, Markdown 내보내기. 피어 답변·카드 초안에는 user 항목과 `공유제외` 태그를 쓰지 않는다 |
 | 사용자 지침·선호 | **Pi 기본** | `AGENTS.md` |
 | 스킬, MCP | **Pi 기본** | `skills/`, `mcp.json` |
 | 큰 입력 처리 | 확장 `documents` | 원문은 파일로, `read`의 offset/limit로 읽기. 분할 요약·번역은 워커 세션 |
@@ -141,7 +141,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | | **구현 메모 (P2, 실측 전)**: loop-guard는 실행 단위로 같은 읽기 조회(성공한 것만, 쓰기·실행 성공 시 잊음)와 30자 이상 문단 반복을 세고, 3번 쌓이면 남은 호출을 terminate로 막은 뒤 알리고 멈춘다. permissions는 같은 실행에서 거부한 호출을 다시 묻지 않는다(repeat-deny). local-model은 첫 요청 때 Ollama `/api/ps`·`/api/show`로 실제 창·사고 지원을 묻고 설정과 다르면 알린다. 결과는 창의 1/4(토큰당 3글자 어림)을 넘으면 앞부분만 보내고, read는 범위를 좁혀 다시 읽게, 그 밖은 전문을 `pi-desktop-agent/outputs/`에 남긴다. `/agent:local-setup`은 확인 뒤 창의 25%·35%를 reserve·keepRecent로 저장한다. Ollama를 흉내 낸 스크립트 LLM으로 계약 테스트를 했고, **이 개발 PC에는 Ollama가 없어 qwen3.5:9b 실측은 아직이다** (아래 절차) | |
 | **P3 기본 기능** | `memory`, `documents`, `attachments`, `ask-user`, `web`, 키체인 연동 | PR을 기능 단위로 나눈다: ① ask-user·web ② memory ③ documents·attachments ④ 키체인 |
 | | **구현 메모 (P3-①)**: `ask_user`·`web_fetch` 도구와 승인 위험도 "네트워크"를 추가. 실제 Pi 계약 테스트로 선택지·직접 입력·네트워크 승인·본문 추출·HTTP 오류를 확인 | |
-| | **구현 메모 (P3-②)**: 기억 하나 = `pi-desktop-agent/memory/<id>.md`(frontmatter `kind`·`created`). SQLite·벡터 대신 사람이 고칠 수 있는 파일. 매 요청 전 `before_agent_start`에서 선호는 늘, 사실·교훈은 요청과 글자 2-gram이 겹치는 것만 골라 `agent_memory` 섹션으로 싣는다(Pi가 시스템 메시지 하나를 고쳐 보내므로 대화에 쌓이지 않음). 로컬 모델은 창의 10%만. 도구 `memory_save`·`memory_forget`(승인 없이, 할 때마다 알림), 명령 `/agent:remember`·`/agent:memories`. 잊은 기억은 `forgotten/`으로 옮겨 되돌릴 수 있다. desktop-agent의 "턴 뒤 LLM으로 기억 뽑기"와 실패 교훈 자동 기록은 아직 옮기지 않았다 → 아래 메모에서 옮김 | |
+| | **구현 메모 (P3-②, 지식베이스로 바뀌기 전)**: 기억 하나 = `pi-desktop-agent/memory/<id>.md`(frontmatter `kind`·`created`). SQLite·벡터 대신 사람이 고칠 수 있는 파일. 매 요청 전 `before_agent_start`에서 선호는 늘, 사실·교훈은 요청과 글자 2-gram이 겹치는 것만 골라 `agent_memory` 섹션으로 싣는다(Pi가 시스템 메시지 하나를 고쳐 보내므로 대화에 쌓이지 않음). 로컬 모델은 창의 10%만. 도구 `memory_save`·`memory_forget`(승인 없이, 할 때마다 알림), 명령 `/agent:remember`·`/agent:memories`. 잊은 기억은 `forgotten/`으로 옮겨 되돌릴 수 있다. desktop-agent의 "턴 뒤 LLM으로 기억 뽑기"와 실패 교훈 자동 기록은 아직 옮기지 않았다 → 아래 메모에서 옮김 | |
 | | **구현 메모 (턴 뒤 기억 추출)**: `agent_end`의 메시지를 받아 두었다가 `agent_settled`(중단 아님)에서 대화 기록·실패 신호(실패한 도구 결과, 승인 거부)로 정리하고, 지금 모델(`ctx.modelRegistry.complete`)에 기존 기억 목록과 함께 보내 `{"ops":[create·update·forget]}`를 받는다. 기다리지 않고 한 번에 하나씩 돌리며, 저장·고침·지움마다 알린다. 관찰 도구(read·grep·find·ls·bash·web_fetch 등)가 하나도 성공하지 않은 실행은 "사용자가 직접 말한 것만" 규칙을 덧붙인다. 사고 블록·코드 펜스·끊긴 JSON을 관대하게 읽고, 모르는 id와 키·토큰처럼 보이는 글은 버린다. JSON이 아예 없는 답은 "저장할 것 없음"으로 본다. 자동 기억은 frontmatter `source: auto`, 고치면 `updated`. 워커·예약·중단 실행에서는 뽑지 않고, 기억 화면의 체크(`memory/settings.json`의 `autoLearn`)나 `PI_DESKTOP_AGENT_LEARN=0`으로 끈다 | |
 | | **구현 메모 (P3-③)**: `process_document`는 창의 30%(토큰당 2글자) 크기로 문단 경계에서 나눠 조각마다 `ctx.modelRegistry.complete`로 지금 모델을 부른다. transform(번역·교정)은 결과를 `<이름>.result.md`(또는 output)로 쓰고 그 경로로 "쓰기" 승인, reduce(요약·질문)는 조각별로 뽑아 한 번 더 모아 답하며 묻지 않는다. .docx는 의존성 없이 zip에서 `word/document.xml`만 풀어 본문을 뽑는다(PDF는 아직). 앱의 "파일 첨부"는 내용 대신 `[첨부] <경로>`를 메시지에 싣는다. 조각 처리 요청에는 local-model의 사고 끄기가 적용되지 않는다 | |
 | | **구현 메모 (P3-④)**: 앱의 `KeyStore`(safeStorage 암호화)와 "API 키" 화면을 만들었으나, v0.1.2에서 키 관리를 Pi Desktop으로 모으며 없앴다(§3) | |
@@ -174,3 +174,39 @@ Ollama가 있는 PC에서 한다. desktop-agent 실측과 같은 조건(qwen3.5:
 3. desktop-agent에서 실패했던 시나리오를 그대로 돌린다: 디렉터리 목록에 답이 있는데 없는 경로를 다시 찾던 과제, 같은 문단을 되풀이하던 과제, 거부한 명령을 다시 시도하던 과제, 큰 파일 요약.
 4. 볼 것: 감사 로그(`audit.jsonl`)의 repeat-deny, loop-guard 멈춤 알림 횟수, 답이 문장 중간에서 끊기는지, 압축이 매 턴 일어나지 않는지, 응답 시간.
 
+
+## 8. 중계 서버 (N5, 보류 — 설계만)
+
+지금 피어는 같은 네트워크(사내망·VPN)에서 `http://IP:7811`로 직접 닿는다. 다른 네트워크·NAT 너머의 에이전트끼리 연결하려면 중계 서버가 필요하다. 사용자 결정(2026-10-30)으로 구현은 미루고 설계만 남긴다. 그 전까지는 Tailscale 같은 VPN으로 같은 네트워크에 두는 것이 방법이다.
+
+**목표**: 방화벽·NAT 뒤의 에이전트끼리 연결, TLS, 오프라인일 때 잠깐 쌓아 두기, 카드 디렉터리(찾기). 지금의 원칙(지식은 옮기지 않음, 양쪽 사람 승인, 받는 쪽 정책·폴더 가두기)은 그대로 둔다. 중계는 **봉투만 나른다**.
+
+**구성**
+
+| 부분 | 위치 | 하는 일 |
+|---|---|---|
+| 중계 서버 | 이 저장소의 별도 앱(예: `apps/relay`, Node 단일 프로세스) | 에이전트 등록, WebSocket 상시 연결, 메시지 전달, 오프라인 큐, 카드 디렉터리. TLS는 앞단 프록시(Caddy·nginx)나 클라우드 LB |
+| 전송 추상화 | agent-kit `peers` | 지금의 HTTP 호출(`fetchCard`·`pair`·`a2a`)을 `PeerTransport` 뒤로 옮긴다. `DirectHttpTransport`(지금 것)와 `RelayTransport`(WebSocket) |
+| 수신 | 스케줄러 세션 | 중계를 쓰면 포트를 열지 않고, 스케줄러가 중계에 바깥 방향 WebSocket을 유지하고 들어온 요청을 지금의 `peerRequestHandler`에 그대로 넘긴다 |
+
+**주소와 신원**
+- 피어 주소는 `relay://<중계 호스트>/<agentId>` 꼴이다. 피어 레코드에는 주소만 있으므로 상위 로직(정책·작업·승인)은 바뀌지 않는다.
+- `agentId`는 에이전트가 처음 등록할 때 만든 키쌍(Ed25519)의 공개키 지문으로 한다. 중계는 등록 때 서명으로 소유를 확인하고, 그 뒤로는 연결마다 짧은 세션 토큰을 쓴다.
+- 피어끼리의 토큰(지금의 `myToken`·`theirToken`)은 중계를 지나도 그대로 쓴다. 중계는 봉투의 대상만 보고 내용은 보지 않는 것이 목표다. 2단계에서 피어 공개키로 내용을 암호화(종단간)한다.
+
+**메시지 흐름**
+1. A의 스케줄러가 `wss://relay/agents/A`에 연결해 둔다. B도 같다.
+2. A가 B에게 질문하면 `{ to: B, from: A, id, body: <지금의 JSON-RPC 본문> }` 봉투를 중계로 보낸다.
+3. 중계는 B 연결이 있으면 바로 넘기고, 없으면 큐에 둔다(질문은 짧게 1분, 작업 요청은 길게 24시간).
+4. B는 지금의 서버 처리기로 처리하고 같은 id로 답 봉투를 돌려보낸다.
+5. 작업(N4)은 지금처럼 `tasks/get`으로 확인하므로 상태 알림을 따로 만들 필요가 없다. 나중에 중계가 상태 변화를 밀어 주게 바꿀 수 있다.
+
+**카드 디렉터리**: 중계에 카드를 올릴지는 에이전트마다 고른다(기본 올리지 않음). 올리면 같은 중계를 쓰는 사람이 이름·잘하는 것으로 찾아 페어링을 요청할 수 있다. 페어링 승인은 지금과 같이 양쪽 사람이 한다.
+
+**운영**: 사용자가 사내 서버나 클라우드에 직접 띄운다. 필요한 것은 도메인, TLS 인증서, 포트 하나(443). 중계 자체에는 대화 내용이 남지 않게 하고, 큐는 메모리(재시작하면 사라짐)로 시작한다. 등록 수·메시지 크기·속도에 상한을 둔다.
+
+**단계 (구현할 때)**
+1. `PeerTransport` 추상화로 지금 코드를 옮긴다 (동작 변화 없음)
+2. 중계 서버 최소판: 등록·연결·전달 (큐·디렉터리 없음), `RelayTransport`
+3. 오프라인 큐, 카드 디렉터리
+4. 종단간 암호화
