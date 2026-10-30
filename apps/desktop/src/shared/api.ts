@@ -53,6 +53,7 @@ import type {
   SessionSummary,
   SessionUiResolvedNotification,
   StoredChangedNotification,
+  StoredDeleteResult,
   StoredInspectResult,
   StoredReadResult,
   StoredSession,
@@ -358,6 +359,8 @@ export interface PiDesktopApi {
   listHistory(hostId: string, cwd?: string): Promise<StoredSession[]>;
   /** 세션 파일 상태 (다른 프로그램이 쓰고 있는지 판단용) */
   inspectStored(hostId: string, path: string): Promise<StoredInspectResult>;
+  /** 저장된 세션 파일을 지운다 (데몬 홈의 백업 폴더로 옮김). 실행 중이면 먼저 닫아야 한다 */
+  deleteStored(hostId: string, path: string): Promise<StoredDeleteResult>;
   /** 세션 파일을 읽기만 해서 현재 대화를 받는다 (팔로우 모드) */
   readStored(hostId: string, path: string): Promise<StoredReadResult>;
   /** 세션 파일 변경 감시 시작·해제 (팔로우 모드) */
@@ -565,6 +568,7 @@ export const IpcChannels = {
   openSession: "pi:open-session",
   listHistory: "pi:list-history",
   inspectStored: "pi:inspect-stored",
+  deleteStored: "pi:delete-stored",
   readStored: "pi:read-stored",
   watchStored: "pi:watch-stored",
   unwatchStored: "pi:unwatch-stored",

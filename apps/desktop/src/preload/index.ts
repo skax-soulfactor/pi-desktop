@@ -20,6 +20,7 @@ const api: PiDesktopApi = {
   listSessions: (hostId) => ipcRenderer.invoke(IpcChannels.listSessions, hostId),
   listHistory: (hostId, cwd) => ipcRenderer.invoke(IpcChannels.listHistory, hostId, cwd),
   inspectStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.inspectStored, hostId, path),
+  deleteStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.deleteStored, hostId, path),
   readStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.readStored, hostId, path),
   watchStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.watchStored, hostId, path),
   unwatchStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.unwatchStored, hostId, path),

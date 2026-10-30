@@ -1178,7 +1178,7 @@ button.small {
 .rename-button {
   position: absolute;
   top: 4px;
-  right: 26px;
+  right: 48px;
   padding: 0 6px;
   border: 0;
   background: transparent;
@@ -1189,7 +1189,9 @@ button.small {
 .session-row:hover .rename-button,
 .rename-button:focus-visible,
 .session-row:hover .close-session-button,
-.close-session-button:focus-visible {
+.close-session-button:focus-visible,
+.session-row:hover .delete-session-button,
+.delete-session-button:focus-visible {
   opacity: 1;
 }
 
@@ -1206,6 +1208,27 @@ button.small {
 }
 
 .close-session-button:hover:not(:disabled) {
+  color: var(--danger, #c0392b);
+}
+
+/* 세션 삭제 🗑: 실행 중 줄은 ✕ 왼쪽, 기록 줄은 오른쪽 끝 */
+.delete-session-button {
+  position: absolute;
+  top: 4px;
+  right: 26px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  opacity: 0;
+}
+
+.history-row .delete-session-button {
+  right: 4px;
+}
+
+.delete-session-button:hover:not(:disabled) {
   color: var(--danger, #c0392b);
 }
 
