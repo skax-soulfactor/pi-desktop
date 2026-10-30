@@ -32,6 +32,8 @@ describe("휴대폰 글·명령", () => {
     expect(parseCommand("CI 왜 깨졌어?")).toEqual({ kind: "chat", text: "CI 왜 깨졌어?" });
     expect(parseCommand("/모름")).toEqual({ kind: "chat", text: "/모름" });
     expect(parseCommand("/new")).toEqual({ kind: "new" });
+    expect(parseCommand("/history")).toEqual({ kind: "history", count: 10 });
+    expect(parseCommand("/history 50")).toEqual({ kind: "history", count: 30 });
     expect(parseOptionCallback("o:abc-1:2")).toEqual({ lineId: "abc-1", index: 2 });
     expect(parseOptionCallback("o:abc:7")).toBeUndefined();
     expect(parseCommand("/unknown")).toEqual({ kind: "help" });
@@ -242,6 +244,48 @@ describe("TelegramRemote", () => {
     await remote.cycle(0);
     await chat.whenIdle();
     expect(piCalls.at(-1)!.chat!.sessionId).toBe("mate-chat-2");
+  });
+
+  it("/history는 앱·휴대폰 대화를 함께 보여 주고, 설정을 켜면 그 뒤의 앱 대화도 보낸다", async () => {
+    tg.message(7, "/start 123456");
+    await remote.cycle(0);
+    // 앱에서 나눈 대화는 기본으로 휴대폰에 보내지 않는다
+    piReply = { summary: "앱 답" };
+    chat.submit({ text: "앱에서 물어봄", source: "app" });
+    await chat.whenIdle();
+    await remote.cycle(0);
+    expect(tg.texts().some((t) => t.includes("앱에서 물어봄") || t.includes("앱 답"))).toBe(false);
+
+    // /history로는 볼 수 있다 (🖥 앱 표시)
+    tg.message(7, "/history");
+    await remote.cycle(0);
+    const history = tg.texts().at(-1)!;
+    expect(history).toMatch(/최근 대화 2줄/);
+    expect(history).toMatch(/🖥 <b>나<\/b>\n앱에서 물어봄/);
+    expect(history).toContain("앱 답");
+
+    // 설정을 켜면 켠 뒤의 앱 대화만 보낸다
+    clock = at(12, 30);
+    await saveConfig(paths, { telegram: { mirrorApp: true, mirrorAppSince: clock } });
+    await remote.cycle(0);
+    expect(tg.texts().some((t) => t.includes("🖥 <b>앱에서</b>\n앱에서 물어봄"))).toBe(false);
+    clock = at(12, 31);
+    piReply = { summary: "두 번째 답" };
+    chat.submit({ text: "앱 두 번째", source: "app" });
+    await chat.whenIdle();
+    await remote.flushChat();
+    expect(tg.texts().slice(-2)).toEqual(["🖥 <b>앱에서</b>\n앱 두 번째", "🖥 두 번째 답"]);
+
+    // 조용한 시간에는 보내지 않고 건너뛴다 (끝난 뒤에도 몰아 보내지 않음)
+    await saveConfig(paths, { telegram: { quiet: { start: "12:00", end: "13:00" } } });
+    const sentBefore = tg.texts().length;
+    clock = at(12, 40);
+    chat.submit({ text: "조용한 시간", source: "app" });
+    await chat.whenIdle();
+    await remote.flushChat();
+    clock = at(13, 10);
+    await remote.flushChat();
+    expect(tg.texts().length).toBe(sentBefore);
   });
 
   it("앱에서 연결을 해제하면(연결 번호가 바뀌면) 연결을 버린다", async () => {

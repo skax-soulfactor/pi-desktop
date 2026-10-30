@@ -82,6 +82,10 @@ export interface TelegramConfig {
   sendDetail: boolean;
   /** 휴대폰에서 고치기(/fix, 맡기기)를 허용하는지 */
   allowFix: boolean;
+  /** 앱에서 나눈 대화도 휴대폰으로 보내는지. 조용한 시간에는 보내지 않고 건너뛴다 (나중에 /history로 본다) */
+  mirrorApp: boolean;
+  /** mirrorApp을 켠 시각. 그 뒤의 앱 대화만 보낸다 (켜자마자 지난 대화가 쏟아지지 않게) */
+  mirrorAppSince?: number;
 }
 
 /**
@@ -103,7 +107,7 @@ export const DEFAULT_CONFIG: MateConfig = {
   dailyRunLimit: 20,
   maxCostUsd: 0.5,
   observe: { enabled: false, quietMinutes: 5, dailySuggestionLimit: 5, excluded: [] },
-  telegram: { enabled: false, pairEpoch: 0, notify: "action", sendDetail: true, allowFix: false },
+  telegram: { enabled: false, pairEpoch: 0, notify: "action", sendDetail: true, allowFix: false, mirrorApp: false },
 };
 
 export const DEFAULT_TIMEOUT_SEC = 300;

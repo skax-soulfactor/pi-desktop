@@ -12,9 +12,11 @@ import {
   chunks,
   confirmApplyButtons,
   HELP_TEXT,
+  historyMessages,
   inQuietHours,
   itemButtons,
   itemText,
+  mirrorText,
   optionButtons,
   parseCallback,
   parseCommand,
@@ -64,6 +66,14 @@ export function chatLineForPhone(line: ChatLine): boolean {
 }
 
 /**
+ * "앱 대화도 휴대폰으로 보내기"를 켰을 때 함께 보낼 앱 대화 줄 (사용자가 앱에서 한 말과 그 답).
+ * 켠 시각 뒤의 줄만 보낸다. 꺼져 있으면 아무것도 보내지 않는다.
+ */
+export function mirroredAppLine(line: ChatLine, telegram: Pick<MateConfig["telegram"], "mirrorApp" | "mirrorAppSince">): boolean {
+  return telegram.mirrorApp && line.source === "app" && line.kind !== "divider" && line.at >= (telegram.mirrorAppSince ?? 0);
+}
+
+/**
  * 휴대폰(텔레그램) 연결 (설계 DESIGN-MATE.md §12, §13).
  * 실행기 안에서 따로 돌며(임무 실행 중에도 버튼에 바로 답하도록), 앱과 같은 동작만 한다:
  * 인박스 확인·버리기, 고친 변경 적용(한 번 더 묻기)·버리기, 맡기기·고치기 지시(설정에서 허용했을 때), 살펴보기 지시, 임무 실행.
@@ -90,9 +100,9 @@ export class TelegramRemote {
   }
 
   start(): void {
-    // 대화 답이 생기면 다음 폴링을 기다리지 않고 바로 보낸다
+    // 대화 답이 생기면 다음 폴링을 기다리지 않고 바로 보낸다. 앱 대화는 보낼지 설정을 보고 정한다
     this.unsubscribe = this.chat.onLine((line) => {
-      if (chatLineForPhone(line)) void this.flushChat();
+      if (chatLineForPhone(line) || line.source === "app") void this.flushChat();
     });
     void this.loop();
   }
@@ -213,6 +223,11 @@ export class TelegramRemote {
         if (fresh.length > 5) await say(`그 밖에 ${fresh.length - 5}건은 PC의 Mate에서 보세요.`);
         return;
       }
+      case "history": {
+        // 앱에서 나눈 말도 함께 보여 준다. 같은 Pi 세션이라 이어서 말하면 앞의 맥락을 기억한다
+        for (const part of historyMessages(await readChat(this.paths.chat), command.count)) await say(part);
+        return;
+      }
       case "chat":
       case "new": {
         // 대화는 Mate 대화 담당이 한 번에 하나씩 답한다. 답은 대화 줄로 생겨 바로 보낸다
@@ -326,7 +341,10 @@ export class TelegramRemote {
     for (const item of fresh.reverse().slice(0, MAX_SEND_PER_CYCLE)) await this.sendItem(item, names, config, chatId);
   }
 
-  /** 아직 보내지 않은 대화 줄(휴대폰 대화의 답·Mate 질문)을 보낸다. 질문은 조용한 시간을 지킨다 */
+  /**
+   * 아직 보내지 않은 대화 줄(휴대폰 대화의 답·Mate 질문, 설정했으면 앱 대화)을 보낸다.
+   * 질문은 조용한 시간을 지킨다. 앱 대화는 조용한 시간이면 보내지 않고 건너뛴다 (끝난 뒤 한꺼번에 쏟아지지 않게).
+   */
   flushChat(): Promise<void> {
     this.sending = this.sending.then(() => this.sendChatLines()).catch((error: Error) => this.log(`telegram chat send error ${error.message}`));
     return this.sending;
@@ -338,17 +356,23 @@ export class TelegramRemote {
     const lines = await readChat(this.paths.chat);
     const answered = new Set(lines.filter((l) => l.answerTo).map((l) => l.answerTo));
     const quiet = inQuietHours(config.telegram.quiet, this.now());
+    const mirrored = (l: ChatLine) => mirroredAppLine(l, config.telegram);
     const todo = lines.filter(
       (l) =>
-        chatLineForPhone(l) &&
+        (chatLineForPhone(l) || mirrored(l)) &&
         l.at >= (state.pairedAt ?? 0) &&
         !state.chatSent[l.id] &&
-        !(l.kind === "question" && (answered.has(l.id) || quiet || l.source === "app")),
+        !(l.kind === "question" && (answered.has(l.id) || quiet || (l.source === "app" && !mirrored(l)))),
     );
     if (todo.length === 0) return;
     const map = { ...state.chatSent };
     for (const line of todo.slice(0, MAX_SEND_PER_CYCLE)) {
-      const text = line.kind === "question" ? `❓ ${safe(line.text, 1500)}` : safe(line.text, 3500);
+      if (quiet && mirrored(line)) {
+        // 보낸 것으로 쳐서 다시 보내지 않는다 (message_id 0: 실제로는 보내지 않음)
+        map[line.id] = { messageId: 0, at: this.now() };
+        continue;
+      }
+      const text = mirrored(line) ? mirrorText(line) : line.kind === "question" ? `❓ ${safe(line.text, 1500)}` : safe(line.text, 3500);
       const sent = await this.api.sendMessage(state.chatId, text, line.kind === "question" && line.options?.length ? optionButtons(line.id, line.options) : undefined);
       map[line.id] = { messageId: sent.message_id, at: this.now() };
     }
