@@ -142,12 +142,16 @@ describe("실행기 + 실제 Pi", () => {
       found = (await listRuns(paths)).find(match);
     }
     if (found) return found;
-    const diagnostics = [
+    throw new Error(`실행 기록을 기다리다 시간이 지났습니다\n${await diagnostics()}`);
+  }
+
+  /** 분리된 실행기의 로그·실행 기록·상태 (실패 메시지에 붙인다) */
+  async function diagnostics(): Promise<string> {
+    return [
       await readFile(paths.log, "utf8").catch(() => "(로그 없음)"),
       JSON.stringify(await listRuns(paths), null, 1),
       await readFile(paths.state, "utf8").catch(() => "(상태 없음)"),
     ].join("\n---\n");
-    throw new Error(`실행 기록을 기다리다 시간이 지났습니다\n${diagnostics}`);
   }
 
   it("상주 실행기가 지금 실행 요청을 처리하고, 두 번 띄워도 하나만 돈다", async () => {
@@ -162,8 +166,8 @@ describe("실행기 + 실제 Pi", () => {
 
     await stopRunner(first.pid);
     expect(isAlive(first.pid)).toBe(false);
-    // pid 파일이 남아도 죽은 pid라 다음 start가 새로 띄운다
-    expect(isAlive(await readPid(paths))).toBe(false);
+    // stop은 pid 파일까지 지운다. 남기면 그 pid가 다른 프로세스에 재사용됐을 때 다음 start가 실행기를 띄우지 않는다
+    expect(await readPid(paths)).toBeUndefined();
   });
 
   it("act: 작업 공간에서 고친 것은 승인 대기로 올라가고, 적용해야 내 폴더에 들어온다", async () => {
@@ -213,9 +217,14 @@ describe("실행기 + 실제 Pi", () => {
     const runner = await start();
     try {
       // 느린 Windows CI에서는 실행기 시작(WMI)과 첫 git 확인이 10초를 넘기도 해 넉넉히 기다린다
-      for (let i = 0; i < 300 && !(await loadState(paths)).duties.repo?.watch?.signature; i++) await new Promise((r) => setTimeout(r, 100));
-      const baseline = (await loadState(paths)).duties.repo?.watch?.signature;
-      expect(baseline, baseline ? "" : await readFile(paths.log, "utf8").catch(() => "(로그 없음)")).toMatch(/^main@/);
+      let baseline: string | undefined;
+      for (const end = Date.now() + 30_000; !baseline && Date.now() < end; ) {
+        await new Promise((r) => setTimeout(r, 100));
+        baseline = (await loadState(paths)).duties.repo?.watch?.signature;
+      }
+      // toMatch(undefined)는 메시지 없이 TypeError로 끝나므로, 기준이 없으면 진단을 붙여 먼저 실패시킨다
+      if (!baseline) throw new Error(`git 기준을 기다리다 시간이 지났습니다 (start 결과 ${JSON.stringify(runner)})\n${await diagnostics()}`);
+      expect(baseline).toMatch(/^main@/);
       expect((await listRuns(paths)).some((r) => r.dutyId === "repo")).toBe(false);
 
       await git("commit", "-q", "--allow-empty", "-m", "second");

@@ -405,6 +405,25 @@ export async function releasePid(paths: MatePaths): Promise<void> {
   if ((await readPid(paths)) === process.pid) await rm(paths.pid, { force: true });
 }
 
+/**
+ * 실행기를 끝내고, 끝난 것을 확인하면 pid 파일을 지운다. 끝났으면 true.
+ * Windows의 kill은 강제 종료라 실행기가 releasePid를 못 하고 pid 파일이 남는다.
+ * 남은 pid가 다른 프로세스에 재사용되면 다음 start·acquirePid가 그 프로세스를 실행기로 알고
+ * 새 실행기를 띄우지 않는다 (start는 "started"라 답하지만 아무 실행기도 돌지 않음).
+ */
+export async function killRunner(paths: MatePaths, pid: number, waitMs = 5_000): Promise<boolean> {
+  try {
+    process.kill(pid);
+  } catch {
+    // 이미 끝남
+  }
+  for (const end = Date.now() + waitMs; isAlive(pid) && Date.now() < end; ) await new Promise((r) => setTimeout(r, 100));
+  if (isAlive(pid)) return false;
+  // 그사이 새 실행기가 자기 pid를 썼으면 건드리지 않는다
+  if ((await readPid(paths)) === pid) await rm(paths.pid, { force: true });
+  return true;
+}
+
 export async function fileHash(path: string): Promise<string> {
   return createHash("sha256").update(await readFile(path)).digest("hex").slice(0, 16);
 }

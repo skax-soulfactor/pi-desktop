@@ -8,7 +8,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { locatePi } from "../../host-agent/src/pi-locator";
 import { spawnDaemon } from "../../host-agent/src/spawn-daemon";
-import { acquirePid, fileHash, isAlive, log, readPid, releasePid, Runner, runDuty, type RunnerOptions } from "./daemon";
+import { acquirePid, fileHash, isAlive, killRunner, log, readPid, releasePid, Runner, runDuty, type RunnerOptions } from "./daemon";
 import type { PiLaunch } from "./executor";
 import { mateHome, matePaths } from "./paths";
 import { piReadiness } from "./pi-readiness";
@@ -48,12 +48,7 @@ async function start(): Promise<void> {
     }
     // 번들이 바뀌었고 도는 실행이 없으면 새 실행기로 바꾼다 (Host Agent의 데몬 교체와 같은 이유)
     await log(paths, `runner replace pid=${pid} build=${state.build}→${build}`);
-    try {
-      process.kill(pid!);
-    } catch {
-      // 이미 끝남
-    }
-    await waitFor(async () => !isAlive(pid), 5_000);
+    await killRunner(paths, pid!);
   }
   await spawnDaemon(script, process.env);
   const started = await waitFor(async () => isAlive(await readPid(paths)), 10_000);
@@ -77,7 +72,7 @@ async function daemon(): Promise<void> {
 
 async function stop(): Promise<void> {
   const pid = await readPid(paths);
-  if (isAlive(pid)) process.kill(pid!);
+  if (isAlive(pid)) await killRunner(paths, pid!);
   console.log(JSON.stringify({ status: "stopped", pid }));
 }
 
