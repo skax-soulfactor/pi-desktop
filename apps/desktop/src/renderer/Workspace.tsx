@@ -106,6 +106,8 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     follow,
     pendingOpen,
     cancelPendingOpen,
+    missingCwdOpen,
+    cancelMissingCwdOpen,
     stopFollow,
     handOffToTui,
     closeSession,
@@ -357,7 +359,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
 
   // 탭 표시와 백그라운드 알림을 위해 상태를 알린다.
   const statusTitle = ui.title ?? sessionInfo.info.sessionName ?? session?.title ?? follow?.title ?? (session ? baseName(session.cwd) : follow ? baseName(follow.cwd) : "새 탭");
-  const needsInput = ui.dialogs.length > 0 || externalWrite || Boolean(pendingOpen);
+  const needsInput = ui.dialogs.length > 0 || externalWrite || Boolean(pendingOpen) || Boolean(missingCwdOpen);
   const disconnected = connection.status === "disconnected";
   const hostLabel = host?.label ?? hostId;
   useEffect(() => {
@@ -1273,6 +1275,26 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         >
           이 세션 파일은 {formatRelative(pendingOpen.modified)} 수정되었고, 이 앱이 쓰고 있는 파일이 아닙니다. 터미널의 Pi(TUI)
           등에서 열려 있다면 같은 파일에 함께 쓸 때 기록이 꼬일 수 있습니다.
+        </ChoiceDialog>
+      )}
+      {missingCwdOpen && (
+        <ChoiceDialog
+          title="이 세션의 작업 폴더가 없습니다"
+          onCancel={cancelMissingCwdOpen}
+          choices={[
+            {
+              label: "폴더를 다시 만들고 이어 쓰기",
+              kind: "primary",
+              onSelect: () => void guard(() => openStored(missingCwdOpen, "recreate")),
+            },
+            { label: "홈 폴더에서 분기해 이어 쓰기", onSelect: () => void guard(() => openStored(missingCwdOpen, "fork-home")) },
+            { label: "읽기 전용으로 보기", onSelect: () => void guard(() => openStored(missingCwdOpen, "follow")) },
+          ]}
+        >
+          <code>{missingCwdOpen.cwd}</code> 폴더가 지워져 Pi가 이 세션을 그대로 열 수 없습니다. WSL을 다시 시작하면 비워지는 /tmp
+          아래에서 만든 세션에서 자주 생깁니다. 대화 기록은 세션 파일에 그대로 있습니다.
+          {"\n"}폴더를 다시 만들면 빈 폴더로 생기므로, 그 안에 있던 파일은 돌아오지 않습니다. 분기하면 원래 파일은 그대로 두고 홈
+          폴더에서 새 세션으로 이어 갑니다.
         </ChoiceDialog>
       )}
       {trustAsk && (

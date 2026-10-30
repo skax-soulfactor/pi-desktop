@@ -80,7 +80,12 @@ export interface FollowState {
 }
 
 /** 저장된 세션을 여는 방식 (openStored 참고) */
-export type OpenMode = "auto" | "follow" | "fork" | "open";
+export type OpenMode = "auto" | "follow" | "fork" | "open" | "recreate" | "fork-home";
+
+/** 데몬이 작업 폴더가 없어 세션을 열지 못했다는 오류인지 (cwdMissing 표시가 없는 예전 데몬·목록을 위해) */
+function isMissingCwdError(error: unknown): boolean {
+  return /작업 폴더를 찾을 수 없습니다|Stored session working directory does not exist/.test(error instanceof Error ? error.message : String(error));
+}
 
 /**
  * 이 시간 안에 수정된 세션 파일은 다른 곳(TUI 등)에서 쓰는 중일 수 있다고 본다.
@@ -170,6 +175,8 @@ export function useSession(tabId: string = MAIN_TAB) {
   const [lost, setLost] = useState<LostSession | undefined>();
   const [follow, setFollow] = useState<FollowState | undefined>();
   const [pendingOpen, setPendingOpen] = useState<StoredSession | undefined>();
+  /** 작업 폴더가 지워져 그대로 열 수 없는 세션. 열 방법(폴더 다시 만들기·홈에서 분기·읽기 전용)을 묻는 중 */
+  const [missingCwdOpen, setMissingCwdOpen] = useState<StoredSession | undefined>();
   /** 보고 있는 세션의 입력 권한 (설계 §3.4). other면 다른 앱이 입력 중이라 읽기 전용 */
   const [writer, setWriter] = useState<WriterState>("you");
   /** 세션을 열기 전에 프로젝트 신뢰를 묻는 중이면 그 폴더의 상태와 답을 받을 함수 */
@@ -404,14 +411,21 @@ export function useSession(tabId: string = MAIN_TAB) {
    * - "auto"인데 파일이 최근에 수정됐고 이 데몬이 쓰는 파일이 아니면, 다른 곳(TUI 등)에서 쓰는 중일 수 있으므로
    *   바로 열지 않고 선택을 요청한다(pendingOpen). 같은 파일에 두 Pi가 함께 쓰면 기록이 꼬일 수 있다.
    * - "follow": 읽기 전용으로 따라가기, "fork": 그 파일에서 분기한 새 세션으로 열기, "open": 그래도 같은 파일로 열기
+   * - 작업 폴더가 지워졌으면(cwdMissing) Pi가 열지 못하므로 바로 열지 않고 방법을 묻는다(missingCwdOpen).
+   *   "recreate": 폴더를 다시 만들고 같은 파일로, "fork-home": 호스트의 홈 폴더에서 분기한 새 세션으로
    */
   const openStored = useCallback(
     async (stored: StoredSession, mode: OpenMode = "auto") => {
       setPendingOpen(undefined);
+      setMissingCwdOpen(undefined);
       const live = (await refreshSessions()).find((s) => s.state === "running" && s.sessionFile === stored.path);
-      if (live && mode !== "fork") {
+      if (live && mode !== "fork" && mode !== "fork-home") {
         stopFollow();
         await switchTo(live);
+        return;
+      }
+      if (stored.cwdMissing && (mode === "auto" || mode === "open" || mode === "fork")) {
+        setMissingCwdOpen(stored);
         return;
       }
       if (mode === "auto") {
@@ -425,10 +439,25 @@ export function useSession(tabId: string = MAIN_TAB) {
         await startFollow({ path: stored.path, cwd: stored.cwd, title: stored.name ?? stored.firstMessage });
         return;
       }
-      await exclusiveOpen(stored.cwd, async () => {
+      // 홈에서 분기할 때는 그 호스트의 홈 폴더를 데몬에게 묻는다 (WSL·SSH의 홈은 이 PC와 다르다).
+      const cwd = mode === "fork-home" ? (await api().listDir(hostRef.current)).home : stored.cwd;
+      await exclusiveOpen(cwd, async () => {
         stopFollow();
-        const request = mode === "fork" ? { cwd: stored.cwd, forkFrom: stored.path } : { cwd: stored.cwd, sessionFile: stored.path };
-        const created = await openWithTrust(request);
+        const request: OpenSessionRequest =
+          mode === "fork" || mode === "fork-home"
+            ? { cwd, forkFrom: stored.path }
+            : { cwd, sessionFile: stored.path, ...(mode === "recreate" ? { createCwd: true } : {}) };
+        let created: SessionSummary | undefined;
+        try {
+          created = await openWithTrust(request);
+        } catch (error) {
+          // 목록을 받은 뒤 폴더가 지워졌거나 예전 데몬이라 표시가 없었다: 오류 대신 열 방법을 묻는다.
+          if (mode !== "fork-home" && mode !== "recreate" && isMissingCwdError(error)) {
+            setMissingCwdOpen({ ...stored, cwdMissing: true });
+            return;
+          }
+          throw error;
+        }
         if (!created) return;
         await refreshSessions();
         await switchTo(created);
@@ -764,6 +793,9 @@ export function useSession(tabId: string = MAIN_TAB) {
     follow,
     pendingOpen,
     cancelPendingOpen: () => setPendingOpen(undefined),
+    /** 작업 폴더가 지워져 열 방법을 묻는 중인 세션 */
+    missingCwdOpen,
+    cancelMissingCwdOpen: () => setMissingCwdOpen(undefined),
     stopFollow,
     handOffToTui,
     closeSession,
