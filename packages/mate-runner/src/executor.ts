@@ -1,5 +1,7 @@
 import { spawn, execFile } from "node:child_process";
+import { resolve } from "node:path";
 import { ASK_TOOL, MATE_ENV, PROPOSE_TOOL, profileTools, type MateProfile } from "@pi-desktop/mate-kit";
+import { isolationArgs, isolationEnv } from "@pi-desktop/pi-isolation";
 import type { Duty } from "./types";
 
 /**
@@ -24,6 +26,10 @@ export interface RunInput {
   model: string;
   /** mate-kit 확장 진입 파일들 */
   extensions: string[];
+  /** Mate 홈. 스킬·프롬프트는 여기서만 올린다 (DESIGN-APPS.md §3.1) */
+  home: string;
+  /** pi-isolation 폴더 (isolationDirOf) */
+  isolationDir: string;
   inboxPath: string;
   sessionsDir: string;
   timeoutSec: number;
@@ -49,6 +55,11 @@ export interface RunOutcome {
   sessionId?: string;
   /** act: 인박스에 올린 변경의 파일 수 */
   changeFiles?: number;
+}
+
+/** pi-isolation 폴더. 개발 중(packages/)에도 설치본(resources/)에도 mate-kit 옆에 있다 */
+export function isolationDirOf(kitDir: string): string {
+  return resolve(kitDir, "..", "pi-isolation");
 }
 
 /** 모든 실행의 시스템 프롬프트 뒤에 붙이는 안내 */
@@ -85,7 +96,9 @@ export function piArgs(input: RunInput): string[] {
     "--session-dir", input.sessionsDir,
     // 대화는 같은 세션을 이어 써서 앞의 말을 기억한다
     ...(input.chat ? ["--session-id", input.chat.sessionId] : []),
-    ...input.extensions.flatMap((e) => ["-e", e]),
+    // Pi Desktop의 스킬·프롬프트·확장·사용자 지침이 끼어들지 않게 Mate 홈의 것만 올린다.
+    // MCP는 임무마다 고르게 되면(D2.5) 켠다. 그전까지는 올리지 않는다
+    ...isolationArgs({ home: input.home, isolationDir: input.isolationDir, extensions: input.extensions, mcp: false }),
     "--tools", profileTools(input.chat ? "chat" : duty.profile).join(","),
     // 모델을 정하지 않았으면 Pi 기본 모델(settings.json)을 따른다
     ...(input.model ? ["--model", input.model] : []),
@@ -96,6 +109,7 @@ export function piArgs(input: RunInput): string[] {
 
 export function piEnv(input: RunInput, profile: MateProfile): Record<string, string> {
   return {
+    ...isolationEnv(input.home),
     [MATE_ENV.profile]: input.chat ? "chat" : profile,
     ...(input.chatPath ? { [MATE_ENV.chat]: input.chatPath } : {}),
     ...(input.chat ? { [MATE_ENV.actions]: input.chat.actionsPath } : {}),

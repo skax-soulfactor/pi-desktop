@@ -29,6 +29,13 @@ extraResources:
       - package.json
       - extensions/**
       - src/**
+  # pi-isolation: 작업 폴더의 문맥 파일을 Pi와 같은 규칙으로 읽는 확장. mate-kit 옆에 두어야 실행기가 찾는다
+  - from: ../../packages/pi-isolation
+    to: pi-isolation
+    filter:
+      - package.json
+      - extensions/**
+      - src/**
   # Linux 창 아이콘 (실행 파일에 아이콘이 없어 창에 직접 준다)
   - from: build/icon.png
     to: icon.png
