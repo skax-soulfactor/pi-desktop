@@ -48,6 +48,7 @@ import {
   type SessionOpenParams,
   type SessionOpenResult,
   type SessionSummary,
+  type StoredDeleteResult,
   type StoredInspectResult,
   type StoredReadResult,
   type StoredSession,
@@ -234,6 +235,9 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     hostId === LOCAL_HOST_ID && process.env.PI_DESKTOP_PI_CLI ? { path, piCliPath: process.env.PI_DESKTOP_PI_CLI } : { path };
   handle(IpcChannels.inspectStored, (_event, hostId: string, path: string) =>
     conn(hostId).request<StoredInspectResult>(Methods.storedInspect, { path }),
+  );
+  handle(IpcChannels.deleteStored, (_event, hostId: string, path: string) =>
+    conn(hostId).request<StoredDeleteResult>(Methods.storedDelete, { path }),
   );
   handle(IpcChannels.readStored, (_event, hostId: string, path: string) =>
     conn(hostId).request<StoredReadResult>(Methods.storedRead, storedParams(hostId, path)),

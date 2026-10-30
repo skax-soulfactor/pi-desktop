@@ -3,6 +3,7 @@ import type {
   ProjectTrustInfo,
   SessionEventNotification,
   SessionSummary,
+  StoredDeleteResult,
   StoredSession,
   WriterState,
 } from "@pi-desktop/host-protocol/messages";
@@ -562,6 +563,27 @@ export function useSession(tabId: string = MAIN_TAB) {
   );
 
   /**
+   * 세션을 지운다: 그 파일로 실행 중인 Pi가 있으면 먼저 닫고(따라 보는 중이면 그만두고), 세션 파일을 데몬의
+   * 백업 폴더로 옮긴다. 바로 지우지 않으므로 잘못 지웠으면 결과의 backup을 원래 자리로 옮겨 되살린다.
+   */
+  const deleteStored = useCallback(
+    async (path: string): Promise<StoredDeleteResult> => {
+      for (const live of (await refreshSessions()).filter((s) => s.sessionFile === path)) await closeSession(live);
+      if (followRef.current?.path === path) {
+        leaveFollow();
+        dispatch({ type: "reset" });
+      }
+      const result = await api().deleteStored(hostRef.current, path);
+      // 지운 세션을 다음에 자동으로 다시 열지 않게 기억도 지운다.
+      if (readStorage<RememberedSession>(lastSessionKey(hostRef.current))?.sessionFile === path) writeStorage(lastSessionKey(hostRef.current), null);
+      setMissingCwdOpen(undefined);
+      setPendingOpen(undefined);
+      return result;
+    },
+    [refreshSessions, closeSession],
+  );
+
+  /**
    * 세션 새로고침: 보던 세션의 Pi를 끄고 같은 세션 파일로 다시 띄운다. 대화는 파일에서 다시 읽는다.
    * Pi는 시작할 때 모델·인증을 읽으므로, 로그인한 뒤 새 프로바이더의 모델을 쓰려면 이렇게 해야 한다(session-refresh.ts).
    * 메시지를 주고받기 전이라 파일이 없으면 같은 폴더에 새 세션을 연다(잃을 대화가 없다).
@@ -800,6 +822,7 @@ export function useSession(tabId: string = MAIN_TAB) {
     handOffToTui,
     closeSession,
     closeAllSessions,
+    deleteStored,
     restartSession,
     resumeFollowed,
     continueFollowedAsFork,

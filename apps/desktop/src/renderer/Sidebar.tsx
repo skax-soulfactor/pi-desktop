@@ -17,6 +17,8 @@ interface Props {
   onOpenStored: (stored: StoredSession) => void;
   /** 실행 중인 세션을 닫는다 (Pi 종료). 대화는 기록에 남는다 */
   onClose: (session: SessionSummary) => void;
+  /** 세션 파일을 지운다 (화면이 확인을 받은 뒤 백업 폴더로 옮김). 실행 중이면 닫은 뒤 지운다 */
+  onDelete: (target: { path: string; title: string; running: boolean }) => void;
   /** 보고 있는 세션의 이름 (get_state). 기록을 다시 읽기 전에도 바로 보이게 한다 */
   currentName?: string;
   /** 보고 있는 세션의 이름을 바꾼다. 실행 중인 세션만 바꿀 수 있다 */
@@ -36,9 +38,10 @@ interface Props {
  * - 검색: 두 목록을 이름·첫 메시지·폴더·파일 경로로 거른다
  * - 이름 변경: 보고 있는 실행 중 세션의 ✎ (set_session_name)
  * - 닫기: 실행 중 세션의 ✕. Pi를 끄고, 다시 쓰려면 기록에서 연다
+ * - 삭제: 🗑. 세션 파일을 지운다 (확인을 받고, 데몬의 백업 폴더로 옮겨 되살릴 수 있음)
  */
 export function Sidebar(props: Props) {
-  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, onClose, currentName, onRename, refreshKey, piMissing, onInstallPi } = props;
+  const { hostId, connected, sessions, current, disabled, onSelect, onOpenStored, onClose, onDelete, currentName, onRename, refreshKey, piMissing, onInstallPi } = props;
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<string | undefined>();
   const [scope, setScope] = useState<Scope>(() => {
@@ -210,6 +213,18 @@ export function Sidebar(props: Props) {
                   ✎
                 </button>
               )}
+              {s.sessionFile && (
+                <button
+                  type="button"
+                  className="delete-session-button"
+                  disabled={disabled}
+                  onClick={() => onDelete({ path: s.sessionFile!, title: liveTitle(s), running: s.state === "running" })}
+                  title="세션 삭제 (Pi를 닫고 대화 기록 파일을 지웁니다. 백업 폴더로 옮겨 되살릴 수 있습니다)"
+                  aria-label="세션 삭제"
+                >
+                  🗑
+                </button>
+              )}
               <button
                 type="button"
                 className="close-session-button"
@@ -260,24 +275,36 @@ export function Sidebar(props: Props) {
         )}
         {shownHistory.map((h) => {
           const open = liveFiles.has(h.path);
+          const title = h.name ?? (h.firstMessage || "(빈 세션)");
           return (
-            <button
-              key={h.path}
-              type="button"
-              className={`session-item${h.path === current?.sessionFile ? " current" : ""}`}
-              disabled={disabled}
-              onClick={() => onOpenStored(h)}
-              title={h.cwdMissing ? `${h.path}\n작업 폴더가 없습니다: ${h.cwd}` : h.path}
-            >
-              <span className="session-name">{h.name ?? (h.firstMessage || "(빈 세션)")}</span>
-              <span className="session-meta-line">
-                {formatRelative(h.modified)} · 메시지 {h.messageCount}
-                {!folder && ` · ${baseName(h.cwd)}`}
-                {h.parentSessionPath && " · 분기"}
-                {open && " · 열려 있음"}
-                {h.cwdMissing && <span className="session-missing"> · 폴더 없음</span>}
-              </span>
-            </button>
+            <div key={h.path} className="session-row history-row">
+              <button
+                type="button"
+                className={`session-item${h.path === current?.sessionFile ? " current" : ""}`}
+                disabled={disabled}
+                onClick={() => onOpenStored(h)}
+                title={h.cwdMissing ? `${h.path}\n작업 폴더가 없습니다: ${h.cwd}` : h.path}
+              >
+                <span className="session-name">{title}</span>
+                <span className="session-meta-line">
+                  {formatRelative(h.modified)} · 메시지 {h.messageCount}
+                  {!folder && ` · ${baseName(h.cwd)}`}
+                  {h.parentSessionPath && " · 분기"}
+                  {open && " · 열려 있음"}
+                  {h.cwdMissing && <span className="session-missing"> · 폴더 없음</span>}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="delete-session-button"
+                disabled={disabled}
+                onClick={() => onDelete({ path: h.path, title, running: open })}
+                title="세션 삭제 (대화 기록 파일을 지웁니다. 백업 폴더로 옮겨 되살릴 수 있습니다)"
+                aria-label="세션 삭제"
+              >
+                🗑
+              </button>
+            </div>
           );
         })}
       </section>

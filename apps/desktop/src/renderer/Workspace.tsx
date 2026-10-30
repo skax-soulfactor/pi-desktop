@@ -112,6 +112,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     handOffToTui,
     closeSession,
     closeAllSessions,
+    deleteStored,
     restartSession,
     resumeFollowed,
     continueFollowedAsFork,
@@ -190,6 +191,19 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   const [palette, setPalette] = useState<{ history: StoredSession[]; query?: string } | undefined>();
   const root = useRef<HTMLDivElement>(null);
   const [handoffAsk, setHandoffAsk] = useState(false);
+  /** 지울지 확인을 묻는 세션 (사이드바 🗑, 폴더가 지워진 세션의 "세션 삭제") */
+  const [deleteAsk, setDeleteAsk] = useState<{ path: string; title: string; running: boolean }>();
+  const confirmDelete = (target: { path: string; title: string; running: boolean }) =>
+    void guard(async () => {
+      setDeleteAsk(undefined);
+      const result = await deleteStored(target.path);
+      setHistoryRefresh((n) => n + 1);
+      setInfo(
+        result.backup
+          ? `"${target.title}" 세션을 지웠습니다. 되살리려면 이 파일을 원래 자리로 옮기세요.\n백업: ${result.backup}\n원래 자리: ${target.path}`
+          : `"${target.title}" 세션을 닫았습니다. 아직 저장된 대화가 없어 지울 파일은 없었습니다.`,
+      );
+    });
   const [handoffCommand, setHandoffCommand] = useState<string | undefined>();
 
   const connected = connection.status === "connected";
@@ -1034,6 +1048,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           onSelect={(target) => void guard(() => switchTo(target))}
           onOpenStored={(stored) => void guard(() => openStored(stored))}
           onClose={(target) => void guard(() => closeSession(target))}
+          onDelete={setDeleteAsk}
           {...(piState.status ? { piMissing: !piState.status.pi } : piState.error ? { piMissing: false } : {})}
           onInstallPi={() => {
             setPiManagerTab("status");
@@ -1289,12 +1304,33 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
             },
             { label: "홈 폴더에서 분기해 이어 쓰기", onSelect: () => void guard(() => openStored(missingCwdOpen, "fork-home")) },
             { label: "읽기 전용으로 보기", onSelect: () => void guard(() => openStored(missingCwdOpen, "follow")) },
+            {
+              label: "세션 삭제",
+              kind: "danger",
+              onSelect: () => {
+                setDeleteAsk({ path: missingCwdOpen.path, title: missingCwdOpen.name ?? (missingCwdOpen.firstMessage || "(빈 세션)"), running: false });
+                cancelMissingCwdOpen();
+              },
+            },
           ]}
         >
           <code>{missingCwdOpen.cwd}</code> 폴더가 지워져 Pi가 이 세션을 그대로 열 수 없습니다. WSL을 다시 시작하면 비워지는 /tmp
           아래에서 만든 세션에서 자주 생깁니다. 대화 기록은 세션 파일에 그대로 있습니다.
           {"\n"}폴더를 다시 만들면 빈 폴더로 생기므로, 그 안에 있던 파일은 돌아오지 않습니다. 분기하면 원래 파일은 그대로 두고 홈
           폴더에서 새 세션으로 이어 갑니다.
+        </ChoiceDialog>
+      )}
+      {deleteAsk && (
+        <ChoiceDialog
+          title="세션을 삭제할까요?"
+          onCancel={() => setDeleteAsk(undefined)}
+          choices={[{ label: deleteAsk.running ? "닫고 삭제" : "삭제", kind: "danger", onSelect: () => confirmDelete(deleteAsk) }]}
+        >
+          <strong>{deleteAsk.title}</strong>
+          {"\n"}대화 기록 파일을 지웁니다.{deleteAsk.running ? " 실행 중인 Pi를 먼저 닫습니다." : ""} 바로 지우지 않고 이 호스트의 백업
+          폴더(~/.pi-desktop/session-backups)로 옮기므로, 잘못 지웠으면 되살릴 수 있습니다.
+          {"\n"}
+          <code>{deleteAsk.path}</code>
         </ChoiceDialog>
       )}
       {trustAsk && (
