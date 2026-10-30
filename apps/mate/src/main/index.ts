@@ -3,8 +3,10 @@ import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig, loadRemoteState, mateHome, matePaths, saveConfig, type ConfigPatch, type InboxStatus } from "@pi-desktop/mate-runner";
-import { IpcChannels, type DutyDraft, type McpCheckResult, type Overview, type PiReadiness, type PiSetupView, type RunnerView, type SkillInput } from "../shared/api";
+import { IpcChannels, type CurrentHost, type HostView, type DutyDraft, type McpCheckResult, type Overview, type PiReadiness, type PiSetupView, type RunnerView, type SkillInput } from "../shared/api";
 import { RunnerConnection, type RunnerConnectionState } from "./runner-connection";
+import { listWslDistros, LOCAL_HOST_ID, readHostChoice, SSH_PREFIX, SshHostStore, WSL_PREFIX, writeHostChoice, type SshHostConfig } from "@pi-desktop/host-deploy";
+import { prepareMateSsh, prepareMateWsl, type RemoteMate } from "./hosts";
 
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
 import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
@@ -78,17 +80,72 @@ const runnerStore: TelegramStore = {
   remoteState: () => call("remoteState"),
 };
 
+/**
+ * 지금 호스트 (설계 DESIGN-MATE-REMOTE.md §3.1). 한 번에 한 호스트(로컬·WSL·SSH)의 실행기에 붙는다.
+ * 원격이면 연결할 때 실행기 번들과 mate-kit·pi-isolation을 그 호스트에 올린다 (hosts.ts, host-deploy).
+ */
+const hostChoiceFile = () => join(app.getPath("userData"), "mate-host.json");
+let currentHostId = LOCAL_HOST_ID;
+/** 원격이면 그 호스트의 Mate 홈과 사용자 홈 (연결을 준비할 때 정해진다) */
+let remoteMate: RemoteMate | undefined;
+let sshHostStore: SshHostStore | undefined;
+const sshHosts = () => (sshHostStore ??= new SshHostStore(join(app.getPath("userData"), "ssh-hosts.json")));
+const isRemote = () => currentHostId !== LOCAL_HOST_ID;
+
+/** 이 PC에서만 되는 일. 원격이면 이유를 알린다 */
+function localOnly(what: string): void {
+  if (isRemote()) throw new Error(`${what}은(는) 원격 호스트에서는 할 수 없습니다 (이 PC의 Mate에서만 됩니다)`);
+}
+
+/** 원격 호스트의 휴대폰 연결은 D5-4에서 (토큰을 RPC로 넘겨 실행기 메모리에만 둔다) */
+function phoneLocalOnly(): void {
+  if (isRemote()) throw new Error("원격 호스트의 휴대폰 연결은 아직 지원하지 않습니다. 로컬 호스트에서 설정하세요");
+}
+
+async function launchFor(hostId: string) {
+  if (hostId === LOCAL_HOST_ID) {
+    const runtime = await resolveNodeRuntime();
+    remoteMate = undefined;
+    // 휴대폰 연결 토큰은 실행기를 띄울 때만 풀어서 넘긴다 (connect가 실행기를 띄우는 경우)
+    return {
+      command: runtime.command,
+      args: [runnerScript(), "connect"],
+      env: { ...process.env, ...runtime.env, ...runnerEnv(), ...(await telegramEnv(localStore)) },
+    };
+  }
+  const options = { runnerScript: runnerScript(), version: app.getVersion(), kitDir: kitDir() };
+  let prepared;
+  if (hostId.startsWith(WSL_PREFIX)) prepared = await prepareMateWsl(hostId.slice(WSL_PREFIX.length), options);
+  else if (hostId.startsWith(SSH_PREFIX)) {
+    const host = sshHosts().get(hostId.slice(SSH_PREFIX.length));
+    if (!host) throw new Error(`등록되지 않은 SSH 호스트입니다: ${hostId.slice(SSH_PREFIX.length)}`);
+    prepared = await prepareMateSsh(host, options);
+  } else throw new Error(`알 수 없는 호스트입니다: ${hostId}`);
+  remoteMate = prepared.remote;
+  return { command: prepared.spec.command, args: prepared.spec.args, env: { ...process.env, ...prepared.spec.env } };
+}
+
+/**
+ * 호스트를 바꾼다. 앞 호스트의 실행기는 그대로 두면 임무가 두 곳에서 같이 돌 수 있어, stopPrevious면 멈춘다 (DESIGN-MATE-REMOTE.md §3.1).
+ * 화면은 새로 읽는다.
+ */
+async function switchHost(hostId: string, stopPrevious: boolean): Promise<void> {
+  if (hostId === currentHostId) return;
+  if (hostId.startsWith(SSH_PREFIX) && !sshHosts().get(hostId.slice(SSH_PREFIX.length))) throw new Error("등록되지 않은 SSH 호스트입니다");
+  if (stopPrevious) await stopRunner().catch(() => undefined);
+  writeHostChoice(hostChoiceFile(), hostId);
+  currentHostId = hostId;
+  connection?.dispose();
+  lastOverview = undefined;
+  readinessCache = undefined;
+  startConnection();
+  mainWindow?.webContents.reload();
+}
+
 function startConnection(): void {
+  const hostId = currentHostId;
   connection = new RunnerConnection({
-    launch: async () => {
-      const runtime = await resolveNodeRuntime();
-      // 휴대폰 연결 토큰은 실행기를 띄울 때만 풀어서 넘긴다 (connect가 실행기를 띄우는 경우)
-      return {
-        command: runtime.command,
-        args: [runnerScript(), "connect"],
-        env: { ...process.env, ...runtime.env, ...runnerEnv(), ...(await telegramEnv(localStore)) },
-      };
-    },
+    launch: () => launchFor(hostId),
     onChanged: () => mainWindow?.webContents.send(IpcChannels.changed),
     onState: (state: RunnerConnectionState) => {
       runnerError = state.status === "disconnected" ? `실행기에 연결하지 못했습니다: ${state.reason}` : undefined;
@@ -98,9 +155,15 @@ function startConnection(): void {
   connection.start();
 }
 
+/** 지금 호스트의 실행기를 멈춘다. 로컬은 pid로(실행기가 멈춰 있어도 되게), 원격은 실행기에 멈추라고 한다 */
+async function stopRunner(): Promise<void> {
+  if (isRemote()) await call("stopRunner");
+  else await runnerCommand(runnerScript(), "stop", runnerEnv());
+}
+
 /** 실행기를 멈췄다가 다시 띄운다 (토큰이 바뀌어 환경 변수를 다시 넘겨야 할 때). 연결은 끊긴 뒤 다시 붙으며 새로 띄운다 */
 async function restartRunner(): Promise<void> {
-  await runnerCommand(runnerScript(), "stop", runnerEnv()).catch(() => undefined);
+  await stopRunner().catch(() => undefined);
 }
 
 /** 로그인할 때 실행: 창 없이 실행기만 확인한다 */
@@ -173,6 +236,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannels.skillSave, (_e, previous: string | undefined, input: SkillInput) => call("skillSave", previous, input));
   forward(IpcChannels.skillDelete, "skillDelete");
   ipcMain.handle(IpcChannels.skillOpenFolder, async () => {
+    localOnly("스킬 폴더 열기");
     await mkdir(paths.skills, { recursive: true });
     const error = await shell.openPath(paths.skills);
     if (error) throw new Error(error);
@@ -183,6 +247,7 @@ function registerIpc(): void {
   forward(IpcChannels.removeMcp, "mcpRemove");
   ipcMain.handle(IpcChannels.openMcpFile, async () => {
     const path = await call<string>("mcpEnsureFile");
+    localOnly("mcp.json 열기");
     const error = await shell.openPath(path);
     if (error) throw new Error(error);
   });
@@ -198,20 +263,42 @@ function registerIpc(): void {
     await restartRunner();
     return (await overview()).runner;
   });
-  ipcMain.handle(IpcChannels.revealHome, () => shell.openPath(paths.home));
+  ipcMain.handle(IpcChannels.revealHome, () => {
+    localOnly("데이터 폴더 열기");
+    return shell.openPath(paths.home);
+  });
+  // 호스트 (DESIGN-MATE-REMOTE.md §3.1): 고르기, SSH 호스트 관리, 그 호스트의 폴더 훑기
+  ipcMain.handle(IpcChannels.listHosts, async (): Promise<HostView[]> => [
+    { id: LOCAL_HOST_ID, kind: "local", label: process.platform === "win32" ? "로컬 (Windows)" : process.platform === "darwin" ? "로컬 (macOS)" : "로컬 (Linux)" },
+    ...(await listWslDistros()).map((d): HostView => ({ id: `${WSL_PREFIX}${d}`, kind: "wsl", label: `WSL: ${d}` })),
+    ...sshHosts().list().map((h): HostView => ({ id: `${SSH_PREFIX}${h.name}`, kind: "ssh", label: `SSH: ${h.name}` })),
+  ]);
+  ipcMain.handle(IpcChannels.currentHost, (): CurrentHost => ({ id: currentHostId, remote: isRemote(), ...(remoteMate ? { home: remoteMate.home, userHome: remoteMate.userHome } : {}) }));
+  ipcMain.handle(IpcChannels.setHost, (_e, hostId: string, stopPrevious: boolean) => switchHost(String(hostId), stopPrevious !== false));
+  ipcMain.handle(IpcChannels.listSshHosts, () => sshHosts().list());
+  ipcMain.handle(IpcChannels.saveSshHost, (_e, host: SshHostConfig, previousName?: string) => sshHosts().save(host, previousName));
+  ipcMain.handle(IpcChannels.removeSshHost, (_e, name: string) => {
+    if (currentHostId === `${SSH_PREFIX}${name}`) throw new Error("지금 쓰는 호스트입니다. 다른 호스트로 바꾼 뒤 지우세요");
+    sshHosts().remove(name);
+  });
+  forward(IpcChannels.listDir, "listDir");
+  forward(IpcChannels.makeDir, "makeDir");
   ipcMain.handle(IpcChannels.getAutostart, () => getAutostart());
   ipcMain.handle(IpcChannels.telegramView, () => telegramView(runnerStore));
   ipcMain.handle(IpcChannels.telegramSetToken, async (_e, token: string) => {
+    phoneLocalOnly();
     await saveTelegramToken(runnerStore, String(token));
     await restartRunner();
     return telegramView(runnerStore);
   });
   ipcMain.handle(IpcChannels.telegramRemove, async () => {
+    phoneLocalOnly();
     await removeTelegram(runnerStore);
     await restartRunner();
     return telegramView(runnerStore);
   });
   ipcMain.handle(IpcChannels.telegramPair, async () => {
+    phoneLocalOnly();
     await createPairingCode(runnerStore);
     return telegramView(runnerStore);
   });
@@ -219,14 +306,18 @@ function registerIpc(): void {
     await unpairTelegram(runnerStore);
     return telegramView(runnerStore);
   });
-  ipcMain.handle(IpcChannels.telegramTest, () => sendTelegramTest(runnerStore));
+  ipcMain.handle(IpcChannels.telegramTest, () => (phoneLocalOnly(), sendTelegramTest(runnerStore)));
   ipcMain.handle(IpcChannels.chatSend, (_e, text: string, answerTo?: string) => call("chatSend", String(text ?? ""), typeof answerTo === "string" ? answerTo : undefined));
   ipcMain.handle(IpcChannels.piReadiness, (_e, refresh: boolean) => readiness(refresh === true));
   ipcMain.handle(IpcChannels.installPiDesktop, () =>
     installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total)),
   );
   ipcMain.handle(IpcChannels.openPiDesktop, () => openPiDesktop());
-  ipcMain.handle(IpcChannels.setAutostart, (_e, enabled: boolean) => setAutostart(enabled === true));
+  ipcMain.handle(IpcChannels.setAutostart, (_e, enabled: boolean) => {
+    // 로그인할 때 시작은 이 PC의 실행기만 띄운다 (원격 실행기는 그 호스트에서 돈다, DESIGN-MATE-REMOTE.md §4)
+    localOnly("로그인할 때 실행기 시작");
+    return setAutostart(enabled === true);
+  });
   ipcMain.handle(IpcChannels.delegate, (_e, itemId: string) => call("delegate", String(itemId)));
   ipcMain.handle(IpcChannels.applyChange, (_e, itemId: string) => call("applyChange", String(itemId)));
   ipcMain.handle(IpcChannels.discardChange, (_e, itemId: string) => call("discardChange", String(itemId)));
@@ -274,6 +365,7 @@ if (isRunnerOnlyLaunch()) {
     mainWindow?.focus();
   });
   void app.whenReady().then(async () => {
+    currentHostId = readHostChoice(hostChoiceFile());
     registerIpc();
     createWindow();
     // 창을 먼저 띄우고 실행기에 붙는다. 실행기는 앱을 닫아도 남는다 (연결기만 끝난다)

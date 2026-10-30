@@ -21,6 +21,8 @@
   },
   "devDependencies": {
     "@pi-desktop/agent-kit": "*",
+    "@pi-desktop/host-deploy": "*",
+    "@pi-desktop/host-protocol": "*",
     "@pi-desktop/mate-kit": "*",
     "@pi-desktop/mate-runner": "*",
     "@pi-desktop/pi-isolation": "*",
