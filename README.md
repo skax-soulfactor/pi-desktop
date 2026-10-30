@@ -30,6 +30,7 @@ packages/
   agent-kit/            Agent의 기능 묶음. Pi 패키지(확장·스킬)라 터미널 pi에도 설치할 수 있음
   mate-kit/             Mate의 Pi 확장: 권한 단계 강제(mate-guard), 제안 도구(mate_propose)
   mate-runner/          Mate의 상주 실행기: 임무 시간표를 지키고 실행마다 pi --mode json을 띄움
+  pi-isolation/         Agent·Mate가 앱 홈의 세션·스킬·MCP·지침만 Pi에 올리는 실행 옵션과 확장
 docs/                   설계 문서와 개발 방식
 ```
 
