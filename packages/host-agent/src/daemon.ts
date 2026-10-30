@@ -88,6 +88,12 @@ import {
   type StoredPathParams,
   type StoredReadResult,
   type StoredSession,
+  type ArchiveSetParams,
+  type TrashEmptyParams,
+  type TrashEmptyResult,
+  type TrashItem,
+  type TrashRestoreParams,
+  type TrashRestoreResult,
 } from "@pi-desktop/host-protocol";
 import { agentHome, runDir, socketPath } from "./paths";
 import { locatePi } from "./pi-locator";
@@ -115,7 +121,8 @@ import { projectTrust, setProjectTrust, trustArgs, type TrustSdk } from "./trust
 import { createResourceFile, defaultPackagesRoot, readResourceFile, writeResourceFile } from "./resource-files";
 import { importResource } from "./resource-import";
 import { deleteResource, inspectImported, moveToBackup, readImported, type DeletableKind } from "./import-manage";
-import { deleteStoredSession } from "./stored-delete";
+import { emptyTrash, listTrash, moveToTrash, restoreFromTrash } from "./session-trash";
+import { loadArchive, setArchived } from "./session-archive";
 import { exportResource } from "./resource-export";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
@@ -610,12 +617,36 @@ export class AgentDaemon {
       if ([...this.sessions.values()].some((s) => s.isRunning && s.summary().sessionFile === path)) {
         throw new JsonRpcError(ErrorCodes.InvalidParams, "실행 중인 세션입니다. 먼저 닫은 뒤 지우세요");
       }
-      const backups = join(agentHome(this.env), "session-backups", "deleted");
-      const result = await deleteStoredSession(path, backups).catch((e: unknown) => {
-        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
-      });
+      const result = await moveToTrash(path, agentHome(this.env)).catch(invalidParams);
       if (result.backup) this.log(`세션 파일 삭제 ${path} → ${result.backup}`);
+      // 지운 세션은 아카이브에서도 뺀다 (되살리면 목록에 다시 보인다)
+      await setArchived(agentHome(this.env), path, false);
       return result;
+    });
+
+    // 휴지통 (설계 DESIGN-APPS.md §3.2). 예전 삭제가 남긴 백업은 Pi 기본 규칙으로 원래 자리를 계산한다
+    peer.handle(Methods.trashList, (): Promise<TrashItem[]> => listTrash(agentHome(this.env), agentDirOf(this.env)));
+
+    peer.handle(Methods.trashRestore, async (params): Promise<TrashRestoreResult> => {
+      const p = params as TrashRestoreParams | undefined;
+      if (!p?.id) throw new JsonRpcError(ErrorCodes.InvalidParams, "id가 필요합니다");
+      const path = await restoreFromTrash(agentHome(this.env), p.id, agentDirOf(this.env)).catch(invalidParams);
+      this.log(`휴지통에서 되살림 ${p.id} → ${path}`);
+      return { path };
+    });
+
+    peer.handle(Methods.trashEmpty, async (params): Promise<TrashEmptyResult> => {
+      const p = (params ?? {}) as TrashEmptyParams;
+      const removed = await emptyTrash(agentHome(this.env), p.ids).catch(invalidParams);
+      this.log(`휴지통 비움 ${removed}개`);
+      return { removed };
+    });
+
+    peer.handle(Methods.archiveSet, async (params): Promise<null> => {
+      const p = params as ArchiveSetParams | undefined;
+      if (!p?.path || typeof p.archived !== "boolean") throw new JsonRpcError(ErrorCodes.InvalidParams, "path와 archived가 필요합니다");
+      await setArchived(agentHome(this.env), p.path, p.archived);
+      return null;
     });
 
     peer.handle(Methods.storedRead, async (params): Promise<StoredReadResult> => {
@@ -694,7 +725,9 @@ export class AgentDaemon {
     peer.handle(Methods.sessionHistory, async (params): Promise<StoredSession[]> => {
       const p = (params ?? {}) as SessionHistoryParams;
       const pi = await locatePi({ piCliPath: p.piCliPath, env: this.env });
-      return listStoredSessions(await loadPiSdk(pi), p);
+      const [sessions, archive] = await Promise.all([listStoredSessions(await loadPiSdk(pi), p), loadArchive(agentHome(this.env))]);
+      for (const session of sessions) if (archive[session.path] !== undefined) session.archived = true;
+      return sessions;
     });
 
     peer.handle(Methods.sessionAttach, (params): SessionAttachResult => {
@@ -1074,6 +1107,11 @@ function requireProvider(params: unknown): string {
   const provider = (params as Partial<AuthProviderParams> | undefined)?.provider;
   if (!isProviderId(provider)) throw new JsonRpcError(ErrorCodes.InvalidParams, "올바른 프로바이더 ID가 필요합니다");
   return provider;
+}
+
+/** 파일 작업의 오류를 앱에 보일 수 있는 InvalidParams로 바꾼다 */
+function invalidParams(error: unknown): never {
+  throw new JsonRpcError(ErrorCodes.InvalidParams, error instanceof Error ? error.message : String(error));
 }
 
 function requirePath(params: unknown): StoredPathParams {
