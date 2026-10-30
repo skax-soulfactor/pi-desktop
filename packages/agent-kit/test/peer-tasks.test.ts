@@ -220,7 +220,8 @@ describe("피어 작업 맡기기 (실제 Pi)", () => {
 
     // 대화가 상대 상태를 확인해 끝난 것을 알면 [작업 알림]을 넣고 한 턴을 일으킨다
     let sent = "";
-    for (let i = 0; i < 400 && !sent.includes("[작업 알림]"); i++) {
+    // 도구 결과에도 "[작업 알림]"이라는 말이 있으므로 작업 이름까지 맞춰 기다린다
+    for (let i = 0; i < 400 && !sent.includes("[작업 알림] 정리"); i++) {
       await new Promise((r) => setTimeout(r, 100));
       sent = JSON.stringify(llm.requests.at(-1)?.messages ?? []);
     }
