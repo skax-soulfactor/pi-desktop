@@ -33,6 +33,8 @@ export interface RunInput {
   workspace?: { cwd: string; root: string };
   /** Mate 대화 기록 경로 (mate_ask가 질문을 남김) */
   chatPath?: string;
+  /** 허용 목록에 없어 막힌 명령을 mate-guard가 남길 파일. 실행이 끝나면 실행기가 읽어 허용을 묻는다 */
+  blockedPath?: string;
   /** 대화(chat): 권한 단계·시스템 안내·이어 쓸 세션을 바꾼다 (임무 실행에는 쓰지 않음) */
   chat?: { sessionId: string; systemPrompt: string; actionsPath: string };
 }
@@ -67,6 +69,10 @@ export function mateSystemPrompt(duty: Duty, cause?: string): string {
   if (duty.profile !== "observe") {
     lines.push(`- 사용자의 판단이 꼭 필요하면 ${ASK_TOOL}로 짧게 물어라 (선택지를 주면 버튼으로 답한다). 답을 기다리지 말고 할 수 있는 만큼만 하고 끝내라.`);
   }
+  if (duty.grants?.length) {
+    lines.push(`- 사용자가 이 임무에 bash로 ${duty.grants.join(", ")}을(를) 허용했다. 읽어 오는 데만 쓰고, 파일을 쓰거나 데이터를 보내지 마라.`);
+  }
+  lines.push("- 필요한 명령이 막히면 다른 명령으로 우회하지 마라. 사용자에게 허용을 요청해 두었으니, 무엇이 막혔는지 요약에 적고 끝내라.");
   if (cause) lines.push(`- 이번 실행은 변화를 감지해 시작했다: ${cause}. 바뀐 부분을 중심으로 살펴라.`);
   lines.push("- 마지막에 결과를 한국어로 두세 문장 요약하라.");
   return lines.join("\n");
@@ -98,6 +104,9 @@ export function piEnv(input: RunInput, profile: MateProfile): Record<string, str
     [MATE_ENV.runId]: input.runId,
     ...(input.workspace ? { [MATE_ENV.writeRoot]: input.workspace.root } : {}),
     ...(input.topic ? { [MATE_ENV.topic]: input.topic } : {}),
+    // 대화(chat)에는 임무의 허용 명령을 쓰지 않는다
+    ...(!input.chat && input.duty.grants?.length ? { [MATE_ENV.grants]: input.duty.grants.join(",") } : {}),
+    ...(input.blockedPath ? { [MATE_ENV.blocked]: input.blockedPath } : {}),
   };
 }
 

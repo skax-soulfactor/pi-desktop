@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
 import { appendFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { appendProposal, extensionEntries, makeProposal } from "@pi-desktop/mate-kit";
+import { appendChatQuestion, appendProposal, extensionEntries, makeProposal, PERMISSION_OPTIONS, readBlocked } from "@pi-desktop/mate-kit";
 import { runPi, type PiLaunch, type RunOutcome } from "./executor";
 import type { MatePaths } from "./paths";
 import { isDue, localDateKey } from "./schedule";
@@ -150,6 +150,7 @@ export async function runDuty(
   const exec = options.exec ?? execCommand;
   let outcome: RunOutcome;
   let workspace: Workspace | undefined;
+  const blockedPath = join(paths.runDir, "blocked", `${runId}.jsonl`);
   try {
     // act는 사용자 폴더 대신 별도 작업 공간에서 돈다
     if (duty.profile === "act") workspace = await prepareWorkspace(exec, duty.cwd, paths.worktrees, runId);
@@ -165,6 +166,7 @@ export async function runDuty(
         extensions,
         inboxPath: paths.inbox,
         chatPath: paths.chat,
+        blockedPath,
         sessionsDir: paths.sessions,
         timeoutSec: duty.timeoutSec ?? DEFAULT_TIMEOUT_SEC,
         maxCostUsd: duty.maxCostUsd ?? config.maxCostUsd,
@@ -186,12 +188,35 @@ export async function runDuty(
     if (await appendProposal(paths.inbox, item)) outcome.proposals += 1;
   }
 
+  await askPermission(paths, duty, runId, blockedPath, now()).catch((error: Error) => log(paths, `permission ask error ${error.message}`));
+
   const sessionFile = outcome.sessionId ? await findSessionFile(paths, outcome.sessionId) : undefined;
   const finished: RunRecord = { ...record, ...outcome, ...(sessionFile ? { sessionFile } : {}), endedAt: now() };
   await writeRun(paths, finished);
   await pruneRuns(paths);
   await log(paths, `run end ${runId} status=${finished.status}${finished.error ? ` error=${finished.error.split("\n")[0]}` : ""}`);
   return finished;
+}
+
+/**
+ * 실행 중에 허용 목록에 없어 막힌 명령이 있으면, 그 명령을 이 임무에 허용할지 대화로 묻는다 (설계 §4 "권한 요청").
+ * 질문은 앱 대화 탭과 휴대폰에 선택지 버튼으로 뜬다. "허용하고 다시 실행"을 누르면 대화 담당이
+ * 임무에 허용 명령을 더하고 다시 실행한다. 답하지 않은 같은 질문은 하루 안에 다시 묻지 않는다.
+ */
+export async function askPermission(paths: MatePaths, duty: Duty, runId: string, blockedPath: string, now: number): Promise<boolean> {
+  const blocked = await readBlocked(blockedPath);
+  await rm(blockedPath, { force: true });
+  const granted = new Set(duty.grants ?? []);
+  const examples = new Map<string, string>();
+  for (const b of blocked) if (!granted.has(b.name) && !examples.has(b.name)) examples.set(b.name, b.command);
+  if (examples.size === 0) return false;
+  const commands = [...examples.keys()].sort();
+  const text = [
+    `"${duty.name}" 임무가 허용되지 않은 명령을 쓰려다 막혔어요.`,
+    ...[...examples].map(([name, command]) => `• ${name}: ${command.split("\n")[0]!.slice(0, 160)}`),
+    `이 임무에서 ${commands.join(", ")}을(를) 허용할까요? 허용해도 이 임무에서만 쓰고, 파일 쓰기·데이터 보내기는 여전히 막아요.`,
+  ].join("\n");
+  return appendChatQuestion(paths.chat, { text, options: [...PERMISSION_OPTIONS], dutyId: duty.id, runId, cwd: duty.cwd, permission: { dutyId: duty.id, commands } }, now);
 }
 
 /**

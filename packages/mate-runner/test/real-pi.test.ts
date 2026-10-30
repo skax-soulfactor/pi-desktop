@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readInbox } from "@pi-desktop/mate-kit";
+import { readChat, readInbox } from "@pi-desktop/mate-kit";
 import { PI_CLI, setupRealPi, type RealPiFixture } from "../../host-agent/test/helpers/real-pi";
 import { isAlive, readPid } from "../src/daemon";
 import { matePaths, type MatePaths } from "../src/paths";
@@ -66,6 +66,22 @@ describe("실행기 + 실제 Pi", () => {
     await addDuty("brief", "observe", "오늘 요약");
     expect(await run("brief")).toMatchObject({ status: "done", summary: "echo: 오늘 요약", proposals: 1 });
     expect((await readInbox(paths.inbox)).find((i) => i.dutyId === "brief")).toMatchObject({ title: "임무 brief 결과", summary: "echo: 오늘 요약" });
+  });
+
+  it("허용 목록에 없는 명령은 허용을 묻고, 임무에 허용하면 다시 묻지 않는다 (지우기 명령은 묻지 않음)", async () => {
+    const questions = async (dutyId: string) => (await readChat(paths.chat)).filter((l) => l.permission?.dutyId === dutyId);
+    await addDuty("fetch", "observe", "bash:curl --version");
+    await run("fetch");
+    expect((await questions("fetch")).map((q) => q.permission!.commands)).toEqual([["curl"]]);
+
+    await saveDuty(paths, { id: "fetch", name: "임무 fetch", cwd: fixture.projectDir, prompt: "bash:curl --version", profile: "observe", trigger: { kind: "manual" }, grants: ["curl"] });
+    await run("fetch");
+    expect(await questions("fetch")).toHaveLength(1);
+
+    await addDuty("rm2", "observe", "bash:rm -f hello.txt");
+    await run("rm2");
+    expect(await questions("rm2")).toEqual([]);
+    expect(await readFile(join(fixture.projectDir, "hello.txt"), "utf8")).toBe("안녕 Pi\n");
   });
 
   it("허용 목록에 없는 bash와 선언되지 않은 쓰기 도구는 실행되지 않는다", async () => {

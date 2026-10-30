@@ -49,3 +49,36 @@ describe("checkCommand", () => {
     ok("grep -n '$(' src/a.sh");
   });
 });
+
+describe("checkCommand — 임무에 허용한 명령 (권한 요청)", () => {
+  it("허용 목록에 없을 뿐인 명령은 허용을 물을 수 있게 이름을 알려 준다", () => {
+    expect(checkCommand("curl -s https://hacker-news.firebaseio.com/v0/topstories.json")).toMatchObject({ allowed: false, grantable: "curl" });
+    // 쓰기 하위 명령이 있는 git·npm, 구조 때문에 막힌 것은 묻지 않는다
+    expect(checkCommand("git push")).not.toHaveProperty("grantable");
+    expect(checkCommand("npm install")).not.toHaveProperty("grantable");
+    expect(checkCommand("curl x > out.json")).not.toHaveProperty("grantable");
+    // 지우기·쓰기·셸은 묻지 않고, 허용 목록에 넣어도 통과하지 않는다
+    for (const c of ["rm -f a", "mv a b", "sed -i s/a/b/ f", "bash -c ls", "sudo ls"]) {
+      expect(checkCommand(c), c).not.toHaveProperty("grantable");
+      expect(checkCommand(c, ["rm", "mv", "sed", "bash", "sudo"]).allowed, c).toBe(false);
+    }
+  });
+
+  it("허용한 명령은 통과하지만, curl·wget은 읽어 오기만 된다", () => {
+    const grants = ["curl", "wget", "dig", "python"];
+    expect(checkCommand("curl -sL https://example.com | jq .", grants)).toEqual({ allowed: true });
+    expect(checkCommand("curl -s https://a | head -5 && ls", grants)).toEqual({ allowed: true });
+    for (const c of ["curl -o out.html https://a", "curl -sSo out https://a", "curl -d x=1 https://a", "curl -X POST https://a", "curl --data-binary @f https://a", "curl -T f https://a"]) {
+      expect(checkCommand(c, grants).allowed, c).toBe(false);
+    }
+    expect(checkCommand("wget -qO- https://a", grants)).toEqual({ allowed: true });
+    expect(checkCommand("wget https://a", grants).allowed).toBe(false);
+    expect(checkCommand("wget -qO- --post-data=x https://a", grants).allowed).toBe(false);
+    // 허용해도 리다이렉트·명령 치환은 막는다
+    expect(checkCommand("curl https://a > a.json", grants).allowed).toBe(false);
+    expect(checkCommand("dig +short example.com", grants)).toEqual({ allowed: true });
+    // 인터프리터는 허용 목록에 넣어도 통과하지 않는다
+    expect(checkCommand("python -c 1", grants).allowed).toBe(false);
+    expect(checkCommand("node -e 1", grants).allowed).toBe(false);
+  });
+});

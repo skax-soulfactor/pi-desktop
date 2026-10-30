@@ -1,7 +1,7 @@
 import { watch, type FSWatcher } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
-import { appendChat, extensionEntries, readChat, readChatActions, readInbox, type ChatLine } from "@pi-desktop/mate-kit";
+import { appendChat, extensionEntries, PERMISSION_OPTIONS, readChat, readChatActions, readInbox, type ChatLine } from "@pi-desktop/mate-kit";
 import { delegateInboxItem } from "../delegate";
 import { runPi as defaultRunPi, type PiLaunch } from "../executor";
 import type { MatePaths } from "../paths";
@@ -208,6 +208,7 @@ export class ChatAgent {
       await this.append({ role: "user", text: request.text, source: request.source, ...(request.answerTo ? { answerTo: request.answerTo } : {}) });
     }
     const text = request.text.trim();
+    if (request.answerTo && (await this.answerPermission(request))) return;
     if (text.startsWith("/")) {
       const command = parseCommand(text);
       if (command && command.kind !== "chat") {
@@ -218,6 +219,44 @@ export class ChatAgent {
       }
     }
     await this.think(request);
+  }
+
+  /**
+   * 막힌 명령의 허용 질문에 답했으면 모델을 거치지 않고 바로 처리한다 (설계 §4 "권한 요청").
+   * 허용하면 임무에 그 명령을 더하고 다시 실행하며, 끝나면 결과를 이 대화 출처로 알린다.
+   * @returns 처리했으면 true. 허용 질문이 아니거나 예·아니요로 읽을 수 없는 답이면 false (모델이 답한다)
+   */
+  private async answerPermission(request: ChatRequest): Promise<boolean> {
+    const { paths } = this.options;
+    const lines = await readChat(paths.chat);
+    const question = lines.find((l) => l.id === request.answerTo);
+    const permission = question?.permission;
+    if (!question || !permission) return false;
+    const text = request.text.trim();
+    const allow = text === PERMISSION_OPTIONS[0] || /^(예|네|응|허용(?!하지|\s*안)|(yes|y|ok)(\s|$))/i.test(text);
+    const deny = text === PERMISSION_OPTIONS[1] || /^(아니|아뇨|거절|허용하지|허용\s*안|(no|n)(\s|$))/i.test(text);
+    if (!allow && !deny) return false;
+    // 버튼을 두 번 눌렀거나 앱·휴대폰에서 함께 답했으면 처음 답만 따른다
+    if (lines.filter((l) => l.answerTo === question.id && l.role === "user").length > 1) {
+      await this.say(request.source, "이미 답한 질문이에요.", "notice");
+      return true;
+    }
+    if (deny) {
+      await this.say(request.source, `알겠어요. ${permission.commands.join(", ")}은(는) 허용하지 않았어요.`, "notice");
+      return true;
+    }
+    const duty = (await listDuties(paths)).find((d) => d.id === permission.dutyId);
+    if (!duty) {
+      await this.say(request.source, "그 임무가 이제 없어요.", "notice");
+      return true;
+    }
+    const grants = [...new Set([...(duty.grants ?? []), ...permission.commands])];
+    await saveDuty(paths, { ...duty, grants, updatedAt: this.now() });
+    await addRequest(paths, duty.id, this.now());
+    await this.track(duty.id, request.source);
+    this.options.log(`chat permission granted duty=${duty.id} commands=${permission.commands.join(",")}`);
+    await this.say(request.source, `✅ "${duty.name}" 임무에 ${permission.commands.join(", ")}을(를) 허용했어요. 다시 실행하고, 끝나면 알려 드릴게요.`, "notice");
+    return true;
   }
 
   async newConversation(source: ChatSource): Promise<void> {

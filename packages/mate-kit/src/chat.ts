@@ -38,7 +38,7 @@ export async function appendChat(path: string, line: Omit<ChatLine, "id" | "at">
 /** 아직 답하지 않은 같은 질문이 최근(하루)에 있으면 다시 묻지 않는다 */
 export async function appendChatQuestion(
   path: string,
-  q: { text: string; options?: string[]; dutyId?: string; runId?: string; cwd?: string },
+  q: { text: string; options?: string[]; dutyId?: string; runId?: string; cwd?: string; permission?: ChatLine["permission"] },
   now = Date.now(),
 ): Promise<boolean> {
   const lines = await readChat(path);

@@ -182,7 +182,30 @@ function DutyForm({
             <strong>{PROFILE_LABELS[p].name}</strong> <span className="muted">{PROFILE_LABELS[p].hint}</span>
           </label>
         ))}
-        <div className="muted small-text">보고·제안은 파일을 바꾸지 않습니다. 고치기도 내 작업 폴더는 적용 전까지 그대로입니다. bash는 어느 단계든 읽기 명령만 통과합니다.</div>
+        <div className="muted small-text">
+          보고·제안은 파일을 바꾸지 않습니다. 고치기도 내 작업 폴더는 적용 전까지 그대로입니다. bash는 어느 단계든 읽기 명령만 통과합니다. 다른 명령이
+          필요하면 실행한 뒤 Mate가 대화로 허용을 묻습니다.
+        </div>
+        {draft.grants?.length ? (
+          <div className="row">
+            <span className="muted">허용한 명령:</span>
+            {draft.grants.map((g) => (
+              <span key={g} className="badge">
+                <code>{g}</code>{" "}
+                <button
+                  className="small"
+                  title={`${g} 허용 빼기`}
+                  onClick={() => {
+                    const rest = draft.grants!.filter((x) => x !== g);
+                    set({ grants: rest.length ? rest : undefined });
+                  }}
+                >
+                  빼기
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
       </fieldset>
       <fieldset>
         <legend>언제</legend>

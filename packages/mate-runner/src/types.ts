@@ -39,6 +39,11 @@ export interface Duty {
   timeoutSec?: number;
   /** 없으면 Mate 설정의 실행당 비용 상한 */
   maxCostUsd?: number;
+  /**
+   * 사용자가 이 임무에 허용한 명령 이름 (예: curl). 읽기 전용 허용 목록에 더해 bash로 쓸 수 있다.
+   * 막힌 명령의 허용 질문에 "허용"으로 답하면 더해진다 (설계 DESIGN-MATE.md §4 "권한 요청")
+   */
+  grants?: string[];
   createdAt: number;
   updatedAt?: number;
 }
