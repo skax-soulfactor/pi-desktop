@@ -624,3 +624,20 @@ code.copy {
   font-size: 13px;
   margin-bottom: 6px;
 }
+
+/* 원격 폴더 고르기 (FolderPicker) */
+.folder-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.folder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  flex: 1;
+}
+.folder-list li {
+  padding: 2px 0;
+}

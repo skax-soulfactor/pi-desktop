@@ -3,6 +3,7 @@ import type { AutostartView, McpServerView, Overview, PiSetupView, UpdateState }
 import { ModelSelect } from "./PiSetup";
 import type { Act } from "./App";
 import { grantLabel, relativeTime } from "./mate-view";
+import { HostSettings } from "./HostSettings";
 
 /** Mate 전체 설정과 실행기 상태 */
 export function SettingsView({
@@ -38,6 +39,8 @@ export function SettingsView({
 
   return (
     <section className="form">
+      <HostSettings act={act} />
+
       <h2>실행</h2>
       <label className="radio">
         <input type="checkbox" checked={config.paused} onChange={() => void act(() => window.mate.saveConfig({ paused: !config.paused }))} />

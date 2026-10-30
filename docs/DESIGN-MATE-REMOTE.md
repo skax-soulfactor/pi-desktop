@@ -111,9 +111,9 @@ Agent의 `apps/agent/src/main/hosts.ts`(kit 모으기·올리기, WSL·SSH 준�
 
 | 단계 | 내용 | 비고 |
 |---|---|---|
-| **D5-1 실행기 RPC** | 실행기 소켓·`connect`, `mate.call` app-api, `mate.changed`. 앱은 로컬 실행기에 RPC로 붙고 파일 직접 읽기·`fs.watch`를 없앤다 | 동작은 지금과 같다. 가장 큰 리팩터링 |
+| **D5-1 실행기 RPC** | 실행기 소켓·`connect`, `mate.call` app-api, `mate.changed`. 앱은 로컬 실행기에 RPC로 붙고 파일 직접 읽기·`fs.watch`를 없앤다 | **완료**. 동작은 지금과 같다 |
 | **D5-2 공용 배포 패키지** | `packages/host-deploy`로 Agent의 원격 배포 코드를 옮긴다 (Agent 동작은 그대로) | **완료**. Agent vendor의 remote-agent·wsl·ssh·ssh-hosts를 없앴다 |
-| **D5-3 Mate 호스트 고르기** | 원격 배포(번들·kit), 설정의 호스트 고르기·SSH 호스트, 앞 실행기 멈추기, 원격 폴더 고르기, 로컬 전용 기능 안내 | D5-1·D5-2 뒤 |
+| **D5-3 Mate 호스트 고르기** | 원격 배포(번들·kit), 설정의 호스트 고르기·SSH 호스트, 앞 실행기 멈추기, 원격 폴더 고르기, 로컬 전용 기능 안내 | **완료**. 실제 WSL·SSH는 아직 확인하지 못했고, sh 흉내 통합 테스트로 확인 |
 | **D5-4 원격 텔레그램** | RPC로 토큰 넘기기, 메모리 보관, 다시 뜬 뒤 안내 | D5-3 뒤 |
 
 각 단계는 PR 하나 이상. D5-1이 끝나면 로컬 Mate가 지금과 똑같이 동작하는지(dev:mock, 실제 Pi) 확인한 뒤 다음으로 간다.

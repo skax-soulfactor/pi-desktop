@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { DutyDraft, DutyView, McpServerView, Overview, PiSetupView, SkillView } from "../shared/api";
 import { ModelSelect } from "./PiSetup";
+import { pickFolder } from "./folder-pick";
 import type { Act } from "./App";
 import {
   defaultTrigger,
@@ -173,7 +174,7 @@ function DutyForm({
           <input className="grow" value={draft.cwd} onChange={(e) => set({ cwd: e.target.value })} placeholder="Pi가 살펴볼 저장소 폴더" />
           <button
             onClick={async () => {
-              const dir = await window.mate.pickDirectory();
+              const dir = await pickFolder();
               if (dir) set({ cwd: dir });
             }}
           >
