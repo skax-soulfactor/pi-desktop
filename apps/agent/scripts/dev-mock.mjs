@@ -2,7 +2,8 @@
 //
 // 1. OpenAI 호환 mock LLM 서버를 고정 포트로 띄운다 (host-agent 테스트 fixture 재사용)
 // 2. 저장소의 Pi devDependency와, mock 프로바이더만 등록한 격리된 Pi 설정을 쓰도록 환경 변수를 정한다
-// 3. 데몬 홈은 Pi Desktop의 개발 실행과도 나눈다 (.dev/agent-home). Pi 설정은 같은 .dev/pi-agent를 함께 쓴다
+// 3. 앱 홈(데몬·세션·스킬·MCP·agent-kit 상태)은 Pi Desktop의 개발 실행과도 나눈다 (.dev/agent-home).
+//    Pi 설정(로그인·모델)은 같은 .dev/pi-agent를 함께 쓴다
 // 4. electron-vite dev를 실행한다
 //
 // mock-llm.ts는 Node 22.18+/24의 TypeScript 타입 제거 기능으로 바로 import한다.
@@ -42,7 +43,6 @@ const env = {
   PI_DESKTOP_PI_CLI: join(repo, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "bundle", "cli.js"),
   PI_DESKTOP_PI_ARGS: "--provider mock --model mock-model --tools read,bash,edit,write,grep,find,ls",
   PI_CODING_AGENT_DIR: piAgentDir,
-  PI_CODING_AGENT_SESSION_DIR: join(piAgentDir, "sessions"),
 };
 
 console.log(`[dev-mock] mock LLM: ${llm.baseUrl}`);
