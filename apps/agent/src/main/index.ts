@@ -1,8 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from "electron";
-import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -20,20 +19,11 @@ import {
   type TrashEmptyResult,
   type TrashItem,
 } from "@pi-desktop/host-protocol";
-import { isolatedPaths } from "@pi-desktop/pi-isolation";
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
-import { readSessionUsage, readUsageLog, summarizeUsage, rangeBuckets, type UsageRange } from "@pi-desktop/agent-kit/usage";
-import { loadEntries, memoryDir } from "@pi-desktop/agent-kit/memory";
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
-import { searchSessions } from "./history";
-import { approvePairing, checkPairings, forgetPeer, networkState, pairWith, previewPeer, rejectPairing, saveCard, setNetworkSettings, setPeerPolicy } from "./network";
-import { DEFAULT_PEER_PORT, type CardDraft, type PeerPolicy, type PeerSettings } from "@pi-desktop/agent-kit/peers";
-import { normalizeAddress } from "@pi-desktop/agent-kit/peers-protocol";
-import { approvePeerTask, rejectPeerTask } from "@pi-desktop/agent-kit/peer-tasks";
-import { generateCardDraft } from "@pi-desktop/agent-kit/card-draft";
-import { readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "@pi-desktop/pi-isolation/mcp-file";
-import { WEB_SEARCH_PRESETS, type McpCheckResult } from "@pi-desktop/pi-isolation/mcp-presets";
+import type { CardDraft } from "@pi-desktop/agent-kit/peers";
+import type { McpCheckResult } from "@pi-desktop/pi-isolation/mcp-presets";
 import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
 import { HostConnection, type LaunchSpec } from "../vendor/main/host-connection";
 import { SshHostStore } from "../vendor/main/ssh-hosts";
@@ -88,19 +78,6 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
   app.commandLine.appendSwitch("remote-debugging-port", process.env.PI_DESKTOP_REMOTE_DEBUG_PORT);
 }
 
-/** 앱 홈의 세션·스킬·MCP 위치 (pi-isolation과 같은 규칙) */
-const homePaths = () => isolatedPaths(agentHome());
-
-
-/**
- * agent-kit 상태 폴더 (agent-kit permissions/store.ts의 dataDir와 같은 규칙: 앱 홈의 data/).
- * 지금은 로컬 호스트만 다루므로 앱이 직접 읽는다 (DESIGN-APPS.md §4: D4에서 데몬 명령으로 옮긴다).
- */
-function agentDataDir(): string {
-  if (process.env.PI_DESKTOP_AGENT_DATA) return process.env.PI_DESKTOP_AGENT_DATA;
-  return join(agentHome(), "data");
-}
-
 /** 끝난 작업을 OS 알림으로 알린다. 창을 보고 있으면 목록이 바뀌는 것으로 충분하다 */
 function notifyTask(task: TaskRecord): void {
   if (!Notification.isSupported()) return;
@@ -141,9 +118,16 @@ function requirePaths(): HostPaths {
   return hostPaths;
 }
 
-/** 이 화면은 아직 이 PC의 데이터만 다룬다 (DESIGN-APPS.md §6 D4에서 데몬 명령으로 옮긴다) */
+/** 이 PC에서만 되는 일 (파일을 OS 프로그램으로 열기 등). 원격이면 이유를 알린다 */
 function localOnly(what: string): void {
-  if (hostPaths?.remote) throw new Error(`${what}은(는) 아직 원격 호스트에서 쓸 수 없습니다. 설정에서 호스트를 로컬로 바꾸면 쓸 수 있습니다`);
+  if (hostPaths?.remote) throw new Error(`${what}은(는) 원격 호스트에서는 할 수 없습니다 (이 PC에서만 열 수 있습니다)`);
+}
+
+/** 로컬 개발 실행의 덮어쓰기 (저장소의 Pi, 격리된 Pi 설정, mock 프로바이더). 원격 호스트에는 넘기지 않는다 */
+function piOverrides(): { piCliPath?: string; piArgs?: string[]; env?: Record<string, string> } {
+  if (hostPaths?.remote) return {};
+  const overrides = devSessionOverrides();
+  return { ...(overrides.piCliPath ? { piCliPath: overrides.piCliPath } : {}), ...(overrides.piArgs ? { piArgs: overrides.piArgs } : {}), ...(overrides.env ? { env: overrides.env } : {}) };
 }
 
 /** 데몬에 상주시키는 스케줄러 세션의 작업 폴더 (호스트마다 하나). 이 폴더로 연 세션이 있으면 이미 떠 있는 것으로 본다 */
@@ -305,66 +289,32 @@ function registerIpc(conn: () => HostConnection): void {
   forward(IpcChannels.listRules, "listRules");
   forward(IpcChannels.removeRule, "removeRule");
   forward(IpcChannels.listAudit, "listAudit");
-  const mcpFile = () => homePaths().mcp;
-  ipcMain.handle(IpcChannels.listMcp, async () => serverViews(await readMcpFile(mcpFile())));
-  ipcMain.handle(IpcChannels.addMcpPreset, (_event, id: string, key?: string) => {
-    const preset = WEB_SEARCH_PRESETS.find((p) => p.id === id);
-    if (!preset) throw new Error(`모르는 서버입니다: ${id}`);
-    return updateMcpFile(mcpFile(), (file) => withPreset(file, preset, key));
-  });
-  ipcMain.handle(IpcChannels.setMcpEnabled, (_event, name: string, enabled: boolean) => updateMcpFile(mcpFile(), (file) => withEnabled(file, name, enabled === true)));
-  ipcMain.handle(IpcChannels.removeMcp, (_event, name: string) => updateMcpFile(mcpFile(), (file) => withoutServer(file, name)));
+  // MCP·네트워크·사용량도 그 호스트의 데몬이 다룬다 (D4). Pi를 띄우는 것(연결 확인·카드 초안)도 그 호스트의 Pi로
+  forward(IpcChannels.listMcp, "mcpList");
+  forward(IpcChannels.addMcpPreset, "mcpAddPreset");
+  forward(IpcChannels.setMcpEnabled, "mcpSetEnabled");
+  forward(IpcChannels.removeMcp, "mcpRemove");
   ipcMain.handle(IpcChannels.openMcpFile, async () => {
-    const path = mcpFile();
-    // 없으면 빈 설정을 만들어 연다
-    await updateMcpFile(path, (file) => ({ mcpServers: {}, ...file }));
+    // 없으면 빈 설정을 만든다. 파일을 여는 것은 이 PC에서만 된다
+    const path = await agentCall<string>("mcpEnsureFile");
+    localOnly("mcp.json 열기");
     const error = await shell.openPath(path);
     if (error) throw new Error(error);
   });
-  ipcMain.handle(IpcChannels.checkMcp, async (): Promise<McpCheckResult> => {
-    localOnly("MCP 연결 확인");
-    // pi mcp list: 켜진 서버마다 연결해 상태·도구·오류를 찍고, 연결 안 된 것이 있으면 1로 끝난다 (세션 없이 돈다).
-    // pi mcp는 Pi 설정 폴더의 mcp.json만 읽으므로 이 실행에서만 설정 폴더를 앱 홈으로 바꾼다.
-    // 그래서 OAuth 로그인이 필요한 서버는 로그인 안 됨으로 보일 수 있다 (세션은 Pi의 mcp-auth.json을 쓴다, pi-isolation 참고)
-    const status = await conn().request<PiStatus>(Methods.piStatus);
-    if (!status.pi) throw new Error(status.piError ?? "Pi를 찾지 못했습니다");
-    const node = status.pi.nodePath ?? status.node.path;
-    await mkdir(agentHome(), { recursive: true });
-    return new Promise((resolve) => {
-      execFile(
-        node,
-        [status.pi!.cliPath, "mcp", "list"],
-        {
-          cwd: agentHome(),
-          env: { ...process.env, ...status.pi!.env, ...devSessionOverrides().env, PI_CODING_AGENT_DIR: agentHome() },
-          timeout: 120_000,
-          windowsHide: true,
-          maxBuffer: 4 * 1024 * 1024,
-        },
-        (error, stdout, stderr) => resolve({ ok: !error, output: `${stdout}${stderr ? `\n${stderr}` : ""}` }),
-      );
-    });
-  });
-  ipcMain.handle(IpcChannels.networkState, () => networkState(agentDataDir()));
-  ipcMain.handle(IpcChannels.setNetworkSettings, (_event, settings: PeerSettings) => setNetworkSettings(agentDataDir(), settings));
-  ipcMain.handle(IpcChannels.saveCard, (_event, card: CardDraft) => saveCard(agentDataDir(), card));
-  ipcMain.handle(IpcChannels.previewPeer, (_event, address: string) => previewPeer(normalizeAddress(address, DEFAULT_PEER_PORT)));
-  ipcMain.handle(IpcChannels.pairWith, async (_event, address: string) => {
-    await pairWith(agentDataDir(), normalizeAddress(address, DEFAULT_PEER_PORT));
-  });
-  ipcMain.handle(IpcChannels.checkPairings, () => checkPairings(agentDataDir()));
-  ipcMain.handle(IpcChannels.approvePairing, (_event, requestId: string) => approvePairing(agentDataDir(), requestId));
-  ipcMain.handle(IpcChannels.rejectPairing, (_event, requestId: string) => rejectPairing(agentDataDir(), requestId));
-  ipcMain.handle(IpcChannels.forgetPeer, (_event, id: string) => forgetPeer(agentDataDir(), id));
-  ipcMain.handle(IpcChannels.approvePeerTask, (_event, id: string, cwd: string) => approvePeerTask(agentDataDir(), id, cwd));
-  ipcMain.handle(IpcChannels.rejectPeerTask, (_event, id: string) => rejectPeerTask(agentDataDir(), id));
-  ipcMain.handle(IpcChannels.setPeerPolicy, (_event, id: string, policy: PeerPolicy) => setPeerPolicy(agentDataDir(), id, policy));
-  ipcMain.handle(IpcChannels.usageSummary, async (_event, range: UsageRange) => {
-    const now = new Date();
-    const { from } = rangeBuckets(range, now);
-    const [sessions, offSession] = await Promise.all([readSessionUsage(homePaths().sessions, from), readUsageLog(agentDataDir(), from)]);
-    return summarizeUsage([...sessions, ...offSession], range, now);
-  });
+  ipcMain.handle(IpcChannels.checkMcp, () => agentCall<McpCheckResult>("mcpCheck", piOverrides()));
+  forward(IpcChannels.networkState, "networkState");
+  forward(IpcChannels.setNetworkSettings, "setNetworkSettings");
+  forward(IpcChannels.saveCard, "saveCard");
+  forward(IpcChannels.previewPeer, "previewPeer");
+  forward(IpcChannels.pairWith, "pairWith");
+  forward(IpcChannels.checkPairings, "checkPairings");
+  forward(IpcChannels.approvePairing, "approvePairing");
+  forward(IpcChannels.rejectPairing, "rejectPairing");
+  forward(IpcChannels.forgetPeer, "forgetPeer");
+  forward(IpcChannels.approvePeerTask, "approvePeerTask");
+  forward(IpcChannels.rejectPeerTask, "rejectPeerTask");
+  forward(IpcChannels.setPeerPolicy, "setPeerPolicy");
+  forward(IpcChannels.usageSummary, "usageSummary");
   ipcMain.handle(IpcChannels.listSessions, async (): Promise<ChatSummary[]> => {
     if (!hostPaths) return [];
     const sessions = await conn().request<SessionSummary[]>(Methods.sessionList);
@@ -453,18 +403,9 @@ function registerIpc(conn: () => HostConnection): void {
   };
   ipcMain.handle(IpcChannels.listHistory, history);
   ipcMain.handle(IpcChannels.suggestCard, async (_event, current: CardDraft) => {
-    localOnly("카드 초안 만들기");
-    // 카드 초안: Pi를 한 번(--print, 도구·확장 없음) 불러 만든다. 재료는 사실·교훈 기억과 사용자가 붙인 대화 이름뿐
-    const status = await conn().request<PiStatus>(Methods.piStatus);
-    if (!status.pi) throw new Error(status.piError ?? "Pi를 찾지 못했습니다");
-    const memories = (await loadEntries(memoryDir(agentDataDir()))).map((m) => ({ type: m.type, title: m.title, tags: m.tags }));
-    const sessionNames = (await history().catch(() => [])).flatMap((h) => (h.name ? [h.name] : [])).slice(0, 50);
-    const cwd = await mkdtemp(join(tmpdir(), "agent-card-"));
-    return generateCardDraft(
-      { command: status.pi.nodePath ?? status.node.path, args: [status.pi.cliPath, ...(devSessionOverrides().piArgs ?? [])], env: { ...process.env, ...status.pi.env, ...devSessionOverrides().env } },
-      { memories, sessionNames, current },
-      cwd,
-    );
+    // 재료로 쓸 대화 이름은 그 호스트의 지난 대화에서
+    const sessionNames = (await history().catch(() => [])).flatMap((h) => (h.name ? [h.name] : []));
+    return agentCall("suggestCard", current, sessionNames, piOverrides());
   });
   // 아카이브·휴지통 (설계 DESIGN-APPS.md §3.2). 데몬 홈(~/.pi-desktop-agent)의 것이라 Pi Desktop과 섞이지 않는다
   ipcMain.handle(IpcChannels.deleteChat, async (_event, path: string) => {
@@ -482,11 +423,11 @@ function registerIpc(conn: () => HostConnection): void {
   ipcMain.handle(IpcChannels.emptyTrash, async (_event, ids?: string[]) =>
     (await conn().request<TrashEmptyResult>(Methods.trashEmpty, ids ? { ids } : {})).removed,
   );
-  ipcMain.handle(IpcChannels.searchHistory, async (_event, query: string) =>
-    // 본문 검색은 세션 파일을 이 PC에서 읽는다. 원격은 이름·첫 메시지로만 거른다 (D4)
-    hostPaths?.remote ? Promise.reject(new Error("원격 호스트에서는 아직 대화 내용까지 찾을 수 없습니다. 이름·첫 메시지로 걸러 주세요")) :
-    searchSessions((await history()).filter((s) => !s.archived), query, (path) => readFile(path, "utf8")),
-  );
+  ipcMain.handle(IpcChannels.searchHistory, async (_event, query: string) => {
+    // 본문은 그 호스트의 데몬이 읽는다 (아카이브한 대화는 찾지 않는다)
+    const items = (await history()).filter((s) => !s.archived).map((s) => ({ path: s.path, firstMessage: s.firstMessage, ...(s.name ? { name: s.name } : {}) }));
+    return agentCall("searchHistory", items, query);
+  });
   ipcMain.handle(IpcChannels.attachSession, async (_event, sessionId: string, lastSeq: number) => {
     // attach 도중 알림으로 온 이벤트도 결과에 담는다. 렌더러는 순번으로 중복을 거른다 (replay-collector.ts).
     const events = replays.begin(sessionId);

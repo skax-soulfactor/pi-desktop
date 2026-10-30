@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StoredSession } from "@pi-desktop/host-protocol";
-import { queryTerms, searchSessions, sessionText, snippetAround } from "../src/main/history";
+import { queryTerms, searchSessions, sessionText, snippetAround } from "../src/history-search";
 
 const jsonl = (...entries: unknown[]) => entries.map((e) => JSON.stringify(e)).join("\n");
 const message = (role: string, content: unknown) => ({ type: "message", message: { role, content } });

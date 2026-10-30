@@ -1,7 +1,10 @@
 import type { StoredSession } from "@pi-desktop/host-protocol";
 
+/** 검색에 쓰는 세션 정보 (지난 대화 목록의 한 줄) */
+export type SearchableSession = Pick<StoredSession, "path" | "name" | "firstMessage">;
+
 /**
- * 지난 대화 검색 (설계 DESIGN-AGENT.md §4 "지난 대화"). 목록은 데몬의 session.history(Pi SDK)가 주고,
+ * 지난 대화 검색 (설계 DESIGN-AGENT.md §4 "지난 대화"). 목록은 데몬의 session.history(Pi SDK)가 주고, 본문은 그 호스트의 데몬이 app-api로 읽는다 (D4).
  * 여기서는 세션 파일 본문(사용자·에이전트의 글)에서 검색어를 찾는다. 따로 색인을 만들지 않는다.
  * 파일 읽기는 밖에서 넘겨받아 테스트할 수 있게 한다.
  */
@@ -58,7 +61,7 @@ export function snippetAround(text: string, term: string, radius = 40): string {
 }
 
 /** 이름·첫 메시지·본문에서 검색어를 모두 담은 세션을 최근 순서 그대로 돌려준다 */
-export async function searchSessions(sessions: StoredSession[], query: string, read: (path: string) => Promise<string>): Promise<HistoryHit[]> {
+export async function searchSessions(sessions: SearchableSession[], query: string, read: (path: string) => Promise<string>): Promise<HistoryHit[]> {
   const terms = queryTerms(query);
   if (terms.length === 0) return [];
   const hits: HistoryHit[] = [];
