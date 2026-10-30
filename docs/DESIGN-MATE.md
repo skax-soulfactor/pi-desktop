@@ -142,8 +142,10 @@ Pi 세션을 `~/.pi/agent/sessions`가 아니라 Mate 홈에 두는 것은 백�
 | `observe` | read·grep·find·ls·bash | write·edit는 도구 목록에 아예 없음. bash는 허용 목록의 읽기 명령만(`mate-guard`) |
 | `propose` (기본) | observe + `mate_propose` | 같음. 제안은 인박스에만 쌓인다 |
 | `act` (고치기, M3) | propose + edit·write | write·edit는 작업 공간(worktree) 안만. bash는 같은 읽기 허용 목록이라 push·배포·삭제·설치는 못 한다 |
+| 모든 단계 (D2.5) | + 임무가 고른 MCP 서버의 도구 | 처음 쓰는 MCP 도구는 막고 허용을 묻는다 (아래 "권한 요청"). 허용한 도구만 통과 |
 
 - `--tools`로 도구 목록을 정하고(쓰기 도구는 선언조차 안 됨), `mate-guard` 확장이 `tool_call`에서 한 번 더 막는다.
+- 스킬·프롬프트·MCP 서버는 Mate 홈(`skills/`, `prompts/`, `mcp.json`)의 것만 쓰고 임무마다 고른다 (DESIGN-APPS.md §3.4). 스킬은 지침일 뿐 권한을 넓히지 않는다.
   Pi security.md가 말하듯 확장 hook은 보안 경계가 아니다. 이 단계는 "실수로 손대지 않게"하는 장치다. act는 여기에 더해 사용자 폴더 대신 별도 worktree에서 돌고, 적용 전까지 사용자 폴더를 바꾸지 않는다.
 - act의 쓰기 범위: Pi와 같이 `@`를 떼고 cwd 기준으로 풀어 작업 공간 안인지 본다. `~`(홈), 바깥, `.git` 안, 바깥을 가리키는 링크는 막는다.
 - bash 허용 목록: `git status/log/diff/show/branch/remote -v`, `gh pr|run|issue view|list|checks|status`, `ls/cat/head/tail/wc/grep/rg/find`(쓰기 옵션 제외), `npm ls/outdated/view`, `node -v` 등. 파이프는 각 단계가 모두 허용될 때만, 리다이렉트(`>`)·명령 치환은 막는다.
@@ -165,6 +167,7 @@ Pi 세션을 `~/.pi/agent/sessions`가 아니라 Mate 홈에 두는 것은 백�
 2. 실행이 끝나면 실행기가 아직 허용하지 않은 이름을 모아 대화에 질문을 남긴다 (`permission` 표시, 선택지 "허용하고 다시 실행"·"허용하지 않음"). 앱 대화 탭과 휴대폰에 버튼으로 뜬다. 답하지 않은 같은 질문은 하루 안에 다시 묻지 않는다.
 3. 답은 모델을 거치지 않고 대화 담당이 바로 처리한다. 허용하면 임무의 `grants`에 이름을 더하고 다시 실행하며, 끝나면 결과를 그 출처로 알린다. 처음 답만 따른다. 예·아니요로 읽을 수 없는 답("왜 필요해?")은 모델이 받는다.
 4. 다음 실행부터 mate-guard는 `grants`(`PI_DESKTOP_MATE_GRANTS`)의 명령도 통과시킨다. 그래도 리다이렉트·명령 치환은 막고, `curl`·`wget`은 파일 쓰기·데이터 보내기 옵션을 막아 읽어 오기만 하게 한다 (`wget`은 `-O-`로 화면에 받을 때만). 허용한 명령은 임무 고치기 화면에서 뺄 수 있다.
+5. **MCP 도구도 같은 흐름이다 (D2.5).** Mate는 MCP 도구가 읽기인지 쓰기인지 알 수 없으므로, 임무가 고른 서버의 도구라도 `grants`에 없으면 막고 `mcp__<서버>__<도구>` 이름으로 기록한다. 질문에는 서버·도구 이름과 도구 설명을 보여 주고, 허용하면 그 도구만 `grants`에 더한다 (서버 전체를 한 번에 허용하지 않는다). 질문이 길어지지 않게 한 번에 묻는 도구는 다섯 개까지다.
 
 ## 5. 인박스
 
