@@ -241,6 +241,20 @@ export function piSessionsDir(env: NodeJS.ProcessEnv = process.env): string {
   return env.PI_CODING_AGENT_SESSION_DIR || join(env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "sessions");
 }
 
+/** Agent의 앱 홈 (agent-kit home.ts와 같은 규칙) */
+export function agentHomeDir(env: NodeJS.ProcessEnv = process.env): string {
+  return env.PI_DESKTOP_AGENT_HOME || join(homedir(), ".pi-desktop-agent");
+}
+
+/**
+ * 관찰하는 세션 폴더 (설계 DESIGN-APPS.md §3.3): Pi Desktop·터미널 pi와 Agent. 읽기만 한다.
+ * Agent의 예약을 돌리는 스케줄러 세션처럼 앱 홈 안에서 연 세션은 사람의 작업이 아니므로 관찰에서 뺄 폴더로 돌려준다.
+ */
+export function observedSessions(env: NodeJS.ProcessEnv = process.env): { dirs: string[]; internal: string[] } {
+  const agentHome = agentHomeDir(env);
+  return { dirs: [piSessionsDir(env), join(agentHome, "sessions")], internal: [agentHome] };
+}
+
 /** 최근 바뀐 세션 파일 (sessions/<폴더>/<파일>.jsonl 또는 sessions/<파일>.jsonl) */
 export async function recentSessionFiles(dir: string, since: number): Promise<Array<{ path: string; mtime: number; size: number }>> {
   const out: Array<{ path: string; mtime: number; size: number }> = [];

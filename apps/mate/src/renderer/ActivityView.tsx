@@ -28,7 +28,7 @@ export function ActivityView({ overview, now, act }: { overview: Overview; now: 
       </label>
       <div className="muted small-text privacy">
         <div>
-          <strong>보는 것</strong>: Pi Desktop·터미널 Pi 세션 기록(요청, 고친 파일, 실패한 명령, 오류)과 최근 작업한 저장소의 git 상태.
+          <strong>보는 것</strong>: Pi Desktop·터미널 Pi·Pi Desktop Agent 세션 기록(요청, 고친 파일, 실패한 명령, 오류. 읽기만 함)과 최근 작업한 저장소의 git 상태.
         </div>
         <div>
           <strong>보지 않는 것</strong>: 화면, 키 입력, 다른 프로그램. 파일 내용·모델 답변은 기록하지 않고, 요청·명령은 앞부분만 남기며 비밀값처럼
@@ -99,7 +99,7 @@ export function ActivityView({ overview, now, act }: { overview: Overview; now: 
           <h2>최근 활동</h2>
           {view.activity.length === 0 && (
             <div className="muted small-text">
-              아직 기록이 없습니다. Pi Desktop이나 터미널 Pi로 작업하고 {observe.quietMinutes}분 쉬면 여기에 나타납니다.
+              아직 기록이 없습니다. Pi Desktop·터미널 Pi·Agent로 작업하고 {observe.quietMinutes}분 쉬면 여기에 나타납니다.
             </div>
           )}
           <ul className="cards">
