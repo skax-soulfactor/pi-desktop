@@ -139,6 +139,16 @@ export function ChatView({ overview, now, act }: { overview: Overview; now: numb
             <button className="small" title="앞의 대화를 잊고 새로 시작합니다" disabled={sending} onClick={() => void send("/new")}>
               새 대화
             </button>
+            <button
+              className="small"
+              title="지금까지의 대화 기록을 휴지통으로 옮깁니다 (휴지통 탭에서 되살릴 수 있음)"
+              disabled={sending || overview.chat.lines.length === 0}
+              onClick={() => {
+                if (confirm("대화 기록을 지울까요? 휴지통으로 옮겨져 되살릴 수 있고, 다음 말부터 새 대화가 됩니다.")) void act(() => window.mate.clearChat());
+              }}
+            >
+              기록 지우기
+            </button>
           </div>
         </div>
       </div>

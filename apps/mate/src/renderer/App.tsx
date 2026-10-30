@@ -9,8 +9,9 @@ import { InboxPanel } from "./InboxPanel";
 import { splitInbox, STATUS_LABELS } from "./mate-view";
 import { RunsView } from "./RunsView";
 import { SettingsView } from "./SettingsView";
+import { TrashView } from "./TrashView";
 
-type Tab = "chat" | "inbox" | "duties" | "activity" | "runs" | "phone" | "settings";
+type Tab = "chat" | "inbox" | "duties" | "activity" | "runs" | "trash" | "phone" | "settings";
 
 /** 화면 전체. Mate 홈의 파일이 바뀔 때마다(실행기·확장이 쓴 것 포함) 다시 읽는다 */
 export function App() {
@@ -104,6 +105,9 @@ export function App() {
           <button className={tab === "runs" ? "active" : ""} onClick={() => setTab("runs")}>
             실행 기록
           </button>
+          <button className={tab === "trash" ? "active" : ""} onClick={() => setTab("trash")}>
+            휴지통{overview.trash.length > 0 && <span className="count"> {overview.trash.length}</span>}
+          </button>
           <button className={tab === "phone" ? "active" : ""} onClick={() => setTab("phone")}>
             휴대폰{overview.config.telegram.enabled && overview.config.telegram.tokenEnc && <span className="count"> 연결</span>}
           </button>
@@ -149,7 +153,8 @@ export function App() {
         {tab === "inbox" && <InboxPanel overview={overview} now={now} act={act} />}
         {tab === "duties" && <DutiesView overview={overview} now={now} act={act} setup={setup} />}
         {tab === "activity" && <ActivityView overview={overview} now={now} act={act} />}
-        {tab === "runs" && <RunsView overview={overview} now={now} />}
+        {tab === "runs" && <RunsView overview={overview} now={now} act={act} />}
+        {tab === "trash" && <TrashView overview={overview} now={now} act={act} />}
         {tab === "phone" && (
           <section>
             <PhoneView overview={overview} act={act} />

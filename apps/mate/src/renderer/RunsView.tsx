@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Overview, RunRecord, TranscriptItem } from "../shared/api";
+import type { Act } from "./App";
 import { costLabel, durationLabel, PROFILE_LABELS, REASON_LABELS, relativeTime, STATUS_LABELS } from "./mate-view";
 
 /** 최근 실행 기록 (새것부터) */
-export function RunsView({ overview, now }: { overview: Overview; now: number }) {
+export function RunsView({ overview, now, act }: { overview: Overview; now: number; act: Act }) {
   const { runs, runner } = overview;
   const [viewing, setViewing] = useState<RunRecord>();
   const todayCost = costLabel(runner.today.costUsd);
@@ -20,7 +21,13 @@ export function RunsView({ overview, now }: { overview: Overview; now: number })
       {runs.length === 0 && <div className="empty">아직 실행 기록이 없습니다.</div>}
       <ul className="cards">
         {runs.map((run) => (
-          <RunRow key={run.id} run={run} now={now} onView={() => setViewing(run)} />
+          <RunRow
+            key={run.id}
+            run={run}
+            now={now}
+            onView={() => setViewing(run)}
+            onDelete={() => void act(() => window.mate.deleteRun(run.id))}
+          />
         ))}
       </ul>
       {viewing && <SessionPanel run={viewing} onClose={() => setViewing(undefined)} />}
@@ -28,7 +35,7 @@ export function RunsView({ overview, now }: { overview: Overview; now: number })
   );
 }
 
-function RunRow({ run, now, onView }: { run: RunRecord; now: number; onView: () => void }) {
+function RunRow({ run, now, onView, onDelete }: { run: RunRecord; now: number; onView: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
   const text = run.error ?? run.summary;
   return (
@@ -45,6 +52,11 @@ function RunRow({ run, now, onView }: { run: RunRecord; now: number; onView: () 
         {run.sessionId && run.status !== "running" && (
           <button className="small" onClick={onView}>
             세션 보기
+          </button>
+        )}
+        {run.status !== "running" && (
+          <button className="small" title="세션 파일과 함께 휴지통으로 옮깁니다 (휴지통 탭에서 되살릴 수 있음)" onClick={onDelete}>
+            🗑
           </button>
         )}
       </div>
