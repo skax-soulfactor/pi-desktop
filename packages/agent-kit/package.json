@@ -12,6 +12,7 @@
     ".": "./src/index.ts",
     "./constants": "./src/constants.ts",
     "./home": "./src/home.ts",
+    "./app-api": "./src/app-api.ts",
     "./approval": "./src/approval.ts",
     "./tasks": "./extensions/tasks/store.ts",
     "./task-types": "./extensions/tasks/types.ts",

@@ -83,5 +83,11 @@ describe.skipIf(process.platform === "win32" || !existsSync(agentScript))("원�
     expect(existsSync(join(home, ".pi-desktop"))).toBe(false);
     const stored = await connected.request<StoredSession[]>(Methods.sessionHistory, { sessionDir: sessionsDirFor(prepared.paths), piCliPath: PI_CLI });
     expect(stored).toHaveLength(1);
+
+    // 기억·스킬 같은 Agent 데이터도 그 호스트의 데몬이 그 Agent 홈에서 다룬다 (D4)
+    await connected.request(Methods.agentCall, { name: "kbSave", args: [undefined, { type: "user", title: "원격 기억", content: "그 호스트에 남는다", tags: [] }] });
+    expect(existsSync(join(home, ".pi-desktop-agent", "data", "memory"))).toBe(true);
+    const list = await connected.request<Array<{ title: string }>>(Methods.agentCall, { name: "kbList", args: [false] });
+    expect(list.map((e) => e.title)).toEqual(["원격 기억"]);
   }, 90_000);
 });

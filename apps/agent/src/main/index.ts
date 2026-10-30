@@ -20,32 +20,10 @@ import {
   type TrashEmptyResult,
   type TrashItem,
 } from "@pi-desktop/host-protocol";
-import { AGENT_HOME_ENV } from "@pi-desktop/agent-kit/home";
 import { isolatedPaths } from "@pi-desktop/pi-isolation";
-import { loadTasks, tasksDir } from "@pi-desktop/agent-kit/tasks";
-import { loadSchedules, schedulesPath, updateSchedules } from "@pi-desktop/agent-kit/schedules";
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
-import { loadElevationEnabled, saveElevationEnabled } from "@pi-desktop/agent-kit/elevation";
 import { readSessionUsage, readUsageLog, summarizeUsage, rangeBuckets, type UsageRange } from "@pi-desktop/agent-kit/usage";
-import {
-  bulkUpdate,
-  createEntry,
-  exportMarkdown,
-  knowledgeStats,
-  loadAutoLearn,
-  loadEntries,
-  markReviewed,
-  memoryDir,
-  mergeEntries,
-  needsReview,
-  saveAutoLearn,
-  updateEntry,
-  type BulkAction,
-  type EntryInput,
-} from "@pi-desktop/agent-kit/memory";
-import { buildKnowledgeSection } from "@pi-desktop/agent-kit/memory-recall";
-import { deleteSkill, listSkills, saveSkill, userSkillsDir, type SkillInput } from "@pi-desktop/agent-kit/skills";
-import { loadAudit, loadRules, removeRule } from "@pi-desktop/agent-kit/permissions";
+import { loadEntries, memoryDir } from "@pi-desktop/agent-kit/memory";
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
 import { searchSessions } from "./history";
@@ -66,7 +44,7 @@ import { schedulerDirFor, sessionParamsFor, sessionsDirFor } from "./host-sessio
 import { readHostChoice, writeHostChoice } from "./host-choice";
 import { resolveNodeRuntime } from "../vendor/main/node-runtime";
 import { ReplayCollector } from "../vendor/main/replay-collector";
-import { IpcChannels, type AttachResult, type ChatSummary, type CurrentHost, type HostView, type RuleView, type SessionSource, type ImageAttachment } from "../shared/api";
+import { IpcChannels, type AttachResult, type ChatSummary, type CurrentHost, type HostView, type SessionSource, type ImageAttachment } from "../shared/api";
 import { findPiDesktop, installPiDesktop, openPiDesktop } from "./pi-desktop";
 import type { PiSetupView } from "../shared/pi-setup";
 import { TaskWatcher } from "./task-watcher";
@@ -113,10 +91,6 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
 /** 앱 홈의 세션·스킬·MCP 위치 (pi-isolation과 같은 규칙) */
 const homePaths = () => isolatedPaths(agentHome());
 
-/** agent-kit이 앱 홈을 알도록 주는 환경. 앱이 직접 부르는 agent-kit 함수에도 같은 값을 준다 */
-function kitEnv(): NodeJS.ProcessEnv {
-  return { ...process.env, [AGENT_HOME_ENV]: agentHome() };
-}
 
 /**
  * agent-kit 상태 폴더 (agent-kit permissions/store.ts의 dataDir와 같은 규칙: 앱 홈의 data/).
@@ -294,57 +268,43 @@ function registerIpc(conn: () => HostConnection): void {
     const result = await installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total));
     return { status: result.status };
   });
-  // 지식베이스·승인 규칙은 agent-kit의 같은 함수로 같은 파일을 읽고 고친다 (사람이 직접 고쳐도 되는 파일)
-  const kb = () => memoryDir(agentDataDir());
-  // 스킬: 앱 홈의 skills/를 고친다. 지운 것은 agent-kit 상태 폴더의 skills-trash/로
-  const skillsDir = () => userSkillsDir(kitEnv());
-  ipcMain.handle(IpcChannels.skillsList, () => listSkills(kitEnv()));
-  ipcMain.handle(IpcChannels.skillSave, async (_event, previous: string | undefined, input: SkillInput) => {
-    await saveSkill(skillsDir(), input, previous);
-  });
-  ipcMain.handle(IpcChannels.skillDelete, (_event, name: string) => deleteSkill(skillsDir(), name, join(agentDataDir(), "skills-trash")));
+  // 지식베이스·스킬·승인 규칙·관리자 권한은 그 호스트의 데몬이 agent-kit의 같은 함수로 같은 파일을 읽고 고친다
+  // (DESIGN-APPS.md §6 D4, agent-kit src/app-api.ts). 사람이 직접 고쳐도 되는 파일이다
+  const forward = (channel: string, name: string) => ipcMain.handle(channel, (_event, ...args: unknown[]) => agentCall(name, ...args));
+  forward(IpcChannels.skillsList, "skillsList");
+  forward(IpcChannels.skillSave, "skillSave");
+  forward(IpcChannels.skillDelete, "skillDelete");
   ipcMain.handle(IpcChannels.skillOpenFolder, async () => {
-    await mkdir(skillsDir(), { recursive: true });
-    const error = await shell.openPath(skillsDir());
+    localOnly("스킬 폴더 열기");
+    const dir = await agentCall<string>("skillsDir");
+    await mkdir(dir, { recursive: true });
+    const error = await shell.openPath(dir);
     if (error) throw new Error(error);
   });
-  ipcMain.handle(IpcChannels.kbList, (_event, includeArchived: boolean) => loadEntries(kb(), { includeArchived: includeArchived === true }));
-  ipcMain.handle(IpcChannels.kbSave, async (_event, id: string | undefined, input: EntryInput) => {
-    if (!input.title?.trim() || !input.content?.trim()) throw new Error("제목과 본문을 적어 주세요");
-    if (!id) return createEntry(kb(), { ...input, origin: "user" });
-    // 사람이 고친 것은 확인된 것으로 본다
-    const entry = await updateEntry(kb(), id, { ...input, unverified: false });
-    if (!entry) throw new Error("그 항목을 찾지 못했습니다 (다른 곳에서 지웠을 수 있습니다)");
-    return entry;
-  });
-  ipcMain.handle(IpcChannels.kbBulk, (_event, ids: string[], action: BulkAction, tag?: string) => bulkUpdate(kb(), ids, action, tag));
-  ipcMain.handle(IpcChannels.kbMerge, async (_event, keepId: string, dropIds: string[]) => {
-    await mergeEntries(kb(), keepId, dropIds);
-  });
-  ipcMain.handle(IpcChannels.kbReviewed, async (_event, id: string) => {
-    await markReviewed(kb(), id);
-  });
-  ipcMain.handle(IpcChannels.kbReview, async () => needsReview(await loadEntries(kb())));
-  ipcMain.handle(IpcChannels.kbStats, async () => knowledgeStats(await loadEntries(kb(), { includeArchived: true })));
-  ipcMain.handle(IpcChannels.kbPreview, async (_event, prompt: string) => {
-    // 클라우드 모델의 예산(8,000자)으로 보인다. 로컬 모델이면 창에 맞춰 더 줄어든다
-    const { text, injected } = buildKnowledgeSection(await loadEntries(kb()), prompt ?? "", 8000);
-    return { text: text ?? "", chars: text?.length ?? 0, injected: injected.length };
-  });
+  forward(IpcChannels.kbList, "kbList");
+  forward(IpcChannels.kbSave, "kbSave");
+  forward(IpcChannels.kbBulk, "kbBulk");
+  forward(IpcChannels.kbMerge, "kbMerge");
+  forward(IpcChannels.kbReviewed, "kbReviewed");
+  forward(IpcChannels.kbReview, "kbReview");
+  forward(IpcChannels.kbStats, "kbStats");
+  forward(IpcChannels.kbPreview, "kbPreview");
   ipcMain.handle(IpcChannels.kbExport, async () => {
+    // 글은 그 호스트에서 만들고, 파일은 이 PC에 저장한다
+    const text = await agentCall<string>("kbExportText");
     const options = { defaultPath: join(homedir(), "지식베이스.md"), filters: [{ name: "Markdown", extensions: ["md"] }] };
     const result = mainWindow ? await dialog.showSaveDialog(mainWindow, options) : await dialog.showSaveDialog(options);
     if (result.canceled || !result.filePath) return undefined;
-    await writeFile(result.filePath, exportMarkdown(await loadEntries(kb(), { includeArchived: true })), "utf8");
+    await writeFile(result.filePath, text, "utf8");
     return result.filePath;
   });
-  ipcMain.handle(IpcChannels.getElevation, () => loadElevationEnabled(agentDataDir()));
-  ipcMain.handle(IpcChannels.setElevation, (_event, on: boolean) => saveElevationEnabled(agentDataDir(), on === true));
-  ipcMain.handle(IpcChannels.getAutoLearn, () => loadAutoLearn(memoryDir(agentDataDir())));
-  ipcMain.handle(IpcChannels.setAutoLearn, (_event, on: boolean) => saveAutoLearn(memoryDir(agentDataDir()), on === true));
-  ipcMain.handle(IpcChannels.listRules, () => loadRules(agentDataDir()));
-  ipcMain.handle(IpcChannels.removeRule, (_event, rule: RuleView) => removeRule(agentDataDir(), rule));
-  ipcMain.handle(IpcChannels.listAudit, () => loadAudit(agentDataDir(), 100));
+  forward(IpcChannels.getElevation, "getElevation");
+  forward(IpcChannels.setElevation, "setElevation");
+  forward(IpcChannels.getAutoLearn, "getAutoLearn");
+  forward(IpcChannels.setAutoLearn, "setAutoLearn");
+  forward(IpcChannels.listRules, "listRules");
+  forward(IpcChannels.removeRule, "removeRule");
+  forward(IpcChannels.listAudit, "listAudit");
   const mcpFile = () => homePaths().mcp;
   ipcMain.handle(IpcChannels.listMcp, async () => serverViews(await readMcpFile(mcpFile())));
   ipcMain.handle(IpcChannels.addMcpPreset, (_event, id: string, key?: string) => {
@@ -469,14 +429,10 @@ function registerIpc(conn: () => HostConnection): void {
       }),
     ),
   );
-  ipcMain.handle(IpcChannels.listTasks, async () => (await loadTasks(tasksDir(agentDataDir()))).slice(0, 30));
-  ipcMain.handle(IpcChannels.listSchedules, () => loadSchedules(schedulesPath(agentDataDir())));
-  ipcMain.handle(IpcChannels.setScheduleEnabled, async (_event, id: string, enabled: boolean) => {
-    await updateSchedules(schedulesPath(agentDataDir()), (all) => all.map((s) => (s.id === id ? { ...s, enabled } : s)));
-  });
-  ipcMain.handle(IpcChannels.removeSchedule, async (_event, id: string) => {
-    await updateSchedules(schedulesPath(agentDataDir()), (all) => all.filter((s) => s.id !== id));
-  });
+  ipcMain.handle(IpcChannels.listTasks, () => agentCall("listTasks", 30));
+  forward(IpcChannels.listSchedules, "listSchedules");
+  forward(IpcChannels.setScheduleEnabled, "setScheduleEnabled");
+  forward(IpcChannels.removeSchedule, "removeSchedule");
   ipcMain.handle(IpcChannels.openSession, async (_event, cwd: string, from?: SessionSource) => {
     // forkFrom: 다른 폴더로 대화를 옮길 때 지금 세션 파일에서 분기한다 (pi --fork, 원래 세션 파일은 그대로)
     // sessionFile: 지난 대화를 그 파일 그대로 이어서 연다
@@ -591,6 +547,24 @@ function createWindow(): void {
 }
 
 let connection: HostConnection | undefined;
+let taskWatcher: TaskWatcher | undefined;
+
+/** 그 호스트의 데몬에서 agent-kit 데이터 함수를 부른다 (DESIGN-APPS.md §6 D4, agent-kit src/app-api.ts) */
+function agentCall<T = unknown>(name: string, ...args: unknown[]): Promise<T> {
+  if (!connection) return Promise.reject(new Error("호스트에 아직 연결되지 않았습니다"));
+  return connection.request<T>(Methods.agentCall, { name, args });
+}
+
+/** 끝난 작업 알림은 호스트마다 처음 읽은 것을 기준으로 삼는다 (호스트를 바꾸면 새로 시작) */
+function watchTasks(): void {
+  taskWatcher?.stop();
+  taskWatcher = new TaskWatcher(
+    () => agentCall<TaskRecord[]>("listTasks", 200),
+    notifyTask,
+    () => sendToRenderer(IpcChannels.tasksChanged, null),
+  );
+  taskWatcher.start();
+}
 
 /** 고른 호스트에 붙는 연결을 만든다. 붙으면 그 호스트의 스케줄러 세션을 확인한다 */
 function connectTo(hostId: string): HostConnection {
@@ -614,6 +588,7 @@ async function switchHost(hostId: string): Promise<void> {
   hostPaths = undefined;
   connection = connectTo(hostId);
   connection.start();
+  watchTasks();
   mainWindow?.webContents.reload();
 }
 
@@ -649,11 +624,7 @@ app.whenReady().then(() => {
   // Windows 작업 표시줄·알림의 앱 식별자. 설치 프로그램이 만든 바로 가기는 electron-builder의 appId를 쓰므로
   // 같은 값이어야 한다. 다르면 실행 중인 창이 다른 앱으로 묶여 기본 Electron 아이콘이 보인다.
   app.setAppUserModelId("dev.pi-desktop.agent");
-  new TaskWatcher(
-    () => loadTasks(tasksDir(agentDataDir())),
-    notifyTask,
-    () => sendToRenderer(IpcChannels.tasksChanged, null),
-  ).start();
+  watchTasks();
   createWindow();
   connection!.start();
 
