@@ -7,7 +7,9 @@
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
-    "./paths": "./src/paths.ts"
+    "./paths": "./src/paths.ts",
+    "./mcp-file": "./src/mcp-file.ts",
+    "./mcp-presets": "./src/mcp-presets.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

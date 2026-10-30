@@ -4,6 +4,9 @@ import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendChat, readChat, readInbox } from "@pi-desktop/mate-kit";
+import { listSkillsIn, saveSkill } from "@pi-desktop/agent-kit/skills";
+import { readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "@pi-desktop/pi-isolation/mcp-file";
+import { WEB_SEARCH_PRESETS as MCP_PRESETS } from "@pi-desktop/pi-isolation/mcp-presets";
 import {
   addChatRequest,
   addRequest,
@@ -19,6 +22,7 @@ import {
   clearChat,
   deleteDuty,
   deleteRun,
+  deleteSkill as deleteMateSkill,
   dutyIdFrom,
   emptyTrash,
   listTrash,
@@ -43,7 +47,7 @@ import {
   type ConfigPatch,
   type InboxStatus,
 } from "@pi-desktop/mate-runner";
-import { IpcChannels, type DutyDraft, type Overview, type PiReadiness, type PiSetupView, type RunnerView } from "../shared/api";
+import { IpcChannels, type DutyDraft, type McpCheckResult, type Overview, type PiReadiness, type PiSetupView, type RunnerView, type SkillInput } from "../shared/api";
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
 import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
 import { runnerCommand } from "./runner-process";
@@ -243,6 +247,31 @@ function registerIpc(): void {
     await restoreTrash(paths, id);
   });
   ipcMain.handle(IpcChannels.emptyTrash, (_e, ids?: string[]) => emptyTrash(paths, ids));
+  // 스킬·MCP (설계 DESIGN-APPS.md §3.4): Mate 홈의 skills/·mcp.json을 Agent와 같은 형식·코드로 다룬다
+  ipcMain.handle(IpcChannels.skillsList, () => listSkillsIn(paths.skills));
+  ipcMain.handle(IpcChannels.skillSave, async (_e, previous: string | undefined, input: SkillInput) => {
+    await saveSkill(paths.skills, input, previous);
+  });
+  ipcMain.handle(IpcChannels.skillDelete, (_e, name: string) => deleteMateSkill(paths, name));
+  ipcMain.handle(IpcChannels.skillOpenFolder, async () => {
+    await mkdir(paths.skills, { recursive: true });
+    const error = await shell.openPath(paths.skills);
+    if (error) throw new Error(error);
+  });
+  ipcMain.handle(IpcChannels.listMcp, async () => serverViews(await readMcpFile(paths.mcp)));
+  ipcMain.handle(IpcChannels.addMcpPreset, (_e, id: string, key?: string) => {
+    const preset = MCP_PRESETS.find((p) => p.id === id);
+    if (!preset) throw new Error(`목록에 없는 서버입니다: ${id}`);
+    return updateMcpFile(paths.mcp, (file) => withPreset(file, preset, key));
+  });
+  ipcMain.handle(IpcChannels.setMcpEnabled, (_e, name: string, enabled: boolean) => updateMcpFile(paths.mcp, (file) => withEnabled(file, name, enabled === true)));
+  ipcMain.handle(IpcChannels.removeMcp, (_e, name: string) => updateMcpFile(paths.mcp, (file) => withoutServer(file, name)));
+  ipcMain.handle(IpcChannels.openMcpFile, async () => {
+    await updateMcpFile(paths.mcp, (file) => ({ mcpServers: {}, ...file }));
+    const error = await shell.openPath(paths.mcp);
+    if (error) throw new Error(error);
+  });
+  ipcMain.handle(IpcChannels.checkMcp, async () => (await runnerCommand(runnerScript(), "mcp-check", runnerEnv())) as unknown as McpCheckResult);
   ipcMain.handle(IpcChannels.runNow, async (_e, id: string) => {
     if (!isDutyId(id)) throw new Error("잘못된 임무 id입니다");
     await addRequest(paths, id);

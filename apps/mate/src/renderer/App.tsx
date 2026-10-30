@@ -10,8 +10,9 @@ import { splitInbox, STATUS_LABELS } from "./mate-view";
 import { RunsView } from "./RunsView";
 import { SettingsView } from "./SettingsView";
 import { TrashView } from "./TrashView";
+import { SkillsMcpView } from "./SkillsMcpView";
 
-type Tab = "chat" | "inbox" | "duties" | "activity" | "runs" | "trash" | "phone" | "settings";
+type Tab = "chat" | "inbox" | "duties" | "activity" | "runs" | "tools" | "trash" | "phone" | "settings";
 
 /** 화면 전체. Mate 홈의 파일이 바뀔 때마다(실행기·확장이 쓴 것 포함) 다시 읽는다 */
 export function App() {
@@ -105,6 +106,9 @@ export function App() {
           <button className={tab === "runs" ? "active" : ""} onClick={() => setTab("runs")}>
             실행 기록
           </button>
+          <button className={tab === "tools" ? "active" : ""} onClick={() => setTab("tools")}>
+            스킬·MCP
+          </button>
           <button className={tab === "trash" ? "active" : ""} onClick={() => setTab("trash")}>
             휴지통{overview.trash.length > 0 && <span className="count"> {overview.trash.length}</span>}
           </button>
@@ -154,6 +158,7 @@ export function App() {
         {tab === "duties" && <DutiesView overview={overview} now={now} act={act} setup={setup} />}
         {tab === "activity" && <ActivityView overview={overview} now={now} act={act} />}
         {tab === "runs" && <RunsView overview={overview} now={now} act={act} />}
+        {tab === "tools" && <SkillsMcpView act={act} />}
         {tab === "trash" && <TrashView overview={overview} now={now} act={act} />}
         {tab === "phone" && (
           <section>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import type { AutostartView, Overview, PiSetupView, UpdateState } from "../shared/api";
+import type { AutostartView, McpServerView, Overview, PiSetupView, UpdateState } from "../shared/api";
 import { ModelSelect } from "./PiSetup";
 import type { Act } from "./App";
-import { relativeTime } from "./mate-view";
+import { grantLabel, relativeTime } from "./mate-view";
 
 /** Mate 전체 설정과 실행기 상태 */
 export function SettingsView({
@@ -23,9 +23,12 @@ export function SettingsView({
   const [limit, setLimit] = useState(String(config.dailyRunLimit));
   const [maxCost, setMaxCost] = useState(String(config.maxCostUsd));
   const [autostart, setAutostartState] = useState<AutostartView>();
+  const [servers, setServers] = useState<McpServerView[]>([]);
   useEffect(() => {
     void window.mate.getAutostart().then(setAutostartState);
+    void window.mate.listMcp().then(setServers, () => setServers([]));
   }, []);
+  const chatServers = new Set(config.chatMcpServers);
   useEffect(() => {
     setModel(config.model);
     setLimit(String(config.dailyRunLimit));
@@ -75,6 +78,40 @@ export function SettingsView({
           저장
         </button>
       </div>
+
+      <h2>대화에서 쓸 MCP 서버</h2>
+      <div className="row">
+        {servers.length === 0 && <span className="muted small-text">MCP 서버가 없습니다 (스킬·MCP 탭에서 넣습니다)</span>}
+        {servers.map((s) => (
+          <label key={s.name} className="day" title={s.description ?? s.target}>
+            <input
+              type="checkbox"
+              checked={chatServers.has(s.name)}
+              onChange={() => {
+                const next = new Set(chatServers);
+                if (next.has(s.name)) next.delete(s.name);
+                else next.add(s.name);
+                void act(() => window.mate.saveConfig({ chatMcpServers: [...next] }));
+              }}
+            />{" "}
+            {s.name}
+          </label>
+        ))}
+      </div>
+      {config.chatGrants.length > 0 && (
+        <div className="row">
+          <span className="muted">대화에서 허용한 도구:</span>
+          {config.chatGrants.map((g) => (
+            <span key={g} className="badge">
+              <code>{grantLabel(g)}</code>{" "}
+              <button className="small" onClick={() => void act(() => window.mate.saveConfig({ chatGrants: config.chatGrants.filter((x) => x !== g) }))}>
+                빼기
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="muted small-text">처음 쓰는 도구는 대화 중에 Mate가 허용을 묻습니다. 허용한 도구만 다음부터 씁니다.</div>
 
       <h2>Pi</h2>
       <div className="kv">

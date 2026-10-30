@@ -39,6 +39,9 @@ export function matePaths(home: string) {
     chatActions: join(home, "chat", "actions"),
     /** 대화 상태 (실행기가 씀: 세션 번호·생각 중·결과를 기다리는 실행) */
     chatState: join(home, "chat", "state.json"),
+    /** 임무가 고르는 스킬과 MCP 서버 (DESIGN-APPS.md §3.4). Pi 형식 그대로 */
+    skills: join(home, "skills"),
+    mcp: join(home, "mcp.json"),
     /** 지운 임무·실행 기록·대화 (되살리거나 비운다, DESIGN-APPS.md §3.2) */
     trash: join(home, "trash"),
   };

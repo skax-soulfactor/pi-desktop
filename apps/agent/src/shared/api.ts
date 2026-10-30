@@ -15,7 +15,7 @@ export type { UsageRange, UsageSource, UsageSummary, UsageTotals } from "@pi-des
 import type { Schedule } from "@pi-desktop/agent-kit/schedule-plan";
 import type { ConnectionState } from "../vendor/shared/api";
 import type { PiSetupView } from "./pi-setup";
-import type { McpCheckResult, McpServerView } from "./mcp";
+import type { McpCheckResult, McpServerView } from "@pi-desktop/pi-isolation/mcp-presets";
 import type { BulkAction, EntryInput, KnowledgeEntry, KnowledgeStats, ReviewItem } from "@pi-desktop/agent-kit/memory-types";
 import type { SkillInput, SkillView } from "@pi-desktop/agent-kit/skill-types";
 import type { AgentCard, CardDraft, NetworkState, PeerPolicy, PeerSettings } from "./network";

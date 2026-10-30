@@ -2,7 +2,7 @@ import type { MateTrashItem, Overview } from "../shared/api";
 import type { Act } from "./App";
 import { relativeTime } from "./mate-view";
 
-const KIND_LABELS: Record<MateTrashItem["kind"], string> = { duty: "임무", run: "실행 기록", chat: "대화" };
+const KIND_LABELS: Record<MateTrashItem["kind"], string> = { duty: "임무", run: "실행 기록", chat: "대화", skill: "스킬" };
 
 /**
  * 휴지통 (설계 DESIGN-APPS.md §3.2). 지운 임무·실행 기록·대화와, 200개 넘어 정리한 실행 기록이 있다.

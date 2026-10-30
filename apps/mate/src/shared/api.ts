@@ -11,6 +11,10 @@ import type {
   RunStatus,
 } from "@pi-desktop/mate-runner/types";
 import type { PiReadiness } from "@pi-desktop/mate-runner/pi-readiness";
+import type { SkillInput, SkillView } from "@pi-desktop/agent-kit/skill-types";
+import type { McpCheckResult, McpServerView } from "@pi-desktop/pi-isolation/mcp-presets";
+
+export type { McpCheckResult, McpServerView, SkillInput, SkillView };
 
 export type { PiReadiness };
 
@@ -57,6 +61,16 @@ export const IpcChannels = {
   telegramUnpair: "mate:telegram-unpair",
   telegramTest: "mate:telegram-test",
   chatSend: "mate:chat-send",
+  skillsList: "mate:skills-list",
+  skillSave: "mate:skill-save",
+  skillDelete: "mate:skill-delete",
+  skillOpenFolder: "mate:skill-open-folder",
+  listMcp: "mate:list-mcp",
+  addMcpPreset: "mate:add-mcp-preset",
+  setMcpEnabled: "mate:set-mcp-enabled",
+  removeMcp: "mate:remove-mcp",
+  openMcpFile: "mate:open-mcp-file",
+  checkMcp: "mate:check-mcp",
   changed: "mate:changed",
 } as const;
 
@@ -180,6 +194,22 @@ export interface MateApi {
   restoreTrash(id: string): Promise<void>;
   /** 휴지통을 비운다 (ids가 없으면 전부). 정말 지운 항목 수 */
   emptyTrash(ids?: string[]): Promise<number>;
+  /** Mate 홈 skills/의 스킬 (DESIGN-APPS.md §3.4) */
+  skillsList(): Promise<SkillView[]>;
+  /** 스킬을 만들거나 고친다. previous가 있으면 그 이름의 스킬을 고친다(이름 바꾸기 포함) */
+  skillSave(previous: string | undefined, input: SkillInput): Promise<void>;
+  /** 스킬을 휴지통으로 옮긴다 */
+  skillDelete(name: string): Promise<void>;
+  skillOpenFolder(): Promise<void>;
+  /** Mate 홈 mcp.json의 서버 (키 값은 보내지 않는다) */
+  listMcp(): Promise<McpServerView[]>;
+  /** 미리 정한 서버를 넣는다. 키가 필요한 서버는 key를 env에 넣는다 */
+  addMcpPreset(id: string, key?: string): Promise<McpServerView[]>;
+  setMcpEnabled(name: string, enabled: boolean): Promise<McpServerView[]>;
+  removeMcp(name: string): Promise<McpServerView[]>;
+  openMcpFile(): Promise<void>;
+  /** 서버마다 연결해 보고 결과를 받는다 (pi mcp list) */
+  checkMcp(): Promise<McpCheckResult>;
   runNow(id: string): Promise<void>;
   setInbox(ids: string[], status: InboxStatus | undefined): Promise<void>;
   saveConfig(
