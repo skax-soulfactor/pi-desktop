@@ -5,6 +5,7 @@ import { isGrantableName, isProfile } from "@pi-desktop/mate-kit";
 import type { MatePaths } from "./paths";
 import { parseTime } from "./schedule";
 import { pollCommandError } from "./watchers";
+import { moveToTrash } from "./trash";
 import {
   DEFAULT_COOLDOWN_MINUTES,
   DEFAULT_QUIET_SECONDS,
@@ -228,9 +229,11 @@ export async function saveDuty(paths: MatePaths, raw: unknown): Promise<Duty> {
   return duty;
 }
 
+/** 임무를 휴지통으로 옮긴다 (되살릴 수 있다). 이미 쌓인 제안과 실행 기록은 그대로 둔다 */
 export async function deleteDuty(paths: MatePaths, id: string): Promise<void> {
   if (!isDutyId(id)) throw new Error("잘못된 임무 id입니다");
-  await rm(join(paths.duties, `${id}.json`), { force: true });
+  const duty = await getDuty(paths, id);
+  await moveToTrash(paths, { kind: "duty", title: duty?.name ?? id, detail: duty?.cwd ?? "" }, [{ path: join(paths.duties, `${id}.json`) }]);
 }
 
 // ── 실행 요청 ("지금 실행") ──
@@ -300,13 +303,52 @@ export async function listRuns(paths: MatePaths, limit = 100): Promise<RunRecord
   return runs.filter((r): r is RunRecord => !!r);
 }
 
-export async function pruneRuns(paths: MatePaths, keep = 200): Promise<void> {
+/** 실행 기록 하나와 그 Pi 세션 파일 (Mate 홈 sessions/ 안에 있을 때만) */
+async function runFiles(paths: MatePaths, name: string): Promise<{ files: Array<{ path: string }>; run?: RunRecord }> {
+  const path = join(paths.runs, name);
+  const run = await readJson<RunRecord | undefined>(path, undefined);
+  const files = [{ path }];
+  if (run?.sessionFile && dirname(run.sessionFile) === paths.sessions) files.push({ path: run.sessionFile });
+  return run ? { files, run } : { files };
+}
+
+/** 실행 기록 하나를 휴지통으로 옮긴다 (세션 파일도 함께) */
+export async function deleteRun(paths: MatePaths, id: string): Promise<void> {
+  if (!/^[0-9A-Za-z-]+$/.test(id)) throw new Error("잘못된 실행 id입니다");
+  const { files, run } = await runFiles(paths, `${id}.json`);
+  await moveToTrash(paths, { kind: "run", title: run ? `${run.dutyName} 실행` : `실행 ${id}`, ...(run ? { detail: new Date(run.startedAt).toLocaleString() } : {}) }, files);
+}
+
+/** 실행 기록이 keep개를 넘으면 오래된 것부터 한 항목으로 묶어 휴지통으로 옮긴다 (DESIGN-APPS.md §6 D2) */
+export async function pruneRuns(paths: MatePaths, keep = 200, now = Date.now()): Promise<void> {
+  let names: string[];
   try {
-    const names = (await readdir(paths.runs)).filter((n) => n.endsWith(".json")).sort();
-    await Promise.all(names.slice(0, Math.max(0, names.length - keep)).map((n) => rm(join(paths.runs, n), { force: true })));
+    names = (await readdir(paths.runs)).filter((n) => n.endsWith(".json")).sort();
   } catch {
     // 폴더가 없으면 지울 것도 없다
+    return;
   }
+  const old = names.slice(0, Math.max(0, names.length - keep));
+  if (old.length === 0) return;
+  const collected = await Promise.all(old.map((n) => runFiles(paths, n)));
+  const starts = collected.flatMap((c) => (c.run ? [c.run.startedAt] : []));
+  const range = starts.length > 0 ? `${new Date(Math.min(...starts)).toLocaleDateString()} ~ ${new Date(Math.max(...starts)).toLocaleDateString()}` : "";
+  await moveToTrash(paths, { kind: "run", title: `오래된 실행 기록 ${old.length}개 정리`, detail: range }, collected.flatMap((c) => c.files), now);
+}
+
+/**
+ * 대화 기록을 휴지통으로 옮긴다: 대화 줄(chat.jsonl)과 대화의 Pi 세션들. 다음 말부터 새 대화가 된다.
+ * 되살리면 그사이 나눈 대화와 시각 순으로 합친다.
+ */
+export async function clearChat(paths: MatePaths, now = Date.now()): Promise<boolean> {
+  const sessions = await readdir(paths.chatSessions).catch(() => [] as string[]);
+  const item = await moveToTrash(
+    paths,
+    { kind: "chat", title: "대화 기록", detail: new Date(now).toLocaleString() },
+    [{ path: paths.chat, merge: true }, ...sessions.filter((n) => n.endsWith(".jsonl")).map((n) => ({ path: join(paths.chatSessions, n) }))],
+    now,
+  );
+  return item !== undefined;
 }
 
 /** 시각 순으로 정렬되는 실행 id */
