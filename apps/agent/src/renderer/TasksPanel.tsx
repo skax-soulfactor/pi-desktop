@@ -3,6 +3,7 @@ import { describeSchedule } from "@pi-desktop/agent-kit/schedule-plan";
 import type { Schedule, TaskRecord } from "../shared/api";
 
 const STATUS: Record<TaskRecord["status"], { text: string; tone: "ok" | "bad" | "" }> = {
+  waiting: { text: "승인 기다림", tone: "" },
   running: { text: "실행 중", tone: "" },
   done: { text: "완료", tone: "ok" },
   failed: { text: "실패", tone: "bad" },
@@ -72,7 +73,7 @@ export function TasksPanel({ onError }: { onError: (message: string) => void }) 
               <li key={t.id} className="tasks-item">
                 <button className="tasks-row" onClick={() => setOpenId(openId === t.id ? undefined : t.id)}>
                   <span className={`badge ${STATUS[t.status].tone}`}>{STATUS[t.status].text}</span>
-                  <span className="tasks-origin">{t.origin === "schedule" ? "예약" : "작업"}</span>
+                  <span className="tasks-origin">{originLabel(t)}</span>
                   <strong>{t.title}</strong>
                   <span className="tasks-meta">{when(t.finishedAt ?? t.startedAt)}</span>
                 </button>
@@ -84,4 +85,12 @@ export function TasksPanel({ onError }: { onError: (message: string) => void }) 
       </section>
     </div>
   );
+}
+
+/** 작업이 어디서 왔는지 (예약, 대화, 피어가 맡김, 피어에게 맡김) */
+function originLabel(task: TaskRecord): string {
+  if (task.origin === "schedule") return "예약";
+  if (task.origin === "peer-in") return `${task.peer?.name ?? "피어"}가 맡김`;
+  if (task.origin === "peer-out") return `${task.peer?.name ?? "피어"}에게 맡김`;
+  return "작업";
 }

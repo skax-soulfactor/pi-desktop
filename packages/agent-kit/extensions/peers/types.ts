@@ -29,6 +29,8 @@ export interface AgentCard {
 }
 
 export interface PeerPolicy {
+  /** 작업 맡기기를 받을지 (ask: 받아서 사람이 승인하면 시작, deny: 받지 않음). 없으면 ask */
+  task?: "ask" | "deny";
   /** 질문에 답할지 */
   question: "auto" | "deny";
   /** 하루에 받을 질문 수 */
@@ -76,7 +78,8 @@ export interface InboundLog {
   peerId: string;
   peerName: string;
   question: string;
-  status: "answered" | "denied" | "limit" | "loop" | "error";
+  /** task: 작업 맡기기를 받아 승인 대기로 남김 (detail은 작업 id) */
+  status: "answered" | "task" | "denied" | "limit" | "loop" | "error";
   detail?: string;
 }
 

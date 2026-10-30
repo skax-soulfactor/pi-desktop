@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
-import { A2A_PATH, agentReply, CARD_PATH, isCard, MAX_HOPS, PAIR_PATH, PAIR_STATUS_PATH, parseMessageSend, rpcError } from "./protocol";
+import { A2A_PATH, agentReply, CARD_PATH, isCard, MAX_HOPS, PAIR_PATH, PAIR_STATUS_PATH, parseMessageSend, rpcError, taskResult } from "./protocol";
+import { cancelPeerTask, findPeerTask, receivePeerTask, taskView } from "./tasks";
 import {
   appendInboundLog,
   loadCardDraft,
@@ -11,6 +12,7 @@ import {
   newId,
   publicCard,
   saveInbound,
+  type InboundLog,
   type Peer,
 } from "./store";
 
@@ -20,12 +22,16 @@ import {
  * - 카드는 인증 없이 보인다 (카드만 공개, 지식은 공개하지 않는다)
  * - 페어링 요청은 쌓아 두기만 하고, 사람이 앱에서 승인해야 피어가 된다. 요청자는 /pair/status로 결과를 가져간다
  * - 질문은 피어 토큰으로만 받고, 피어 정책·하루 상한·홉 상한을 지난 뒤 answer로 넘긴다
+ * - 작업(taskType task)은 "승인 기다림" 작업 기록으로만 남긴다. 사람이 앱에서 승인해야 스케줄러가 시작한다.
+ *   맡긴 쪽은 tasks/get으로 상태·결과를, tasks/cancel로 취소를 한다 (자기가 맡긴 작업만 보인다)
  */
 
 export interface PeerServerOptions {
   dataDir: string;
   /** 질문에 답한다 (도구 없는 워커). 던지면 오류로 답한다 */
   answer: (question: string, peer: Peer) => Promise<string>;
+  /** 받은 작업의 워커를 멈춘다 (스케줄러가 돌리는 중일 때). 멈출 것이 없으면 false */
+  abortTask?: (id: string) => boolean;
   /** 이 에이전트의 이름 (홉 확인). 기본은 카드 이름 */
   selfName?: () => Promise<string>;
   now?: () => Date;
@@ -132,12 +138,24 @@ export function peerRequestHandler(options: PeerServerOptions) {
           send(res, 401, rpcError(id, -32001, "페어링된 에이전트만 부를 수 있다"));
           return;
         }
-        const message = parseMessageSend(body);
-        if (!message) {
-          send(res, 400, rpcError(id, -32602, "message/send의 글 질문만 받는다"));
+        const method = (body as { method?: unknown })?.method;
+        if (method === "tasks/get" || method === "tasks/cancel") {
+          const taskId = (body as { params?: { id?: unknown } })?.params?.id;
+          const record = typeof taskId === "string" ? await findPeerTask(dataDir, peer.id, taskId) : undefined;
+          if (!record) {
+            send(res, 200, rpcError(id, -32006, "그런 작업이 없다"));
+            return;
+          }
+          const current = method === "tasks/cancel" ? await cancelPeerTask(dataDir, record, options.abortTask ?? (() => false), now()) : record;
+          send(res, 200, taskResult(id, taskView(current)));
           return;
         }
-        const log = (status: "answered" | "denied" | "limit" | "loop" | "error", detail?: string) =>
+        const message = parseMessageSend(body);
+        if (!message) {
+          send(res, 400, rpcError(id, -32602, "message/send(글)·tasks/get·tasks/cancel만 받는다"));
+          return;
+        }
+        const log = (status: InboundLog["status"], detail?: string) =>
           appendInboundLog(dataDir, {
             at: now().toISOString(),
             peerId: peer.id,
@@ -146,13 +164,14 @@ export function peerRequestHandler(options: PeerServerOptions) {
             status,
             ...(detail ? { detail } : {}),
           });
-        if (peer.policy.question === "deny") {
+        const isTask = message.taskType === "task";
+        if (isTask ? peer.policy.task === "deny" : peer.policy.question === "deny") {
           await log("denied");
-          send(res, 200, rpcError(id, -32003, "이 에이전트는 지금 질문을 받지 않는다"));
+          send(res, 200, rpcError(id, -32003, isTask ? "이 에이전트는 지금 작업을 받지 않는다" : "이 에이전트는 지금 질문을 받지 않는다"));
           return;
         }
         const today = now().toISOString().slice(0, 10);
-        const usedToday = (await loadInboundLog(dataDir, 1000)).filter((e) => e.peerId === peer.id && e.status === "answered" && e.at.startsWith(today)).length;
+        const usedToday = (await loadInboundLog(dataDir, 1000)).filter((e) => e.peerId === peer.id && (e.status === "answered" || e.status === "task") && e.at.startsWith(today)).length;
         if (usedToday >= peer.policy.dailyLimit) {
           await log("limit");
           send(res, 200, rpcError(id, -32004, `오늘 받을 수 있는 질문(${peer.policy.dailyLimit}개)을 다 썼다`));
@@ -162,6 +181,12 @@ export function peerRequestHandler(options: PeerServerOptions) {
         if (message.callChain.length >= MAX_HOPS || message.callChain.includes(self)) {
           await log("loop");
           send(res, 200, rpcError(id, -32005, "에이전트를 너무 여러 번 거친 질문이라 답하지 않는다"));
+          return;
+        }
+        if (isTask) {
+          const record = await receivePeerTask(dataDir, peer, message.title ?? "맡긴 작업", message.text, now());
+          await log("task", record.id);
+          send(res, 200, taskResult(id, taskView(record)));
           return;
         }
         try {

@@ -17,6 +17,7 @@ import {
   type PeerPolicy,
   type PeerSettings,
 } from "@pi-desktop/agent-kit/peers";
+import { loadTasks, tasksDir } from "@pi-desktop/agent-kit/tasks";
 import type { AgentCard, NetworkState } from "../shared/network";
 
 /**
@@ -45,13 +46,14 @@ async function listening(port: number): Promise<boolean> {
 
 export async function networkState(dataDir: string): Promise<NetworkState> {
   const settings = await loadPeerSettings(dataDir);
-  const [card, peers, inbound, outbound, log, up] = await Promise.all([
+  const [card, peers, inbound, outbound, log, up, tasks] = await Promise.all([
     loadCardDraft(dataDir),
     loadPeers(dataDir),
     loadInbound(dataDir),
     loadOutbound(dataDir),
     loadInboundLog(dataDir, 30),
     settings.enabled ? listening(settings.port) : Promise.resolve(false),
+    loadTasks(tasksDir(dataDir)),
   ]);
   return {
     settings,
@@ -72,6 +74,9 @@ export async function networkState(dataDir: string): Promise<NetworkState> {
       .map((r) => ({ requestId: r.requestId, name: r.card.name, description: r.card.description, address: r.address, createdAt: r.createdAt })),
     outbound: outbound.map((r) => ({ requestId: r.requestId, name: r.card?.name ?? r.address, address: r.address, createdAt: r.createdAt, status: r.status })),
     log: log.reverse(),
+    taskRequests: tasks
+      .filter((t) => t.origin === "peer-in" && t.approval === "pending" && t.status === "waiting")
+      .map((t) => ({ id: t.id, peerName: t.peer?.name ?? "?", title: t.title, instruction: t.instruction, startedAt: t.startedAt })),
     lanAddresses: lanAddresses(settings.port),
   };
 }
@@ -100,4 +105,8 @@ export const approvePairing = (dataDir: string, requestId: string) => approveInb
 export const rejectPairing = (dataDir: string, requestId: string) => rejectInbound(dataDir, requestId);
 export const forgetPeer = (dataDir: string, id: string) => removePeer(dataDir, id);
 export const setPeerPolicy = (dataDir: string, id: string, policy: PeerPolicy) =>
-  updatePeerPolicy(dataDir, id, { question: policy.question === "deny" ? "deny" : "auto", dailyLimit: Math.max(0, Math.floor(policy.dailyLimit)) || 0 });
+  updatePeerPolicy(dataDir, id, {
+    question: policy.question === "deny" ? "deny" : "auto",
+    task: policy.task === "deny" ? "deny" : "ask",
+    dailyLimit: Math.max(0, Math.floor(policy.dailyLimit)) || 0,
+  });

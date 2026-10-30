@@ -24,7 +24,8 @@
     "./peers": "./extensions/peers/store.ts",
     "./peers-client": "./extensions/peers/client.ts",
     "./peer-types": "./extensions/peers/types.ts",
-    "./peers-protocol": "./extensions/peers/protocol.ts"
+    "./peers-protocol": "./extensions/peers/protocol.ts",
+    "./peer-tasks": "./extensions/peers/tasks.ts"
   },
   "pi": {
     "extensions": [

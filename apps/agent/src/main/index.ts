@@ -30,6 +30,7 @@ import { searchSessions } from "./history";
 import { approvePairing, checkPairings, forgetPeer, networkState, pairWith, previewPeer, rejectPairing, saveCard, setNetworkSettings, setPeerPolicy } from "./network";
 import { DEFAULT_PEER_PORT, type CardDraft, type PeerPolicy, type PeerSettings } from "@pi-desktop/agent-kit/peers";
 import { normalizeAddress } from "@pi-desktop/agent-kit/peers-protocol";
+import { approvePeerTask, rejectPeerTask } from "@pi-desktop/agent-kit/peer-tasks";
 import { readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "./mcp-config";
 import { WEB_SEARCH_PRESETS, type McpCheckResult } from "../shared/mcp";
 import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
@@ -98,9 +99,16 @@ function agentDataDir(): string {
 
 /** 끝난 작업을 OS 알림으로 알린다. 창을 보고 있으면 목록이 바뀌는 것으로 충분하다 */
 function notifyTask(task: TaskRecord): void {
-  if (!Notification.isSupported() || mainWindow?.isFocused()) return;
+  if (!Notification.isSupported()) return;
+  // 피어가 작업을 맡기면 사람이 승인해야 시작되므로 창을 보고 있어도 알린다
+  if (task.status === "waiting") {
+    if (task.origin !== "peer-in" || task.approval !== "pending") return;
+    new Notification({ title: `작업 요청: ${task.peer?.name ?? "피어"}`, body: `"${task.title}" — 네트워크 화면에서 폴더를 골라 승인하거나 거절하세요` }).show();
+    return;
+  }
+  if (mainWindow?.isFocused()) return;
   const status = task.status === "done" ? "완료" : task.status === "failed" ? "실패" : "취소됨";
-  const origin = task.origin === "schedule" ? "예약" : "작업";
+  const origin = task.origin === "schedule" ? "예약" : task.origin === "peer-out" ? `${task.peer?.name ?? "피어"}에게 맡긴 작업` : task.origin === "peer-in" ? `${task.peer?.name ?? "피어"}가 맡긴 작업` : "작업";
   const body = (task.status === "failed" ? task.error : task.result)?.slice(0, 200) ?? "";
   new Notification({ title: `${origin} ${status}: ${task.title}`, body }).show();
 }
@@ -254,6 +262,8 @@ function registerIpc(connection: HostConnection): void {
   ipcMain.handle(IpcChannels.approvePairing, (_event, requestId: string) => approvePairing(agentDataDir(), requestId));
   ipcMain.handle(IpcChannels.rejectPairing, (_event, requestId: string) => rejectPairing(agentDataDir(), requestId));
   ipcMain.handle(IpcChannels.forgetPeer, (_event, id: string) => forgetPeer(agentDataDir(), id));
+  ipcMain.handle(IpcChannels.approvePeerTask, (_event, id: string, cwd: string) => approvePeerTask(agentDataDir(), id, cwd));
+  ipcMain.handle(IpcChannels.rejectPeerTask, (_event, id: string) => rejectPeerTask(agentDataDir(), id));
   ipcMain.handle(IpcChannels.setPeerPolicy, (_event, id: string, policy: PeerPolicy) => setPeerPolicy(agentDataDir(), id, policy));
   ipcMain.handle(IpcChannels.usageSummary, async (_event, range: UsageRange) => {
     const now = new Date();

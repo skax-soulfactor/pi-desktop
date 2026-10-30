@@ -114,7 +114,17 @@ export default function tasks(pi: ExtensionAPI): void {
     parameters: Type.Object({ id: Type.String({ description: "멈출 작업 id" }) }),
     async execute(_toolCallId, params) {
       const task = running.get(params.id);
-      if (!task) throw new Error(`돌고 있는 작업이 아니다: ${params.id}`);
+      if (!task) {
+        // 피어에게 맡긴 작업이면 상대에게 취소를 보낸다
+        const record = (await loadTasks(dir)).find((t) => t.id === params.id && t.origin === "peer-out");
+        if (record && record.status !== "done" && record.status !== "failed" && record.status !== "cancelled") {
+          const { cancelRemoteTask } = await import("../peers/tasks");
+          const { loadPeers } = await import("../peers/store");
+          const next = await cancelRemoteTask(dataDir(), record, await loadPeers(dataDir()));
+          return { content: [{ type: "text", text: `${record.peer?.name ?? "피어"}에게 맡긴 작업 ${params.id}를 멈추게 했다 (상태: ${next.status}).` }], details: { id: params.id } };
+        }
+        throw new Error(`돌고 있는 작업이 아니다: ${params.id}`);
+      }
       task.abort.abort();
       return { content: [{ type: "text", text: `작업 ${params.id}를 멈추게 했다.` }], details: { id: params.id } };
     },
@@ -128,7 +138,7 @@ export function taskNotice(record: TaskRecord): string {
   return `${head}\n${record.result ? clip(record.result) : "(워커가 글로 된 답을 남기지 않았다)"}`;
 }
 
-const STATUS_LABEL: Record<TaskRecord["status"], string> = { running: "실행 중", done: "완료", failed: "실패", cancelled: "취소됨" };
+const STATUS_LABEL: Record<TaskRecord["status"], string> = { waiting: "승인 기다림", running: "실행 중", done: "완료", failed: "실패", cancelled: "취소됨" };
 
 function clip(text: string): string {
   return text.length > RESULT_CHARS ? `${text.slice(0, RESULT_CHARS)}\n[결과가 길어 앞부분만 넣었다. 전문은 작업 기록에 있다]` : text;

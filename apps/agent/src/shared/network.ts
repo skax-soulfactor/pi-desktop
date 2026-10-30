@@ -25,6 +25,8 @@ export interface NetworkState {
   inbound: Array<{ requestId: string; name: string; description: string; address: string; createdAt: string }>;
   outbound: Array<{ requestId: string; name: string; address: string; createdAt: string; status: "pending" | "rejected" }>;
   log: InboundLog[];
+  /** 피어가 맡겨 승인을 기다리는 작업 */
+  taskRequests: Array<{ id: string; peerName: string; title: string; instruction: string; startedAt: string }>;
   /** 이 PC의 같은 네트워크 주소 후보 (내 주소 고르기) */
   lanAddresses: string[];
 }
