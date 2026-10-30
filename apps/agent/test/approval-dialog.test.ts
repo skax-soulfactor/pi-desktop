@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitOption } from "../src/renderer/ApprovalDialog";
+import { splitOption } from "../src/renderer/approval-option";
 
 describe("승인 선택지 나누기", () => {
   it("범위 설명과 허용 패턴을 나누고, 패턴이 없으면 설명만", () => {
