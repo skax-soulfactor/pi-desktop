@@ -35,8 +35,18 @@ describe("piArgs", () => {
     expect(observe[observe.indexOf("--tools") + 1]).toBe("read,grep,find,ls,bash");
     expect(observe.at(-1)).toBe("CI를 봐");
     const propose = piArgs({ ...input, duty: { ...duty, profile: "propose" } });
-    expect(propose[propose.indexOf("--tools") + 1]).toBe("read,grep,find,ls,bash,mate_propose");
+    expect(propose[propose.indexOf("--tools") + 1]).toBe("read,grep,find,ls,bash,mate_propose,mate_ask");
     expect(propose[propose.indexOf("--append-system-prompt") + 1]).toContain("mate_propose");
+    expect(propose[propose.indexOf("--append-system-prompt") + 1]).toContain("mate_ask");
+    // 대화는 같은 세션을 이어 쓰고, 읽기 + mate_do만 쓰며, 대화용 안내를 붙인다
+    const chat = piArgs({ ...input, chat: { sessionId: "mate-chat-3", systemPrompt: "대화 안내", actionsPath: "/h/a.jsonl" } });
+    expect(chat[chat.indexOf("--session-id") + 1]).toBe("mate-chat-3");
+    expect(chat[chat.indexOf("--tools") + 1]).toBe("read,grep,find,ls,bash,mate_do");
+    expect(chat[chat.indexOf("--append-system-prompt") + 1]).toBe("대화 안내");
+    expect(piEnv({ ...input, chat: { sessionId: "s", systemPrompt: "", actionsPath: "/h/a.jsonl" } }, "observe")).toMatchObject({
+      PI_DESKTOP_MATE_PROFILE: "chat",
+      PI_DESKTOP_MATE_ACTIONS: "/h/a.jsonl",
+    });
     expect(piEnv(input, "observe")).toMatchObject({ PI_DESKTOP_MATE_PROFILE: "observe", PI_DESKTOP_MATE_DUTY: "ci" });
     // 관찰자 실행은 제안에 붙일 주제를 넘긴다
     expect(piEnv({ ...input, topic: "untested-edit" }, "propose")).toMatchObject({ PI_DESKTOP_MATE_TOPIC: "untested-edit" });

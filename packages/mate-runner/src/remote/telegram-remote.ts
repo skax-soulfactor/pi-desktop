@@ -1,23 +1,24 @@
-import { readInbox, type InboxItem } from "@pi-desktop/mate-kit";
-import { delegateInboxItem, requestOneOff } from "../delegate";
+import { readChat, readInbox, type ChatLine, type InboxItem } from "@pi-desktop/mate-kit";
+import { runCommand, freshItems } from "../chat/commands";
+import type { ChatAgent } from "../chat/chat-agent";
+import { delegateInboxItem } from "../delegate";
 import { applyInboxChange, discardInboxChange } from "../inbox-change";
 import { OBSERVER_DUTY_ID, OBSERVER_NAME } from "../observer";
 import type { MatePaths } from "../paths";
-import { addRequest, listDuties, listRuns, loadConfig, loadInboxState, loadState, readJson, setInboxStatus, writeJsonAtomic } from "../store";
-import type { Duty, MateConfig } from "../types";
+import { listDuties, loadConfig, loadInboxState, readJson, setInboxStatus, writeJsonAtomic } from "../store";
+import type { MateConfig } from "../types";
 import type { Exec } from "../watchers";
 import {
   chunks,
   confirmApplyButtons,
-  escapeHtml,
-  folderAlias,
   HELP_TEXT,
   inQuietHours,
   itemButtons,
   itemText,
+  optionButtons,
   parseCallback,
   parseCommand,
-  resolveFolder,
+  parseOptionCallback,
   safe,
   shouldNotify,
   type Command,
@@ -38,14 +39,15 @@ export interface RemoteState {
   offset?: number;
   /** 보낸 인박스 항목 → 메시지 id */
   sent: Record<string, { messageId: number; at: number }>;
-  /** 휴대폰에서 시작한 실행: 임무 id → 요청 시각 (끝나면 결과를 보낸다) */
-  pendingRuns: Record<string, number>;
+  /** 보낸 대화 줄 → 메시지 id (질문에 답장하면 어느 질문인지 찾음) */
+  chatSent: Record<string, { messageId: number; at: number }>;
   lastPollAt?: number;
   lastError?: string;
 }
 
 const MAX_SEND_PER_CYCLE = 5;
 const POLL_TIMEOUT_SEC = 25;
+const MONTH_MS = 30 * 24 * 3_600_000;
 
 export function remoteStatePath(paths: MatePaths): string {
   return paths.remote;
@@ -53,25 +55,34 @@ export function remoteStatePath(paths: MatePaths): string {
 
 export async function loadRemoteState(paths: MatePaths): Promise<RemoteState> {
   const raw = await readJson<Partial<RemoteState>>(paths.remote, {});
-  return { epoch: raw.epoch ?? 0, ...raw, sent: raw.sent ?? {}, pendingRuns: raw.pendingRuns ?? {} } as RemoteState;
+  return { epoch: raw.epoch ?? 0, ...raw, sent: raw.sent ?? {}, chatSent: raw.chatSent ?? {} } as RemoteState;
+}
+
+/** 휴대폰으로 보낼 대화 줄: 휴대폰에서 시작한 대화의 Mate 답, 그리고 (어디서 왔든) Mate의 질문 */
+export function chatLineForPhone(line: ChatLine): boolean {
+  return line.role === "mate" && line.kind !== "divider" && (line.source === "telegram" || line.kind === "question");
 }
 
 /**
- * 휴대폰(텔레그램) 연결 (설계 DESIGN-MATE.md §12).
+ * 휴대폰(텔레그램) 연결 (설계 DESIGN-MATE.md §12, §13).
  * 실행기 안에서 따로 돌며(임무 실행 중에도 버튼에 바로 답하도록), 앱과 같은 동작만 한다:
  * 인박스 확인·버리기, 고친 변경 적용(한 번 더 묻기)·버리기, 맡기기·고치기 지시(설정에서 허용했을 때), 살펴보기 지시, 임무 실행.
- * 연결된 개인 채팅 한 곳의 명령만 받는다.
+ * 빗금 없는 말은 Mate 대화로 넘기고, 대화의 답·Mate 질문을 휴대폰으로 보낸다. 연결된 개인 채팅 한 곳의 명령만 받는다.
  */
 export class TelegramRemote {
   private stopped = false;
   private abort = new AbortController();
   private readonly api: TelegramApi;
+  /** 대화 줄 보내기를 한 줄로 세운다 (같은 줄을 두 번 보내지 않게) */
+  private sending: Promise<void> = Promise.resolve();
+  private unsubscribe: (() => void) | undefined;
 
   constructor(
     private readonly paths: MatePaths,
     token: string,
     private readonly exec: Exec,
     private readonly log: (message: string) => void,
+    private readonly chat: ChatAgent,
     private readonly now: () => number = Date.now,
     apiBase?: string,
   ) {
@@ -79,11 +90,16 @@ export class TelegramRemote {
   }
 
   start(): void {
+    // 대화 답이 생기면 다음 폴링을 기다리지 않고 바로 보낸다
+    this.unsubscribe = this.chat.onLine((line) => {
+      if (chatLineForPhone(line)) void this.flushChat();
+    });
     void this.loop();
   }
 
   stop(): void {
     this.stopped = true;
+    this.unsubscribe?.();
     this.abort.abort();
   }
 
@@ -129,7 +145,7 @@ export class TelegramRemote {
   private async syncEpoch(config: MateConfig): Promise<RemoteState> {
     const state = await loadRemoteState(this.paths);
     if (state.epoch === config.telegram.pairEpoch) return state;
-    const next: RemoteState = { epoch: config.telegram.pairEpoch, sent: {}, pendingRuns: {}, ...(state.offset ? { offset: state.offset } : {}) };
+    const next: RemoteState = { epoch: config.telegram.pairEpoch, sent: {}, chatSent: {}, ...(state.offset ? { offset: state.offset } : {}) };
     await writeJsonAtomic(this.paths.remote, next);
     return next;
   }
@@ -155,7 +171,8 @@ export class TelegramRemote {
         return;
       }
       if (chat.id !== state.chatId) return; // 연결된 채팅만
-      if (command) await this.handleCommand(command, config, state);
+      const replyTo = update.message.reply_to_message?.message_id;
+      if (command) await this.handleCommand(command, config, state, replyTo);
       return;
     }
     const cb = update.callback_query;
@@ -179,7 +196,7 @@ export class TelegramRemote {
     await this.api.sendMessage(chat.id, `✅ 연결했어요. 이제 Mate 알림이 여기로 옵니다.\n\n${HELP_TEXT}`);
   }
 
-  private async handleCommand(command: Command, config: MateConfig, state: RemoteState): Promise<void> {
+  private async handleCommand(command: Command, config: MateConfig, state: RemoteState, replyTo?: number): Promise<void> {
     const chatId = state.chatId!;
     const say = (text: string) => this.api.sendMessage(chatId, text);
     switch (command.kind) {
@@ -187,66 +204,48 @@ export class TelegramRemote {
       case "help":
         await say(HELP_TEXT);
         return;
-      case "status":
-        await say(await this.statusText(config));
-        return;
       case "inbox": {
-        const fresh = await this.freshItems();
+        // 버튼으로 바로 처리할 수 있게 항목마다 따로 보낸다
+        const fresh = await freshItems(this.paths);
         if (fresh.length === 0) return void (await say("새 제안이 없어요."));
         const names = await this.dutyNames();
         for (const item of fresh.slice(0, 5)) await this.sendItem(item, names, config, chatId);
         if (fresh.length > 5) await say(`그 밖에 ${fresh.length - 5}건은 PC의 Mate에서 보세요.`);
         return;
       }
-      case "duties": {
-        const duties = (await listDuties(this.paths)).filter((d) => !isOneOff(d));
-        await say(duties.length ? duties.map((d) => `• ${escapeHtml(d.name)} <code>${d.id}</code>`).join("\n") : "임무가 없어요.");
+      case "chat":
+      case "new": {
+        // 대화는 Mate 대화 담당이 한 번에 하나씩 답한다. 답은 대화 줄로 생겨 바로 보낸다
+        const answerTo = replyTo ? Object.entries(state.chatSent).find(([, v]) => v.messageId === replyTo)?.[0] : undefined;
+        if (this.chat.busy) await say("앞의 말에 답하는 중이에요. 이어서 답할게요.");
+        await this.api.typing(chatId).catch(() => undefined);
+        this.chat.submit({ text: command.kind === "new" ? "/new" : command.text, source: "telegram", ...(answerTo ? { answerTo } : {}) });
         return;
       }
-      case "folders": {
-        const folders = await this.knownFolders();
-        await say(folders.length ? folders.map((f) => `• <b>${escapeHtml(folderAlias(f))}</b> ${escapeHtml(f)}`).join("\n") : "아는 폴더가 없어요. PC의 Mate에서 임무를 하나 만들어 주세요.");
-        return;
-      }
-      case "run": {
-        const q = command.query.toLowerCase();
-        const duty = (await listDuties(this.paths)).find((d) => d.id === q || (q && d.name.toLowerCase().includes(q)));
-        if (!duty) return void (await say("그 임무를 찾지 못했어요. /duties로 목록을 보세요."));
-        await addRequest(this.paths, duty.id, this.now());
-        await this.trackRun(duty.id);
-        await say(`▶ <b>${escapeHtml(duty.name)}</b>을(를) 실행할게요. 끝나면 알려 드릴게요.`);
-        return;
-      }
-      case "ask":
-      case "fix": {
-        if (!command.text) return void (await say(`무엇을 할지 함께 보내 주세요. 예: <code>/${command.kind} ${command.kind === "fix" ? "pi-desktop 깨진 테스트 고쳐줘" : "pi-desktop CI 실패 원인 찾아줘"}</code>`));
-        if (command.kind === "fix" && !config.telegram.allowFix) {
-          return void (await say("휴대폰에서 고치기는 꺼져 있어요. PC의 Mate 설정 → 휴대폰 연결에서 허용할 수 있어요. 지금은 /ask로 살펴보기만 할 수 있어요."));
-        }
-        const folders = await this.knownFolders();
-        const { folder, rest } = resolveFolder(command.text, folders);
-        if (!folder || !rest) {
-          const list = folders.map((f) => `<b>${escapeHtml(folderAlias(f))}</b>`).join(", ");
-          return void (await say(folders.length ? `어느 폴더인지 앞에 써 주세요: ${list}\n예: <code>/${command.kind} ${escapeHtml(folderAlias(folders[0]!))} ${escapeHtml(rest || "할 일")}</code>` : "아는 폴더가 없어요. PC의 Mate에서 임무를 하나 만들어 주세요."));
-        }
-        const duty = await requestOneOff(
-          this.paths,
-          { idPrefix: "phone", name: `휴대폰 지시: ${rest}`, cwd: folder, prompt: rest, wantAct: command.kind === "fix" },
-          this.exec,
-          this.now(),
+      default: {
+        // 나머지 "/" 명령은 앱 대화와 같은 처리 (결과는 대화 담당이 추적해 알린다)
+        const text = await runCommand(
+          {
+            paths: this.paths,
+            exec: this.exec,
+            now: this.now,
+            track: (dutyId, source) => this.chat.track(dutyId, source),
+            source: "telegram",
+            allowFix: config.telegram.allowFix,
+          },
+          command,
         );
-        await this.trackRun(duty.id);
-        const how = duty.profile === "act" ? "별도 작업 공간에서 고치고, 적용은 다시 물을게요" : "읽기만 하며 살펴보고 결과를 보낼게요";
-        await say(`📝 받았어요 (<b>${escapeHtml(folderAlias(folder))}</b>): ${safe(rest, 200)}\n${how}.`);
-        return;
+        await say(safe(text, 3500));
       }
     }
   }
 
   private async handleCallback(id: string, data: string | undefined, messageId: number, config: MateConfig): Promise<void> {
-    const cb = parseCallback(data);
     const state = await loadRemoteState(this.paths);
     const chatId = state.chatId!;
+    const option = parseOptionCallback(data);
+    if (option) return this.answerOption(id, option, messageId, chatId);
+    const cb = parseCallback(data);
     if (!cb) return void (await this.api.answerCallback(id));
     const item = (await readInbox(this.paths.inbox)).find((i) => i.id === cb.itemId);
     if (!item) return void (await this.api.answerCallback(id, "이미 없는 항목이에요"));
@@ -284,7 +283,7 @@ export class TelegramRemote {
         case "delegate": {
           if (!config.telegram.allowFix) return void (await this.api.answerCallback(id, "휴대폰에서 고치기는 설정에서 허용해야 해요"));
           const duty = await delegateInboxItem(this.paths, item.id, this.exec);
-          await this.trackRun(duty.id);
+          await this.chat.track(duty.id, "telegram");
           return void (await done("🛠 맡겼어요. 끝나면 알려 드릴게요"));
         }
         case "view": {
@@ -301,33 +300,60 @@ export class TelegramRemote {
     }
   }
 
+  /** Mate 질문의 선택지를 눌렀다: 그 답을 대화로 넘긴다 */
+  private async answerOption(id: string, option: { lineId: string; index: number }, messageId: number, chatId: number): Promise<void> {
+    const lines = await readChat(this.paths.chat);
+    const question = lines.find((l) => l.id === option.lineId && l.kind === "question");
+    const answer = question?.options?.[option.index];
+    if (!question || !answer) return void (await this.api.answerCallback(id, "이미 없는 질문이에요"));
+    await this.api.editButtons(chatId, messageId, []);
+    if (lines.some((l) => l.answerTo === question.id)) return void (await this.api.answerCallback(id, "이미 답한 질문이에요"));
+    await this.api.answerCallback(id, `답: ${answer}`);
+    await this.api.typing(chatId).catch(() => undefined);
+    this.chat.submit({ text: answer, source: "telegram", answerTo: question.id });
+  }
+
   // ── 보낼 것 ──
 
   private async outbound(config: MateConfig, state: RemoteState): Promise<void> {
     const chatId = state.chatId!;
-    // 휴대폰에서 시작한 실행이 끝났으면 결과를 알린다
-    if (Object.keys(state.pendingRuns).length > 0) {
-      const runs = await listRuns(this.paths, 100);
-      const pending = { ...state.pendingRuns };
-      for (const [dutyId, at] of Object.entries(pending)) {
-        const run = runs.find((r) => r.dutyId === dutyId && r.startedAt >= at - 1_000 && r.status !== "running");
-        if (!run) continue;
-        const ok = run.status === "done";
-        const lines = [`${ok ? "✅ 끝났어요" : "⚠️ 실패했어요"}: <b>${safe(run.dutyName, 120)}</b>`];
-        if (run.error) lines.push(safe(run.error, 400));
-        else if (run.summary) lines.push(safe(run.summary, 900));
-        if (run.proposals) lines.push(`인박스에 ${run.proposals}건을 남겼어요.`);
-        await this.api.sendMessage(chatId, lines.join("\n"));
-        delete pending[dutyId];
-      }
-      await this.patchState({ pendingRuns: pending });
-    }
+    await this.flushChat();
     if (inQuietHours(config.telegram.quiet, this.now())) return;
-    const fresh = (await this.freshItems()).filter((i) => i.createdAt >= (state.pairedAt ?? 0) && !state.sent[i.id] && shouldNotify(i, config.telegram.notify));
+    const fresh = (await freshItems(this.paths)).filter((i) => i.createdAt >= (state.pairedAt ?? 0) && !state.sent[i.id] && shouldNotify(i, config.telegram.notify));
     if (fresh.length === 0) return;
     const names = await this.dutyNames();
     // 오래된 것부터 보낸다
     for (const item of fresh.reverse().slice(0, MAX_SEND_PER_CYCLE)) await this.sendItem(item, names, config, chatId);
+  }
+
+  /** 아직 보내지 않은 대화 줄(휴대폰 대화의 답·Mate 질문)을 보낸다. 질문은 조용한 시간을 지킨다 */
+  flushChat(): Promise<void> {
+    this.sending = this.sending.then(() => this.sendChatLines()).catch((error: Error) => this.log(`telegram chat send error ${error.message}`));
+    return this.sending;
+  }
+
+  private async sendChatLines(): Promise<void> {
+    const [config, state] = await Promise.all([loadConfig(this.paths), loadRemoteState(this.paths)]);
+    if (!config.telegram.enabled || !state.chatId) return;
+    const lines = await readChat(this.paths.chat);
+    const answered = new Set(lines.filter((l) => l.answerTo).map((l) => l.answerTo));
+    const quiet = inQuietHours(config.telegram.quiet, this.now());
+    const todo = lines.filter(
+      (l) =>
+        chatLineForPhone(l) &&
+        l.at >= (state.pairedAt ?? 0) &&
+        !state.chatSent[l.id] &&
+        !(l.kind === "question" && (answered.has(l.id) || quiet || l.source === "app")),
+    );
+    if (todo.length === 0) return;
+    const map = { ...state.chatSent };
+    for (const line of todo.slice(0, MAX_SEND_PER_CYCLE)) {
+      const text = line.kind === "question" ? `❓ ${safe(line.text, 1500)}` : safe(line.text, 3500);
+      const sent = await this.api.sendMessage(state.chatId, text, line.kind === "question" && line.options?.length ? optionButtons(line.id, line.options) : undefined);
+      map[line.id] = { messageId: sent.message_id, at: this.now() };
+    }
+    for (const [k, v] of Object.entries(map)) if (this.now() - v.at > MONTH_MS) delete map[k];
+    await this.patchState({ chatSent: map });
   }
 
   private async sendItem(item: InboxItem, names: Map<string, string>, config: MateConfig, chatId: number): Promise<void> {
@@ -335,50 +361,13 @@ export class TelegramRemote {
     const state = await loadRemoteState(this.paths);
     const map = { ...state.sent, [item.id]: { messageId: sent.message_id, at: this.now() } };
     // 한 달 넘은 기록은 지운다
-    for (const [k, v] of Object.entries(map)) if (this.now() - v.at > 30 * 24 * 3_600_000) delete map[k];
+    for (const [k, v] of Object.entries(map)) if (this.now() - v.at > MONTH_MS) delete map[k];
     await this.patchState({ sent: map });
-  }
-
-  private async freshItems(): Promise<InboxItem[]> {
-    const [items, handled] = await Promise.all([readInbox(this.paths.inbox), loadInboxState(this.paths)]);
-    return items.filter((i) => !handled[i.id]).sort((a, b) => b.createdAt - a.createdAt);
   }
 
   private async dutyNames(): Promise<Map<string, string>> {
     return new Map<string, string>([[OBSERVER_DUTY_ID, OBSERVER_NAME], ...(await listDuties(this.paths)).map((d) => [d.id, d.name] as [string, string])]);
   }
-
-  /** 지시할 수 있는 폴더: 임무 폴더 + 활동 관찰이 본 최근 작업 폴더 */
-  private async knownFolders(): Promise<string[]> {
-    const duties = await listDuties(this.paths);
-    const state = await loadState(this.paths);
-    const all = [...duties.filter((d) => !isOneOff(d)).map((d) => d.cwd), ...(state.observer?.recent.map((s) => s.cwd) ?? []), ...duties.map((d) => d.cwd)];
-    const seen = new Map<string, string>();
-    for (const f of all) if (f && !seen.has(f.replace(/\\/g, "/").toLowerCase())) seen.set(f.replace(/\\/g, "/").toLowerCase(), f);
-    return [...seen.values()].slice(0, 20);
-  }
-
-  private async trackRun(dutyId: string): Promise<void> {
-    const state = await loadRemoteState(this.paths);
-    await this.patchState({ pendingRuns: { ...state.pendingRuns, [dutyId]: this.now() } });
-  }
-
-  private async statusText(config: MateConfig): Promise<string> {
-    const [state, fresh] = await Promise.all([loadState(this.paths), this.freshItems()]);
-    const cost = state.today.costUsd ? ` · 오늘 비용 $${state.today.costUsd.toFixed(3)}` : "";
-    return [
-      "<b>Mate 상태</b>",
-      `실행기: 동작 중${state.current ? ` (지금 실행 중: ${escapeHtml(state.current.dutyId)})` : ""}`,
-      `오늘 자동 실행 ${state.today.count}/${config.dailyRunLimit}회${cost}`,
-      `새 제안 ${fresh.length}건${config.paused ? " · 일시 정지 중" : ""}`,
-      `모델: ${escapeHtml(config.model || "Pi 기본 모델")}`,
-    ].join("\n");
-  }
-}
-
-/** 휴대폰 지시·맡긴 일처럼 한 번만 도는 임무 */
-function isOneOff(duty: Duty): boolean {
-  return /^(phone|delegated)-/.test(duty.id);
 }
 
 function sleep(ms: number): Promise<void> {

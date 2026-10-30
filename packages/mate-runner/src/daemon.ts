@@ -10,6 +10,7 @@ import { ChangeWatchers, execCommand, notePending, type Exec } from "./watchers"
 import { Observer, observerDuty } from "./observer";
 import { TELEGRAM_TOKEN_ENV } from "./remote/telegram-api";
 import { TelegramRemote } from "./remote/telegram-remote";
+import { ChatAgent } from "./chat/chat-agent";
 import type { SessionAggregate } from "./activity-types";
 import { collectChange, prepareWorkspace, removeWorkspace, type Workspace } from "./workspace";
 import {
@@ -163,6 +164,7 @@ export async function runDuty(
         model: record.model,
         extensions,
         inboxPath: paths.inbox,
+        chatPath: paths.chat,
         sessionsDir: paths.sessions,
         timeoutSec: duty.timeoutSec ?? DEFAULT_TIMEOUT_SEC,
         maxCostUsd: duty.maxCostUsd ?? config.maxCostUsd,
@@ -208,6 +210,7 @@ export class Runner {
   private readonly watchers: ChangeWatchers;
   private readonly observer: Observer;
   private remote: TelegramRemote | undefined;
+  private chat: ChatAgent | undefined;
 
   constructor(private readonly options: RunnerOptions) {
     this.watchers = new ChangeWatchers(options.exec, (message) => void log(options.paths, message));
@@ -233,10 +236,14 @@ export class Runner {
       // 감시를 못 해도 주기 확인으로 처리된다
     }
     this.timer = setInterval(() => void this.tick(), TICK_MS);
+    // Mate 대화: 임무 실행과 따로 돌아, 임무가 도는 중에도 답한다
+    const exec = this.options.exec ?? execCommand;
+    this.chat = new ChatAgent({ paths, kitDir: this.options.kitDir, locatePi: this.options.locatePi, exec, log: (message) => void log(paths, message), ...(this.options.now ? { now: this.options.now } : {}) });
+    await this.chat.start();
     // 휴대폰 연결: 앱이 봇 토큰을 넘겼을 때만. 임무 실행과 따로 돌아 버튼에 바로 답한다
     const token = process.env[TELEGRAM_TOKEN_ENV];
     if (token) {
-      this.remote = new TelegramRemote(paths, token, this.options.exec ?? execCommand, (message) => void log(paths, message));
+      this.remote = new TelegramRemote(paths, token, exec, (message) => void log(paths, message), this.chat);
       this.remote.start();
     }
     await this.tick();
@@ -247,6 +254,7 @@ export class Runner {
     this.watcher?.close();
     this.watchers.dispose();
     this.remote?.stop();
+    this.chat?.stop();
     // 도는 실행이 있으면 abort 신호로 Pi 프로세스 트리를 끝낸다
     this.abort.abort();
     await log(this.options.paths, `runner stop pid=${process.pid}`);
