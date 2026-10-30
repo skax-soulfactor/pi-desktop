@@ -5,12 +5,17 @@
 // - status: Pi 준비 상태(설치·버전·로그인한 프로바이더·쓸 수 있는 모델·Pi 기본 모델)를 JSON으로
 // - run: 임무 하나를 지금 이 프로세스에서 실행하고 기록을 출력한다 (확인·테스트용)
 // - mcp-check: Mate 홈 mcp.json의 서버에 연결해 보고 결과를 JSON으로 ({ ok, output })
+// - connect: 실행기가 없거나 번들이 바뀌었으면 띄우고, 표준 입출력을 실행기 소켓(JSON-RPC)에 잇는다. 앱이 붙는 길이다
+//   (설계 DESIGN-MATE-REMOTE.md §2.1, Host Agent의 connect와 같은 방식)
 import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { locatePi } from "../../host-agent/src/pi-locator";
 import { spawnDaemon } from "../../host-agent/src/spawn-daemon";
+import { runConnect } from "../../host-agent/src/connect";
+import { mateAppApi } from "./app-api";
+import { RunnerServer, socketEnv } from "./rpc-server";
 import { acquirePid, fileHash, isAlive, killRunner, log, readPid, releasePid, Runner, runDuty, type RunnerOptions } from "./daemon";
 import type { PiLaunch } from "./executor";
 import { mateHome, matePaths } from "./paths";
@@ -40,29 +45,59 @@ async function waitFor(check: () => Promise<boolean>, ms: number): Promise<boole
   return false;
 }
 
-async function start(): Promise<void> {
+/** 실행기가 없으면 띄우고, 번들이 바뀌었고 도는 실행이 없으면 새 실행기로 바꾼다 (Host Agent의 데몬 교체와 같은 이유) */
+async function ensureStarted(): Promise<{ status: "running" | "started" | "failed"; pid: number | undefined; replaced?: boolean }> {
   const pid = await readPid(paths);
   if (isAlive(pid)) {
     const state = await loadState(paths);
     const build = await fileHash(script);
-    if (state.build === build || state.current) {
-      console.log(JSON.stringify({ status: "running", pid, replaced: false }));
-      return;
-    }
-    // 번들이 바뀌었고 도는 실행이 없으면 새 실행기로 바꾼다 (Host Agent의 데몬 교체와 같은 이유)
+    if (state.build === build || state.current) return { status: "running", pid, replaced: false };
     await log(paths, `runner replace pid=${pid} build=${state.build}→${build}`);
     await killRunner(paths, pid!);
   }
   await spawnDaemon(script, process.env);
   const started = await waitFor(async () => isAlive(await readPid(paths)), 10_000);
-  console.log(JSON.stringify({ status: started ? "started" : "failed", pid: await readPid(paths) }));
-  if (!started) process.exitCode = 1;
+  return { status: started ? "started" : "failed", pid: await readPid(paths) };
+}
+
+async function start(): Promise<void> {
+  const result = await ensureStarted();
+  console.log(JSON.stringify(result));
+  if (result.status === "failed") process.exitCode = 1;
+}
+
+/** 앱이 붙는 길. 표준 출력은 JSON-RPC 통로라 다른 글을 쓰지 않는다 */
+async function connect(): Promise<void> {
+  const result = await ensureStarted();
+  if (result.status === "failed") throw new Error("실행기를 띄우지 못했습니다. run/mated.log를 확인하세요");
+  await runConnect({ env: socketEnv(paths), agentScript: script });
 }
 
 async function daemon(): Promise<void> {
   if (!(await acquirePid(paths))) return;
   const runner = new Runner(await options());
+  // 앱이 붙는 JSON-RPC 서버 (DESIGN-MATE-REMOTE.md §2). 화면이 쓰는 함수는 app-api에 있다
+  const server = new RunnerServer(
+    paths,
+    mateAppApi({
+      paths,
+      runnerView: async () => {
+        const state = await loadState(paths);
+        return {
+          alive: true,
+          pid: process.pid,
+          ...(state.heartbeatAt ? { heartbeatAt: state.heartbeatAt } : {}),
+          ...(state.current ? { current: state.current } : {}),
+          today: state.today,
+        };
+      },
+      wake: () => void runner.tick(),
+      locatePi: findPi,
+    }),
+    (message) => void log(paths, message),
+  );
   const shutdown = async () => {
+    server.close();
     await runner.stop();
     await releasePid(paths);
     process.exit(0);
@@ -71,6 +106,7 @@ async function daemon(): Promise<void> {
   process.on("SIGINT", () => void shutdown());
   process.on("uncaughtException", (error) => void log(paths, `uncaught ${error.stack ?? error}`));
   await runner.start();
+  if (!(await server.listen())) await log(paths, "rpc listen skipped: 다른 실행기가 소켓을 쓰고 있다");
 }
 
 async function stop(): Promise<void> {
@@ -108,10 +144,10 @@ async function mcpCheck(): Promise<void> {
   console.log(JSON.stringify(result));
 }
 
-const commands: Record<string, () => Promise<void>> = { start, daemon, stop, status, "mcp-check": mcpCheck, run: () => runOnce(arg) };
+const commands: Record<string, () => Promise<void>> = { start, daemon, stop, status, connect, "mcp-check": mcpCheck, run: () => runOnce(arg) };
 const handler = command ? commands[command] : undefined;
 if (!handler) {
-  console.error("사용법: mate-runner <start|daemon|stop|status|mcp-check|run <임무 id>>");
+  console.error("사용법: mate-runner <start|daemon|stop|status|connect|mcp-check|run <임무 id>>");
   process.exitCode = 2;
 } else {
   handler().catch((error: Error) => {

@@ -396,3 +396,13 @@ export async function setInboxStatus(paths: MatePaths, ids: string[], status: In
   await writeJsonAtomic(paths.inboxState, state);
   return state;
 }
+
+/** Pi가 --session-dir에 만든 세션 파일(`<시각>_<id>.jsonl`)을 찾는다 */
+export async function findSessionFile(paths: MatePaths, sessionId: string): Promise<string | undefined> {
+  try {
+    const name = (await readdir(paths.sessions)).find((n) => n.endsWith(`_${sessionId}.jsonl`));
+    return name ? join(paths.sessions, name) : undefined;
+  } catch {
+    return undefined;
+  }
+}

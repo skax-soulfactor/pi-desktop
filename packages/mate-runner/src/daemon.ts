@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
-import { appendFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { appendProposal, extensionEntries, makeProposal } from "@pi-desktop/mate-kit";
 import { askPermission } from "./permission";
@@ -16,6 +16,7 @@ import { ChatAgent } from "./chat/chat-agent";
 import type { SessionAggregate } from "./activity-types";
 import { collectChange, prepareWorkspace, removeWorkspace, type Workspace } from "./workspace";
 import {
+  findSessionFile,
   getDuty,
   listDuties,
   loadConfig,
@@ -73,15 +74,6 @@ function isSameOrInside(child: string, parent: string): boolean {
   return rel === "" || (!rel.startsWith("..") && !/^[a-zA-Z]:/.test(rel));
 }
 
-/** Pi가 --session-dir에 만든 세션 파일(`<시각>_<id>.jsonl`)을 찾는다 */
-export async function findSessionFile(paths: MatePaths, sessionId: string): Promise<string | undefined> {
-  try {
-    const name = (await readdir(paths.sessions)).find((n) => n.endsWith(`_${sessionId}.jsonl`));
-    return name ? join(paths.sessions, name) : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 export async function log(paths: MatePaths, message: string): Promise<void> {
   try {
