@@ -56,6 +56,7 @@ const api: AgentApi = {
   setPeerPolicy: (id, policy) => ipcRenderer.invoke(IpcChannels.setPeerPolicy, id, policy),
   approvePeerTask: (id, cwd) => ipcRenderer.invoke(IpcChannels.approvePeerTask, id, cwd),
   rejectPeerTask: (id) => ipcRenderer.invoke(IpcChannels.rejectPeerTask, id),
+  suggestCard: (current) => ipcRenderer.invoke(IpcChannels.suggestCard, current),
   openMcpFile: () => ipcRenderer.invoke(IpcChannels.openMcpFile),
   openSession: (cwd, from) => ipcRenderer.invoke(IpcChannels.openSession, cwd, from),
   listHistory: () => ipcRenderer.invoke(IpcChannels.listHistory),

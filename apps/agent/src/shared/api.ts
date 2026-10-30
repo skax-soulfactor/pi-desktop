@@ -67,6 +67,7 @@ export const IpcChannels = {
   forgetPeer: "agent:forget-peer",
   setPeerPolicy: "agent:set-peer-policy",
   approvePeerTask: "agent:approve-peer-task",
+  suggestCard: "agent:suggest-card",
   rejectPeerTask: "agent:reject-peer-task",
   openMcpFile: "agent:open-mcp-file",
   openSession: "agent:open-session",
@@ -226,6 +227,8 @@ export interface AgentApi {
   /** 피어가 맡긴 작업을 그 폴더에서 하도록 승인한다 (스케줄러가 곧 시작) */
   approvePeerTask(id: string, cwd: string): Promise<void>;
   rejectPeerTask(id: string): Promise<void>;
+  /** 기억(사실·교훈)과 대화 이름으로 카드 소개·잘하는 것 초안을 만든다 (저장하지 않음) */
+  suggestCard(current: CardDraft): Promise<Pick<CardDraft, "description" | "skills">>;
   openMcpFile(): Promise<void>;
   /** agent-kit 확장을 올린 새 Pi 세션을 연다 */
   /** 새 세션을 연다. forkFrom(세션 파일)을 주면 그 대화를 이어 가는 분기 세션으로 연다 */

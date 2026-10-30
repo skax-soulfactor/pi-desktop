@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from "electron";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, stat } from "node:fs/promises";
-import { homedir } from "node:os";
+import { mkdir, mkdtemp, readFile, stat } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -31,6 +31,7 @@ import { approvePairing, checkPairings, forgetPeer, networkState, pairWith, prev
 import { DEFAULT_PEER_PORT, type CardDraft, type PeerPolicy, type PeerSettings } from "@pi-desktop/agent-kit/peers";
 import { normalizeAddress } from "@pi-desktop/agent-kit/peers-protocol";
 import { approvePeerTask, rejectPeerTask } from "@pi-desktop/agent-kit/peer-tasks";
+import { generateCardDraft } from "@pi-desktop/agent-kit/card-draft";
 import { readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "./mcp-config";
 import { WEB_SEARCH_PRESETS, type McpCheckResult } from "../shared/mcp";
 import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
@@ -342,6 +343,19 @@ function registerIpc(connection: HostConnection): void {
     return stored.filter((s) => s.cwd !== schedulerDir());
   };
   ipcMain.handle(IpcChannels.listHistory, history);
+  ipcMain.handle(IpcChannels.suggestCard, async (_event, current: CardDraft) => {
+    // 카드 초안: Pi를 한 번(--print, 도구·확장 없음) 불러 만든다. 재료는 사실·교훈 기억과 사용자가 붙인 대화 이름뿐
+    const status = await connection.request<PiStatus>(Methods.piStatus);
+    if (!status.pi) throw new Error(status.piError ?? "Pi를 찾지 못했습니다");
+    const memories = (await loadMemories(memoryDir(agentDataDir()))).map((m) => ({ kind: m.kind, text: m.text }));
+    const sessionNames = (await history().catch(() => [])).flatMap((h) => (h.name ? [h.name] : [])).slice(0, 50);
+    const cwd = await mkdtemp(join(tmpdir(), "agent-card-"));
+    return generateCardDraft(
+      { command: status.pi.nodePath ?? status.node.path, args: [status.pi.cliPath, ...(devSessionOverrides().piArgs ?? [])], env: { ...process.env, ...status.pi.env, ...devSessionOverrides().env } },
+      { memories, sessionNames, current },
+      cwd,
+    );
+  });
   ipcMain.handle(IpcChannels.searchHistory, async (_event, query: string) => searchSessions(await history(), query, (path) => readFile(path, "utf8")));
   ipcMain.handle(IpcChannels.attachSession, async (_event, sessionId: string, lastSeq: number) => {
     // attach 도중 알림으로 온 이벤트도 결과에 담는다. 렌더러는 순번으로 중복을 거른다 (replay-collector.ts).

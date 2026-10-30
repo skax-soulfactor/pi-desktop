@@ -12,6 +12,9 @@ export function NetworkPage({ onError }: { onError: (message: string) => void })
   const [address, setAddress] = useState("");
   const [preview, setPreview] = useState<AgentCard>();
   const [busy, setBusy] = useState(false);
+  /** 카드 초안을 만드는 중인가, 만든 뒤 안내 */
+  const [drafting, setDrafting] = useState(false);
+  const [drafted, setDrafted] = useState(false);
   /** 들어온 작업마다 고른 폴더 */
   const [folders, setFolders] = useState<Record<string, string>>({});
 
@@ -158,9 +161,39 @@ export function NetworkPage({ onError }: { onError: (message: string) => void })
             }
             placeholder={"잘하는 것 한 줄에 하나 (이름: 설명)\n예: 빌드 오류 진단: Maven·Gradle 빌드 실패 원인 찾기"}
           />
+          {drafted && <p className="notice-line small-text">초안입니다. 다른 사람에게 보이는 글이니 확인하고 고친 뒤 저장하세요.</p>}
           <div className="row">
-            <button className="small primary" onClick={() => run(async () => (await window.piAgent.saveCard(card), setCard(undefined), await refresh()))}>
+            <button
+              className="small primary"
+              onClick={() =>
+                run(async () => {
+                  await window.piAgent.saveCard(card);
+                  setCard(undefined);
+                  setDrafted(false);
+                  await refresh();
+                })
+              }
+            >
               카드 저장
+            </button>
+            <button
+              className="small"
+              disabled={drafting}
+              title="기억(사실·교훈)과 대화 이름으로 소개·잘하는 것을 채웁니다. 선호 기억과 대화 내용은 쓰지 않습니다. 저장하기 전까지 공개되지 않습니다"
+              onClick={() =>
+                run(async () => {
+                  setDrafting(true);
+                  try {
+                    const draft = await window.piAgent.suggestCard(card);
+                    setCard({ ...card, ...draft });
+                    setDrafted(true);
+                  } finally {
+                    setDrafting(false);
+                  }
+                })
+              }
+            >
+              {drafting ? "만드는 중…" : "기억으로 초안 만들기"}
             </button>
           </div>
         </section>
