@@ -35,6 +35,7 @@ export const IpcChannels = {
   listHosts: "agent:list-hosts",
   currentHost: "agent:current-host",
   setHost: "agent:set-host",
+  replaceAgent: "agent:replace-agent",
   listSshHosts: "agent:list-ssh-hosts",
   saveSshHost: "agent:save-ssh-host",
   removeSshHost: "agent:remove-ssh-host",
@@ -199,6 +200,8 @@ export interface AgentApi {
   currentHost(): Promise<CurrentHost>;
   /** 호스트를 바꾼다. 다시 연결하고 화면을 새로 읽는다 */
   setHost(hostId: string): Promise<void>;
+  /** 예전 Host Agent(업데이트 대기)를 지금 끄고 새 것으로 바꾼다. 돌고 있는 대화도 끝난다 */
+  replaceAgent(): Promise<void>;
   listSshHosts(): Promise<SshHostConfig[]>;
   saveSshHost(host: SshHostConfig, previousName?: string): Promise<SshHostConfig>;
   removeSshHost(name: string): Promise<void>;

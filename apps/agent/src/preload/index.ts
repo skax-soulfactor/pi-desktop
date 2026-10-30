@@ -14,6 +14,7 @@ const api: AgentApi = {
   listHosts: () => ipcRenderer.invoke(IpcChannels.listHosts),
   currentHost: () => ipcRenderer.invoke(IpcChannels.currentHost),
   setHost: (hostId) => ipcRenderer.invoke(IpcChannels.setHost, hostId),
+  replaceAgent: () => ipcRenderer.invoke(IpcChannels.replaceAgent),
   listSshHosts: () => ipcRenderer.invoke(IpcChannels.listSshHosts),
   saveSshHost: (host, previousName) => ipcRenderer.invoke(IpcChannels.saveSshHost, host, previousName),
   removeSshHost: (name) => ipcRenderer.invoke(IpcChannels.removeSshHost, name),

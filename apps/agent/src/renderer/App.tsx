@@ -272,6 +272,24 @@ export function App() {
             </button>
           </div>
         )}
+        {connection.status === "connected" && connection.agentUpdate && (
+          // 앱을 업데이트했는데 데몬은 예전 것: 새 기능(작업·기록·네트워크 등)을 처리하지 못한다
+          <div className="update-banner" role="status">
+            <span>
+              Agent 업데이트 대기: 떠 있는 Host Agent가 이 앱보다 예전 것이라 일부 화면이 동작하지 않을 수 있습니다. 대화가 모두 끝나면 저절로 바뀝니다
+              (지금 도는 대화 {connection.agentUpdate.liveSessions}개).
+            </span>
+            <button
+              className="small"
+              onClick={() => {
+                if (!window.confirm("지금 Host Agent를 바꿀까요? 돌고 있는 대화는 끝나며, 기록에서 다시 열어 이어 갈 수 있습니다.")) return;
+                guard(() => window.piAgent.replaceAgent());
+              }}
+            >
+              지금 바꾸기
+            </button>
+          </div>
+        )}
         {agent.opening && (
           // Pi를 띄우는 데 몇 초 걸린다. 눌린 것을 바로 보여 주어 여러 번 누르지 않게 한다.
           <div className="opening-banner" role="status">

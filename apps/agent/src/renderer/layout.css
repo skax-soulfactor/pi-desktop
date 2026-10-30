@@ -251,6 +251,19 @@ button.small {
   flex: 1;
 }
 
+/* Host Agent 업데이트 대기 */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+
+.update-banner span {
+  flex: 1;
+}
+
 /* 대화를 여는 중 표시 */
 .opening-banner {
   display: flex;

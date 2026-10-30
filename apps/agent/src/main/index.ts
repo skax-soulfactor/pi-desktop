@@ -223,6 +223,9 @@ function createConnection(hostId: string, onConnected: () => void): HostConnecti
     onFilesChanged: ignore,
     onPlaygroundOutput: ignore,
     onPiUpdateOutput: ignore,
+    // 늘 떠 있는 예약 작업 세션은 데몬 교체를 막지 않는다 (붙은 뒤 ensureSchedulerSession이 새 데몬에 다시 띄운다).
+    // 이 세션까지 세면 앱을 업데이트해도 예전 데몬이 계속 남아 새 기능 요청(agent.call 등)을 거절한다
+    blocksReplace: (session) => !hostPaths || session.cwd !== schedulerDir(),
   });
 }
 
@@ -340,6 +343,7 @@ function registerIpc(conn: () => HostConnection): void {
   ]);
   ipcMain.handle(IpcChannels.currentHost, (): CurrentHost => ({ id: currentHostId, remote: currentHostId !== LOCAL_HOST_ID }));
   ipcMain.handle(IpcChannels.setHost, (_event, hostId: string) => switchHost(hostId));
+  ipcMain.handle(IpcChannels.replaceAgent, () => conn().replaceAgent());
   ipcMain.handle(IpcChannels.listSshHosts, () => sshHosts().list());
   ipcMain.handle(IpcChannels.saveSshHost, (_event, host: SshHostConfig, previousName?: string) => sshHosts().save(host, previousName));
   ipcMain.handle(IpcChannels.removeSshHost, async (_event, name: string) => {
