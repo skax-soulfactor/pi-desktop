@@ -3,7 +3,7 @@ import { appendProposal, makeProposal, readInbox } from "@pi-desktop/mate-kit";
 import {
   applySessionLine,
   isObserved,
-  piSessionsDir,
+  observedSessions,
   projectCandidates,
   readNewLines,
   readProject,
@@ -113,7 +113,10 @@ export class Observer {
 
   private async scanSessions(obs: ObserverState, config: MateConfig, now: number): Promise<SessionAggregate[]> {
     const quiet = config.observe.quietMinutes * 60_000;
-    const files = await recentSessionFiles(piSessionsDir(this.env), now - 2 * 24 * 3_600_000);
+    const sources = observedSessions(this.env);
+    const since = now - 2 * 24 * 3_600_000;
+    const files = (await Promise.all(sources.dirs.map((dir) => recentSessionFiles(dir, since)))).flat();
+    const excluded = [...config.observe.excluded, ...sources.internal];
     const ended: SessionAggregate[] = [];
     for (const file of files) {
       let entry = obs.files[file.path];
@@ -136,7 +139,7 @@ export class Observer {
       if (!agg || agg.prompts === 0 || now - Math.max(agg.lastAt, file.mtime) < quiet) continue;
       if (entry.endedAt && entry.endedAt >= agg.lastAt) continue;
       entry.endedAt = now;
-      if (isObserved(agg.cwd, config.observe.excluded)) ended.push(agg);
+      if (isObserved(agg.cwd, excluded)) ended.push(agg);
       // 같은 세션을 이어 쓰면 다음 작업은 새로 센다
       entry.aggregate = { ...agg, startedAt: agg.lastAt, prompts: 0, firstPrompt: undefined, editedFiles: [], commands: 0, ranTests: false, failures: [], modelErrors: [] };
       delete entry.aggregate.firstPrompt;

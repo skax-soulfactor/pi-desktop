@@ -23,6 +23,13 @@ describe("isolationArgs", () => {
     expect(extensions).not.toContain("builtin:mcp");
   });
 
+  it("mcp: false면 MCP 확장과 codemode·tool-search를 올리지 않는다", () => {
+    const args = isolationArgs({ home: "/h", isolationDir: "/iso", extensions: ["/kit/a.ts"], mcp: false });
+    const extensions = args.flatMap((arg, i) => (arg === "-e" ? [args[i + 1]] : []));
+    expect(extensions).toEqual(["/kit/a.ts", resolve("/iso", "extensions/context.ts")]);
+    expect(args).toContain("-ne");
+  });
+
   it("세션 폴더를 주지 않으면 --session-dir를 붙이지 않는다", () => {
     expect(isolationArgs({ home: "/h", isolationDir: "/iso", extensions: [] })).not.toContain("--session-dir");
   });

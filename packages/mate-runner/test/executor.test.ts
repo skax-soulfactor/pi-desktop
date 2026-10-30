@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EventSummary, piArgs, piEnv } from "../src/executor";
+import { join, resolve } from "node:path";
+import { EventSummary, isolationDirOf, piArgs, piEnv } from "../src/executor";
 import type { Duty } from "../src/types";
 
 const duty: Duty = {
@@ -17,6 +18,8 @@ const input = {
   runId: "r1",
   model: "anthropic/claude-haiku-5-5",
   extensions: ["/kit/a.ts"],
+  home: "/h",
+  isolationDir: "/iso",
   inboxPath: "/h/inbox.jsonl",
   sessionsDir: "/h/sessions",
   timeoutSec: 60,
@@ -51,6 +54,19 @@ describe("piArgs", () => {
     // 관찰자 실행은 제안에 붙일 주제를 넘긴다
     expect(piEnv({ ...input, topic: "untested-edit" }, "propose")).toMatchObject({ PI_DESKTOP_MATE_TOPIC: "untested-edit" });
     expect(piEnv(input, "observe")).not.toHaveProperty("PI_DESKTOP_MATE_TOPIC");
+  });
+
+  it("Mate 홈의 스킬·프롬프트만 올리고 Pi 기본 확장·문맥 파일·MCP는 끈다", () => {
+    const args = piArgs(input);
+    for (const flag of ["-ns", "-np", "-ne", "-nc"]) expect(args).toContain(flag);
+    expect(args[args.indexOf("--skill") + 1]).toBe(join("/h", "skills"));
+    expect(args[args.indexOf("--prompt-template") + 1]).toBe(join("/h", "prompts"));
+    const extensions = args.flatMap((arg, i) => (arg === "-e" ? [args[i + 1]] : []));
+    expect(extensions).toEqual(["/kit/a.ts", resolve("/iso", "extensions/context.ts")]);
+    // 세션 폴더는 Mate가 정한 것 하나뿐이다
+    expect(args.filter((arg) => arg === "--session-dir")).toHaveLength(1);
+    expect(piEnv(input, "observe")).toMatchObject({ PI_ISOLATION_HOME: "/h" });
+    expect(isolationDirOf(resolve("/r/mate-kit"))).toBe(resolve("/r/pi-isolation"));
   });
 });
 

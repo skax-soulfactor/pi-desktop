@@ -3,7 +3,7 @@ import { watch, type FSWatcher } from "node:fs";
 import { appendFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { appendChatQuestion, appendProposal, extensionEntries, makeProposal, PERMISSION_OPTIONS, readBlocked } from "@pi-desktop/mate-kit";
-import { runPi, type PiLaunch, type RunOutcome } from "./executor";
+import { isolationDirOf, runPi, type PiLaunch, type RunOutcome } from "./executor";
 import type { MatePaths } from "./paths";
 import { isDue, localDateKey } from "./schedule";
 import { ChangeWatchers, execCommand, notePending, type Exec } from "./watchers";
@@ -164,6 +164,8 @@ export async function runDuty(
         runId,
         model: record.model,
         extensions,
+        home: paths.home,
+        isolationDir: isolationDirOf(options.kitDir),
         inboxPath: paths.inbox,
         chatPath: paths.chat,
         blockedPath,

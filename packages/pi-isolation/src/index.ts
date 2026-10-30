@@ -11,8 +11,8 @@ export { ISOLATION_HOME_ENV, isolatedPaths, isolationHome } from "./paths";
  * 꺼진 MCP와 문맥 파일은 이 패키지의 확장이 앱 홈에서 다시 읽는다.
  */
 
-/** 이 패키지 폴더 기준 확장 진입 파일 */
-export const ISOLATION_EXTENSIONS = ["extensions/mcp.ts", "extensions/context.ts"] as const;
+const MCP_EXTENSION = "extensions/mcp.ts";
+const CONTEXT_EXTENSION = "extensions/context.ts";
 
 /** Pi 내장 확장 중 다시 올릴 것. MCP 도구는 기본 노출이 codemode라 이 둘이 있어야 쓸 수 있다. 내장 MCP는 올리지 않는다 */
 const BUILTIN_EXTENSIONS = ["builtin:codemode", "builtin:tool-search"];
@@ -26,16 +26,21 @@ export interface IsolationOptions {
   extensions: string[];
   /** 세션 폴더. 주지 않으면 `--session-dir`를 붙이지 않는다 (호출하는 쪽이 따로 정할 때) */
   sessionDir?: string;
+  /** false면 MCP를 아예 올리지 않는다 (MCP 확장과 codemode·tool-search 모두). 기본 true */
+  mcp?: boolean;
 }
 
-export function isolationExtensionPaths(isolationDir: string): string[] {
-  return ISOLATION_EXTENSIONS.map((entry) => resolve(isolationDir, entry));
+/** 이 패키지의 확장 진입 파일 (절대 경로) */
+export function isolationExtensionPaths(isolationDir: string, options: { mcp?: boolean } = {}): string[] {
+  const entries = options.mcp === false ? [CONTEXT_EXTENSION] : [MCP_EXTENSION, CONTEXT_EXTENSION];
+  return entries.map((entry) => resolve(isolationDir, entry));
 }
 
 /** `pi --mode …` 뒤에 붙일 인자 */
 export function isolationArgs(options: IsolationOptions): string[] {
   const paths = isolatedPaths(options.home);
-  const extensions = [...options.extensions, ...isolationExtensionPaths(options.isolationDir), ...BUILTIN_EXTENSIONS];
+  const mcp = options.mcp !== false;
+  const extensions = [...options.extensions, ...isolationExtensionPaths(options.isolationDir, { mcp }), ...(mcp ? BUILTIN_EXTENSIONS : [])];
   return [
     ...(options.sessionDir ? ["--session-dir", options.sessionDir] : []),
     "-ns",

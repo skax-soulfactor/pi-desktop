@@ -3,7 +3,7 @@ import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { appendChat, extensionEntries, PERMISSION_OPTIONS, readChat, readChatActions, readInbox, type ChatLine } from "@pi-desktop/mate-kit";
 import { delegateInboxItem } from "../delegate";
-import { runPi as defaultRunPi, type PiLaunch } from "../executor";
+import { isolationDirOf, runPi as defaultRunPi, type PiLaunch } from "../executor";
 import type { MatePaths } from "../paths";
 import { folderAlias, parseCommand } from "../remote/messages";
 import { addRequest, dutyIdFrom, listDuties, listRuns, loadConfig, readJson, saveConfig, saveDuty, setInboxStatus, writeJsonAtomic } from "../store";
@@ -294,6 +294,8 @@ export class ChatAgent {
           runId: `chat-${now.toString(36)}`,
           model: config.model,
           extensions,
+          home: paths.home,
+          isolationDir: isolationDirOf(this.options.kitDir),
           inboxPath: paths.inbox,
           sessionsDir: paths.chatSessions,
           timeoutSec: CHAT_TIMEOUT_SEC,

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile, appendFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile, appendFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -123,9 +123,11 @@ describe("Observer", () => {
   afterEach(async () => {
     await rm(base, { recursive: true, force: true });
   });
+  /** 사용자 홈의 세션을 보지 않도록 Pi·Agent 세션 폴더를 모두 임시 폴더로 */
+  const sessionEnv = () => ({ PI_CODING_AGENT_SESSION_DIR: join(base, "pi-sessions"), PI_DESKTOP_AGENT_HOME: join(base, "agent-home") });
 
   it("세션이 조용해지면 끝난 것으로 기록하고, 규칙 후보는 인박스에, 분석 후보는 쉬는 때 관찰자에게", async () => {
-    const observer = new Observer(paths, noGit, { PI_CODING_AGENT_SESSION_DIR: join(base, "pi-sessions") });
+    const observer = new Observer(paths, noGit, sessionEnv());
     const state: RunnerState = { duties: {}, today: { date: "", count: 0 } };
     const now = Date.now();
     const file = join(sessions, "2026_s1.jsonl");
@@ -155,8 +157,26 @@ describe("Observer", () => {
     expect((await observer.tick(state, config(), later + 130_000 + 6 * 60_000)).ended.map((s) => s.firstPrompt)).toEqual(["하나 더"]);
   });
 
+  it("Agent의 세션도 읽기만 하고, Agent 앱 홈 안에서 연 세션(스케줄러)은 빼고 본다", async () => {
+    const observer = new Observer(paths, noGit, sessionEnv());
+    const agentHome = join(base, "agent-home");
+    const agentSessions = join(agentHome, "sessions", "--work--");
+    await mkdir(agentSessions, { recursive: true });
+    const state: RunnerState = { duties: {}, today: { date: "", count: 0 } };
+    const now = Date.now();
+    const work = `${sessionLines("/work", now, { edit: true }).join("\n")}\n`;
+    await writeFile(join(agentSessions, "a.jsonl"), work);
+    const scheduler = `${sessionLines(join(agentHome, "scheduler"), now, { edit: true }).join("\n")}\n`;
+    await writeFile(join(agentSessions, "scheduler.jsonl"), scheduler);
+    await observer.tick(state, config(), now + 60_000);
+    const { ended } = await observer.tick(state, config(), now + 6 * 60_000);
+    expect(ended.map((s) => s.cwd)).toEqual(["/work"]);
+    // 읽기만 한다
+    expect(await readFile(join(agentSessions, "a.jsonl"), "utf8")).toBe(work);
+  });
+
   it("관찰을 켜기 전에 이미 조용해진 세션은 읽지 않는다", async () => {
-    const observer = new Observer(paths, noGit, { PI_CODING_AGENT_SESSION_DIR: join(base, "pi-sessions") });
+    const observer = new Observer(paths, noGit, sessionEnv());
     await writeFile(join(sessions, "old.jsonl"), `${sessionLines("/repo", Date.now() - 2 * H, { edit: true }).join("\n")}\n`);
     const state: RunnerState = { duties: {}, today: { date: "", count: 0 } };
     const now = Date.now() + 10 * 60_000;
