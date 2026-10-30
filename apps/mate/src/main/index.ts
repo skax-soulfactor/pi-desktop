@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { readInbox } from "@pi-desktop/mate-kit";
 import {
   addRequest,
+  delegateInboxItem,
   applyInboxChange,
   discardInboxChange,
   execCommand,
@@ -177,23 +178,7 @@ async function overview(): Promise<Overview> {
  * git 저장소면 고치기(act: 별도 작업 공간, 적용은 사용자가), 아니면 제안 단계로. 임무로 남겨 다시 돌릴 수 있게 한다.
  */
 async function delegate(itemId: string): Promise<void> {
-  const item = (await readInbox(paths.inbox)).find((i) => i.id === itemId);
-  if (!item?.followUp) throw new Error("맡길 일이 없는 제안입니다");
-  const repo = await execCommand("git", ["rev-parse", "--is-inside-work-tree"], item.followUp.cwd);
-  const now = Date.now();
-  const duty = await saveDuty(paths, {
-    id: `delegated-${now.toString(36)}`,
-    name: `맡긴 일: ${item.title}`.slice(0, 80),
-    enabled: true,
-    cwd: item.followUp.cwd,
-    // 관찰자에게 맡길 일을 그것만으로 실행할 수 있게 쓰라고 했으므로 그대로 쓴다
-    prompt: item.followUp.prompt,
-    profile: repo.code === 0 && repo.stdout.trim() === "true" ? "act" : "propose",
-    trigger: { kind: "manual" },
-    createdAt: now,
-  });
-  await addRequest(paths, duty.id);
-  await setInboxStatus(paths, [item.id], "accepted");
+  await delegateInboxItem(paths, itemId);
   if (!isAlive(await readPid(paths))) await ensureRunner();
 }
 

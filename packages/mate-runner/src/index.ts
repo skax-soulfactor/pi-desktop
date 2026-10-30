@@ -9,3 +9,4 @@ export { applyInboxChange, discardInboxChange } from "./inbox-change";
 export type { PiReadiness } from "./pi-readiness";
 export { OBSERVER_DUTY_ID, OBSERVER_NAME, readActivity, topicFeedback } from "./observer";
 export { execCommand } from "./watchers";
+export { delegateInboxItem, requestOneOff } from "./delegate";
