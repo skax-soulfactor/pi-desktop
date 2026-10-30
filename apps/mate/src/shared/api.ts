@@ -61,6 +61,8 @@ export const IpcChannels = {
   telegramUnpair: "mate:telegram-unpair",
   telegramTest: "mate:telegram-test",
   chatSend: "mate:chat-send",
+  applyInstall: "mate:apply-install",
+  describeInstall: "mate:describe-install",
   skillsList: "mate:skills-list",
   skillSave: "mate:skill-save",
   skillDelete: "mate:skill-delete",
@@ -194,6 +196,10 @@ export interface MateApi {
   restoreTrash(id: string): Promise<void>;
   /** 휴지통을 비운다 (ids가 없으면 전부). 정말 지운 항목 수 */
   emptyTrash(ids?: string[]): Promise<number>;
+  /** Mate가 제안한 설치(스킬 초안·MCP 서버·다른 앱 스킬 복사)를 적용한다. 사용자에게 보일 한 줄을 돌려준다 */
+  applyInstall(itemId: string): Promise<string>;
+  /** 설치 제안을 적용하기 전에 보일 내용 (Markdown) */
+  describeInstall(itemId: string): Promise<string>;
   /** Mate 홈 skills/의 스킬 (DESIGN-APPS.md §3.4) */
   skillsList(): Promise<SkillView[]>;
   /** 스킬을 만들거나 고친다. previous가 있으면 그 이름의 스킬을 고친다(이름 바꾸기 포함) */

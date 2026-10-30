@@ -140,25 +140,28 @@ export function SkillsMcpView({ act }: { act: Act }) {
       </div>
       <ul className="cards">
         {MCP_PRESETS.map((preset) => {
-          const added = servers?.some((s) => s.name === preset.name);
+          const server = servers?.find((s) => s.name === preset.name);
+          const added = !!server;
+          // Mate의 제안으로 키 없이(꺼진 채) 넣은 서버는 키를 넣으면 켜진다
+          const needsKey = !!preset.keyEnv && (!server || !server.hasSecrets);
           return (
             <li key={preset.id} className="card">
               <div className="card-head">
                 <strong className="title">{preset.label}</strong>
                 <span className="muted">{preset.detail}</span>
                 <span className="right">
-                  {preset.keyEnv && !added && (
+                  {needsKey && (
                     <input type="password" placeholder={preset.keyEnv} value={keys[preset.id] ?? ""} onChange={(e) => setKeys((prev) => ({ ...prev, [preset.id]: e.target.value }))} />
                   )}{" "}
                   <button
-                    className={added ? "small" : "small primary"}
-                    disabled={added || (!!preset.keyEnv && !keys[preset.id]?.trim())}
+                    className={added && !needsKey ? "small" : "small primary"}
+                    disabled={(added && !needsKey) || (!!preset.keyEnv && !keys[preset.id]?.trim())}
                     onClick={() => {
                       mcp(() => window.mate.addMcpPreset(preset.id, keys[preset.id]));
                       setKeys((prev) => ({ ...prev, [preset.id]: "" }));
                     }}
                   >
-                    {added ? "넣음" : "넣기"}
+                    {added ? (needsKey ? "키 넣고 켜기" : "넣음") : "넣기"}
                   </button>
                 </span>
               </div>

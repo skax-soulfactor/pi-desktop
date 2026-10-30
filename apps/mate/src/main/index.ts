@@ -13,6 +13,8 @@ import {
   loadChatState,
   delegateInboxItem,
   applyInboxChange,
+  applyInstall,
+  describeInstall,
   discardInboxChange,
   execCommand,
   OBSERVER_DUTY_ID,
@@ -247,6 +249,13 @@ function registerIpc(): void {
     await restoreTrash(paths, id);
   });
   ipcMain.handle(IpcChannels.emptyTrash, (_e, ids?: string[]) => emptyTrash(paths, ids));
+  // Mate가 제안한 설치: 적용은 실행기와 같은 코드로 한다 (DESIGN-APPS.md §3.4)
+  ipcMain.handle(IpcChannels.applyInstall, (_e, itemId: string) => applyInstall(paths, itemId));
+  ipcMain.handle(IpcChannels.describeInstall, async (_e, itemId: string) => {
+    const item = (await readInbox(paths.inbox)).find((i) => i.id === itemId);
+    if (!item?.install) throw new Error("설치 제안을 찾지 못했습니다");
+    return describeInstall(item.install);
+  });
   // 스킬·MCP (설계 DESIGN-APPS.md §3.4): Mate 홈의 skills/·mcp.json을 Agent와 같은 형식·코드로 다룬다
   ipcMain.handle(IpcChannels.skillsList, () => listSkillsIn(paths.skills));
   ipcMain.handle(IpcChannels.skillSave, async (_e, previous: string | undefined, input: SkillInput) => {
