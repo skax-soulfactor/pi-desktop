@@ -25,6 +25,7 @@ export function ChatPage({
   home,
   onMoveTo,
   onMoveToPicked,
+  prefill,
   guard,
 }: {
   agent: Session;
@@ -43,6 +44,8 @@ export function ChatPage({
   /** 지금 대화를 그 폴더로 옮겨 이어 간다 */
   onMoveTo: (folder: string) => void;
   onMoveToPicked: () => void;
+  /** 입력창에 채울 글. tick이 바뀔 때마다 채운다 */
+  prefill?: { text: string; tick: number };
   guard: (action: () => Promise<void>) => void;
 }) {
   const { session, chat, ui, kit, model, models } = agent;
@@ -58,6 +61,15 @@ export function ChatPage({
     if (session) input.current?.focus();
     setRenaming(undefined);
   }, [session?.sessionId]);
+
+  // 다른 화면에서 보낸 글(예: /skill:이름)을 입력창에 채운다. 새 요청일 때만
+  const seenPrefill = useRef(prefill?.tick);
+  useEffect(() => {
+    if (!prefill || prefill.tick === seenPrefill.current) return;
+    seenPrefill.current = prefill.tick;
+    setDraft(prefill.text);
+    input.current?.focus();
+  }, [prefill?.tick, session?.sessionId]);
 
   // 이름 바꾸기 요청이 새로 왔을 때만 연다. 다른 화면에 갔다 돌아와 다시 그려질 때는 열지 않는다
   const seenRenameTick = useRef(renameTick);

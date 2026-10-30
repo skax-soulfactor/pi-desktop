@@ -28,7 +28,9 @@
     "./peer-types": "./extensions/peers/types.ts",
     "./peers-protocol": "./extensions/peers/protocol.ts",
     "./peer-tasks": "./extensions/peers/tasks.ts",
-    "./card-draft": "./extensions/peers/card-draft.ts"
+    "./card-draft": "./extensions/peers/card-draft.ts",
+    "./skills": "./extensions/skills/store.ts",
+    "./skill-types": "./extensions/skills/types.ts"
   },
   "pi": {
     "extensions": [
@@ -43,7 +45,8 @@
       "./extensions/tasks/index.ts",
       "./extensions/schedule/index.ts",
       "./extensions/elevation/index.ts",
-      "./extensions/peers/index.ts"
+      "./extensions/peers/index.ts",
+      "./extensions/skills/index.ts"
     ]
   },
   "scripts": {

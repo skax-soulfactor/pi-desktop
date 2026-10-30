@@ -39,6 +39,7 @@ import {
   type EntryInput,
 } from "@pi-desktop/agent-kit/memory";
 import { buildKnowledgeSection } from "@pi-desktop/agent-kit/memory-recall";
+import { deleteSkill, listSkills, saveSkill, userSkillsDir, type SkillInput } from "@pi-desktop/agent-kit/skills";
 import { loadAudit, loadRules, removeRule } from "@pi-desktop/agent-kit/permissions";
 import { agentBuildId } from "../vendor/main/agent-build";
 import { devSessionOverrides } from "../vendor/main/dev-overrides";
@@ -225,6 +226,17 @@ function registerIpc(connection: HostConnection): void {
   });
   // 지식베이스·승인 규칙은 agent-kit의 같은 함수로 같은 파일을 읽고 고친다 (사람이 직접 고쳐도 되는 파일)
   const kb = () => memoryDir(agentDataDir());
+  // 스킬: Pi 사용자 스킬 폴더를 고친다. 지운 것은 agent-kit 상태 폴더의 skills-trash/로
+  ipcMain.handle(IpcChannels.skillsList, () => listSkills());
+  ipcMain.handle(IpcChannels.skillSave, async (_event, previous: string | undefined, input: SkillInput) => {
+    await saveSkill(userSkillsDir(), input, previous);
+  });
+  ipcMain.handle(IpcChannels.skillDelete, (_event, name: string) => deleteSkill(userSkillsDir(), name, join(agentDataDir(), "skills-trash")));
+  ipcMain.handle(IpcChannels.skillOpenFolder, async () => {
+    await mkdir(userSkillsDir(), { recursive: true });
+    const error = await shell.openPath(userSkillsDir());
+    if (error) throw new Error(error);
+  });
   ipcMain.handle(IpcChannels.kbList, (_event, includeArchived: boolean) => loadEntries(kb(), { includeArchived: includeArchived === true }));
   ipcMain.handle(IpcChannels.kbSave, async (_event, id: string | undefined, input: EntryInput) => {
     if (!input.title?.trim() || !input.content?.trim()) throw new Error("제목과 본문을 적어 주세요");

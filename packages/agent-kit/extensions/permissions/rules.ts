@@ -3,6 +3,7 @@ import type { ApprovalRequest, Risk } from "../../src/approval";
 import { defaultOutputPath, inferMode } from "../documents/chunks";
 import { argvLine, compileElevated, ELEVATED_TOOL, type ElevatedInput } from "../elevation/compile";
 import { linuxPackageManager } from "../elevation/run";
+import { userSkillsDir } from "../skills/store";
 
 /**
  * 승인 판단의 순수 로직. 파일·프로세스·Pi에 손대지 않으므로 단위 테스트로 확인한다.
@@ -93,6 +94,12 @@ export function classify(toolName: string, input: Record<string, unknown>): Clas
       request: { toolName, risk: "exec", summary: "관리자 권한으로 실행", target, pattern: "", onceOnly: true },
       ...(invalid ? { invalid } : {}),
     };
+  }
+  if (toolName === "skill_save") {
+    // 앞으로의 동작을 바꾸는 파일을 남긴다. 사용자 스킬 폴더 단위로 계속 허용할 수 있다
+    const name = String(input.name ?? "");
+    const target = `${userSkillsDir().replace(/\\/g, "/")}/${name}/SKILL.md`;
+    return { risk: "write", request: { toolName, risk: "write", summary: input.replace ? "스킬 고치기" : "스킬 저장", target, pattern: `${userSkillsDir().replace(/\\/g, "/")}/**` } };
   }
   if (toolName === "delegate_to_peer") {
     const peer = String(input.peer ?? "");

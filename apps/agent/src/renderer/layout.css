@@ -929,3 +929,14 @@ button.danger {
   color: var(--bad);
   border-color: var(--bad);
 }
+
+/* 스킬 */
+.list li.skill-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skill-item.active {
+  border-color: var(--accent);
+}
