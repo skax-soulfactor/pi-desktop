@@ -66,6 +66,26 @@ export async function loadConfig(paths: MatePaths): Promise<MateConfig> {
       typeof raw.dailyRunLimit === "number" && raw.dailyRunLimit >= 0 ? Math.floor(raw.dailyRunLimit) : DEFAULT_CONFIG.dailyRunLimit,
     maxCostUsd: typeof raw.maxCostUsd === "number" && raw.maxCostUsd >= 0 ? raw.maxCostUsd : DEFAULT_CONFIG.maxCostUsd,
     observe: normalizeObserve(raw.observe),
+    telegram: normalizeTelegram(raw.telegram),
+  };
+}
+
+function normalizeTelegram(raw: unknown): MateConfig["telegram"] {
+  const t = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<string, unknown>>;
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+  const quiet = t.quiet as { start?: unknown; end?: unknown } | undefined;
+  const validQuiet = quiet && typeof quiet.start === "string" && parseTime(quiet.start) && typeof quiet.end === "string" && parseTime(quiet.end);
+  return {
+    enabled: t.enabled === true,
+    ...(str(t.tokenEnc) ? { tokenEnc: str(t.tokenEnc) } : {}),
+    ...(str(t.botName) ? { botName: str(t.botName) } : {}),
+    ...(str(t.tokenHint) ? { tokenHint: str(t.tokenHint) } : {}),
+    ...(str(t.pairingCode) && typeof t.pairingExpires === "number" ? { pairingCode: str(t.pairingCode), pairingExpires: t.pairingExpires } : {}),
+    pairEpoch: typeof t.pairEpoch === "number" ? t.pairEpoch : 0,
+    notify: t.notify === "all" ? "all" : "action",
+    ...(validQuiet ? { quiet: { start: quiet!.start as string, end: quiet!.end as string } } : {}),
+    sendDetail: t.sendDetail !== false,
+    allowFix: t.allowFix === true,
   };
 }
 
@@ -83,11 +103,14 @@ function normalizeObserve(raw: unknown): MateConfig["observe"] {
 }
 
 /** 설정 일부를 바꾼다. 관찰 설정도 일부만 줄 수 있다 */
-export type ConfigPatch = Partial<Omit<MateConfig, "observe">> & { observe?: Partial<MateConfig["observe"]> };
+export type ConfigPatch = Partial<Omit<MateConfig, "observe" | "telegram">> & {
+  observe?: Partial<MateConfig["observe"]>;
+  telegram?: Partial<MateConfig["telegram"]>;
+};
 
 export async function saveConfig(paths: MatePaths, patch: ConfigPatch): Promise<MateConfig> {
   const current = await loadConfig(paths);
-  const next = { ...current, ...patch, observe: { ...current.observe, ...patch.observe } };
+  const next = { ...current, ...patch, observe: { ...current.observe, ...patch.observe }, telegram: { ...current.telegram, ...patch.telegram } };
   await writeJsonAtomic(paths.config, next);
   return loadConfig(paths);
 }

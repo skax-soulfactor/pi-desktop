@@ -54,6 +54,34 @@ export interface MateConfig {
   maxCostUsd: number;
   /** 활동 관찰 (M4) */
   observe: ObserveConfig;
+  /** 휴대폰 연결 (텔레그램) */
+  telegram: TelegramConfig;
+}
+
+/**
+ * 휴대폰 연결 설정 (설계 DESIGN-MATE.md §12). 앱이 쓰고 실행기가 읽는다.
+ * 봇 토큰은 여기에 두지 않는다: 앱이 OS 키체인으로 암호화한 값(tokenEnc)만 두고, 실행기를 띄울 때 풀어서 환경 변수로 넘긴다.
+ */
+export interface TelegramConfig {
+  enabled: boolean;
+  /** 앱이 safeStorage로 암호화한 봇 토큰 (base64). 실행기는 풀 수 없다 */
+  tokenEnc?: string;
+  /** 화면 표시용: 봇 이름(@...)과 토큰 끝 4자리 */
+  botName?: string;
+  tokenHint?: string;
+  /** 짝짓기 코드와 만료 시각. 봇에게 "/start 코드"를 보내면 그 채팅을 연결한다 */
+  pairingCode?: string;
+  pairingExpires?: number;
+  /** 연결 해제할 때 올린다. 실행기의 연결 상태(remote.json)가 이 값과 다르면 연결이 없는 것으로 본다 */
+  pairEpoch: number;
+  /** 알릴 것: action = 할 일·확인 필요·고친 변경만, all = 전부 */
+  notify: "action" | "all";
+  /** 조용한 시간 (로컬 "HH:MM"). 이 동안 생긴 알림은 끝나면 보낸다 */
+  quiet?: { start: string; end: string };
+  /** diff·근거 내용을 휴대폰으로 보내도 되는지 */
+  sendDetail: boolean;
+  /** 휴대폰에서 고치기(/fix, 맡기기)를 허용하는지 */
+  allowFix: boolean;
 }
 
 /**
@@ -75,6 +103,7 @@ export const DEFAULT_CONFIG: MateConfig = {
   dailyRunLimit: 20,
   maxCostUsd: 0.5,
   observe: { enabled: false, quietMinutes: 5, dailySuggestionLimit: 5, excluded: [] },
+  telegram: { enabled: false, pairEpoch: 0, notify: "action", sendDetail: true, allowFix: false },
 };
 
 export const DEFAULT_TIMEOUT_SEC = 300;
@@ -94,6 +123,8 @@ export interface RunRecord {
   dutyName: string;
   /** schedule: 시간표, change: 변화 감지, manual: 지금 실행, observe: 활동 관찰자 */
   reason: "schedule" | "change" | "manual" | "observe";
+  /** 휴대폰에서 시작한 실행 */
+  remote?: boolean;
   /** 변화 감지로 돌았을 때 무엇이 바뀌었는지 */
   cause?: string;
   status: RunStatus;

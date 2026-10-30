@@ -10,3 +10,5 @@ export type { PiReadiness } from "./pi-readiness";
 export { OBSERVER_DUTY_ID, OBSERVER_NAME, readActivity, topicFeedback } from "./observer";
 export { execCommand } from "./watchers";
 export { delegateInboxItem, requestOneOff } from "./delegate";
+export { loadRemoteState, type RemoteState } from "./remote/telegram-remote";
+export { TELEGRAM_TOKEN_ENV } from "./remote/telegram-api";

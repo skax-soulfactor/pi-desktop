@@ -8,6 +8,8 @@ import type { MatePaths } from "./paths";
 import { isDue, localDateKey } from "./schedule";
 import { ChangeWatchers, execCommand, notePending, type Exec } from "./watchers";
 import { Observer, observerDuty } from "./observer";
+import { TELEGRAM_TOKEN_ENV } from "./remote/telegram-api";
+import { TelegramRemote } from "./remote/telegram-remote";
 import type { SessionAggregate } from "./activity-types";
 import { collectChange, prepareWorkspace, removeWorkspace, type Workspace } from "./workspace";
 import {
@@ -139,6 +141,7 @@ export async function runDuty(
     startedAt: now(),
     model: duty.model ?? config.model,
     profile: duty.profile,
+    ...(duty.id.startsWith("phone-") ? { remote: true } : {}),
   };
   await writeRun(paths, record);
   await log(paths, `run start ${runId} duty=${duty.id} reason=${reason} model=${record.model}`);
@@ -204,6 +207,7 @@ export class Runner {
   private queue: string[] = [];
   private readonly watchers: ChangeWatchers;
   private readonly observer: Observer;
+  private remote: TelegramRemote | undefined;
 
   constructor(private readonly options: RunnerOptions) {
     this.watchers = new ChangeWatchers(options.exec, (message) => void log(options.paths, message));
@@ -229,6 +233,12 @@ export class Runner {
       // 감시를 못 해도 주기 확인으로 처리된다
     }
     this.timer = setInterval(() => void this.tick(), TICK_MS);
+    // 휴대폰 연결: 앱이 봇 토큰을 넘겼을 때만. 임무 실행과 따로 돌아 버튼에 바로 답한다
+    const token = process.env[TELEGRAM_TOKEN_ENV];
+    if (token) {
+      this.remote = new TelegramRemote(paths, token, this.options.exec ?? execCommand, (message) => void log(paths, message));
+      this.remote.start();
+    }
     await this.tick();
   }
 
@@ -236,6 +246,7 @@ export class Runner {
     if (this.timer) clearInterval(this.timer);
     this.watcher?.close();
     this.watchers.dispose();
+    this.remote?.stop();
     // 도는 실행이 있으면 abort 신호로 Pi 프로세스 트리를 끝낸다
     this.abort.abort();
     await log(this.options.paths, `runner stop pid=${process.pid}`);

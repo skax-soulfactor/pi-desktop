@@ -146,7 +146,7 @@ export function runPi(launch: PiLaunch, input: RunInput, signal?: AbortSignal): 
     let overBudget = false;
     const child = spawn(launch.nodePath ?? process.execPath, [launch.cliPath, ...piArgs(input)], {
       cwd: input.workspace?.cwd ?? input.duty.cwd,
-      env: { ...process.env, ...launch.env, ...piEnv(input, input.duty.profile) },
+      env: { ...withoutSecrets(process.env), ...launch.env, ...piEnv(input, input.duty.profile) },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
@@ -218,4 +218,10 @@ export function killTree(pid: number | undefined): void {
   } catch {
     // 이미 끝남
   }
+}
+
+/** Pi(=모델이 bash로 볼 수 있는 환경)에는 Mate의 비밀값(휴대폰 봇 토큰)을 넘기지 않는다 */
+export function withoutSecrets(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const { PI_DESKTOP_MATE_TELEGRAM_TOKEN: _token, ...rest } = env;
+  return rest;
 }
