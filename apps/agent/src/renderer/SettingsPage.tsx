@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { UpdateState } from "../shared/api";
 import { piSetupIssues, type PiSetupView } from "../shared/pi-setup";
 import { PiDesktopButton } from "./PiSetupBanner";
+import { HostSettings } from "./HostSettings";
 
 /**
  * 설정 (설계 DESIGN-AGENT.md §0 "Pi 관리").
@@ -30,6 +31,7 @@ export function SettingsPage({
         <h2>설정</h2>
       </header>
       <div className="page-body">
+        <HostSettings onError={onError} />
         <section className="card">
           <h3>Pi</h3>
           <p className="muted">

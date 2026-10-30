@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Toasts } from "../vendor/renderer/ExtensionUi";
-import type { ChatSummary, PiSetupView, StoredChat, UpdateState } from "../shared/api";
+import type { ChatSummary, CurrentHost, PiSetupView, StoredChat, UpdateState } from "../shared/api";
+import { FolderBrowser } from "../vendor/renderer/FolderBrowser";
 import { ChatPage } from "./ChatPage";
 import { connectionLabel } from "./connection-label";
 import { groupByFolder } from "./chat-groups";
@@ -16,11 +17,22 @@ import { McpPage } from "./McpPage";
 import { NetworkPage } from "./NetworkPage";
 import { SettingsPage } from "./SettingsPage";
 import { TasksPanel } from "./TasksPanel";
-import { folderName, lastFolder, recentFolders, rememberFolder } from "./recent-folders";
+import { folderName, lastFolder, recentFolders, rememberFolder, setRecentScope } from "./recent-folders";
 import { useAgentSession } from "./use-agent-session";
 
 /** 화면. 대화 말고는 메뉴바(보기)에서 연다 (main/app-menu.ts) */
 type Page = "chat" | "tasks" | "memory" | "skills" | "rules" | "usage" | "history" | "mcp" | "network" | "settings";
+
+/** 데몬을 거치지 않아 아직 이 PC의 데이터만 보이는 화면 (DESIGN-APPS.md §6 D4에서 옮긴다) */
+const LOCAL_ONLY_PAGES: Page[] = ["tasks", "memory", "skills", "rules", "usage", "mcp", "network"];
+
+/** 호스트 id를 사람이 읽는 이름으로 ("wsl:Ubuntu" → "WSL: Ubuntu") */
+export function hostLabel(id: string): string {
+  if (id === "local") return "로컬";
+  if (id.startsWith("wsl:")) return `WSL: ${id.slice(4)}`;
+  if (id.startsWith("ssh:")) return `SSH: ${id.slice(4)}`;
+  return id;
+}
 
 /** 사이드바·대화 머리에 보일 이름: Pi 세션 이름, 없으면 폴더 이름 */
 export function chatTitle(chat: Pick<ChatSummary, "name" | "cwd">): string {
@@ -42,6 +54,10 @@ export function App() {
   /** 최근 작업 폴더와 홈 (새 대화·폴더 옮기기에서 고른다) */
   const [recent, setRecent] = useState<string[]>(() => recentFolders());
   const [home, setHome] = useState<string>();
+  /** 지금 호스트. 원격이면 폴더는 데몬으로 훑어 고른다 */
+  const [host, setHost] = useState<CurrentHost>();
+  /** 원격 폴더 고르기 창이 열려 있으면 고른 결과를 넘길 곳 */
+  const [folderPick, setFolderPick] = useState<{ resolve: (folder: string | undefined) => void }>();
   const connected = connection.status === "connected";
 
   /** 실패는 어느 화면에서든 보이도록 위쪽 띠로 알린다 */
@@ -68,8 +84,24 @@ export function App() {
   }, [session?.sessionId, connected, refreshSessions]);
 
   useEffect(() => {
-    void window.piAgent.defaultCwd().then(setHome);
+    void window.piAgent.currentHost().then((current) => {
+      // 최근 폴더는 호스트마다 따로 기억한다
+      setRecentScope(current.id);
+      setRecent(recentFolders());
+      setHost(current);
+    });
   }, []);
+
+  // 홈은 그 호스트의 것이라 연결된 뒤에 읽는다
+  useEffect(() => {
+    if (connected) void window.piAgent.defaultCwd().then(setHome);
+  }, [connected]);
+
+  /** 폴더 고르기: 로컬은 OS 창, 원격은 데몬으로 그 호스트의 폴더를 훑는다 */
+  const pickFolder = (): Promise<string | undefined> => {
+    if (!host?.remote) return window.piAgent.pickDirectory();
+    return new Promise((resolve) => setFolderPick({ resolve }));
+  };
 
   useEffect(() => {
     void window.piAgent.updateState().then(setUpdate);
@@ -110,12 +142,12 @@ export function App() {
   };
 
   const moveToPicked = async () => {
-    const folder = await window.piAgent.pickDirectory();
+    const folder = await pickFolder();
     if (folder) await moveTo(folder);
   };
 
   const newChatInFolder = async () => {
-    const folder = await window.piAgent.pickDirectory();
+    const folder = await pickFolder();
     if (folder) await newChat(folder);
   };
 
@@ -226,7 +258,10 @@ export function App() {
             </button>
           )}
           {update?.status === "downloading" && <span className="muted small-text">업데이트 내려받는 중 {update.percent ?? 0}%</span>}
-          <span className={`badge ${label.tone}`}>{label.text}</span>
+          <span className={`badge ${label.tone}`} title={host ? `호스트: ${hostLabel(host.id)}` : undefined}>
+            {label.text}
+          </span>
+          {host?.remote && <span className="muted small-text">🖥 {hostLabel(host.id)}</span>}
           {setup?.piVersion && <span className="muted small-text">Pi {setup.piVersion}</span>}
         </div>
       </nav>
@@ -245,6 +280,11 @@ export function App() {
           <div className="opening-banner" role="status">
             <span className="spinner" aria-hidden="true" />
             <span>📁 {folderName(agent.opening)}에서 대화를 여는 중… Pi를 시작하고 있습니다.</span>
+          </div>
+        )}
+        {host?.remote && LOCAL_ONLY_PAGES.includes(page) && (
+          <div className="notice-line small-text">
+            이 화면은 아직 이 PC의 데이터만 보여 줍니다. 지금 호스트({hostLabel(host.id)})의 것은 이후 버전에서 보입니다.
           </div>
         )}
         {setup && page !== "settings" && <PiSetupBanner setup={setup} onRefresh={() => guard(refreshSetup)} onError={onError} />}
@@ -313,6 +353,21 @@ export function App() {
 
       {ui.dialogs[0] && <DialogHost dialog={ui.dialogs[0]} onAnswer={(reply) => guard(() => agent.answer(ui.dialogs[0]!, reply))} />}
       <Toasts toasts={ui.toasts} onDismiss={agent.dismiss} />
+      {folderPick && host && (
+        <FolderBrowser
+          hostId={host.id}
+          hostLabel={hostLabel(host.id)}
+          initialPath={recent[0] ?? home ?? ""}
+          onPick={(folder) => {
+            folderPick.resolve(folder);
+            setFolderPick(undefined);
+          }}
+          onClose={() => {
+            folderPick.resolve(undefined);
+            setFolderPick(undefined);
+          }}
+        />
+      )}
     </div>
   );
 }
