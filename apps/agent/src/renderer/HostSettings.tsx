@@ -36,7 +36,7 @@ export function HostSettings({ onError }: { onError: (message: string) => void }
     <section className="card">
       <h3>호스트</h3>
       <p className="muted small-text">
-        대화를 어느 컴퓨터에서 돌릴지 고릅니다. WSL·SSH를 고르면 그 호스트의 Pi로 대화하고, 대화·지난 대화·휴지통은 그 호스트에 남습니다. 기억·작업·스킬·승인·사용량·웹 검색
+        대화를 어느 컴퓨터에서 돌릴지 고릅니다. WSL·SSH를 고르면 그 호스트의 Pi로 대화하고, 대화·지난 대화·휴지통·기억·작업·스킬·승인은 그 호스트의 것을 씁니다. 사용량·웹 검색·네트워크
         화면은 아직 이 PC의 것만 보입니다.
       </p>
       {!hosts || !current ? (

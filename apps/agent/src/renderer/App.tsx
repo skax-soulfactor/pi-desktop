@@ -24,7 +24,7 @@ import { useAgentSession } from "./use-agent-session";
 type Page = "chat" | "tasks" | "memory" | "skills" | "rules" | "usage" | "history" | "mcp" | "network" | "settings";
 
 /** 데몬을 거치지 않아 아직 이 PC의 데이터만 보이는 화면 (DESIGN-APPS.md §6 D4에서 옮긴다) */
-const LOCAL_ONLY_PAGES: Page[] = ["tasks", "memory", "skills", "rules", "usage", "mcp", "network"];
+const LOCAL_ONLY_PAGES: Page[] = ["usage", "mcp", "network"];
 
 /** 호스트 id를 사람이 읽는 이름으로 ("wsl:Ubuntu" → "WSL: Ubuntu") */
 export function hostLabel(id: string): string {
