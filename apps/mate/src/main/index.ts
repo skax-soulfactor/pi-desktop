@@ -40,6 +40,15 @@ import { IpcChannels, type DutyDraft, type Overview, type PiReadiness, type PiSe
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
 import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
 import { runnerCommand } from "./runner-process";
+import {
+  createPairingCode,
+  removeTelegram,
+  saveTelegramToken,
+  sendTelegramTest,
+  telegramEnv,
+  telegramView,
+  unpairTelegram,
+} from "./telegram-setup";
 import { Updater } from "./updater";
 import { parseTranscript } from "./session-transcript";
 
@@ -76,9 +85,16 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
 let mainWindow: BrowserWindow | undefined;
 let runnerError: string | undefined;
 
+/** 실행기를 멈췄다가 다시 띄운다 (토큰이 바뀌어 환경 변수를 다시 넘겨야 할 때) */
+async function restartRunner(): Promise<void> {
+  await runnerCommand(runnerScript(), "stop", runnerEnv()).catch(() => undefined);
+  await ensureRunner();
+}
+
 async function ensureRunner(): Promise<void> {
   try {
-    const result = await runnerCommand(runnerScript(), "start", runnerEnv());
+    // 휴대폰 연결 토큰은 실행기를 띄울 때만 풀어서 넘긴다
+    const result = await runnerCommand(runnerScript(), "start", { ...runnerEnv(), ...(await telegramEnv(paths)) });
     runnerError = result.status === "failed" ? "실행기를 띄우지 못했습니다. 로그를 확인하세요." : undefined;
   } catch (error) {
     runnerError = `실행기를 띄우지 못했습니다: ${(error as Error).message}`;
@@ -212,12 +228,31 @@ function registerIpc(): void {
     return result.canceled ? undefined : result.filePaths[0];
   });
   ipcMain.handle(IpcChannels.restartRunner, async () => {
-    await runnerCommand(runnerScript(), "stop", runnerEnv()).catch(() => undefined);
-    await ensureRunner();
+    await restartRunner();
     return runnerView();
   });
   ipcMain.handle(IpcChannels.revealHome, () => shell.openPath(paths.home));
   ipcMain.handle(IpcChannels.getAutostart, () => getAutostart());
+  ipcMain.handle(IpcChannels.telegramView, () => telegramView(paths));
+  ipcMain.handle(IpcChannels.telegramSetToken, async (_e, token: string) => {
+    await saveTelegramToken(paths, String(token));
+    await restartRunner();
+    return telegramView(paths);
+  });
+  ipcMain.handle(IpcChannels.telegramRemove, async () => {
+    await removeTelegram(paths);
+    await restartRunner();
+    return telegramView(paths);
+  });
+  ipcMain.handle(IpcChannels.telegramPair, async () => {
+    await createPairingCode(paths);
+    return telegramView(paths);
+  });
+  ipcMain.handle(IpcChannels.telegramUnpair, async () => {
+    await unpairTelegram(paths);
+    return telegramView(paths);
+  });
+  ipcMain.handle(IpcChannels.telegramTest, () => sendTelegramTest(paths));
   ipcMain.handle(IpcChannels.piReadiness, (_e, refresh: boolean) => readiness(refresh === true));
   ipcMain.handle(IpcChannels.installPiDesktop, () =>
     installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total)),

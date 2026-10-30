@@ -45,6 +45,12 @@ export const IpcChannels = {
   updateStateChanged: "mate:update-state-changed",
   checkForUpdates: "mate:check-for-updates",
   confirmUpdate: "mate:confirm-update",
+  telegramView: "mate:telegram-view",
+  telegramSetToken: "mate:telegram-set-token",
+  telegramRemove: "mate:telegram-remove",
+  telegramPair: "mate:telegram-pair",
+  telegramUnpair: "mate:telegram-unpair",
+  telegramTest: "mate:telegram-test",
   changed: "mate:changed",
 } as const;
 
@@ -69,6 +75,22 @@ export interface UpdateState {
   percent?: number;
   error?: string;
   checkedAt?: number;
+}
+
+/** 휴대폰(텔레그램) 연결 상태 */
+export interface TelegramView {
+  hasToken: boolean;
+  botName?: string;
+  tokenHint?: string;
+  paired: boolean;
+  chatName?: string;
+  /** 지금 쓸 수 있는 연결 코드 */
+  pairingCode?: string;
+  pairingExpires?: number;
+  lastPollAt?: number;
+  lastError?: string;
+  /** OS 키체인을 쓸 수 있는지 (없으면 토큰을 저장할 수 없음) */
+  keychain: boolean;
 }
 
 export interface AutostartView {
@@ -132,7 +154,12 @@ export interface MateApi {
   deleteDuty(id: string): Promise<void>;
   runNow(id: string): Promise<void>;
   setInbox(ids: string[], status: InboxStatus | undefined): Promise<void>;
-  saveConfig(patch: Partial<Omit<MateConfig, "observe">> & { observe?: Partial<MateConfig["observe"]> }): Promise<MateConfig>;
+  saveConfig(
+    patch: Partial<Omit<MateConfig, "observe" | "telegram">> & {
+      observe?: Partial<MateConfig["observe"]>;
+      telegram?: Partial<MateConfig["telegram"]>;
+    },
+  ): Promise<MateConfig>;
   pickDirectory(): Promise<string | undefined>;
   restartRunner(): Promise<RunnerView>;
   revealHome(): Promise<void>;
@@ -161,6 +188,15 @@ export interface MateApi {
   /** 찾은 새 버전을 받을지 묻는다 (상단 배지) */
   confirmUpdate(): Promise<void>;
   onUpdateState(listener: (state: UpdateState) => void): () => void;
+  /** 휴대폰(텔레그램) 연결 */
+  telegramView(): Promise<TelegramView>;
+  /** 봇 토큰을 확인하고 암호화해 저장한 뒤 실행기를 다시 띄운다 */
+  telegramSetToken(token: string): Promise<TelegramView>;
+  telegramRemove(): Promise<TelegramView>;
+  /** 10분짜리 연결 코드를 만든다 */
+  telegramPair(): Promise<TelegramView>;
+  telegramUnpair(): Promise<TelegramView>;
+  telegramTest(): Promise<void>;
   /** Mate 홈의 파일이 바뀌면 불린다. 해제 함수를 돌려준다 */
   onChanged(listener: () => void): () => void;
 }

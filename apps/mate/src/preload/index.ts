@@ -21,6 +21,12 @@ const api: MateApi = {
   installPiDesktop: () => ipcRenderer.invoke(IpcChannels.installPiDesktop),
   openPiDesktop: () => ipcRenderer.invoke(IpcChannels.openPiDesktop),
   updateState: () => ipcRenderer.invoke(IpcChannels.updateState),
+  telegramView: () => ipcRenderer.invoke(IpcChannels.telegramView),
+  telegramSetToken: (token) => ipcRenderer.invoke(IpcChannels.telegramSetToken, token),
+  telegramRemove: () => ipcRenderer.invoke(IpcChannels.telegramRemove),
+  telegramPair: () => ipcRenderer.invoke(IpcChannels.telegramPair),
+  telegramUnpair: () => ipcRenderer.invoke(IpcChannels.telegramUnpair),
+  telegramTest: () => ipcRenderer.invoke(IpcChannels.telegramTest),
   checkForUpdates: (interactive) => ipcRenderer.invoke(IpcChannels.checkForUpdates, interactive === true),
   confirmUpdate: () => ipcRenderer.invoke(IpcChannels.confirmUpdate),
   onUpdateState: (listener) => {
