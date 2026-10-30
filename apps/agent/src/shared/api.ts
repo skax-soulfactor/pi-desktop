@@ -6,6 +6,7 @@ import type {
   SessionSummary,
   SessionUiResolvedNotification,
   StoredSession,
+  TrashItem,
 } from "@pi-desktop/host-protocol/messages";
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
 import type { UsageRange, UsageSummary } from "@pi-desktop/agent-kit/usage-types";
@@ -85,6 +86,11 @@ export const IpcChannels = {
   openSession: "agent:open-session",
   listHistory: "agent:list-history",
   searchHistory: "agent:search-history",
+  deleteChat: "agent:delete-chat",
+  setArchived: "agent:set-archived",
+  listTrash: "agent:list-trash",
+  restoreTrash: "agent:restore-trash",
+  emptyTrash: "agent:empty-trash",
   attachSession: "agent:attach-session",
   sendCommand: "agent:send-command",
   sendRecord: "agent:send-record",
@@ -255,6 +261,16 @@ export interface AgentApi {
   listHistory(): Promise<StoredChat[]>;
   /** 지난 대화의 본문까지 찾는다 */
   searchHistory(query: string): Promise<HistoryHit[]>;
+  /** 지난 대화를 휴지통으로 옮긴다 (열려 있으면 먼저 닫아야 한다) */
+  deleteChat(path: string): Promise<void>;
+  /** 지난 대화를 아카이브하거나 되돌린다 (파일은 그대로, 목록에서만 숨김) */
+  setArchived(path: string, archived: boolean): Promise<void>;
+  /** 휴지통 목록 */
+  listTrash(): Promise<TrashItem[]>;
+  /** 휴지통의 대화를 원래 자리로 되살린다 */
+  restoreTrash(id: string): Promise<void>;
+  /** 휴지통을 비운다 (ids가 없으면 전부). 정말 지운 개수 */
+  emptyTrash(ids?: string[]): Promise<number>;
   attachSession(sessionId: string, lastSeq: number): Promise<AttachResult>;
   /** 응답을 기다리는 Pi RPC 명령 (prompt, abort, get_commands …) */
   sendCommand(sessionId: string, command: Record<string, unknown>): Promise<PiResponse>;
