@@ -7,6 +7,7 @@ import { groupByFolder } from "./chat-groups";
 import { DialogHost } from "./dialog-host";
 import { FolderMenu } from "./FolderMenu";
 import { KnowledgePage } from "./KnowledgePage";
+import { SkillsPage } from "./SkillsPage";
 import { PiSetupBanner } from "./PiSetupBanner";
 import { RulesPage } from "./RulesPage";
 import { UsagePage } from "./UsagePage";
@@ -19,7 +20,7 @@ import { folderName, lastFolder, recentFolders, rememberFolder } from "./recent-
 import { useAgentSession } from "./use-agent-session";
 
 /** 화면. 대화 말고는 메뉴바(보기)에서 연다 (main/app-menu.ts) */
-type Page = "chat" | "tasks" | "memory" | "rules" | "usage" | "history" | "mcp" | "network" | "settings";
+type Page = "chat" | "tasks" | "memory" | "skills" | "rules" | "usage" | "history" | "mcp" | "network" | "settings";
 
 /** 사이드바·대화 머리에 보일 이름: Pi 세션 이름, 없으면 폴더 이름 */
 export function chatTitle(chat: Pick<ChatSummary, "name" | "cwd">): string {
@@ -36,6 +37,8 @@ export function App() {
   const [error, setError] = useState<string>();
   /** 대화 이름 바꾸기를 연다 (메뉴 F2·머리의 ✎). 값이 바뀔 때마다 ChatPage가 입력칸을 연다 */
   const [renameTick, setRenameTick] = useState(0);
+  /** 대화 입력창에 채울 글 (스킬 화면의 "대화에서 쓰기") */
+  const [prefill, setPrefill] = useState<{ text: string; tick: number }>();
   /** 최근 작업 폴더와 홈 (새 대화·폴더 옮기기에서 고른다) */
   const [recent, setRecent] = useState<string[]>(() => recentFolders());
   const [home, setHome] = useState<string>();
@@ -236,7 +239,7 @@ export function App() {
             <button className="small" onClick={() => setPage("chat")}>
               ← 대화로
             </button>
-            <span className="muted small-text">기능 화면(작업·지식베이스·승인·사용량·지난 대화·웹 검색·네트워크·설정)은 메뉴바의 "보기"에서 엽니다</span>
+            <span className="muted small-text">기능 화면(작업·지식베이스·스킬·승인·사용량·지난 대화·웹 검색·네트워크·설정)은 메뉴바의 "보기"에서 엽니다</span>
           </div>
         )}
         {page === "chat" && (
@@ -252,6 +255,7 @@ export function App() {
             home={home}
             onMoveTo={(folder) => guard(() => moveTo(folder))}
             onMoveToPicked={() => guard(moveToPicked)}
+            prefill={prefill}
             guard={guard}
           />
         )}
@@ -267,6 +271,18 @@ export function App() {
           </div>
         )}
         {page === "memory" && <KnowledgePage onError={onError} />}
+        {page === "skills" && (
+          <SkillsPage
+            onUse={(name) =>
+              guard(async () => {
+                if (!session) await newChat();
+                setPage("chat");
+                setPrefill((prev) => ({ text: `/skill:${name} `, tick: (prev?.tick ?? 0) + 1 }));
+              })
+            }
+            onError={onError}
+          />
+        )}
         {page === "rules" && <RulesPage onError={onError} />}
         {page === "usage" && <UsagePage onError={onError} />}
         {page === "mcp" && <McpPage onError={onError} />}

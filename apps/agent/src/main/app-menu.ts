@@ -17,6 +17,7 @@ export type MenuCommand =
   | "page:history"
   | "page:mcp"
   | "page:network"
+  | "page:skills"
   | "page:settings";
 
 export interface MenuHandlers {
@@ -55,6 +56,7 @@ export function appMenuTemplate(platform: NodeJS.Platform, isPackaged: boolean, 
         cmd("대화", "page:chat", "CmdOrCtrl+1"),
         cmd("작업·예약", "page:tasks", "CmdOrCtrl+2"),
         cmd("지식베이스", "page:memory", "CmdOrCtrl+3"),
+        cmd("스킬", "page:skills", "CmdOrCtrl+9"),
         cmd("승인", "page:rules", "CmdOrCtrl+4"),
         cmd("사용량", "page:usage", "CmdOrCtrl+5"),
         cmd("지난 대화", "page:history", "CmdOrCtrl+6"),

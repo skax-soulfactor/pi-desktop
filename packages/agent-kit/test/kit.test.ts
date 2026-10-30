@@ -28,6 +28,7 @@ describe("agent-kit 매니페스트", () => {
       join(kitDir, "extensions", "schedule", "index.ts"),
       join(kitDir, "extensions", "elevation", "index.ts"),
       join(kitDir, "extensions", "peers", "index.ts"),
+      join(kitDir, "extensions", "skills", "index.ts"),
     ]);
     expect(extensionArgs(entries)).toEqual(entries.flatMap((entry) => ["-e", entry]));
   });

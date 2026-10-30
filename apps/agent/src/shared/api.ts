@@ -16,6 +16,7 @@ import type { ConnectionState } from "../vendor/shared/api";
 import type { PiSetupView } from "./pi-setup";
 import type { McpCheckResult, McpServerView } from "./mcp";
 import type { BulkAction, EntryInput, KnowledgeEntry, KnowledgeStats, ReviewItem } from "@pi-desktop/agent-kit/memory-types";
+import type { SkillInput, SkillView } from "@pi-desktop/agent-kit/skill-types";
 import type { AgentCard, CardDraft, NetworkState, PeerPolicy, PeerSettings } from "./network";
 
 /**
@@ -42,6 +43,10 @@ export const IpcChannels = {
   checkForUpdates: "agent:check-for-updates",
   confirmUpdate: "agent:confirm-update",
   kbList: "agent:kb-list",
+  skillsList: "agent:skills-list",
+  skillSave: "agent:skill-save",
+  skillDelete: "agent:skill-delete",
+  skillOpenFolder: "agent:skill-open-folder",
   kbSave: "agent:kb-save",
   kbBulk: "agent:kb-bulk",
   kbMerge: "agent:kb-merge",
@@ -185,6 +190,12 @@ export interface AgentApi {
   onUpdateState(listener: (state: UpdateState) => void): () => void;
   /** 앱 메뉴바에서 고른 명령 (app-menu.ts의 MenuCommand) */
   onMenuCommand(listener: (id: string) => void): () => void;
+  /** Pi 스킬 (사용자 스킬 폴더 + ~/.agents/skills) */
+  skillsList(): Promise<SkillView[]>;
+  /** 사용자 스킬을 만들거나(previous 없음) 고친다 */
+  skillSave(previous: string | undefined, input: SkillInput): Promise<void>;
+  skillDelete(name: string): Promise<void>;
+  skillOpenFolder(): Promise<void>;
   /** 지식베이스 항목 (보관한 것 포함 여부) */
   kbList(includeArchived: boolean): Promise<KnowledgeEntry[]>;
   /** 새로 쓰거나(id 없음) 고친다 */
