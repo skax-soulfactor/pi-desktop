@@ -147,6 +147,9 @@ export async function runCommand(ctx: CommandContext, command: Exclude<Command, 
     }
     case "new":
       return "새 대화를 시작했어요.";
+    case "history":
+      // 휴대폰용 명령이다. 앱 대화 탭에는 대화가 모두 보인다
+      return "지금까지의 대화는 이 화면에 모두 있어요. /history는 휴대폰에서 앱 대화를 볼 때 씁니다.";
   }
 }
 

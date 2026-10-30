@@ -42,7 +42,7 @@ describe("store", () => {
       // 활동 관찰은 사용자가 켜야 한다
       observe: { enabled: false, quietMinutes: 5, dailySuggestionLimit: 5, excluded: [] },
       // 휴대폰 연결도 사용자가 켜야 하고, 고치기는 따로 허용해야 한다
-      telegram: { enabled: false, pairEpoch: 0, notify: "action", sendDetail: true, allowFix: false },
+      telegram: { enabled: false, pairEpoch: 0, notify: "action", sendDetail: true, allowFix: false, mirrorApp: false },
     });
     // 빈 모델은 "Pi 기본 모델 따르기"로 남는다
     expect((await saveConfig(paths, { model: "" })).model).toBe("");
