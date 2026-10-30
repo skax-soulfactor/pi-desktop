@@ -1,14 +1,20 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { agentBuildId } from "./agent-build";
+import { createHash } from "node:crypto";
 
 /**
- * 다른 호스트(WSL 배포판, SSH 서버)에 Host Agent를 올리는 공통 절차 (설계 §3.2 "배포와 부트스트랩").
+ * 다른 호스트(WSL 배포판, SSH 서버)에 실행할 번들(의존성 없는 .mjs 한 파일)을 올리는 공통 절차 (설계 DESIGN.md §3.2 "배포와 부트스트랩").
+ * Pi Desktop의 apps/desktop/src/main/remote-agent.ts에서 가져와, 올릴 홈 폴더·하위 폴더·파일 이름 앞부분을 받게 했다
+ * (Agent: ~/.pi-desktop-agent/agent/host-agent-…, Mate: ~/.pi-desktop-mate/runner/mate-runner-…).
  *
- * 그 호스트에서는 앱의 파일이 보이지 않을 수 있다(WSL automount 해제, 원격). 그래서 Agent 번들을
- * 호스트 홈(`~/.pi-desktop/agent/`)으로 복사해 두고 그 파일을 실행한다.
+ * 그 호스트에서는 앱의 파일이 보이지 않을 수 있다(WSL automount 해제, 원격). 그래서 번들을 호스트 홈으로 복사해 두고 그 파일을 실행한다.
  * 파일 이름에 내용 해시를 넣어, 앱이 업데이트되면 새 파일을 올리고 같은 번들이면 다시 올리지 않는다.
  */
+
+/** 번들 내용의 짧은 해시 (Host Agent의 agentBuildId와 같은 규칙) */
+export function bundleBuildId(bundle: Buffer): string {
+  return createHash("sha256").update(bundle).digest("hex").slice(0, 12);
+}
 
 /** Pi가 요구하는 최소 Node 주 버전 */
 export const MIN_NODE_MAJOR = 22;
@@ -23,7 +29,7 @@ export interface ProbeResult {
   /** 사용할 node 경로. 없으면 빈 문자열 */
   node: string;
   nodeVersion: string;
-  /** 같은 해시의 Agent가 이미 올라가 있는지 */
+  /** 같은 해시의 번들이 이미 올라가 있는지 */
   agentPresent: boolean;
 }
 
@@ -48,24 +54,24 @@ export function nodeMajor(version: string): number {
   return match ? Number(match[1]) : 0;
 }
 
-/** 번들 내용으로 원격 파일 이름을 정한다. */
-export function agentFileName(version: string, bundle: Buffer): string {
-  return `host-agent-${version}-${agentBuildId(bundle)}.mjs`;
+/** 번들 내용으로 원격 파일 이름을 정한다 (prefix: host-agent, mate-runner) */
+export function bundleFileName(prefix: string, version: string, bundle: Buffer): string {
+  return `${prefix}-${version}-${bundleBuildId(bundle)}.mjs`;
 }
 
 /**
  * 원격에서 node와 Agent 파일을 확인하는 스크립트.
  * PATH에 node가 없으면 Pi 공식 설치기가 깐 Node(pi-node)를 쓴다.
  */
-// agent: 데몬 홈 폴더 이름을 받는다 (Agent는 ~/.pi-desktop-agent, DESIGN-APPS.md §4)
-export function probeScript(agentFile: string, homeDir = ".pi-desktop"): string {
+/** @param dir 홈 기준 번들 폴더 (예: .pi-desktop-agent/agent) */
+export function probeScript(file: string, dir: string): string {
   return [
     'NODE="$(command -v node 2>/dev/null || true)"',
     'if [ -z "$NODE" ] && [ -x "$HOME/.local/share/pi-node/current/bin/node" ]; then NODE="$HOME/.local/share/pi-node/current/bin/node"; fi',
     'printf "pi-desktop-home=%s\\n" "$HOME"',
     'printf "pi-desktop-node=%s\\n" "$NODE"',
     'if [ -n "$NODE" ]; then printf "pi-desktop-nodeVersion=%s\\n" "$("$NODE" -v)"; fi',
-    `if [ -f "$HOME/${homeDir}/agent/${agentFile}" ]; then echo pi-desktop-agent=1; else echo pi-desktop-agent=0; fi`,
+    `if [ -f "$HOME/${dir}/${file}" ]; then echo pi-desktop-agent=1; else echo pi-desktop-agent=0; fi`,
   ].join("\n");
 }
 
@@ -76,50 +82,50 @@ export interface DeployOptions {
   /** 오류 문구에 쓰는 호스트 이름 (예: "WSL(Ubuntu)", "SSH(phone)") */
   label: string;
   run: RemoteRunner;
-  /** 로컬의 번들된 Agent 파일 (dist/host-agent.mjs) */
-  agentScript: string;
-  agentVersion: string;
+  /** 로컬의 번들 파일 */
+  bundle: string;
+  /** 번들 버전 (파일 이름에 넣는다) */
+  version: string;
+  /** 파일 이름 앞부분 (host-agent, mate-runner) */
+  prefix: string;
+  /** 홈 기준 번들 폴더 (예: .pi-desktop-agent/agent, .pi-desktop-mate/runner) */
+  dir: string;
   /** Node가 없을 때 덧붙일 안내 */
   nodeHint: string;
-  /** agent: 번들을 올릴 홈 아래 폴더 이름 (기본 .pi-desktop) */
-  homeDir?: string;
 }
 
 export interface DeployResult {
-  /** agent: 호스트의 홈 ($HOME) */
+  /** 호스트의 홈 ($HOME) */
   home: string;
   /** 호스트에서 실행할 node */
   node: string;
-  /** 호스트에 올린 Agent 파일 */
+  /** 호스트에 올린 번들 파일 */
   remotePath: string;
-  agentBuild: string;
+  /** 번들 해시 */
+  build: string;
 }
 
 /**
- * node 확인 → 필요하면 Agent 업로드.
- * 업로드는 임시 파일에 쓴 뒤 mv로 바꿔치기해, 실행 중인 데몬이 읽는 파일을 망가뜨리지 않는다.
+ * node 확인 → 필요하면 번들 업로드.
+ * 업로드는 임시 파일에 쓴 뒤 mv로 바꿔치기해, 실행 중인 프로세스가 읽는 파일을 망가뜨리지 않는다.
  */
-export async function deployAgent(options: DeployOptions): Promise<DeployResult> {
-  const bundle = await readFile(options.agentScript);
-  const agentBuild = agentBuildId(bundle);
-  const fileName = agentFileName(options.agentVersion, bundle);
-  const homeDir = options.homeDir ?? ".pi-desktop";
-  const probe = parseProbe(await options.run(probeScript(fileName, homeDir)));
+export async function deployBundle(options: DeployOptions): Promise<DeployResult> {
+  const bundle = await readFile(options.bundle);
+  const build = bundleBuildId(bundle);
+  const fileName = bundleFileName(options.prefix, options.version, bundle);
+  const probe = parseProbe(await options.run(probeScript(fileName, options.dir)));
 
   if (!probe.node) throw new Error(`${options.label}에서 Node.js를 찾지 못했습니다. ${options.nodeHint}`);
   if (nodeMajor(probe.nodeVersion) < MIN_NODE_MAJOR) {
     throw new Error(`${options.label}의 Node.js ${probe.nodeVersion}는 너무 오래되었습니다. ${MIN_NODE_MAJOR} 이상이 필요합니다.`);
   }
 
-  const remotePath = `${probe.home}/${homeDir}/agent/${fileName}`;
+  const remotePath = `${probe.home}/${options.dir}/${fileName}`;
   if (!probe.agentPresent) {
     const tmp = `${remotePath}.uploading`;
-    await options.run(
-      `mkdir -p ${shQuote(`${probe.home}/${homeDir}/agent`)} && cat > ${shQuote(tmp)} && mv ${shQuote(tmp)} ${shQuote(remotePath)}`,
-      bundle,
-    );
+    await options.run(`mkdir -p ${shQuote(`${probe.home}/${options.dir}`)} && cat > ${shQuote(tmp)} && mv ${shQuote(tmp)} ${shQuote(remotePath)}`, bundle);
   }
-  return { home: probe.home, node: probe.node, remotePath, agentBuild };
+  return { home: probe.home, node: probe.node, remotePath, build };
 }
 
 /** 오류 표시용으로 stderr 마지막 몇 줄만 남긴다. WSL의 경로 변환 경고처럼 의미 없는 줄은 뺀다. */

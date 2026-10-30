@@ -1,7 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { SshHostConfig } from "../shared/api";
-import { validateSshHost } from "./ssh";
+import { validateSshHost, type SshHostConfig } from "./ssh";
 
 /**
  * 사용자가 등록한 SSH 호스트 목록 (앱 userData의 JSON 파일).

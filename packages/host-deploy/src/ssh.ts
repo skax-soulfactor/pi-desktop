@@ -1,8 +1,10 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { SshHostConfig } from "../shared/api";
-import type { LaunchSpec } from "./host-connection";
-import { deployAgent, runCommand, shQuote } from "./remote-agent";
+import { runCommand, shQuote, type RemoteRunner } from "./bundle";
+
+import type { SshHostConfig } from "./types";
+
+export type { SshHostConfig };
 
 /**
  * SSH 호스트 지원 (설계 §3.2 SSH transport, §5.6).
@@ -11,7 +13,7 @@ import { deployAgent, runCommand, shQuote } from "./remote-agent";
  *   그래서 항상 BatchMode로 실행한다: 비밀번호가 필요하면 묻지 않고 실패한다.
  * - 처음 보는 서버의 호스트 키는 받아들이고(accept-new), 바뀐 키는 거부한다 (ssh 기본 보호 유지).
  * - 연결이 조용히 끊긴 것을 알아채도록 keep-alive를 보낸다. 끊기면 앱이 다시 붙고, 데몬과 Pi는 서버에서 계속 돈다.
- * - Agent 배포는 WSL과 같다 (remote-agent.ts): 홈의 ~/.pi-desktop/agent/에 해시 이름으로 올린다.
+ * - 올리기는 WSL과 같다 (bundle.ts·kit.ts). Pi Desktop의 apps/desktop/src/main/ssh.ts에서 가져왔다.
  */
 
 export const SSH_PREFIX = "ssh:";
@@ -64,30 +66,18 @@ export function validateSshHost(host: SshHostConfig): string | undefined {
   return undefined;
 }
 
-export interface SshPrepareOptions {
-  host: SshHostConfig;
-  /** 로컬의 번들된 Agent 파일 (dist/host-agent.mjs) */
-  agentScript: string;
-  agentVersion: string;
+/** 그 서버에서 셸 스크립트를 실행하는 명령 (stdin으로 바이트를 그대로 넘길 수 있다) */
+export function sshShell(host: SshHostConfig): (script: string) => { command: string; args: string[] } {
+  const ssh = sshExecutable();
+  return (script) => ({ command: ssh, args: [...sshArgs(host), remoteSh(script)] });
 }
 
-/** SSH 연결을 준비한다: node 확인 → 필요하면 Agent 업로드 → 연결기 실행 명령 반환. */
-export async function prepareSsh(options: SshPrepareOptions): Promise<LaunchSpec> {
-  const ssh = sshExecutable();
-  const label = `SSH(${options.host.name})`;
-  const deployed = await deployAgent({
-    label,
-    run: (script, input) => runCommand(ssh, [...sshArgs(options.host), remoteSh(script)], label, input),
-    agentScript: options.agentScript,
-    agentVersion: options.agentVersion,
-    nodeHint: "서버에 Node.js 22 이상을 설치하세요 (Android Termux는 pkg install nodejs-lts).",
-  }).catch((error: unknown) => {
-    throw new Error(explainSshError(error instanceof Error ? error.message : String(error)));
-  });
-  return {
-    command: ssh,
-    args: [...sshArgs(options.host), remoteSh(`exec ${shQuote(deployed.node)} ${shQuote(deployed.remotePath)} connect`)],
-    agentBuild: deployed.agentBuild,
+/** 그 서버에서 스크립트를 실행해 출력을 받는다 */
+export function sshRunner(host: SshHostConfig): RemoteRunner {
+  const shell = sshShell(host);
+  return (script, input) => {
+    const { command, args } = shell(script);
+    return runCommand(command, args, `SSH(${host.name})`, input);
   };
 }
 

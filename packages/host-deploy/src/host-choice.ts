@@ -1,9 +1,12 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { LOCAL_HOST_ID, SSH_PREFIX, WSL_PREFIX } from "./hosts";
+import { SSH_PREFIX } from "./ssh";
+
+export const LOCAL_HOST_ID = "local";
+export const WSL_PREFIX = "wsl:";
 
 /**
- * 지금 쓰는 호스트 (설계 DESIGN-APPS.md §6 D3). 에이전트 앱은 한 번에 한 호스트에 붙는다.
+ * 지금 쓰는 호스트 (설계 DESIGN-APPS.md §6 D3, DESIGN-MATE-REMOTE.md §3.1). Agent·Mate는 한 번에 한 호스트에 붙는다.
  * 앱 userData의 JSON 파일에 호스트 id만 둔다. 없거나 깨졌으면 로컬.
  */
 
