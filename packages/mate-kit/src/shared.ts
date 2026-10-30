@@ -123,6 +123,18 @@ export interface ChangeInfo {
   files: string[];
 }
 
+/**
+ * Mate가 제안하는 설치 (설계 DESIGN-APPS.md §3.4 "Mate가 제안해서 만들기·추가하기").
+ * 모델은 제안만 남기고, 사용자가 적용하면 실행기 코드가 Mate 홈에 넣는다.
+ * - skill: 새 스킬 초안. content는 SKILL.md 전체 (지침 파일만, 스크립트 없음)
+ * - mcp: 정해 둔 목록(pi-isolation mcp-presets)의 서버 id
+ * - copy: Pi Desktop(`~/.pi/agent/skills`)이나 Agent(`~/.pi-desktop-agent/skills`)의 스킬을 Mate 홈으로 복사
+ */
+export type InstallProposal =
+  | { kind: "skill"; name: string; content: string }
+  | { kind: "mcp"; preset: string }
+  | { kind: "copy"; from: "pi-desktop" | "agent"; name: string };
+
 /** inbox.jsonl 한 줄. 한 번 쓰면 바꾸지 않는다 (상태는 inbox-state.json) */
 export interface InboxItem {
   id: string;
@@ -142,4 +154,6 @@ export interface InboxItem {
   topic?: string;
   /** 사용자가 "Mate에게 맡기기"를 누르면 이 지시로 고치기를 실행한다 (cwd 폴더에서) */
   followUp?: { prompt: string; cwd: string };
+  /** 설치 제안. 있으면 받아들이기가 "적용"이 된다 */
+  install?: InstallProposal;
 }

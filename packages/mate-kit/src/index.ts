@@ -5,7 +5,7 @@ export * from "./shared";
 export { checkCommand, isGrant, isGrantableName, splitCommand, type CommandVerdict } from "./guard";
 export { appendBlocked, readBlocked } from "./blocked";
 export { writeScopeError } from "./write-scope";
-export { appendProposal, makeProposal, proposalHash, readInbox, type ProposalInput } from "./proposal";
+export { appendProposal, installError, makeProposal, proposalHash, readInbox, type ProposalInput } from "./proposal";
 
 /**
  * mate-kit 폴더의 package.json에서 확장 진입 파일(`pi.extensions`)을 절대 경로로 읽는다.
