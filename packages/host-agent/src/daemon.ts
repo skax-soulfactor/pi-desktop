@@ -1,5 +1,5 @@
 import { appendFileSync, chmodSync, mkdirSync } from "node:fs";
-import { stat, unlink } from "node:fs/promises";
+import { mkdir, stat, unlink } from "node:fs/promises";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -540,11 +540,17 @@ export class AgentDaemon {
     peer.handle(Methods.sessionOpen, async (params): Promise<SessionOpenResult> => {
       const p = params as SessionOpenParams;
       if (!p?.cwd) throw new JsonRpcError(ErrorCodes.InvalidParams, "cwd가 필요합니다");
-      // 없는 폴더로 spawn하면 Windows는 "node.exe ENOENT"처럼 엉뚱한 오류를 내므로 미리 확인한다.
-      const cwdStat = await stat(p.cwd).catch(() => undefined);
       if (p.sessionFile && p.forkFrom) {
         throw new JsonRpcError(ErrorCodes.InvalidParams, "sessionFile과 forkFrom은 함께 줄 수 없습니다");
       }
+      // 지워진 작업 폴더를 다시 만들어 달라는 요청이면 먼저 만든다 (세션 파일의 폴더가 비워진 /tmp였을 때 등).
+      if (p.createCwd) {
+        await mkdir(p.cwd, { recursive: true }).catch((e: unknown) => {
+          throw new JsonRpcError(ErrorCodes.InvalidParams, `작업 폴더를 만들지 못했습니다: ${p.cwd} (${e instanceof Error ? e.message : String(e)})`);
+        });
+      }
+      // 없는 폴더로 spawn하면 Windows는 "node.exe ENOENT"처럼 엉뚱한 오류를 내므로 미리 확인한다.
+      const cwdStat = await stat(p.cwd).catch(() => undefined);
       if (!cwdStat?.isDirectory()) {
         throw new JsonRpcError(ErrorCodes.InvalidParams, `작업 폴더를 찾을 수 없습니다: ${p.cwd}`);
       }

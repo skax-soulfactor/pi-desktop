@@ -278,6 +278,7 @@ function registerIpc(manager: HostManager, sshHosts: SshHostStore, imports: Impo
     if (request.sessionFile) params.sessionFile = request.sessionFile;
     if (request.forkFrom) params.forkFrom = request.forkFrom;
     if (request.trust) params.trust = request.trust;
+    if (request.createCwd) params.createCwd = true;
     const result = await conn(hostId).request<SessionOpenResult>(Methods.sessionOpen, params);
     return result.session;
   });

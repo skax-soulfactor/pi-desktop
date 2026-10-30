@@ -267,7 +267,7 @@ export function Sidebar(props: Props) {
               className={`session-item${h.path === current?.sessionFile ? " current" : ""}`}
               disabled={disabled}
               onClick={() => onOpenStored(h)}
-              title={h.path}
+              title={h.cwdMissing ? `${h.path}\n작업 폴더가 없습니다: ${h.cwd}` : h.path}
             >
               <span className="session-name">{h.name ?? (h.firstMessage || "(빈 세션)")}</span>
               <span className="session-meta-line">
@@ -275,6 +275,7 @@ export function Sidebar(props: Props) {
                 {!folder && ` · ${baseName(h.cwd)}`}
                 {h.parentSessionPath && " · 분기"}
                 {open && " · 열려 있음"}
+                {h.cwdMissing && <span className="session-missing"> · 폴더 없음</span>}
               </span>
             </button>
           );

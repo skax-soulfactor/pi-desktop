@@ -335,6 +335,8 @@ export interface OpenSessionRequest {
   forkFrom?: string;
   /** 이번 실행에만 쓰는 프로젝트 신뢰 결정 (pi --approve / --no-approve) */
   trust?: "yes" | "no";
+  /** 작업 폴더가 없으면 만들고 연다 (지워진 폴더의 세션을 같은 파일로 이어 쓸 때) */
+  createCwd?: boolean;
 }
 
 export interface PiDesktopApi {

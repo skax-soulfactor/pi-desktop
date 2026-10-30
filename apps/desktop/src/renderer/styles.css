@@ -1251,6 +1251,11 @@ button.small {
   white-space: nowrap;
 }
 
+/* 작업 폴더가 지워진 기록 */
+.session-missing {
+  color: var(--warn);
+}
+
 .session-meta-line {
   grid-area: meta;
   font-size: 11px;

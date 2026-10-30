@@ -509,6 +509,11 @@ export interface SessionOpenParams {
    * 없으면 Pi가 저장된 결정과 defaultProjectTrust로 정한다. RPC 모드는 묻지 못하므로 "ask"면 건너뛴다
    */
   trust?: "yes" | "no";
+  /**
+   * 작업 폴더가 없으면 만들고 연다 (상위 폴더까지). 세션 파일의 폴더가 지워졌을 때
+   * (예: WSL을 다시 시작해 비워진 /tmp) 같은 파일로 이어 쓰기 위해 쓴다.
+   */
+  createCwd?: boolean;
 }
 
 /**
@@ -664,6 +669,8 @@ export interface StoredSession {
   messageCount: number;
   /** 첫 사용자 메시지 (목록 표시용, 최대 200자) */
   firstMessage: string;
+  /** 작업 폴더(cwd)가 이제 없다. Pi는 이 파일을 그대로 열지 못한다 (폴더를 다시 만들거나 다른 폴더로 분기해야 함) */
+  cwdMissing?: boolean;
 }
 
 export interface DaemonStatus {
