@@ -47,6 +47,13 @@ describe("isolationArgs", () => {
     expect(isolationEnv("/h", { mcpServers: [] })).toEqual({ PI_ISOLATION_HOME: "/h", PI_ISOLATION_MCP_SERVERS: "" });
   });
 
+  it("remote면 이 PC가 Windows여도 다른 호스트의 경로를 /로 잇는다", () => {
+    const args = isolationArgs({ home: "/home/u/.pi-desktop-agent", isolationDir: "/home/u/.pi-desktop-agent/kits/k/pi-isolation", extensions: [], skills: ["a"], remote: true });
+    expect(args[args.indexOf("--skill") + 1]).toBe("/home/u/.pi-desktop-agent/skills/a");
+    expect(args[args.indexOf("--prompt-template") + 1]).toBe("/home/u/.pi-desktop-agent/prompts");
+    expect(args).toContain("/home/u/.pi-desktop-agent/kits/k/pi-isolation/extensions/context.ts");
+  });
+
   it("세션 폴더를 주지 않으면 --session-dir를 붙이지 않는다", () => {
     expect(isolationArgs({ home: "/h", isolationDir: "/iso", extensions: [] })).not.toContain("--session-dir");
   });

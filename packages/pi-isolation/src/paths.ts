@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join as nativeJoin, posix } from "node:path";
 
 /**
  * 앱 홈 안의 Pi 데이터 위치 (설계 DESIGN-APPS.md §3).
@@ -18,7 +18,11 @@ export function isolationHome(env: NodeJS.ProcessEnv = process.env): string | un
   return env[ISOLATION_HOME_ENV] || undefined;
 }
 
-export function isolatedPaths(home: string) {
+/**
+ * @param remote 다른 호스트(WSL·SSH)의 경로를 만들 때 true. 이 PC가 Windows여도 `/`로 잇는다 (DESIGN-APPS.md §4)
+ */
+export function isolatedPaths(home: string, remote = false) {
+  const join = remote ? posix.join : nativeJoin;
   return {
     home,
     sessions: join(home, "sessions"),
