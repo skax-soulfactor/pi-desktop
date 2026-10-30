@@ -3,13 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { appendBlocked, appendChat, appendChatQuestion, appendProposal, makeProposal, PERMISSION_OPTIONS, readChat } from "@pi-desktop/mate-kit";
-import { askPermission } from "../src/daemon";
+import { askPermission } from "../src/permission";
 import { addChatRequest, ChatAgent, loadChatState } from "../src/chat/chat-agent";
 import { chatSystemPrompt, openQuestions } from "../src/chat/context";
 import { parseSchedulePhrase } from "../src/chat/schedule-phrase";
 import type { RunInput, RunOutcome } from "../src/executor";
 import { matePaths, type MatePaths } from "../src/paths";
-import { listDuties, loadConfig, loadInboxState, saveDuty, takeRequests } from "../src/store";
+import { listDuties, loadConfig, loadInboxState, saveConfig, saveDuty, takeRequests } from "../src/store";
 
 describe("실행 시점 표현", () => {
   it("대화에서 쓰는 표현을 계기로 바꾼다", () => {
@@ -147,6 +147,42 @@ describe("ChatAgent", () => {
     agent.submit({ text: PERMISSION_OPTIONS[1], source: "app", answerTo: question.id });
     await agent.whenIdle();
     expect((await listDuties(paths)).find((d) => d.id === "brief")!.grants).toBeUndefined();
+    expect(await takeRequests(paths)).toEqual([]);
+  });
+
+  it("막힌 MCP 도구는 도구 설명과 함께 다섯 개까지 묻고, 허용하면 그 도구만 임무에 더한다", async () => {
+    const duty = (await listDuties(paths)).find((d) => d.id === "brief")!;
+    const blocked = join(paths.runDir, "blocked", "r1.jsonl");
+    for (let i = 0; i < 7; i++) await appendBlocked(blocked, { name: `mcp__github__tool_${i}`, command: `도구 ${i} 설명`, at: i });
+    expect(await askPermission(paths, duty, "r1", blocked, Date.now())).toBe(true);
+    const question = (await readChat(paths.chat)).find((l) => l.kind === "question")!;
+    expect(question.permission!.commands).toEqual(["mcp__github__tool_0", "mcp__github__tool_1", "mcp__github__tool_2", "mcp__github__tool_3", "mcp__github__tool_4"]);
+    expect(question.text).toContain("MCP github · tool_0: 도구 0 설명");
+    expect(question.text).toContain("읽기인지 쓰기인지");
+
+    agent.submit({ text: PERMISSION_OPTIONS[0], source: "app", answerTo: question.id });
+    await agent.whenIdle();
+    expect((await listDuties(paths)).find((d) => d.id === "brief")!.grants).toEqual(question.permission!.commands);
+    expect((await takeRequests(paths)).map((r) => r.dutyId)).toEqual(["brief"]);
+  });
+
+  it("대화는 설정에서 고른 MCP 서버와 허용한 도구로 돌고, 막힌 도구를 허용하면 설정에 더한다", async () => {
+    await saveConfig(paths, { chatMcpServers: ["github"], chatGrants: ["mcp__github__list_prs"] });
+    agent.submit({ text: "열린 PR 알려 줘", source: "app" });
+    await agent.whenIdle();
+    expect(calls[0]!.duty).toMatchObject({ id: "mate-chat", mcpServers: ["github"], grants: ["mcp__github__list_prs"] });
+    expect(calls[0]!.blockedPath).toBeDefined();
+
+    const chatDuty = calls[0]!.duty;
+    await appendBlocked(calls[0]!.blockedPath!, { name: "mcp__github__create_issue", command: "이슈를 만든다", at: 1 });
+    expect(await askPermission(paths, chatDuty, "c1", calls[0]!.blockedPath!, Date.now())).toBe(true);
+    const question = (await readChat(paths.chat)).find((l) => l.kind === "question")!;
+    expect(question.text).toContain("대화에서 create_issue을(를) 허용할까요?");
+    agent.submit({ text: PERMISSION_OPTIONS[0], source: "app", answerTo: question.id });
+    await agent.whenIdle();
+    expect((await loadConfig(paths)).chatGrants).toEqual(["mcp__github__list_prs", "mcp__github__create_issue"]);
+    // 대화는 다시 실행하지 않는다
+    expect(calls).toHaveLength(1);
     expect(await takeRequests(paths)).toEqual([]);
   });
 

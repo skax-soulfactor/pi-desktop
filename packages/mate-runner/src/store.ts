@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { isGrantableName, isProfile } from "@pi-desktop/mate-kit";
+import { isGrant, isMcpToolName, isProfile } from "@pi-desktop/mate-kit";
 import type { MatePaths } from "./paths";
 import { parseTime } from "./schedule";
 import { pollCommandError } from "./watchers";
@@ -68,7 +68,24 @@ export async function loadConfig(paths: MatePaths): Promise<MateConfig> {
     maxCostUsd: typeof raw.maxCostUsd === "number" && raw.maxCostUsd >= 0 ? raw.maxCostUsd : DEFAULT_CONFIG.maxCostUsd,
     observe: normalizeObserve(raw.observe),
     telegram: normalizeTelegram(raw.telegram),
+    chatMcpServers: names(raw.chatMcpServers, isServerName),
+    chatGrants: names(raw.chatGrants, isMcpToolName),
   };
+}
+
+/** 이름 목록을 검사해 겹치지 않게 남긴다 */
+function names(raw: unknown, valid: (name: string) => boolean): string[] {
+  return Array.isArray(raw) ? [...new Set(raw.filter((x): x is string => typeof x === "string" && valid(x)))] : [];
+}
+
+/** MCP 서버 이름 (Pi mcp.json 규칙) */
+export function isServerName(name: string): boolean {
+  return /^[A-Za-z0-9_-]{1,64}$/.test(name);
+}
+
+/** 스킬 이름 (Agent Skills 규격: 소문자·숫자·하이픈) */
+export function isSkillName(name: string): boolean {
+  return name.length <= 64 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(name);
 }
 
 function normalizeTelegram(raw: unknown): MateConfig["telegram"] {
@@ -193,10 +210,12 @@ export function normalizeDuty(raw: unknown): Duty | string {
   if (typeof d.model === "string" && d.model.trim()) duty.model = d.model.trim();
   if (typeof d.timeoutSec === "number" && d.timeoutSec > 0) duty.timeoutSec = Math.min(3600, Math.round(d.timeoutSec));
   if (typeof d.maxCostUsd === "number" && d.maxCostUsd > 0) duty.maxCostUsd = d.maxCostUsd;
-  if (Array.isArray(d.grants)) {
-    const grants = [...new Set(d.grants.filter((g): g is string => typeof g === "string" && isGrantableName(g)))];
-    if (grants.length) duty.grants = grants;
-  }
+  const grants = names(d.grants, isGrant);
+  if (grants.length) duty.grants = grants;
+  // 스킬은 없으면 전부라서 빈 배열(스킬 없음)도 남긴다
+  if (Array.isArray(d.skills)) duty.skills = names(d.skills, isSkillName);
+  const servers = names(d.mcpServers, isServerName);
+  if (servers.length) duty.mcpServers = servers;
   if (typeof d.updatedAt === "number") duty.updatedAt = d.updatedAt;
   return duty;
 }

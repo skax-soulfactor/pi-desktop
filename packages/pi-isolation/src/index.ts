@@ -1,7 +1,9 @@
 import { resolve } from "node:path";
-import { ISOLATION_HOME_ENV, isolatedPaths } from "./paths";
+import { join } from "node:path";
+import { ISOLATION_HOME_ENV, ISOLATION_MCP_EXPOSURE_ENV, ISOLATION_MCP_SERVERS_ENV, isolatedPaths } from "./paths";
 
 export { ISOLATION_HOME_ENV, isolatedPaths, isolationHome } from "./paths";
+export { mcpToolPattern } from "./mcp-config";
 
 /**
  * Agent·Mate가 Pi를 띄울 때 데이터가 들어오는 길만 바꾸는 옵션 (설계 DESIGN-APPS.md §3.1).
@@ -28,6 +30,8 @@ export interface IsolationOptions {
   sessionDir?: string;
   /** false면 MCP를 아예 올리지 않는다 (MCP 확장과 codemode·tool-search 모두). 기본 true */
   mcp?: boolean;
+  /** 올릴 스킬 이름. 주면 앱 홈 skills/ 아래 그 스킬 폴더만 올린다 (빈 배열이면 스킬 없음). 없으면 skills/ 전부 */
+  skills?: string[];
 }
 
 /** 이 패키지의 확장 진입 파일 (절대 경로) */
@@ -44,8 +48,7 @@ export function isolationArgs(options: IsolationOptions): string[] {
   return [
     ...(options.sessionDir ? ["--session-dir", options.sessionDir] : []),
     "-ns",
-    "--skill",
-    paths.skills,
+    ...(options.skills ? options.skills.flatMap((name) => ["--skill", join(paths.skills, name)]) : ["--skill", paths.skills]),
     "-np",
     "--prompt-template",
     paths.prompts,
@@ -55,7 +58,14 @@ export function isolationArgs(options: IsolationOptions): string[] {
   ];
 }
 
-/** Pi 프로세스에 줄 환경 변수 */
-export function isolationEnv(home: string): Record<string, string> {
-  return { [ISOLATION_HOME_ENV]: home };
+/**
+ * Pi 프로세스에 줄 환경 변수.
+ * mcpServers를 주면 그 서버만 올리고(빈 배열이면 없음), mcpExposure: "direct"면 도구를 모델에 바로 선언한다.
+ */
+export function isolationEnv(home: string, options: { mcpServers?: string[]; mcpExposure?: "direct" } = {}): Record<string, string> {
+  return {
+    [ISOLATION_HOME_ENV]: home,
+    ...(options.mcpServers ? { [ISOLATION_MCP_SERVERS_ENV]: options.mcpServers.join(",") } : {}),
+    ...(options.mcpExposure ? { [ISOLATION_MCP_EXPOSURE_ENV]: options.mcpExposure } : {}),
+  };
 }

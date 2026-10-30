@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendBlocked } from "../../src/blocked";
 import { checkCommand, isGrantableName } from "../../src/guard";
-import { isGuardProfile, MATE_ENV, profileTools } from "../../src/shared";
+import { isGuardProfile, isMcpToolName, MATE_ENV, profileTools } from "../../src/shared";
 import { writeScopeError } from "../../src/write-scope";
 
 /** Windows Git Bash 출력이 UTF-8로 오도록 (Pi Desktop bridge와 같은 처리, Mate는 bridge를 쓰지 않는다) */
@@ -15,6 +15,7 @@ const UTF8_PREFIX = "chcp.com 65001 > /dev/null 2>&1";
  * - bash는 어느 단계든 읽기 전용 허용 목록만 (사용자가 그 임무에 허용한 명령은 더한다)
  * - 허용 목록에 없을 뿐인 명령은 막으면서 기록해 둔다. 실행이 끝나면 실행기가 사용자에게 허용을 묻는다
  * - act의 write·edit는 작업 공간(git worktree) 안만. 작업 공간이 주어지지 않았으면 막는다
+ * - MCP 도구(임무가 고른 서버의 것)는 사용자가 허용한 것만. 처음 쓰는 도구는 막고 기록해 허용을 묻는다 (D2.5)
  * 권한 단계 환경 변수가 없으면(터미널 pi에 설치) 아무것도 하지 않는다.
  */
 export default function mateGuard(pi: ExtensionAPI): void {
@@ -27,6 +28,19 @@ export default function mateGuard(pi: ExtensionAPI): void {
   const blockedPath = process.env[MATE_ENV.blocked];
 
   pi.on("tool_call", async (event, ctx) => {
+    if (isMcpToolName(event.toolName)) {
+      if (grants.includes(event.toolName)) return undefined;
+      if (blockedPath) {
+        const description = pi.getAllTools().find((t) => t.name === event.toolName)?.description ?? "";
+        await appendBlocked(blockedPath, { name: event.toolName, command: description.split("\n")[0]!.slice(0, 200), at: Date.now() }).catch(() => undefined);
+      }
+      return {
+        block: true,
+        reason:
+          `${event.toolName}은(는) 사용자가 아직 허용하지 않은 MCP 도구다.` +
+          (blockedPath ? " 사용자에게 허용을 요청해 두었다. 다른 방법으로 우회하지 말고, 할 수 있는 만큼만 하고 무엇이 막혔는지 요약에 적어라." : ""),
+      };
+    }
     if (!allowed.has(event.toolName)) {
       return { block: true, reason: `Mate의 ${profile} 단계에서는 ${event.toolName} 도구를 쓸 수 없습니다` };
     }

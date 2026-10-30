@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isolationArgs, isolationEnv, isolationExtensionPaths } from "../src/index";
 import { findContextFiles } from "../src/context-files";
-import { parseMcpConfig } from "../src/mcp-config";
+import { filterMcpConfig, mcpToolPattern, parseMcpConfig } from "../src/mcp-config";
 
 const temp = (prefix: string) => mkdtempSync(join(tmpdir(), prefix));
 
@@ -28,6 +28,23 @@ describe("isolationArgs", () => {
     const extensions = args.flatMap((arg, i) => (arg === "-e" ? [args[i + 1]] : []));
     expect(extensions).toEqual(["/kit/a.ts", resolve("/iso", "extensions/context.ts")]);
     expect(args).toContain("-ne");
+  });
+
+  it("skills를 주면 그 스킬 폴더만, 빈 배열이면 스킬 없이 올린다", () => {
+    const pick = isolationArgs({ home: "/h", isolationDir: "/iso", extensions: [], skills: ["a", "b"] });
+    expect(pick.flatMap((arg, i) => (arg === "--skill" ? [pick[i + 1]] : []))).toEqual([join("/h", "skills", "a"), join("/h", "skills", "b")]);
+    const none = isolationArgs({ home: "/h", isolationDir: "/iso", extensions: [], skills: [] });
+    expect(none).toContain("-ns");
+    expect(none).not.toContain("--skill");
+  });
+
+  it("isolationEnv는 고른 MCP 서버와 노출 방식을 넘긴다", () => {
+    expect(isolationEnv("/h", { mcpServers: ["a", "b"], mcpExposure: "direct" })).toEqual({
+      PI_ISOLATION_HOME: "/h",
+      PI_ISOLATION_MCP_SERVERS: "a,b",
+      PI_ISOLATION_MCP_EXPOSURE: "direct",
+    });
+    expect(isolationEnv("/h", { mcpServers: [] })).toEqual({ PI_ISOLATION_HOME: "/h", PI_ISOLATION_MCP_SERVERS: "" });
   });
 
   it("세션 폴더를 주지 않으면 --session-dir를 붙이지 않는다", () => {
@@ -65,6 +82,22 @@ describe("parseMcpConfig", () => {
     expect(parseMcpConfig("/m", undefined)).toEqual({ servers: [], errors: [] });
     expect(parseMcpConfig("/m", "{").errors).toHaveLength(1);
     expect(parseMcpConfig("/m", "[]").errors[0]).toContain("expected an object");
+  });
+});
+
+describe("filterMcpConfig", () => {
+  const loaded = parseMcpConfig("/m", JSON.stringify({ mcpServers: { "my-gh": { command: "x", exposure: "deferred", toolExposure: { t: "hidden" } }, other: { url: "https://o.example/mcp" } } }));
+
+  it("고른 서버만 남기고, direct면 노출을 모두 direct로 바꾼다", () => {
+    const filtered = filterMcpConfig(loaded, { servers: ["my-gh"], exposure: "direct" });
+    expect(filtered.servers.map((s) => s.name)).toEqual(["my-gh"]);
+    expect(filtered.servers[0]!.config).toEqual({ command: "x", exposure: "direct" });
+    expect(filterMcpConfig(loaded, { servers: [] }).servers).toEqual([]);
+    expect(filterMcpConfig(loaded, {}).servers).toHaveLength(2);
+  });
+
+  it("도구 이름 패턴은 Pi처럼 -를 _로 바꾼다", () => {
+    expect(mcpToolPattern("my-gh")).toBe("mcp__my_gh__*");
   });
 });
 

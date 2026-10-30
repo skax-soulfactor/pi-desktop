@@ -65,6 +65,27 @@ export function parseMcpConfig(path: string, text: string | undefined): LoadedMc
   return { servers, errors, ...(autoEnableCodemode === undefined ? {} : { autoEnableCodemode }) };
 }
 
+/**
+ * 고른 서버만 남기고, direct면 서버·도구의 노출을 모두 direct로 바꾼다.
+ * servers가 undefined면 전부 남긴다.
+ */
+export function filterMcpConfig(loaded: LoadedMcpConfig, options: { servers?: string[]; exposure?: "direct" }): LoadedMcpConfig {
+  const picked = options.servers ? new Set(options.servers) : undefined;
+  const servers = loaded.servers
+    .filter((entry) => !picked || picked.has(entry.name))
+    .map((entry) => {
+      if (options.exposure !== "direct") return entry;
+      const { toolExposure: _tools, ...config } = entry.config as McpServerConfig & { toolExposure?: unknown };
+      return { ...entry, config: { ...config, exposure: "direct" } as McpServerConfig };
+    });
+  return { ...loaded, servers };
+}
+
+/** MCP 서버의 도구 이름 패턴 (`--tools`에 넣는다). Pi처럼 `-`는 `_`로 바꾼다 */
+export function mcpToolPattern(server: string): string {
+  return `mcp__${server.replace(/-/g, "_")}__*`;
+}
+
 export function loadMcpConfigFile(path: string): LoadedMcpConfig {
   return parseMcpConfig(path, existsSync(path) ? readFileSync(path, "utf8") : undefined);
 }

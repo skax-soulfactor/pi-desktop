@@ -70,6 +70,31 @@ describe("piArgs", () => {
   });
 });
 
+describe("임무별 스킬·MCP 서버", () => {
+  it("고른 스킬만 올리고, 고른 MCP 서버의 도구를 이름 패턴으로 선언하며 바로 선언 노출로 띄운다", () => {
+    const picked = { ...input, duty: { ...duty, skills: ["hn-summary"], mcpServers: ["my-gh"], grants: ["curl", "mcp__my_gh__list_prs"] } };
+    const args = piArgs(picked);
+    expect(args.flatMap((a, i) => (a === "--skill" ? [args[i + 1]] : []))).toEqual([join("/h", "skills", "hn-summary")]);
+    expect(args[args.indexOf("--tools") + 1]).toBe("read,grep,find,ls,bash,mcp__my_gh__*");
+    const extensions = args.flatMap((a, i) => (a === "-e" ? [args[i + 1]] : []));
+    expect(extensions).toContain(resolve("/iso", "extensions/mcp.ts"));
+    expect(piEnv(picked, "observe")).toMatchObject({
+      PI_ISOLATION_MCP_SERVERS: "my-gh",
+      PI_ISOLATION_MCP_EXPOSURE: "direct",
+      PI_DESKTOP_MATE_GRANTS: "curl,mcp__my_gh__list_prs",
+    });
+  });
+
+  it("서버를 고르지 않으면 MCP를 올리지 않고, 스킬을 고르지 않으면 전부 올린다", () => {
+    const args = piArgs(input);
+    expect(args.flatMap((a, i) => (a === "-e" ? [args[i + 1]] : []))).not.toContain(resolve("/iso", "extensions/mcp.ts"));
+    expect(args[args.indexOf("--skill") + 1]).toBe(join("/h", "skills"));
+    expect(piEnv(input, "observe")).not.toHaveProperty("PI_ISOLATION_MCP_SERVERS");
+    // 빈 배열이면 스킬 없이
+    expect(piArgs({ ...input, duty: { ...duty, skills: [] } })).not.toContain("--skill");
+  });
+});
+
 describe("EventSummary", () => {
   it("세션 id, 마지막 답변, 비용, 새 제안 수를 모은다", () => {
     const s = new EventSummary();
