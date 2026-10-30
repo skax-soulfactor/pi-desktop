@@ -41,8 +41,9 @@ async function move(from: string, to: string): Promise<void> {
     await rename(from, to);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
-    await cp(from, to);
-    await rm(from, { force: true });
+    // 다른 드라이브로는 옮기지 못하므로 복사하고 지운다 (스킬은 폴더)
+    await cp(from, to, { recursive: true });
+    await rm(from, { recursive: true, force: true });
   }
 }
 

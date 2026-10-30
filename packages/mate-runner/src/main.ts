@@ -4,6 +4,9 @@
 // - daemon: 상주 실행기 본체 (start가 분리된 프로세스로 띄움)
 // - status: Pi 준비 상태(설치·버전·로그인한 프로바이더·쓸 수 있는 모델·Pi 기본 모델)를 JSON으로
 // - run: 임무 하나를 지금 이 프로세스에서 실행하고 기록을 출력한다 (확인·테스트용)
+// - mcp-check: Mate 홈 mcp.json의 서버에 연결해 보고 결과를 JSON으로 ({ ok, output })
+import { execFile } from "node:child_process";
+import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { locatePi } from "../../host-agent/src/pi-locator";
@@ -87,10 +90,28 @@ async function status(): Promise<void> {
   console.log(JSON.stringify(await piReadiness()));
 }
 
-const commands: Record<string, () => Promise<void>> = { start, daemon, stop, status, run: () => runOnce(arg) };
+/**
+ * MCP 연결 확인 (Mate의 MCP 탭 "연결 확인"). pi mcp list는 Pi 설정 폴더의 mcp.json만 읽으므로
+ * 이 실행에서만 설정 폴더를 Mate 홈으로 바꾼다 (Agent의 연결 확인과 같은 방식). OAuth 서버는 로그인 안 됨으로 보일 수 있다.
+ */
+async function mcpCheck(): Promise<void> {
+  const pi = await findPi();
+  await mkdir(paths.home, { recursive: true });
+  const result = await new Promise<{ ok: boolean; output: string }>((resolve) => {
+    execFile(
+      pi.nodePath ?? process.execPath,
+      [pi.cliPath, "mcp", "list"],
+      { cwd: paths.home, env: { ...process.env, ...pi.env, PI_CODING_AGENT_DIR: paths.home }, timeout: 120_000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+      (error, stdout, stderr) => resolve({ ok: !error, output: `${stdout}${stderr ? `\n${stderr}` : ""}` }),
+    );
+  });
+  console.log(JSON.stringify(result));
+}
+
+const commands: Record<string, () => Promise<void>> = { start, daemon, stop, status, "mcp-check": mcpCheck, run: () => runOnce(arg) };
 const handler = command ? commands[command] : undefined;
 if (!handler) {
-  console.error("사용법: mate-runner <start|daemon|stop|status|run <임무 id>>");
+  console.error("사용법: mate-runner <start|daemon|stop|status|mcp-check|run <임무 id>>");
   process.exitCode = 2;
 } else {
   handler().catch((error: Error) => {

@@ -213,8 +213,8 @@ export type InboxStatus = "accepted" | "dismissed" | "applied";
 /** inbox-state.json: 제안별 사용자 처리 상태. 없으면 "새 제안" */
 export type InboxState = Record<string, { status: InboxStatus; at: number }>;
 
-/** 휴지통 항목의 종류: 임무·실행 기록·대화 기록 (DESIGN-APPS.md §3.2) */
-export type TrashKind = "duty" | "run" | "chat";
+/** 휴지통 항목의 종류: 임무·실행 기록·대화 기록·스킬 (DESIGN-APPS.md §3.2) */
+export type TrashKind = "duty" | "run" | "chat" | "skill";
 
 /** 휴지통 항목 하나 (trash.ts) */
 export interface MateTrashItem {

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { appendChat, readChat } from "@pi-desktop/mate-kit";
 import { matePaths, type MatePaths } from "../src/paths";
-import { clearChat, deleteDuty, deleteRun, listRuns, pruneRuns, saveDuty, writeRun } from "../src/store";
+import { clearChat, deleteDuty, deleteRun, deleteSkill, listRuns, pruneRuns, saveDuty, writeRun } from "../src/store";
 import { emptyTrash, listTrash, restoreTrash } from "../src/trash";
 import type { RunRecord } from "../src/types";
 
@@ -85,6 +85,20 @@ describe("Mate 휴지통", () => {
     expect((await readChat(paths.chat)).map((l) => l.text)).toEqual(["옛 질문", "옛 답", "새 질문"]);
     expect(await readdir(paths.chatSessions)).toEqual(["a_mate-chat-1.jsonl"]);
     expect(readFileSync(paths.chat, "utf8").trim().split("\n")).toHaveLength(3);
+  });
+
+  it("스킬은 폴더째(딸린 파일 포함) 휴지통으로 가고 되살아난다", async () => {
+    const paths = await home();
+    await mkdir(join(paths.skills, "hn-summary", "scripts"), { recursive: true });
+    await writeFile(join(paths.skills, "hn-summary", "SKILL.md"), "---\nname: hn-summary\ndescription: d\n---\nx\n");
+    await writeFile(join(paths.skills, "hn-summary", "scripts", "a.txt"), "a");
+    await deleteSkill(paths, "hn-summary");
+    expect(existsSync(join(paths.skills, "hn-summary"))).toBe(false);
+    const [item] = await listTrash(paths);
+    expect(item).toMatchObject({ kind: "skill", title: "hn-summary" });
+    await restoreTrash(paths, item!.id);
+    expect(readFileSync(join(paths.skills, "hn-summary", "scripts", "a.txt"), "utf8")).toBe("a");
+    await expect(deleteSkill(paths, "../x")).rejects.toThrow(/이름/);
   });
 
   it("비우기는 고른 것만 또는 전부 정말 지우고, 이상한 id는 거절한다", async () => {

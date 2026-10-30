@@ -322,6 +322,12 @@ export async function listRuns(paths: MatePaths, limit = 100): Promise<RunRecord
   return runs.filter((r): r is RunRecord => !!r);
 }
 
+/** 스킬 폴더를 휴지통으로 옮긴다 (Mate의 스킬 탭) */
+export async function deleteSkill(paths: MatePaths, name: string): Promise<void> {
+  if (!isSkillName(name)) throw new Error(`스킬 이름이 올바르지 않습니다: ${name}`);
+  await moveToTrash(paths, { kind: "skill", title: name }, [{ path: join(paths.skills, name) }]);
+}
+
 /** 실행 기록 하나와 그 Pi 세션 파일 (Mate 홈 sessions/ 안에 있을 때만) */
 async function runFiles(paths: MatePaths, name: string): Promise<{ files: Array<{ path: string }>; run?: RunRecord }> {
   const path = join(paths.runs, name);
