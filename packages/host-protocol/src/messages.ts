@@ -79,6 +79,8 @@ export const Methods = {
   sessionClaimWriter: "session.claimWriter",
   sessionHistory: "session.history",
   storedInspect: "stored.inspect",
+  /** 저장된 세션 파일을 지운다. 바로 지우지 않고 데몬 홈의 백업 폴더로 옮긴다 */
+  storedDelete: "stored.delete",
   storedRead: "stored.read",
   storedWatch: "stored.watch",
   storedUnwatch: "stored.unwatch",
@@ -931,6 +933,13 @@ export interface StoredInspectResult {
   modified: number;
   /** 이 데몬의 실행 중인 세션이 이 파일을 쓰고 있으면 그 세션 id */
   ownedBy?: string;
+}
+
+/** 세션 파일을 지운 결과. 파일이 아직 없었으면(첫 메시지 전) backup이 없다 */
+export interface StoredDeleteResult {
+  path: string;
+  /** 옮긴 곳. 되살리려면 이 파일을 원래 자리로 옮긴다 */
+  backup?: string;
 }
 
 /** 저장된 세션 파일을 읽어 만든 현재 갈래의 대화 (파일은 읽기만 한다) */

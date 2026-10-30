@@ -83,6 +83,7 @@ import {
   type SessionSendParams,
   type SessionHistoryParams,
   type SessionSummary,
+  type StoredDeleteResult,
   type StoredInspectResult,
   type StoredPathParams,
   type StoredReadResult,
@@ -114,6 +115,7 @@ import { projectTrust, setProjectTrust, trustArgs, type TrustSdk } from "./trust
 import { createResourceFile, defaultPackagesRoot, readResourceFile, writeResourceFile } from "./resource-files";
 import { importResource } from "./resource-import";
 import { deleteResource, inspectImported, moveToBackup, readImported, type DeletableKind } from "./import-manage";
+import { deleteStoredSession } from "./stored-delete";
 import { exportResource } from "./resource-export";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
@@ -599,6 +601,20 @@ export class AgentDaemon {
         modified: info?.mtimeMs ?? 0,
       };
       if (owner) result.ownedBy = owner.id;
+      return result;
+    });
+
+    peer.handle(Methods.storedDelete, async (params): Promise<StoredDeleteResult> => {
+      const { path } = requirePath(params);
+      // 실행 중인 Pi가 쓰는 파일을 옮기면 Pi가 다시 만들어 쓰므로, 화면이 먼저 닫게 한다.
+      if ([...this.sessions.values()].some((s) => s.isRunning && s.summary().sessionFile === path)) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, "실행 중인 세션입니다. 먼저 닫은 뒤 지우세요");
+      }
+      const backups = join(agentHome(this.env), "session-backups", "deleted");
+      const result = await deleteStoredSession(path, backups).catch((e: unknown) => {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, e instanceof Error ? e.message : String(e));
+      });
+      if (result.backup) this.log(`세션 파일 삭제 ${path} → ${result.backup}`);
       return result;
     });
 
