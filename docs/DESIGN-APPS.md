@@ -31,9 +31,9 @@
 | Pi 설치본 | 함께 씀 | 함께 씀 | 함께 씀 |
 | 로그인·모델·설정·신뢰 | `~/.pi/agent/` (함께 씀) | 같은 곳 | 같은 곳 |
 | 세션(대화 기록) | `~/.pi/agent/sessions/` (Pi 기본, 터미널 `pi`와 같음) | `~/.pi-desktop-agent/sessions/` | `~/.pi-desktop-mate/sessions/`, `chat/sessions/` |
-| 스킬·프롬프트 | `~/.pi/agent/skills`, `prompts` | `~/.pi-desktop-agent/skills`, `prompts` | 쓰지 않음 |
+| 스킬·프롬프트 | `~/.pi/agent/skills`, `prompts` | `~/.pi-desktop-agent/skills`, `prompts` | `~/.pi-desktop-mate/skills`, `prompts` (임무마다 고름, §3.4) |
 | 확장·Pi 패키지 | Pi 설정 그대로 (`settings.json`의 `packages` 포함) | agent-kit만 | mate-kit만 |
-| MCP 서버 | `~/.pi/agent/mcp.json` | `~/.pi-desktop-agent/mcp.json` | 쓰지 않음 |
+| MCP 서버 | `~/.pi/agent/mcp.json` | `~/.pi-desktop-agent/mcp.json` | `~/.pi-desktop-mate/mcp.json` (임무마다 고르고, 처음 쓰는 도구는 승인, §3.4) |
 | 사용자 지침 `AGENTS.md` | `~/.pi/agent/AGENTS.md` | `~/.pi-desktop-agent/AGENTS.md` | 쓰지 않음 (임무 지시가 그 역할) |
 | 작업 폴더의 `AGENTS.md`·`CLAUDE.md` | 읽음 | 읽음 | 읽음 (그 폴더의 것이지 앱의 것이 아님) |
 | 앱 데이터 (기억·권한·작업·예약·피어·사용량 등) | `~/.pi-desktop/` | `~/.pi-desktop-agent/data/` | `~/.pi-desktop-mate/` |
@@ -55,7 +55,7 @@ Pi의 설정 폴더(`PI_CODING_AGENT_DIR`)는 바꾸지 않는다. 바꾸면 로
 | `-ne -e <kit 확장들> -e builtin:codemode -e builtin:tool-search` | Pi 기본·패키지 확장을 끄고 앱의 확장만 올린다. 내장 MCP(`builtin:mcp`)는 올리지 않는다 |
 | `-nc` | Pi의 문맥 파일 찾기를 끈다. 사용자 수준 `~/.pi/agent/AGENTS.md`가 끼어들지 않게 하기 위해서다 |
 
-- **MCP**: Pi의 내장 MCP는 Pi 설정 폴더의 `mcp.json`만 읽는다(`loadMcpConfig({ agentDir })`). 그래서 Agent는 Pi SDK의 `createMcpExtension({ loadConfig, credentials, logPath })`로 **자기 `mcp.json`을 읽는 MCP 확장**을 agent-kit에 둔다. MCP 서버 로그인 정보(`mcp-auth.json`)와 로그도 앱 홈에 둔다.
+- **MCP**: Pi의 내장 MCP는 Pi 설정 폴더의 `mcp.json`만 읽는다(`loadMcpConfig({ agentDir })`). 그래서 Agent와 Mate는 Pi SDK의 `createMcpExtension({ loadConfig, credentials, logPath })`로 **자기 `mcp.json`을 읽는 MCP 확장**을 각자 kit(agent-kit·mate-kit)에 둔다. MCP 서버 로그인 정보(`mcp-auth.json`)와 로그도 앱 홈에 둔다. 이 확장은 두 kit이 같은 코드를 쓰므로 한 곳에 두고 가져다 쓴다 (예: `packages/pi-isolation`).
 - **문맥 파일**: `-nc`로 끈 대신, kit 확장이 Pi와 같은 규칙(작업 폴더에서 위로 올라가며 `AGENTS.md`·`CLAUDE.md`)으로 작업 폴더의 파일을 찾고, 앱 홈의 `AGENTS.md`를 더해 시스템 안내에 붙인다. 작업 폴더의 파일은 프로젝트 신뢰를 따른다.
 - **Pi Desktop**은 위 옵션을 쓰지 않는다. Pi를 있는 그대로 보여 주는 것이 컨셉이기 때문이다.
 
@@ -69,6 +69,20 @@ Pi의 설정 폴더(`PI_CODING_AGENT_DIR`)는 바꾸지 않는다. 바꾸면 로
 
 사용자가 켰을 때만, 같은 호스트에서 **Pi Desktop·터미널 `pi`의 세션(`~/.pi/agent/sessions`)과 Agent의 세션(`~/.pi-desktop-agent/sessions`)을 읽기만** 한다.
 요약(요청 앞부분, 고친 파일, 명령, 오류)만 Mate 홈에 남기고, 그 세션 파일을 옮기거나 고치지 않는다.
+
+### 3.4 Mate의 스킬·프롬프트·MCP
+
+비서로 일하려면 임무에 따라 스킬(예: 웹 글 요약 방법), 프롬프트(여러 임무가 함께 쓰는 지시), MCP 서버(GitHub·Slack·캘린더 등)가 필요하다.
+Agent와 같은 방식으로 Mate 홈에 따로 두고, Pi Desktop의 것은 섞지 않는다. 다만 Mate는 사람이 지켜보지 않을 때 돌므로 권한을 더 좁게 둔다.
+
+| 항목 | 규칙 |
+|---|---|
+| 스킬 | `~/.pi-desktop-mate/skills`. 임무마다 쓸 스킬을 고른다 (기본: 전부). 스킬은 지침일 뿐이라 권한을 넓히지 않는다. 스킬이 시키는 명령도 bash 허용 목록·권한 요청을 그대로 따른다 |
+| 프롬프트 | `~/.pi-desktop-mate/prompts`. 임무 지시와 Mate 대화에서 `/이름`으로 부른다 |
+| MCP 서버 | `~/.pi-desktop-mate/mcp.json`. 임무마다 쓸 서버를 고른다 (기본: 없음). 고른 서버의 도구만 모델에 선언한다 |
+| MCP 도구 권한 | Mate는 MCP 도구가 읽기인지 쓰기인지 알 수 없다. 그래서 **처음 쓰는 도구는 막고 묻는다.** 막힌 bash 명령의 권한 요청(DESIGN-MATE.md §4)과 같은 흐름이다: 막힌 도구 이름을 남기고 → 실행이 끝나면 대화로 "허용하고 다시 실행"을 묻고 → 허용하면 그 임무의 `grants`에 `mcp__<서버>__<도구>`를 더해 다시 실행한다. 서버 전체를 한 번에 허용하지는 않는다 |
+| Mate 대화 | 같은 스킬·프롬프트를 쓴다. MCP는 Mate 설정에서 대화에 쓸 서버를 고르고, 도구마다 같은 승인 규칙을 따른다 |
+| 관리 화면 | Mate에 스킬·MCP 탭을 둔다. Agent의 스킬·MCP 화면을 가져다 쓴다 |
 
 ## 4. 어디서 도는가 — 클라이언트와 호스트
 
@@ -96,8 +110,9 @@ Pi의 설정 폴더(`PI_CODING_AGENT_DIR`)는 바꾸지 않는다. 바꾸면 로
 
 | 단계 | 내용 | 비고 |
 |---|---|---|
-| **D1 데이터 분리** | Agent: 세션·스킬·프롬프트·MCP·AGENTS.md·앱 데이터를 앱 홈으로, §3.1의 실행 옵션, agent-kit MCP 확장과 문맥 파일 확장. Mate: §3.1의 실행 옵션, 관찰 대상에 Agent 세션 추가 | 지금 바로. 로컬에서도 데이터가 섞이는 문제를 먼저 막는다 |
+| **D1 데이터 분리** | Agent: 세션·스킬·프롬프트·MCP·AGENTS.md·앱 데이터를 앱 홈으로, §3.1의 실행 옵션, 자체 MCP 확장과 문맥 파일 확장. Mate: §3.1의 실행 옵션(스킬·프롬프트는 Mate 홈에서), 관찰 대상에 Agent 세션 추가 | 지금 바로. 로컬에서도 데이터가 섞이는 문제를 먼저 막는다 |
 | **D2 휴지통·아카이브** | Pi Desktop·Agent: 데몬에 휴지통 목록·되살리기·비우기, 아카이브·되돌리기. 지금 삭제가 남긴 백업도 휴지통에 보인다. Mate: 실행 기록·지난 대화·임무 (200개 넘는 실행 기록 정리도 휴지통을 거침) | D1 뒤 |
+| **D2.5 Mate 스킬·MCP** | §3.4: 스킬·MCP 탭, 임무별 스킬·MCP 서버 고르기, MCP 도구 권한 요청, 대화에서 쓸 MCP 서버 | D1의 자체 MCP 확장을 쓴다 |
 | **D3 Agent 호스트 선택** | 호스트 연결을 가져와 대화·지난 대화·휴지통·아카이브를 WSL·SSH에서 쓴다 | 데몬을 거치는 기능만 |
 | **D4 Agent 화면의 데몬 이전** | 앱이 직접 읽던 화면을 데몬 명령으로 하나씩 옮긴다. 다 옮기면 원격에서 모든 화면이 된다 | 여러 PR |
 | **D5 Mate 원격 실행기** | 실행기 배포·JSON-RPC 통신·원격 관찰. 세부 설계를 먼저 쓴다 | 가장 큼 |
