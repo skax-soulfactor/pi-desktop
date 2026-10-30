@@ -86,6 +86,8 @@ function normalizeTelegram(raw: unknown): MateConfig["telegram"] {
     ...(validQuiet ? { quiet: { start: quiet!.start as string, end: quiet!.end as string } } : {}),
     sendDetail: t.sendDetail !== false,
     allowFix: t.allowFix === true,
+    mirrorApp: t.mirrorApp === true,
+    ...(typeof t.mirrorAppSince === "number" ? { mirrorAppSince: t.mirrorAppSince } : {}),
   };
 }
 

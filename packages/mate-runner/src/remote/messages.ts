@@ -1,4 +1,4 @@
-import type { InboxItem } from "@pi-desktop/mate-kit";
+import type { ChatLine, InboxItem } from "@pi-desktop/mate-kit";
 import { redact } from "../activity";
 import { parseTime } from "../schedule";
 import type { TelegramConfig } from "../types";
@@ -115,6 +115,8 @@ export type Command =
   | { kind: "run"; query: string }
   | { kind: "ask" | "fix"; text: string }
   | { kind: "new" }
+  /** 지금 대화의 최근 줄을 앱·휴대폰 구분 없이 다시 보기 */
+  | { kind: "history"; count: number }
   /** 빗금 없는 글: Mate와 대화 (설계 §13) */
   | { kind: "chat"; text: string };
 
@@ -146,9 +148,53 @@ export function parseCommand(text: string): Command | undefined {
       return { kind: "fix", text: arg };
     case "new":
       return { kind: "new" };
+    case "history": {
+      const n = Number.parseInt(arg, 10);
+      return { kind: "history", count: Number.isFinite(n) ? Math.min(Math.max(n, 1), HISTORY_MAX) : HISTORY_DEFAULT };
+    }
     default:
       return { kind: "help" };
   }
+}
+
+/** /history가 기본으로 보여 주는 줄 수와 최대 */
+export const HISTORY_DEFAULT = 10;
+export const HISTORY_MAX = 30;
+
+function hhmm(at: number): string {
+  const d = new Date(at);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * /history의 답: 지금 대화(마지막 "새 대화" 뒤)의 최근 줄을 앱(🖥)·휴대폰(📱) 표시와 함께 보여 준다.
+ * 텔레그램 한 메시지 한도를 넘지 않게 줄 단위로 나눈 메시지들을 돌려준다 (HTML 태그가 잘리지 않게).
+ */
+export function historyMessages(lines: ChatLine[], count: number, limit = 3500): string[] {
+  const lastDivider = lines.findLastIndex((l) => l.kind === "divider");
+  const shown = lines.slice(lastDivider + 1).filter((l) => l.kind !== "divider").slice(-count);
+  if (shown.length === 0) return ["아직 이 대화에서 나눈 말이 없어요."];
+  const entries = shown.map((l) => {
+    const where = l.source === "telegram" ? "📱" : "🖥";
+    const who = l.role === "user" ? `${where} <b>나</b>` : `🤖 <b>Mate</b>${l.kind === "question" ? " (질문)" : ""}`;
+    return `<i>${hhmm(l.at)}</i> ${who}\n${safe(l.text, l.role === "user" ? 500 : 800)}`;
+  });
+  const messages: string[] = [];
+  let current = `<b>최근 대화 ${shown.length}줄</b> (🖥 앱 · 📱 휴대폰)`;
+  for (const entry of entries) {
+    if (current.length + entry.length + 2 > limit) {
+      messages.push(current);
+      current = entry;
+    } else current += `\n\n${entry}`;
+  }
+  messages.push(current);
+  return messages;
+}
+
+/** 앱 대화를 휴대폰으로 보낼 때의 글 (설정 "앱 대화도 휴대폰으로 보내기") */
+export function mirrorText(line: ChatLine): string {
+  if (line.role === "user") return `🖥 <b>앱에서</b>\n${safe(line.text, 1500)}`;
+  return `🖥 ${line.kind === "question" ? "❓ " : ""}${safe(line.text, 3500)}`;
 }
 
 /** 폴더 이름(마지막 폴더명, 대소문자 무시) */
@@ -189,5 +235,6 @@ export const HELP_TEXT = [
   "/duties — 임무 목록",
   "/folders — 지시할 수 있는 폴더",
   "/status — 실행기 상태",
+  "/history [줄 수] — 앱·휴대폰에서 나눈 최근 대화 보기 (기본 10줄)",
   "/new — 새 대화 시작",
 ].join("\n");
