@@ -1,58 +1,15 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { watch, type FSWatcher } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { appendChat, readChat, readInbox } from "@pi-desktop/mate-kit";
-import { listSkillsIn, saveSkill } from "@pi-desktop/agent-kit/skills";
-import { readMcpFile, serverViews, updateMcpFile, withEnabled, withoutServer, withPreset } from "@pi-desktop/pi-isolation/mcp-file";
-import { WEB_SEARCH_PRESETS as MCP_PRESETS } from "@pi-desktop/pi-isolation/mcp-presets";
-import {
-  addChatRequest,
-  addRequest,
-  loadChatState,
-  delegateInboxItem,
-  applyInboxChange,
-  applyInstall,
-  describeInstall,
-  discardInboxChange,
-  execCommand,
-  OBSERVER_DUTY_ID,
-  OBSERVER_NAME,
-  readActivity,
-  topicFeedback,
-  clearChat,
-  deleteDuty,
-  deleteRun,
-  deleteSkill as deleteMateSkill,
-  dutyIdFrom,
-  emptyTrash,
-  listTrash,
-  restoreTrash,
-  findSessionFile,
-  getDuty,
-  isAlive,
-  isDutyId,
-  listDuties,
-  listRuns,
-  loadConfig,
-  loadInboxState,
-  loadState,
-  mateHome,
-  matePaths,
-  nextRunAt,
-  pendingRequests,
-  readPid,
-  saveConfig,
-  saveDuty,
-  setInboxStatus,
-  type ConfigPatch,
-  type InboxStatus,
-} from "@pi-desktop/mate-runner";
+import { loadConfig, loadRemoteState, mateHome, matePaths, saveConfig, type ConfigPatch, type InboxStatus } from "@pi-desktop/mate-runner";
 import { IpcChannels, type DutyDraft, type McpCheckResult, type Overview, type PiReadiness, type PiSetupView, type RunnerView, type SkillInput } from "../shared/api";
+import { RunnerConnection, type RunnerConnectionState } from "./runner-connection";
+
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
 import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
-import { runnerCommand } from "./runner-process";
+import { resolveNodeRuntime, runnerCommand } from "./runner-process";
+import type { TelegramStore } from "./telegram-setup";
 import {
   createPairingCode,
   removeTelegram,
@@ -63,7 +20,6 @@ import {
   unpairTelegram,
 } from "./telegram-setup";
 import { Updater } from "./updater";
-import { parseTranscript } from "./session-transcript";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const paths = matePaths(mateHome());
@@ -98,31 +54,74 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
 let mainWindow: BrowserWindow | undefined;
 let runnerError: string | undefined;
 
-/** 실행기를 멈췄다가 다시 띄운다 (토큰이 바뀌어 환경 변수를 다시 넘겨야 할 때) */
-async function restartRunner(): Promise<void> {
-  await runnerCommand(runnerScript(), "stop", runnerEnv()).catch(() => undefined);
-  await ensureRunner();
+/**
+ * 실행기 연결 (설계 DESIGN-MATE-REMOTE.md §2). 화면이 쓰는 데이터는 모두 실행기의 mate.call로 오간다.
+ * 연결은 `mate-runner connect`가 실행기를 띄우고(없으면) 소켓에 이어 준다.
+ */
+let connection: RunnerConnection | undefined;
+const call = <T = unknown>(name: string, ...args: unknown[]): Promise<T> => {
+  if (!connection) return Promise.reject(new Error("실행기에 아직 연결하지 않았습니다"));
+  return connection.call<T>(name, ...args);
+};
+
+/** 실행기에 붙기 전에도 쓰는 로컬 저장소 (연결 명령에 넘길 휴대폰 토큰을 읽는다) */
+const localStore: TelegramStore = {
+  config: () => loadConfig(paths),
+  saveConfig: (patch: ConfigPatch) => saveConfig(paths, patch),
+  remoteState: () => loadRemoteState(paths),
+};
+
+/** 실행기 RPC로 설정과 휴대폰 연결 상태를 읽고 쓰는 저장소 */
+const runnerStore: TelegramStore = {
+  config: () => call("config"),
+  saveConfig: (patch: ConfigPatch) => call("saveConfig", patch),
+  remoteState: () => call("remoteState"),
+};
+
+function startConnection(): void {
+  connection = new RunnerConnection({
+    launch: async () => {
+      const runtime = await resolveNodeRuntime();
+      // 휴대폰 연결 토큰은 실행기를 띄울 때만 풀어서 넘긴다 (connect가 실행기를 띄우는 경우)
+      return {
+        command: runtime.command,
+        args: [runnerScript(), "connect"],
+        env: { ...process.env, ...runtime.env, ...runnerEnv(), ...(await telegramEnv(localStore)) },
+      };
+    },
+    onChanged: () => mainWindow?.webContents.send(IpcChannels.changed),
+    onState: (state: RunnerConnectionState) => {
+      runnerError = state.status === "disconnected" ? `실행기에 연결하지 못했습니다: ${state.reason}` : undefined;
+      mainWindow?.webContents.send(IpcChannels.changed);
+    },
+  });
+  connection.start();
 }
 
+/** 실행기를 멈췄다가 다시 띄운다 (토큰이 바뀌어 환경 변수를 다시 넘겨야 할 때). 연결은 끊긴 뒤 다시 붙으며 새로 띄운다 */
+async function restartRunner(): Promise<void> {
+  await runnerCommand(runnerScript(), "stop", runnerEnv()).catch(() => undefined);
+}
+
+/** 로그인할 때 실행: 창 없이 실행기만 확인한다 */
 async function ensureRunner(): Promise<void> {
   try {
-    // 휴대폰 연결 토큰은 실행기를 띄울 때만 풀어서 넘긴다
-    const result = await runnerCommand(runnerScript(), "start", { ...runnerEnv(), ...(await telegramEnv(paths)) });
+    const result = await runnerCommand(runnerScript(), "start", { ...runnerEnv(), ...(await telegramEnv(localStore)) });
     runnerError = result.status === "failed" ? "실행기를 띄우지 못했습니다. 로그를 확인하세요." : undefined;
   } catch (error) {
     runnerError = `실행기를 띄우지 못했습니다: ${(error as Error).message}`;
   }
 }
 
-/** Pi 준비 상태. pi --list-models가 몇 초 걸려 5분 동안 기억해 둔다 */
+/** Pi 준비 상태 (그 호스트의 Pi). pi --list-models가 몇 초 걸려 5분 동안 기억해 둔다 */
 let readinessCache: Promise<PiSetupView> | undefined;
 let readinessAt = 0;
 
 function readiness(refresh = false): Promise<PiSetupView> {
   if (refresh || !readinessCache || Date.now() - readinessAt > 5 * 60_000) {
     readinessAt = Date.now();
-    readinessCache = runnerCommand(runnerScript(), "status", runnerEnv()).then(
-      async (status) => ({ ...(status as unknown as PiReadiness), ...(await piDesktopInfoView()), checkedAt: Date.now() }),
+    readinessCache = call<PiReadiness>("piReadiness").then(
+      async (status) => ({ ...status, ...(await piDesktopInfoView()), checkedAt: Date.now() }),
       async (error: Error) => ({
         stage: "no-pi" as const,
         piError: `Pi 상태를 확인하지 못했습니다: ${error.message}`,
@@ -142,224 +141,96 @@ async function piDesktopInfoView(): Promise<{ piDesktopPath?: string }> {
   return info.installedPath ? { piDesktopPath: info.installedPath } : {};
 }
 
-async function runnerView(): Promise<RunnerView> {
-  const [pid, state] = await Promise.all([readPid(paths), loadState(paths)]);
-  const alive = isAlive(pid);
-  return {
-    alive,
-    ...(alive && pid ? { pid } : {}),
-    ...(state.heartbeatAt ? { heartbeatAt: state.heartbeatAt } : {}),
-    ...(alive && state.current ? { current: state.current } : {}),
-    today: state.today,
-    ...(runnerError && !alive ? { error: runnerError } : {}),
-  };
-}
+/** 마지막으로 받은 overview. 실행기와 끊겼을 때 화면이 비지 않게 이것에 "꺼짐"을 붙여 보인다 */
+let lastOverview: Overview | undefined;
 
 async function overview(): Promise<Overview> {
-  const [config, duties, state, requests, items, inboxState, runs, runner] = await Promise.all([
-    loadConfig(paths),
-    listDuties(paths),
-    loadState(paths),
-    pendingRequests(paths),
-    readInbox(paths.inbox),
-    loadInboxState(paths),
-    listRuns(paths, 100),
-    runnerView(),
-  ]);
-  const trash = await listTrash(paths);
-  const [activity, feedback, chatLines, chatState] = await Promise.all([readActivity(paths, 150), topicFeedback(paths), readChat(paths.chat), loadChatState(paths)]);
-  const now = Date.now();
-  const names = new Map<string, string>([[OBSERVER_DUTY_ID, OBSERVER_NAME], ...duties.map((d) => [d.id, d.name] as [string, string])]);
-  const queued = new Set(requests.map((r) => r.dutyId));
-  return {
-    home: paths.home,
-    chat: {
-      lines: chatLines.slice(-300),
-      ...(chatState.busy ? { busy: chatState.busy } : {}),
-      pending: Object.keys(chatState.pending).length,
-    },
-    config,
-    duties: duties.map((duty) => {
-      const last = state.duties[duty.id];
-      const next = nextRunAt(duty, last?.lastRunAt, now, last?.watch);
-      const pending = last?.watch?.pending;
-      return {
-        ...duty,
-        ...(last?.lastRunAt ? { lastRunAt: last.lastRunAt } : {}),
-        ...(last?.lastStatus ? { lastStatus: last.lastStatus } : {}),
-        ...(next !== undefined ? { nextRunAt: next } : {}),
-        ...(pending ? { pendingChange: { cause: pending.cause, since: pending.since } } : {}),
-        queued: queued.has(duty.id),
-      };
-    }),
-    inbox: items
-      .map((item) => ({ ...item, ...(inboxState[item.id] ? { status: inboxState[item.id]!.status } : {}), dutyName: names.get(item.dutyId) ?? item.dutyId }))
-      .sort((a, b) => b.createdAt - a.createdAt),
-    runs,
-    runner,
-    observe: {
-      activity: activity.reverse(),
-      queue: state.observer?.queue.length ?? 0,
-      today: state.observer?.today ?? { date: "", count: 0 },
-      projects: Object.values(state.observer?.projects ?? {}),
-      feedback,
-      ...(state.observer ? { since: state.observer.since } : {}),
-    },
-    trash,
-  };
-}
-
-/**
- * "Mate에게 맡기기": 제안의 맡길 일을 그 폴더에서 바로 실행한다 (설계 DESIGN-MATE.md §10).
- * git 저장소면 고치기(act: 별도 작업 공간, 적용은 사용자가), 아니면 제안 단계로. 임무로 남겨 다시 돌릴 수 있게 한다.
- */
-async function delegate(itemId: string): Promise<void> {
-  await delegateInboxItem(paths, itemId);
-  if (!isAlive(await readPid(paths))) await ensureRunner();
-}
-
-/** 사용자의 말을 대화 기록에 남기고 실행기에 넘긴다 (답은 실행기가 남김) */
-async function chatSend(text: string, answerTo?: string): Promise<void> {
-  const t = text.trim().slice(0, 4000);
-  if (!t) return;
-  const line = await appendChat(paths.chat, { role: "user", text: t, source: "app", ...(answerTo ? { answerTo } : {}) });
-  await addChatRequest(paths, { text: t, source: "app", lineId: line.id, ...(answerTo ? { answerTo } : {}) });
-  if (!isAlive(await readPid(paths))) await ensureRunner();
-}
-
-async function saveDraft(draft: DutyDraft) {
-  const now = Date.now();
-  if (draft.id) {
-    const existing = await getDuty(paths, draft.id);
-    if (!existing) throw new Error("임무를 찾지 못했습니다");
-    return saveDuty(paths, { ...existing, ...draft, id: existing.id, createdAt: existing.createdAt, updatedAt: now });
+  try {
+    lastOverview = await call<Overview>("overview");
+    return lastOverview;
+  } catch (error) {
+    if (!lastOverview) throw error;
+    const runner: RunnerView = { ...lastOverview.runner, alive: false, error: runnerError ?? (error as Error).message };
+    delete runner.pid;
+    delete runner.current;
+    return { ...lastOverview, runner };
   }
-  const id = dutyIdFrom(draft.name, (await listDuties(paths)).map((d) => d.id));
-  return saveDuty(paths, { ...draft, id, createdAt: now });
 }
 
 function registerIpc(): void {
+  // 화면이 쓰는 데이터는 실행기의 app-api로 넘긴다 (DESIGN-MATE-REMOTE.md §2.2)
+  const forward = (channel: string, name: string) => ipcMain.handle(channel, (_e, ...args: unknown[]) => call(name, ...args));
   ipcMain.handle(IpcChannels.overview, () => overview());
-  ipcMain.handle(IpcChannels.saveDuty, (_e, draft: DutyDraft) => saveDraft(draft));
-  ipcMain.handle(IpcChannels.deleteDuty, (_e, id: string) => deleteDuty(paths, id));
-  // 휴지통 (설계 DESIGN-APPS.md §3.2): 지운 것은 Mate 홈의 trash/에 두었다가 되살리거나 비운다
-  ipcMain.handle(IpcChannels.deleteRun, (_e, id: string) => deleteRun(paths, id));
-  ipcMain.handle(IpcChannels.clearChat, () => clearChat(paths));
-  ipcMain.handle(IpcChannels.restoreTrash, async (_e, id: string) => {
-    await restoreTrash(paths, id);
-  });
-  ipcMain.handle(IpcChannels.emptyTrash, (_e, ids?: string[]) => emptyTrash(paths, ids));
-  // Mate가 제안한 설치: 적용은 실행기와 같은 코드로 한다 (DESIGN-APPS.md §3.4)
-  ipcMain.handle(IpcChannels.applyInstall, (_e, itemId: string) => applyInstall(paths, itemId));
-  ipcMain.handle(IpcChannels.describeInstall, async (_e, itemId: string) => {
-    const item = (await readInbox(paths.inbox)).find((i) => i.id === itemId);
-    if (!item?.install) throw new Error("설치 제안을 찾지 못했습니다");
-    return describeInstall(item.install);
-  });
-  // 스킬·MCP (설계 DESIGN-APPS.md §3.4): Mate 홈의 skills/·mcp.json을 Agent와 같은 형식·코드로 다룬다
-  ipcMain.handle(IpcChannels.skillsList, () => listSkillsIn(paths.skills));
-  ipcMain.handle(IpcChannels.skillSave, async (_e, previous: string | undefined, input: SkillInput) => {
-    await saveSkill(paths.skills, input, previous);
-  });
-  ipcMain.handle(IpcChannels.skillDelete, (_e, name: string) => deleteMateSkill(paths, name));
+  ipcMain.handle(IpcChannels.saveDuty, (_e, draft: DutyDraft) => call("saveDuty", draft));
+  forward(IpcChannels.deleteDuty, "deleteDuty");
+  forward(IpcChannels.deleteRun, "deleteRun");
+  forward(IpcChannels.clearChat, "clearChat");
+  forward(IpcChannels.restoreTrash, "restoreTrash");
+  forward(IpcChannels.emptyTrash, "emptyTrash");
+  forward(IpcChannels.applyInstall, "applyInstall");
+  forward(IpcChannels.describeInstall, "describeInstall");
+  forward(IpcChannels.skillsList, "skillsList");
+  ipcMain.handle(IpcChannels.skillSave, (_e, previous: string | undefined, input: SkillInput) => call("skillSave", previous, input));
+  forward(IpcChannels.skillDelete, "skillDelete");
   ipcMain.handle(IpcChannels.skillOpenFolder, async () => {
     await mkdir(paths.skills, { recursive: true });
     const error = await shell.openPath(paths.skills);
     if (error) throw new Error(error);
   });
-  ipcMain.handle(IpcChannels.listMcp, async () => serverViews(await readMcpFile(paths.mcp)));
-  ipcMain.handle(IpcChannels.addMcpPreset, (_e, id: string, key?: string) => {
-    const preset = MCP_PRESETS.find((p) => p.id === id);
-    if (!preset) throw new Error(`목록에 없는 서버입니다: ${id}`);
-    return updateMcpFile(paths.mcp, (file) => withPreset(file, preset, key));
-  });
-  ipcMain.handle(IpcChannels.setMcpEnabled, (_e, name: string, enabled: boolean) => updateMcpFile(paths.mcp, (file) => withEnabled(file, name, enabled === true)));
-  ipcMain.handle(IpcChannels.removeMcp, (_e, name: string) => updateMcpFile(paths.mcp, (file) => withoutServer(file, name)));
+  forward(IpcChannels.listMcp, "mcpList");
+  forward(IpcChannels.addMcpPreset, "mcpAddPreset");
+  forward(IpcChannels.setMcpEnabled, "mcpSetEnabled");
+  forward(IpcChannels.removeMcp, "mcpRemove");
   ipcMain.handle(IpcChannels.openMcpFile, async () => {
-    await updateMcpFile(paths.mcp, (file) => ({ mcpServers: {}, ...file }));
-    const error = await shell.openPath(paths.mcp);
+    const path = await call<string>("mcpEnsureFile");
+    const error = await shell.openPath(path);
     if (error) throw new Error(error);
   });
-  ipcMain.handle(IpcChannels.checkMcp, async () => (await runnerCommand(runnerScript(), "mcp-check", runnerEnv())) as unknown as McpCheckResult);
-  ipcMain.handle(IpcChannels.runNow, async (_e, id: string) => {
-    if (!isDutyId(id)) throw new Error("잘못된 임무 id입니다");
-    await addRequest(paths, id);
-    // 실행기가 꺼져 있으면 다시 띄운다 (요청 파일은 실행기가 뜨면 처리)
-    if (!isAlive(await readPid(paths))) await ensureRunner();
-  });
-  ipcMain.handle(IpcChannels.setInbox, async (_e, ids: string[], status: InboxStatus | undefined) => {
-    await setInboxStatus(paths, ids.filter((id) => typeof id === "string"), status);
-  });
-  ipcMain.handle(IpcChannels.saveConfig, (_e, patch: ConfigPatch) => saveConfig(paths, patch));
+  ipcMain.handle(IpcChannels.checkMcp, () => call<McpCheckResult>("mcpCheck"));
+  forward(IpcChannels.runNow, "runNow");
+  ipcMain.handle(IpcChannels.setInbox, (_e, ids: string[], status: InboxStatus | undefined) => call("setInbox", ids, status));
+  ipcMain.handle(IpcChannels.saveConfig, (_e, patch: ConfigPatch) => call("saveConfig", patch));
   ipcMain.handle(IpcChannels.pickDirectory, async () => {
-    const result = await dialog.showOpenDialog(mainWindow!, { properties: ["openDirectory"] });
+    const result = mainWindow ? await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory"] }) : await dialog.showOpenDialog({ properties: ["openDirectory"] });
     return result.canceled ? undefined : result.filePaths[0];
   });
   ipcMain.handle(IpcChannels.restartRunner, async () => {
     await restartRunner();
-    return runnerView();
+    return (await overview()).runner;
   });
   ipcMain.handle(IpcChannels.revealHome, () => shell.openPath(paths.home));
   ipcMain.handle(IpcChannels.getAutostart, () => getAutostart());
-  ipcMain.handle(IpcChannels.telegramView, () => telegramView(paths));
+  ipcMain.handle(IpcChannels.telegramView, () => telegramView(runnerStore));
   ipcMain.handle(IpcChannels.telegramSetToken, async (_e, token: string) => {
-    await saveTelegramToken(paths, String(token));
+    await saveTelegramToken(runnerStore, String(token));
     await restartRunner();
-    return telegramView(paths);
+    return telegramView(runnerStore);
   });
   ipcMain.handle(IpcChannels.telegramRemove, async () => {
-    await removeTelegram(paths);
+    await removeTelegram(runnerStore);
     await restartRunner();
-    return telegramView(paths);
+    return telegramView(runnerStore);
   });
   ipcMain.handle(IpcChannels.telegramPair, async () => {
-    await createPairingCode(paths);
-    return telegramView(paths);
+    await createPairingCode(runnerStore);
+    return telegramView(runnerStore);
   });
   ipcMain.handle(IpcChannels.telegramUnpair, async () => {
-    await unpairTelegram(paths);
-    return telegramView(paths);
+    await unpairTelegram(runnerStore);
+    return telegramView(runnerStore);
   });
-  ipcMain.handle(IpcChannels.telegramTest, () => sendTelegramTest(paths));
-  ipcMain.handle(IpcChannels.chatSend, (_e, text: string, answerTo?: string) =>
-    chatSend(String(text ?? ""), typeof answerTo === "string" ? answerTo : undefined),
-  );
+  ipcMain.handle(IpcChannels.telegramTest, () => sendTelegramTest(runnerStore));
+  ipcMain.handle(IpcChannels.chatSend, (_e, text: string, answerTo?: string) => call("chatSend", String(text ?? ""), typeof answerTo === "string" ? answerTo : undefined));
   ipcMain.handle(IpcChannels.piReadiness, (_e, refresh: boolean) => readiness(refresh === true));
   ipcMain.handle(IpcChannels.installPiDesktop, () =>
     installPiDesktop(mainWindow, (received, total) => mainWindow?.webContents.send(IpcChannels.installProgress, received, total)),
   );
   ipcMain.handle(IpcChannels.openPiDesktop, () => openPiDesktop());
   ipcMain.handle(IpcChannels.setAutostart, (_e, enabled: boolean) => setAutostart(enabled === true));
-  ipcMain.handle(IpcChannels.delegate, (_e, itemId: string) => delegate(String(itemId)));
-  ipcMain.handle(IpcChannels.applyChange, (_e, itemId: string) => applyInboxChange(paths, String(itemId)));
-  ipcMain.handle(IpcChannels.discardChange, (_e, itemId: string) => discardInboxChange(paths, String(itemId)));
-  ipcMain.handle(IpcChannels.readSession, async (_e, runId: string) => {
-    const run = (await listRuns(paths, 1000)).find((r) => r.id === runId);
-    // 실행 기록에 적힌 경로라도 Mate 홈의 sessions/ 밖은 읽지 않는다
-    const file = run?.sessionId ? await findSessionFile(paths, run.sessionId) : undefined;
-    if (!file) throw new Error("이 실행의 세션 파일을 찾지 못했습니다");
-    return parseTranscript(await readFile(file, "utf8"));
-  });
-}
-
-/** Mate 홈의 파일이 바뀌면 화면에 알린다 (실행기·확장이 쓰는 파일 포함). 잦은 변경은 묶는다 */
-function watchHome(): FSWatcher | undefined {
-  let timer: NodeJS.Timeout | undefined;
-  const notify = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IpcChannels.changed);
-    }, 200);
-  };
-  try {
-    return watch(paths.home, { recursive: true }, (_event, name) => {
-      // Pi 세션 파일·로그(대화 세션·할 일 포함)는 실행 중 계속 바뀌므로 화면 갱신에서 뺀다
-      if (name && /^(sessions|run|chat[\\/](sessions|actions))[\\/]/.test(name)) return;
-      notify();
-    });
-  } catch {
-    return undefined;
-  }
+  ipcMain.handle(IpcChannels.delegate, (_e, itemId: string) => call("delegate", String(itemId)));
+  ipcMain.handle(IpcChannels.applyChange, (_e, itemId: string) => call("applyChange", String(itemId)));
+  ipcMain.handle(IpcChannels.discardChange, (_e, itemId: string) => call("discardChange", String(itemId)));
+  ipcMain.handle(IpcChannels.readSession, (_e, runId: string) => call("readSession", String(runId)));
 }
 
 function createWindow(): void {
@@ -403,11 +274,11 @@ if (isRunnerOnlyLaunch()) {
     mainWindow?.focus();
   });
   void app.whenReady().then(async () => {
-    await mkdir(paths.requests, { recursive: true });
     registerIpc();
     createWindow();
-    const watcher = watchHome();
-    app.on("will-quit", () => watcher?.close());
+    // 창을 먼저 띄우고 실행기에 붙는다. 실행기는 앱을 닫아도 남는다 (연결기만 끝난다)
+    startConnection();
+    app.on("will-quit", () => connection?.dispose());
     // 자동 업데이트: 설치 직전에는 실행기를 멈춘다 (실행기가 Electron을 Node로 쓰는 경우 설치 파일을 잡고 있지 않게)
     const updater = new Updater(
       (state) => mainWindow?.webContents.send(IpcChannels.updateStateChanged, state),
@@ -420,9 +291,6 @@ if (isRunnerOnlyLaunch()) {
     ipcMain.handle(IpcChannels.checkForUpdates, (_e, interactive: boolean) => updater.check(interactive === true));
     ipcMain.handle(IpcChannels.confirmUpdate, () => updater.confirmUpdate());
     updater.start();
-    // 창을 먼저 띄우고 실행기를 확인한다. 실행기는 앱을 닫아도 남는다.
-    await ensureRunner();
-    mainWindow?.webContents.send(IpcChannels.changed);
   });
   app.on("window-all-closed", () => app.quit());
 }
