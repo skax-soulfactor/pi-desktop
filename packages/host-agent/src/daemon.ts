@@ -88,6 +88,7 @@ import {
   type StoredPathParams,
   type StoredReadResult,
   type StoredSession,
+  type AgentCallParams,
   type ArchiveSetParams,
   type TrashEmptyParams,
   type TrashEmptyResult,
@@ -123,6 +124,7 @@ import { importResource } from "./resource-import";
 import { deleteResource, inspectImported, moveToBackup, readImported, type DeletableKind } from "./import-manage";
 import { emptyTrash, listTrash, moveToTrash, restoreFromTrash } from "./session-trash";
 import { loadArchive, setArchived } from "./session-archive";
+import { appApi } from "@pi-desktop/agent-kit/app-api";
 import { exportResource } from "./resource-export";
 import { FileIndex } from "./file-search";
 import { FileWatcher } from "./file-watcher";
@@ -640,6 +642,19 @@ export class AgentDaemon {
       const removed = await emptyTrash(agentHome(this.env), p.ids).catch(invalidParams);
       this.log(`휴지통 비움 ${removed}개`);
       return { removed };
+    });
+
+    // 에이전트 앱의 데이터 (설계 DESIGN-APPS.md §4 Agent ③). 데몬 홈이 Agent 홈이고 그 아래 data/가 agent-kit 상태 폴더다.
+    // Pi Desktop의 데몬에서는 부르지 않는다
+    peer.handle(Methods.agentCall, async (params): Promise<unknown> => {
+      const p = params as AgentCallParams | undefined;
+      if (!p?.name || typeof p.name !== "string") throw new JsonRpcError(ErrorCodes.InvalidParams, "name이 필요합니다");
+      const home = agentHome(this.env);
+      const api = appApi({ home, dataDir: this.env.PI_DESKTOP_AGENT_DATA || join(home, "data") });
+      const fn = Object.hasOwn(api, p.name) ? api[p.name] : undefined;
+      if (!fn) throw new JsonRpcError(ErrorCodes.InvalidParams, `모르는 에이전트 함수입니다: ${p.name}`);
+      const result = await fn(...(Array.isArray(p.args) ? p.args : [])).catch(invalidParams);
+      return result === undefined ? null : result;
     });
 
     peer.handle(Methods.archiveSet, async (params): Promise<null> => {

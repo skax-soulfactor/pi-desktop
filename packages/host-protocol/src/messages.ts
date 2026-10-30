@@ -89,6 +89,8 @@ export const Methods = {
   trashEmpty: "trash.empty",
   /** 세션을 아카이브하거나 되돌린다. 파일은 그대로 두고 앱 목록에서만 숨긴다 (archive.json) */
   archiveSet: "archive.set",
+  /** 에이전트 앱의 데이터 함수(agent-kit app-api)를 이 호스트에서 부른다. 데몬 홈이 Agent 홈이다 (DESIGN-APPS.md §6 D4) */
+  agentCall: "agent.call",
   storedRead: "stored.read",
   storedWatch: "stored.watch",
   storedUnwatch: "stored.unwatch",
@@ -988,6 +990,13 @@ export interface TrashEmptyParams {
 
 export interface TrashEmptyResult {
   removed: number;
+}
+
+export interface AgentCallParams {
+  /** agent-kit app-api의 함수 이름 (예: kbList) */
+  name: string;
+  /** 그 함수의 인자 (JSON) */
+  args?: unknown[];
 }
 
 export interface ArchiveSetParams {
