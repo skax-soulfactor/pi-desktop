@@ -178,9 +178,11 @@ function runPeerServer(pi: ExtensionAPI, dir: string): void {
     return Boolean(controller);
   };
 
-  /** 사람이 승인한 받은 작업을 그 폴더에 갇힌 무인 워커로 돌린다 */
+  /** 사람이 승인한 받은 작업을 그 폴더에 갇힌 무인 워커로 돌린다. 이미 띄운 작업은 다시 띄우지 않는다 */
   const startApproved = async () => {
-    const waiting = (await loadTasks(tasksDir(dir))).filter((t) => t.origin === "peer-in" && t.status === "waiting" && t.approval === "approved");
+    const waiting = (await loadTasks(tasksDir(dir))).filter(
+      (t) => t.origin === "peer-in" && t.status === "waiting" && t.approval === "approved" && !runningTasks.has(t.id),
+    );
     for (const record of waiting.slice(0, Math.max(0, MAX_PEER_TASKS - runningTasks.size))) {
       const controller = new AbortController();
       runningTasks.set(record.id, controller);
@@ -243,8 +245,22 @@ function runPeerServer(pi: ExtensionAPI, dir: string): void {
     if (current) await new Promise<void>((resolve) => current.close(() => resolve()));
   };
 
-  /** 설정대로 서버를 켜고 끄고, 보낸 페어링 요청의 결과를 가져온다 */
+  /**
+   * 설정대로 서버를 켜고 끄고, 보낸 페어링 요청의 결과를 가져온다.
+   * 주기가 짧고 한 번에 오래 걸릴 수 있어(느린 디스크·네트워크) 앞의 차례가 끝나기 전에는 다시 돌지 않는다.
+   * 겹치면 같은 승인 작업에 워커를 두 번 띄우거나 서버를 두 번 열려고 한다.
+   */
+  let syncing = false;
   const sync = async () => {
+    if (syncing) return;
+    syncing = true;
+    try {
+      await syncOnce();
+    } finally {
+      syncing = false;
+    }
+  };
+  const syncOnce = async () => {
     const settings = await loadPeerSettings(dir);
     if (!settings.enabled || serverPort !== settings.port) await close();
     if (settings.enabled && !server) {
