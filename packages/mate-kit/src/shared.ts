@@ -17,20 +17,28 @@ export const MATE_ENV = {
   chat: "PI_DESKTOP_MATE_CHAT",
   /** 대화 한 차례에서 mate_do가 남기는 할 일 목록 (실행기가 대화가 끝난 뒤 처리) */
   actions: "PI_DESKTOP_MATE_ACTIONS",
-  /** 사용자가 이 임무에 허용한 명령 이름 (쉼표로 구분, 예: curl). mate-guard가 읽기 전용 목록에 더해 통과시킨다 */
+  /** 사용자가 이 임무에 허용한 명령 이름과 MCP 도구 이름 (쉼표로 구분, 예: curl,mcp__github__list_prs). mate-guard가 통과시킨다 */
   grants: "PI_DESKTOP_MATE_GRANTS",
   /** 허용 목록에 없어 막힌 명령을 남기는 파일(JSONL). 실행이 끝나면 실행기가 읽어 사용자에게 허용을 묻는다 */
   blocked: "PI_DESKTOP_MATE_BLOCKED",
 } as const;
+
+/**
+ * MCP 도구 이름인지 (`mcp__<서버>__<도구>`, Pi가 서버 이름의 `-`를 `_`로 바꾼 것).
+ * Mate는 MCP 도구가 읽기인지 쓰기인지 알 수 없어 도구마다 허용을 받는다 (설계 DESIGN-MATE.md §4 "권한 요청" 5)
+ */
+export function isMcpToolName(name: string): boolean {
+  return /^mcp__[A-Za-z0-9_]{1,64}__[A-Za-z0-9_.-]{1,128}$/.test(name);
+}
 
 /** 막힌 명령의 허용을 묻는 질문의 선택지. 첫째가 허용이다 */
 export const PERMISSION_OPTIONS = ["허용하고 다시 실행", "허용하지 않음"] as const;
 
 /** mate-guard가 막힌 명령마다 남기는 한 줄 */
 export interface BlockedCommand {
-  /** 허용을 물을 명령 이름 (예: curl) */
+  /** 허용을 물을 명령 이름 (예: curl) 또는 MCP 도구 이름 (mcp__<서버>__<도구>) */
   name: string;
-  /** 실제로 실행하려던 명령 (질문에 보여 준다) */
+  /** 실제로 실행하려던 명령, MCP 도구면 도구 설명 (질문에 보여 준다) */
   command: string;
   at: number;
 }
