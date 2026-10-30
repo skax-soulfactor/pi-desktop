@@ -211,6 +211,7 @@ export class Runner {
   private readonly watchers: ChangeWatchers;
   private readonly observer: Observer;
   private remote: TelegramRemote | undefined;
+  private telegramToken: string | undefined;
   private chat: ChatAgent | undefined;
 
   constructor(private readonly options: RunnerOptions) {
@@ -242,12 +243,29 @@ export class Runner {
     this.chat = new ChatAgent({ paths, kitDir: this.options.kitDir, locatePi: this.options.locatePi, exec, log: (message) => void log(paths, message), ...(this.options.now ? { now: this.options.now } : {}) });
     await this.chat.start();
     // 휴대폰 연결: 앱이 봇 토큰을 넘겼을 때만. 임무 실행과 따로 돌아 버튼에 바로 답한다
-    const token = process.env[TELEGRAM_TOKEN_ENV];
-    if (token) {
-      this.remote = new TelegramRemote(paths, token, exec, (message) => void log(paths, message), this.chat);
-      this.remote.start();
-    }
+    this.setTelegramToken(process.env[TELEGRAM_TOKEN_ENV]);
     await this.tick();
+  }
+
+  /**
+   * 휴대폰 연결을 이 봇 토큰으로 켜거나(바뀌었으면 다시) 끈다.
+   * 로컬은 실행기를 띄울 때 환경 변수로, 원격은 앱이 붙은 뒤 RPC로 넘긴다. 토큰은 메모리에만 두고 디스크에 쓰지 않는다
+   * (설계 DESIGN-MATE-REMOTE.md §5). 그래서 원격 실행기가 다시 뜨면 앱이 붙을 때까지 휴대폰 연결이 쉰다.
+   */
+  setTelegramToken(token: string | undefined): void {
+    if (token === this.telegramToken || !this.chat) return;
+    this.remote?.stop();
+    this.remote = undefined;
+    this.telegramToken = token || undefined;
+    if (!this.telegramToken) return;
+    const { paths } = this.options;
+    this.remote = new TelegramRemote(paths, this.telegramToken, this.options.exec ?? execCommand, (message) => void log(paths, message), this.chat);
+    this.remote.start();
+  }
+
+  /** 휴대폰 연결(텔레그램 폴링)이 켜져 있는가 */
+  get phoneActive(): boolean {
+    return !!this.remote;
   }
 
   async stop(): Promise<void> {

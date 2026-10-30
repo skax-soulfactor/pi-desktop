@@ -54,6 +54,12 @@ describe("store", () => {
     expect((await saveConfig(paths, { observe: { enabled: true } })).observe).toMatchObject({ enabled: true, quietMinutes: 5 });
     expect((await saveConfig(paths, { paused: true })).paused).toBe(true);
     expect((await loadConfig(paths)).model).toBe("anthropic/claude-haiku-5-5");
+    // RPC로 온 null은 그 값을 지운다 (JSON은 undefined를 빼므로 앱이 null로 보낸다)
+    await saveConfig(paths, { telegram: { tokenEnc: "enc", botName: "b", quiet: { start: "22:00", end: "07:00" } } });
+    const cleared = await saveConfig(paths, { telegram: { tokenEnc: null, botName: null, quiet: null } } as never);
+    expect(cleared.telegram).not.toHaveProperty("tokenEnc");
+    expect(cleared.telegram).not.toHaveProperty("botName");
+    expect(cleared.telegram).not.toHaveProperty("quiet");
   });
 
   it("임무를 검사해 저장하고, 간격은 15분보다 짧게 못 한다", async () => {

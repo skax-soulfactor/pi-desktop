@@ -172,11 +172,7 @@ export function App() {
         {tab === "trash" && <TrashView overview={overview} now={now} act={act} />}
         {tab === "phone" && (
           <section>
-            {host?.remote ? (
-              <div className="empty">원격 호스트({hostLabel(host.id)})의 휴대폰 연결은 아직 지원하지 않습니다. 휴대폰 연결은 로컬 호스트에서 설정하세요.</div>
-            ) : (
-              <PhoneView overview={overview} act={act} />
-            )}
+            <PhoneView overview={overview} act={act} {...(host?.remote ? { remoteHost: hostLabel(host.id) } : {})} />
           </section>
         )}
         {tab === "settings" && (

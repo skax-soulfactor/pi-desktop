@@ -58,6 +58,8 @@ export interface MateAppContext {
   locatePi: () => Promise<PiLaunch>;
   /** 실행기를 멈춘다 (답을 보낸 뒤). 원격 실행기를 앱에서 멈추거나 다시 띄울 때 쓴다 */
   shutdown?: () => void;
+  /** 휴대폰 연결 토큰을 메모리에 두고 연결을 켠다 (빈 값이면 끈다). 원격 호스트의 휴대폰 연결 (DESIGN-MATE-REMOTE.md §5) */
+  setTelegramToken?: (token: string | undefined) => void;
 }
 
 // 메서드마다 인자 모양이 달라 any로 받는다 (실행기는 이름으로만 찾는다)
@@ -222,6 +224,12 @@ export function mateAppApi(ctx: MateAppContext): MateAppApi {
     // 휴대폰 연결 상태 (실행기가 쓰는 remote.json)
     remoteState: () => loadRemoteState(paths),
 
+    /** 휴대폰 연결 토큰을 넘긴다 (null이면 끈다). 실행기는 메모리에만 두고 결과에 토큰을 담지 않는다 */
+    setTelegramToken: async (token: unknown) => {
+      if (!ctx.setTelegramToken) throw new Error("이 실행기는 휴대폰 연결 토큰을 받을 수 없습니다");
+      if (token !== null && token !== undefined && typeof token !== "string") throw new Error("토큰은 글자여야 합니다");
+      ctx.setTelegramToken(token ?? undefined);
+    },
     /** 실행기를 멈춘다. 답을 보낸 뒤 끝나도록 조금 늦춘다 (원격 호스트를 바꾸거나 다시 띄울 때, DESIGN-MATE-REMOTE.md §3.1) */
     stopRunner: async () => {
       if (!ctx.shutdown) throw new Error("이 실행기는 멈출 수 없습니다");
