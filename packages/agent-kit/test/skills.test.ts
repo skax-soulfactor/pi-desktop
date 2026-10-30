@@ -28,13 +28,10 @@ describe("스킬 파일", () => {
     expect(parseSkill("---\nname: x\ndescription: 쉬운 설명\n---\n본문")).toMatchObject({ description: "쉬운 설명", modelInvocation: true });
   });
 
-  it("사용자·공유 폴더를 읽고, 만들기·같은 이름 거절·이름 바꾸기·지우기(휴지통)", async () => {
+  it("앱 홈의 스킬 폴더를 읽고, 만들기·같은 이름 거절·이름 바꾸기·지우기(휴지통)", async () => {
     const agentDir = mkdtempSync(join(tmpdir(), "skills-agent-"));
-    const home = mkdtempSync(join(tmpdir(), "skills-home-"));
-    const env = { PI_CODING_AGENT_DIR: agentDir };
+    const env = { PI_DESKTOP_AGENT_HOME: agentDir };
     const userDir = join(agentDir, "skills");
-    mkdirSync(join(home, ".agents", "skills", "shared-one"), { recursive: true });
-    writeFileSync(join(home, ".agents", "skills", "shared-one", "SKILL.md"), "---\nname: shared-one\ndescription: 다른 도구와 함께 쓰는 스킬\n---\n본문");
     mkdirSync(join(userDir, "not-a-skill"), { recursive: true });
 
     await saveSkill(userDir, { name: "alpha", description: "알파", instructions: "하라", modelInvocation: true });
@@ -43,12 +40,12 @@ describe("스킬 파일", () => {
     await expect(saveSkill(userDir, { name: "Bad Name", description: "x", instructions: "y", modelInvocation: true })).rejects.toThrow(/소문자/);
     await expect(saveSkill(userDir, { name: "beta", description: " ", instructions: "y", modelInvocation: true })).rejects.toThrow(/설명/);
 
-    let list = await listSkills(env, home);
-    expect(list.map((s) => `${s.scope}:${s.name}`)).toEqual(["user:alpha", "shared:shared-one"]);
+    let list = await listSkills(env);
+    expect(list.map((s) => s.name)).toEqual(["alpha"]);
     expect(list[0]!.extraFiles).toEqual(["scripts"]);
 
     await saveSkill(userDir, { name: "alpha-two", description: "알파 고침", instructions: "하라", modelInvocation: false }, "alpha");
-    list = await listSkills(env, home);
+    list = await listSkills(env);
     expect(list[0]).toMatchObject({ name: "alpha-two", description: "알파 고침", modelInvocation: false, extraFiles: ["scripts"] });
     expect(existsSync(join(userDir, "alpha"))).toBe(false);
 
@@ -69,11 +66,11 @@ describe("스킬 파일", () => {
 describe("스킬 (실제 Pi)", () => {
   let llm: ScriptLlm;
   let pi: RpcPi;
-  let piAgentDir: string;
+  let agentHome: string;
 
   beforeAll(async () => {
     llm = await startScriptLlm("mock-model");
-    ({ pi, piAgentDir } = await startPi(llm.baseUrl));
+    ({ pi, agentHome } = await startPi(llm.baseUrl));
   });
 
   afterAll(async () => {
@@ -81,7 +78,7 @@ describe("스킬 (실제 Pi)", () => {
     await llm?.close();
   });
 
-  it("skill_save는 승인을 받고 <Pi 설정 폴더>/skills/<이름>/SKILL.md로 저장하고, 같은 이름은 replace 없이는 거절한다", async () => {
+  it("skill_save는 승인을 받고 <앱 홈>/skills/<이름>/SKILL.md로 저장하고, 같은 이름은 replace 없이는 거절한다", async () => {
     llm.setScript([
       { tool: "skill_save", args: { name: "weekly-report", description: "주간 보고서를 만든다. 금요일 보고에 쓴다", instructions: "1. 커밋을 본다\n2. 세 줄로" } },
       { tool: "skill_save", args: { name: "weekly-report", description: "다시", instructions: "다시" } },
@@ -98,7 +95,7 @@ describe("스킬 (실제 Pi)", () => {
     pi.write({ type: "extension_ui_response", id: second.id, value: ApprovalChoice.once });
     await pi.waitFor((r) => r.type === "agent_settled", from);
 
-    const file = join(piAgentDir, "skills", "weekly-report", "SKILL.md");
+    const file = join(agentHome, "skills", "weekly-report", "SKILL.md");
     expect(parseSkill(readFileSync(file, "utf8"))).toMatchObject({ name: "weekly-report", description: "주간 보고서를 만든다. 금요일 보고에 쓴다", modelInvocation: true });
     const ends = pi.records.slice(from).filter((r) => r.type === "tool_execution_end");
     expect(JSON.stringify(ends[1]?.result)).toContain("replace: true");

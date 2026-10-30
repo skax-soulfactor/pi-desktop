@@ -6,16 +6,19 @@ import { APPROVAL_MARKER, parseApprovalTitle } from "../src/approval";
 import { attended, isWorker } from "../src/runtime";
 import { classify } from "../extensions/permissions/rules";
 import { taskNotice } from "../extensions/tasks/index";
-import { extensionArgsOf, labelTitle, piCommand, runWorker } from "../extensions/tasks/worker";
+import { inheritedArgsOf, labelTitle, piCommand, runWorker } from "../extensions/tasks/worker";
 import { extensionArgs, extensionEntries } from "../src/index";
 import { kitDir, PI_CLI, startPi, type RpcPi, type RpcRecord } from "./helpers/rpc-pi";
 import { startScriptLlm, type ScriptLlm } from "./helpers/script-llm";
 
 describe("워커 준비", () => {
-  it("지금 Pi의 cli와 -e 확장을 물려준다", () => {
+  it("지금 Pi의 cli와 확장·격리 옵션을 물려준다", () => {
     expect(piCommand(["node", "/x/cli.js", "--mode", "rpc"], {})).toEqual({ command: process.execPath, args: ["/x/cli.js"] });
     expect(piCommand(["pi.exe"], {}).command).toBe("pi");
-    expect(extensionArgsOf(["node", "cli.js", "-e", "/a.ts", "--model", "m", "--extension", "/b.ts"])).toEqual(["-e", "/a.ts", "-e", "/b.ts"]);
+    expect(inheritedArgsOf(["node", "cli.js", "-e", "/a.ts", "--model", "m", "--extension", "/b.ts"])).toEqual(["-e", "/a.ts", "--extension", "/b.ts"]);
+    // 앱이 띄운 격리 옵션은 물려주고 세션 폴더는 물려주지 않는다
+    const isolated = ["node", "cli.js", "--mode", "rpc", "--session-dir", "/h/sessions", "-ns", "--skill", "/h/skills", "-np", "--prompt-template", "/h/prompts", "-ne", "-e", "/k.ts", "-e", "builtin:codemode", "-nc"];
+    expect(inheritedArgsOf(isolated)).toEqual(["-ns", "--skill", "/h/skills", "-np", "--prompt-template", "/h/prompts", "-ne", "-e", "/k.ts", "-e", "builtin:codemode", "-nc"]);
   });
 
   it("다이얼로그 제목에 작업 이름을 붙이되, 승인 형식은 앱이 읽을 수 있게 첫 줄 끝에 붙인다", () => {
@@ -101,7 +104,7 @@ describe("워커 — 모델 오류", () => {
         provider: "mock",
         model: "mock-model",
         argv,
-        env: { ...process.env, PI_CODING_AGENT_DIR: agentDir, PI_CODING_AGENT_SESSION_DIR: join(agentDir, "s") },
+        env: { ...process.env, PI_CODING_AGENT_DIR: agentDir, PI_CODING_AGENT_SESSION_DIR: join(agentDir, "s"), PI_DESKTOP_AGENT_HOME: join(agentDir, "home") },
       }),
     ).rejects.toThrow(/모델 호출이 실패했다/);
   }, 60_000);

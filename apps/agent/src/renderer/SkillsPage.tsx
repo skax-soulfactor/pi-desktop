@@ -12,7 +12,7 @@ const toDraft = (s: SkillView): Draft => ({ previous: s.name, name: s.name, desc
 /**
  * 스킬 (설계 DESIGN-AGENT.md §4 "스킬"). Pi 스킬(SKILL.md)을 보고 만들고 고친다.
  * 모델은 스킬의 이름·설명을 보고 필요할 때 지시를 읽고, 사람은 /skill:이름으로 부른다. 대화에서 "스킬로 만들어"라고 해도 저장된다.
- * 고칠 수 있는 것은 사용자 스킬 폴더(<Pi 설정 폴더>/skills)뿐이고, ~/.agents/skills는 보기만 한다.
+ * 스킬은 앱 홈의 skills/(~/.pi-desktop-agent/skills)에 있다. Pi Desktop·터미널 pi의 스킬과 섞이지 않는다 (DESIGN-APPS.md §3).
  */
 export function SkillsPage({ onUse, onError }: { onUse: (name: string) => void; onError: (message: string) => void }) {
   const [skills, setSkills] = useState<SkillView[]>();
@@ -35,11 +35,10 @@ export function SkillsPage({ onUse, onError }: { onUse: (name: string) => void; 
       setSelected(undefined);
     });
 
-  const user = skills?.filter((s) => s.scope === "user") ?? [];
-  const shared = skills?.filter((s) => s.scope === "shared") ?? [];
+  const user = skills ?? [];
 
   const row = (s: SkillView) => (
-    <li key={`${s.scope}-${s.folder}`} className={`skill-item${selected?.path === s.path ? " active" : ""}`}>
+    <li key={s.folder} className={`skill-item${selected?.path === s.path ? " active" : ""}`}>
       <button
         className="kb-row"
         onClick={() => {
@@ -91,12 +90,6 @@ export function SkillsPage({ onUse, onError }: { onUse: (name: string) => void; 
             ) : (
               <ul className="list">{user.map(row)}</ul>
             )}
-            {shared.length > 0 && (
-              <>
-                <h3>다른 도구와 함께 쓰는 스킬 (~/.agents/skills, 보기만)</h3>
-                <ul className="list">{shared.map(row)}</ul>
-              </>
-            )}
           </div>
 
           {selected && !draft && (
@@ -111,26 +104,22 @@ export function SkillsPage({ onUse, onError }: { onUse: (name: string) => void; 
                 <button className="small primary" onClick={() => onUse(selected.name)}>
                   대화에서 쓰기
                 </button>
-                {selected.scope === "user" && (
-                  <>
-                    <button className="small" onClick={() => setDraft(toDraft(selected))}>
-                      고치기
-                    </button>
-                    <button
-                      className="small danger"
-                      onClick={() =>
-                        run(async () => {
-                          if (!confirm(`${selected.name} 스킬을 지울까요? (휴지통 폴더로 옮겨져 되돌릴 수 있습니다)`)) return;
-                          await window.piAgent.skillDelete(selected.name);
-                          setSelected(undefined);
-                          await refresh();
-                        })
-                      }
-                    >
-                      지우기
-                    </button>
-                  </>
-                )}
+                <button className="small" onClick={() => setDraft(toDraft(selected))}>
+                  고치기
+                </button>
+                <button
+                  className="small danger"
+                  onClick={() =>
+                    run(async () => {
+                      if (!confirm(`${selected.name} 스킬을 지울까요? (휴지통 폴더로 옮겨져 되돌릴 수 있습니다)`)) return;
+                      await window.piAgent.skillDelete(selected.name);
+                      setSelected(undefined);
+                      await refresh();
+                    })
+                  }
+                >
+                  지우기
+                </button>
                 <button className="small link-button" onClick={() => setSelected(undefined)}>
                   닫기
                 </button>

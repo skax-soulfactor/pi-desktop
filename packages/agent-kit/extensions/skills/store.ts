@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { agentHome } from "../../src/home";
 import type { SkillInput, SkillView } from "./types";
 
 export * from "./types";
@@ -8,25 +8,16 @@ export * from "./types";
 /**
  * Pi 스킬 (Pi docs/skills.md, Agent Skills 규격). 스킬 하나 = <폴더>/SKILL.md (frontmatter name·description + 지시).
  *
- * 이 앱이 만들고 고치는 곳은 사용자 스킬 폴더(`<Pi 설정 폴더>/skills/`)뿐이다. `~/.agents/skills/`(다른 도구와 함께 쓰는
- * Agent Skills 위치)는 보여 주기만 한다. 프로젝트 스킬(.pi/skills)은 그 폴더의 일이라 여기서 다루지 않는다.
+ * 스킬은 앱 홈의 `skills/`(`~/.pi-desktop-agent/skills/`)에 둔다 (설계 DESIGN-APPS.md §3). 앱은 Pi를 `-ns --skill <이 폴더>`로
+ * 띄우므로 Pi 설정 폴더·`~/.agents/skills/`·Pi 패키지의 스킬은 올라가지 않는다. 프로젝트 스킬(.pi/skills)도 같은 이유로 쓰지 않는다.
  * 지운 스킬은 바로 지우지 않고 agent-kit 상태 폴더의 skills-trash/로 옮긴다.
  *
  * desktop-agent의 스킬은 "다듬은 지시문을 다시 쓰기" 위한 앱 자체 기능이었다. Pi에는 같은 목적의 스킬이 이미 있으므로
  * 그 형식을 그대로 쓴다 (모델이 이름·설명을 보고 필요할 때 읽고, 사람은 /skill:이름으로 부른다).
  */
 
-/** Pi 설정 폴더 (PI_CODING_AGENT_DIR, 없으면 ~/.pi/agent) */
-export function piAgentDir(env: NodeJS.ProcessEnv = process.env): string {
-  return env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
-}
-
 export function userSkillsDir(env: NodeJS.ProcessEnv = process.env): string {
-  return join(piAgentDir(env), "skills");
-}
-
-export function sharedSkillsDir(home = homedir()): string {
-  return join(home, ".agents", "skills");
+  return join(agentHome(env), "skills");
 }
 
 /** 규격: 소문자·숫자·하이픈, 앞뒤·연속 하이픈 없음, 64자까지 */
@@ -80,7 +71,7 @@ export function parseSkill(text: string): Omit<SkillInput, "name"> & { name?: st
 }
 
 /** 한 폴더 아래의 스킬들 (SKILL.md가 있는 하위 폴더, 한 단계 아래까지) */
-async function scan(dir: string, scope: SkillView["scope"]): Promise<SkillView[]> {
+async function scan(dir: string): Promise<SkillView[]> {
   let names: string[];
   try {
     names = await readdir(dir);
@@ -101,7 +92,6 @@ async function scan(dir: string, scope: SkillView["scope"]): Promise<SkillView[]
         description: parsed.description,
         instructions: parsed.instructions,
         modelInvocation: parsed.modelInvocation,
-        scope,
         path: file,
         extraFiles: files,
       });
@@ -112,9 +102,8 @@ async function scan(dir: string, scope: SkillView["scope"]): Promise<SkillView[]
   return found.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function listSkills(env: NodeJS.ProcessEnv = process.env, home = homedir()): Promise<SkillView[]> {
-  const [user, shared] = await Promise.all([scan(userSkillsDir(env), "user"), scan(sharedSkillsDir(home), "shared")]);
-  return [...user, ...shared];
+export async function listSkills(env: NodeJS.ProcessEnv = process.env): Promise<SkillView[]> {
+  return scan(userSkillsDir(env));
 }
 
 /**
