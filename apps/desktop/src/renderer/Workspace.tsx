@@ -122,6 +122,12 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   } = useSession(tabId);
   const isLocal = host?.kind === "local";
   const [cwd, setCwd] = useState("");
+  // 새 세션 폴더는 지금 보고 있는(따라 보는) 세션의 폴더로 채운다. 세션을 바꾸면 그 세션의 폴더로 바뀐다.
+  // 폴더가 같은 세션 사이를 오가면 그대로 두어, 직접 고쳐 둔 경로를 덮어쓰지 않는다.
+  const activeCwd = session?.cwd ?? follow?.cwd;
+  useEffect(() => {
+    if (activeCwd) setCwd(activeCwd);
+  }, [activeCwd]);
   const [draft, setDraftState] = useState("");
   const [commands, setCommands] = useState<PiCommand[] | undefined>();
   const [busy, setBusy] = useState(false);
