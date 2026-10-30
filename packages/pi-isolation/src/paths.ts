@@ -9,6 +9,11 @@ import { join } from "node:path";
 /** 앱이 Pi에 앱 홈을 알리는 환경 변수. 이 패키지의 확장은 이 값이 없으면 아무것도 하지 않는다 */
 export const ISOLATION_HOME_ENV = "PI_ISOLATION_HOME";
 
+/** 올릴 MCP 서버 이름 (쉼표로 구분). 없으면 mcp.json의 서버 전부, 빈 값이면 없음 (Mate가 임무마다 고른 서버) */
+export const ISOLATION_MCP_SERVERS_ENV = "PI_ISOLATION_MCP_SERVERS";
+/** "direct"면 모든 서버의 도구를 모델에 바로 선언되는 노출로 바꾼다 (Mate처럼 --tools로 도구를 정하는 실행) */
+export const ISOLATION_MCP_EXPOSURE_ENV = "PI_ISOLATION_MCP_EXPOSURE";
+
 export function isolationHome(env: NodeJS.ProcessEnv = process.env): string | undefined {
   return env[ISOLATION_HOME_ENV] || undefined;
 }

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { isolationArgs, isolationEnv } from "../src/index";
+import { isolationArgs, isolationEnv, mcpToolPattern } from "../src/index";
 
 /**
  * 실제 Pi(devDependency)를 격리 옵션으로 띄워, 모델에 가는 시스템 안내에 앱 홈의 것만 들어가는지 본다.
@@ -106,5 +106,27 @@ describe("실제 Pi에서 격리 옵션", () => {
     // 세션은 앱 홈에 남는다
     expect(existsSync(join(home, "sessions"))).toBe(true);
     expect(existsSync(join(piDir, "sessions"))).toBe(false);
+  });
+
+  it("Mate처럼 고른 서버의 도구만 모델에 바로 선언한다 (direct 노출, --tools 패턴)", async () => {
+    const piDir = mkdtempSync(join(tmpdir(), "iso-pi-"));
+    writeFileSync(join(piDir, "models.json"), JSON.stringify({ providers: { mock: { baseUrl: llm.baseUrl, api: "openai-completions", apiKey: "mock", models: [{ id: "mock-model" }] } } }));
+    const home = mkdtempSync(join(tmpdir(), "iso-home-"));
+    const fake = { command: process.execPath, args: [join(packageDir, "test", "fixtures", "fake-mcp.mjs")] };
+    writeFileSync(join(home, "mcp.json"), JSON.stringify({ mcpServers: { "picked-one": fake, other: fake } }));
+    const args = [
+      "--mode", "json",
+      "--provider", "mock",
+      "--model", "mock-model",
+      ...isolationArgs({ home, isolationDir: packageDir, extensions: [], sessionDir: join(home, "sessions") }),
+      "--tools", ["read", mcpToolPattern("picked-one")].join(","),
+      "도구 목록",
+    ];
+    const result = await run(findPiCli(), args, home, { PI_CODING_AGENT_DIR: piDir, ...isolationEnv(home, { mcpServers: ["picked-one"], mcpExposure: "direct" }) });
+    expect(result.code, result.stderr).toBe(0);
+    const tools = ((llm.requests.at(-1)!.tools ?? []) as Array<{ function?: { name?: string } }>).map((t) => t.function?.name);
+    expect(tools).toEqual(expect.arrayContaining(["read", "mcp__picked_one__echo", "mcp__picked_one__add"]));
+    expect(tools.some((name) => name?.startsWith("mcp__other__"))).toBe(false);
+    expect(tools).not.toContain("codemode");
   });
 });
