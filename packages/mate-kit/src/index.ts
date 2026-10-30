@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 
 export * from "./shared";
-export { checkCommand, splitCommand, type CommandVerdict } from "./guard";
+export { checkCommand, isGrantableName, splitCommand, type CommandVerdict } from "./guard";
+export { appendBlocked, readBlocked } from "./blocked";
 export { writeScopeError } from "./write-scope";
 export { appendProposal, makeProposal, proposalHash, readInbox, type ProposalInput } from "./proposal";
 

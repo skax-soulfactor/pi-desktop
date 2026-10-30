@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { checkCommand } from "../../src/guard";
+import { appendBlocked } from "../../src/blocked";
+import { checkCommand, isGrantableName } from "../../src/guard";
 import { isGuardProfile, MATE_ENV, profileTools } from "../../src/shared";
 import { writeScopeError } from "../../src/write-scope";
 
@@ -11,7 +12,8 @@ const UTF8_PREFIX = "chcp.com 65001 > /dev/null 2>&1";
  *
  * 실행기가 `--tools`로 단계에 없는 도구를 아예 선언하지 않지만, 여기서 한 번 더 막는다:
  * - 단계에 없는 도구 호출은 막는다 (다른 확장이 더한 도구 포함)
- * - bash는 어느 단계든 읽기 전용 허용 목록만
+ * - bash는 어느 단계든 읽기 전용 허용 목록만 (사용자가 그 임무에 허용한 명령은 더한다)
+ * - 허용 목록에 없을 뿐인 명령은 막으면서 기록해 둔다. 실행이 끝나면 실행기가 사용자에게 허용을 묻는다
  * - act의 write·edit는 작업 공간(git worktree) 안만. 작업 공간이 주어지지 않았으면 막는다
  * 권한 단계 환경 변수가 없으면(터미널 pi에 설치) 아무것도 하지 않는다.
  */
@@ -20,6 +22,9 @@ export default function mateGuard(pi: ExtensionAPI): void {
   if (!isGuardProfile(profile)) return;
   const allowed = new Set(profileTools(profile));
   const writeRoot = process.env[MATE_ENV.writeRoot];
+  /** 사용자가 이 임무에 허용한 명령 이름 */
+  const grants = (process.env[MATE_ENV.grants] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const blockedPath = process.env[MATE_ENV.blocked];
 
   pi.on("tool_call", async (event, ctx) => {
     if (!allowed.has(event.toolName)) {
@@ -34,8 +39,18 @@ export default function mateGuard(pi: ExtensionAPI): void {
     if (event.toolName !== "bash") return undefined;
     const input = event.input as { command?: unknown };
     const command = String(input.command ?? "");
-    const verdict = checkCommand(command);
+    const verdict = checkCommand(command, grants);
     if (!verdict.allowed) {
+      // 허용을 물을 수 있는 명령이면 기록해 두고, 실행이 끝나면 실행기가 사용자에게 묻는다 (설계 §4 "권한 요청")
+      if (verdict.grantable && blockedPath && isGrantableName(verdict.grantable)) {
+        await appendBlocked(blockedPath, { name: verdict.grantable, command: command.slice(0, 300), at: Date.now() }).catch(() => undefined);
+        return {
+          block: true,
+          reason:
+            `읽기 전용 명령만 실행할 수 있습니다: ${verdict.reason}. ` +
+            `사용자에게 ${verdict.grantable} 허용을 요청해 두었다. 다른 명령으로 우회하지 말고, 할 수 있는 만큼만 하고 무엇이 막혔는지 요약에 적어라.`,
+        };
+      }
       return { block: true, reason: `읽기 전용 명령만 실행할 수 있습니다: ${verdict.reason}` };
     }
     if (process.platform === "win32" && !command.startsWith(UTF8_PREFIX)) input.command = `${UTF8_PREFIX}\n${command}`;

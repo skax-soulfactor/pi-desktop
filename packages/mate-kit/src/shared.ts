@@ -17,7 +17,23 @@ export const MATE_ENV = {
   chat: "PI_DESKTOP_MATE_CHAT",
   /** 대화 한 차례에서 mate_do가 남기는 할 일 목록 (실행기가 대화가 끝난 뒤 처리) */
   actions: "PI_DESKTOP_MATE_ACTIONS",
+  /** 사용자가 이 임무에 허용한 명령 이름 (쉼표로 구분, 예: curl). mate-guard가 읽기 전용 목록에 더해 통과시킨다 */
+  grants: "PI_DESKTOP_MATE_GRANTS",
+  /** 허용 목록에 없어 막힌 명령을 남기는 파일(JSONL). 실행이 끝나면 실행기가 읽어 사용자에게 허용을 묻는다 */
+  blocked: "PI_DESKTOP_MATE_BLOCKED",
 } as const;
+
+/** 막힌 명령의 허용을 묻는 질문의 선택지. 첫째가 허용이다 */
+export const PERMISSION_OPTIONS = ["허용하고 다시 실행", "허용하지 않음"] as const;
+
+/** mate-guard가 막힌 명령마다 남기는 한 줄 */
+export interface BlockedCommand {
+  /** 허용을 물을 명령 이름 (예: curl) */
+  name: string;
+  /** 실제로 실행하려던 명령 (질문에 보여 준다) */
+  command: string;
+  at: number;
+}
 
 export const PROPOSE_TOOL = "mate_propose";
 export const ASK_TOOL = "mate_ask";
@@ -78,6 +94,11 @@ export interface ChatLine {
   dutyId?: string;
   /** 질문을 남긴 폴더 (답에 따라 그 폴더에서 일을 맡길 수 있게) */
   cwd?: string;
+  /**
+   * 막힌 명령의 허용을 묻는 질문이면 그 임무와 명령 이름. 답(PERMISSION_OPTIONS)은 모델을 거치지 않고
+   * 실행기가 바로 처리한다: 허용하면 임무에 저장하고 다시 실행한다
+   */
+  permission?: { dutyId: string; commands: string[] };
 }
 
 export type Severity = "info" | "warn" | "action";
