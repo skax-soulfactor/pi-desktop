@@ -1191,7 +1191,9 @@ button.small {
 .session-row:hover .close-session-button,
 .close-session-button:focus-visible,
 .session-row:hover .delete-session-button,
-.delete-session-button:focus-visible {
+.delete-session-button:focus-visible,
+.session-row:hover .archive-session-button,
+.archive-session-button:focus-visible {
   opacity: 1;
 }
 
@@ -1230,6 +1232,86 @@ button.small {
 
 .delete-session-button:hover:not(:disabled) {
   color: var(--danger, #c0392b);
+}
+
+/* 기록 줄의 아카이브 📦: 🗑 왼쪽 */
+.archive-session-button {
+  position: absolute;
+  top: 4px;
+  right: 26px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  opacity: 0;
+}
+
+/* 기록 아래 아카이브·휴지통 링크 */
+.sidebar-bin-links {
+  display: flex;
+  gap: 12px;
+  padding: 8px 4px 4px;
+  font-size: 12px;
+}
+
+.sidebar-bin-links .link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.sidebar-bin-links .link-button:hover:not(:disabled) {
+  color: inherit;
+}
+
+/* 아카이브·휴지통 대화상자 */
+.modal.session-bin {
+  width: min(640px, 92vw);
+}
+
+.session-bin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.session-bin-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin: 8px 0;
+}
+
+.session-bin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.session-bin-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.session-bin-text .session-name,
+.session-bin-text .session-meta-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-bin-notice {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 12px;
+  word-break: break-all;
 }
 
 .session-item.editing {

@@ -564,7 +564,7 @@ export function useSession(tabId: string = MAIN_TAB) {
 
   /**
    * 세션을 지운다: 그 파일로 실행 중인 Pi가 있으면 먼저 닫고(따라 보는 중이면 그만두고), 세션 파일을 데몬의
-   * 백업 폴더로 옮긴다. 바로 지우지 않으므로 잘못 지웠으면 결과의 backup을 원래 자리로 옮겨 되살린다.
+   * 휴지통으로 옮긴다. 바로 지우지 않으므로 잘못 지웠으면 휴지통에서 되살린다 (SessionBinDialog).
    */
   const deleteStored = useCallback(
     async (path: string): Promise<StoredDeleteResult> => {
