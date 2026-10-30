@@ -7,7 +7,11 @@ import type {
   SessionUiResolvedNotification,
   StoredSession,
   TrashItem,
+  FsListDirResult,
 } from "@pi-desktop/host-protocol/messages";
+import type { SshHostConfig } from "../vendor/shared/api";
+
+export type { SshHostConfig };
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
 import type { UsageRange, UsageSummary } from "@pi-desktop/agent-kit/usage-types";
 
@@ -28,6 +32,14 @@ import type { AgentCard, CardDraft, NetworkState, PeerPolicy, PeerSettings } fro
 export const IpcChannels = {
   connectionState: "agent:connection-state",
   defaultCwd: "agent:default-cwd",
+  listHosts: "agent:list-hosts",
+  currentHost: "agent:current-host",
+  setHost: "agent:set-host",
+  listSshHosts: "agent:list-ssh-hosts",
+  saveSshHost: "agent:save-ssh-host",
+  removeSshHost: "agent:remove-ssh-host",
+  listDir: "agent:list-dir",
+  makeDir: "agent:make-dir",
   pickDirectory: "agent:pick-directory",
   pickFiles: "agent:pick-files",
   readImages: "agent:read-images",
@@ -131,6 +143,19 @@ export type ChatSummary = SessionSummary & { name?: string };
 /** Pi가 디스크에 남긴 지난 대화 하나 (데몬 session.history의 StoredSession) */
 export type StoredChat = StoredSession;
 
+/** 고를 수 있는 호스트 (설계 DESIGN-APPS.md §6 D3) */
+export interface HostView {
+  id: string;
+  kind: "local" | "wsl" | "ssh";
+  label: string;
+}
+
+/** 지금 쓰는 호스트. remote면 데몬을 거치지 않는 화면(기억·작업 등)은 아직 이 PC의 것만 보인다 (D4) */
+export interface CurrentHost {
+  id: string;
+  remote: boolean;
+}
+
 /** 메시지와 함께 보낼 이미지 하나 */
 export interface ImageAttachment {
   name: string;
@@ -169,6 +194,17 @@ export interface AgentApi {
   connectionState(): Promise<ConnectionState>;
   /** 처음 열 작업 폴더 (사용자 홈) */
   defaultCwd(): Promise<string>;
+  /** 호스트 목록 (로컬, WSL 배포판, 등록한 SSH 호스트) */
+  listHosts(): Promise<HostView[]>;
+  currentHost(): Promise<CurrentHost>;
+  /** 호스트를 바꾼다. 다시 연결하고 화면을 새로 읽는다 */
+  setHost(hostId: string): Promise<void>;
+  listSshHosts(): Promise<SshHostConfig[]>;
+  saveSshHost(host: SshHostConfig, previousName?: string): Promise<SshHostConfig>;
+  removeSshHost(name: string): Promise<void>;
+  /** 호스트의 폴더를 데몬으로 훑는다 (원격 호스트의 폴더 고르기). hostId는 vendor FolderBrowser와 맞춘 자리 */
+  listDir(hostId: string, path?: string): Promise<FsListDirResult>;
+  makeDir(hostId: string, parent: string, name: string): Promise<string>;
   pickDirectory(): Promise<string | undefined>;
   /** 첨부할 파일을 고른다 (여러 개). 취소하면 빈 배열 */
   pickFiles(): Promise<string[]>;

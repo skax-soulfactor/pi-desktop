@@ -1,6 +1,6 @@
 import type { HostInfo } from "@pi-desktop/host-protocol/messages";
 
-/** Pi Desktop apps/desktop/src/shared/api.ts의 ConnectionState만 복사했다 (vendor/README.md) */
+/** Pi Desktop apps/desktop/src/shared/api.ts의 ConnectionState·SshHostConfig만 복사했다 (vendor/README.md) */
 export type ConnectionState =
   | { status: "idle" }
   | { status: "connecting" }
@@ -24,3 +24,12 @@ export type ConnectionState =
       /** 연달아 실패해 자동으로 다시 붙기를 멈췄다. "다시 연결"(reconnectHost)로 다시 시작한다 */
       gaveUp?: boolean;
     };
+
+export interface SshHostConfig {
+  /** 화면에 보일 이름. 호스트 id("ssh:<이름>")에도 쓰여 겹칠 수 없다 */
+  name: string;
+  /** ssh에 넘기는 대상: user@host 또는 ~/.ssh/config의 Host 이름 */
+  target: string;
+  /** 비우면 ssh 기본값(22 또는 ~/.ssh/config) */
+  port?: number;
+}

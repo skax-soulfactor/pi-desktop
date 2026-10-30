@@ -2,8 +2,18 @@
  * 최근에 대화를 연 작업 폴더 (설계 DESIGN-AGENT.md §4 "작업 폴더").
  * 새 대화·폴더 옮기기에서 고를 수 있게 이 PC(앱 화면)에만 둔다. 저장하지 못해도 동작한다.
  */
-const KEY = "agent.recentCwds";
-const LAST_KEY = "agent.lastCwd";
+let KEY = "agent.recentCwds";
+let LAST_KEY = "agent.lastCwd";
+
+/**
+ * 호스트마다 최근 폴더를 따로 둔다 (원격 호스트의 폴더는 이 PC에 없다, DESIGN-APPS.md §6 D3).
+ * 로컬은 예전 키를 그대로 써서 전에 기억한 폴더를 잃지 않는다.
+ */
+export function setRecentScope(hostId: string): void {
+  const suffix = hostId === "local" ? "" : `:${hostId}`;
+  KEY = `agent.recentCwds${suffix}`;
+  LAST_KEY = `agent.lastCwd${suffix}`;
+}
 export const MAX_RECENT = 6;
 
 /** Windows 경로는 대소문자·구분자가 달라도 같은 폴더로 본다 */

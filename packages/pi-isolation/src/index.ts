@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { posix, resolve } from "node:path";
 import { join } from "node:path";
 import { ISOLATION_HOME_ENV, ISOLATION_MCP_EXPOSURE_ENV, ISOLATION_MCP_SERVERS_ENV, isolatedPaths } from "./paths";
 
@@ -32,23 +32,27 @@ export interface IsolationOptions {
   mcp?: boolean;
   /** 올릴 스킬 이름. 주면 앱 홈 skills/ 아래 그 스킬 폴더만 올린다 (빈 배열이면 스킬 없음). 없으면 skills/ 전부 */
   skills?: string[];
+  /** 다른 호스트(WSL·SSH)에서 띄울 때 true. 경로를 `/`로 잇는다 (home·isolationDir도 그 호스트의 절대 경로) */
+  remote?: boolean;
 }
 
 /** 이 패키지의 확장 진입 파일 (절대 경로) */
-export function isolationExtensionPaths(isolationDir: string, options: { mcp?: boolean } = {}): string[] {
+export function isolationExtensionPaths(isolationDir: string, options: { mcp?: boolean; remote?: boolean } = {}): string[] {
   const entries = options.mcp === false ? [CONTEXT_EXTENSION] : [MCP_EXTENSION, CONTEXT_EXTENSION];
-  return entries.map((entry) => resolve(isolationDir, entry));
+  return entries.map((entry) => (options.remote ? posix.join(isolationDir, entry) : resolve(isolationDir, entry)));
 }
 
 /** `pi --mode …` 뒤에 붙일 인자 */
 export function isolationArgs(options: IsolationOptions): string[] {
-  const paths = isolatedPaths(options.home);
+  const remote = options.remote === true;
+  const paths = isolatedPaths(options.home, remote);
+  const pathJoin = remote ? posix.join : join;
   const mcp = options.mcp !== false;
-  const extensions = [...options.extensions, ...isolationExtensionPaths(options.isolationDir, { mcp }), ...(mcp ? BUILTIN_EXTENSIONS : [])];
+  const extensions = [...options.extensions, ...isolationExtensionPaths(options.isolationDir, { mcp, remote }), ...(mcp ? BUILTIN_EXTENSIONS : [])];
   return [
     ...(options.sessionDir ? ["--session-dir", options.sessionDir] : []),
     "-ns",
-    ...(options.skills ? options.skills.flatMap((name) => ["--skill", join(paths.skills, name)]) : ["--skill", paths.skills]),
+    ...(options.skills ? options.skills.flatMap((name) => ["--skill", pathJoin(paths.skills, name)]) : ["--skill", paths.skills]),
     "-np",
     "--prompt-template",
     paths.prompts,
