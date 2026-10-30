@@ -517,3 +517,110 @@ code.copy {
 .phone .steps a {
   color: var(--accent);
 }
+
+/* ── 대화 (설계 DESIGN-MATE.md §13) ── */
+.content > section.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.chat-log {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.chat-empty p {
+  margin: 6px 0;
+}
+.chat-item {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bubble {
+  max-width: 78%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+.bubble.user {
+  align-self: flex-end;
+  background: var(--panel-2);
+  white-space: pre-wrap;
+}
+.bubble.mate {
+  align-self: flex-start;
+}
+.bubble.kind-question {
+  border-color: var(--accent);
+}
+.bubble.kind-notice,
+.bubble.kind-result {
+  background: transparent;
+  border-style: dashed;
+}
+.bubble-label {
+  font-size: 12px;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+.bubble-text p {
+  margin: 4px 0;
+  /* 명령 답처럼 줄바꿈만 있는 글도 줄을 나눠 보인다 */
+  white-space: pre-wrap;
+}
+.bubble-meta {
+  font-size: 11px;
+  margin-top: 4px;
+}
+.chat-divider {
+  align-self: center;
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+  width: 60%;
+  text-align: center;
+}
+.chat-busy {
+  font-size: 13px;
+}
+.chat-input {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.chat-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.chat-row textarea {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  padding: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.chat-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chat-hints {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  font-size: 13px;
+}
+.chat-answering {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}

@@ -8,7 +8,13 @@ export const TELEGRAM_TOKEN_ENV = "PI_DESKTOP_MATE_TELEGRAM_TOKEN";
 
 export interface TgUpdate {
   update_id: number;
-  message?: { message_id: number; chat: { id: number; type: string; first_name?: string; username?: string }; text?: string };
+  message?: {
+    message_id: number;
+    chat: { id: number; type: string; first_name?: string; username?: string };
+    text?: string;
+    /** 답장한 메시지 (Mate 질문에 답장하면 그 질문의 답으로 본다) */
+    reply_to_message?: { message_id: number };
+  };
   callback_query?: {
     id: string;
     data?: string;
@@ -54,6 +60,11 @@ export class TelegramApi {
 
   editButtons(chatId: number, messageId: number, buttons: Array<Array<{ text: string; callback_data: string }>>): Promise<unknown> {
     return this.call("editMessageReplyMarkup", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: buttons } });
+  }
+
+  /** "입력 중…" 표시 (몇 초 동안) */
+  typing(chatId: number): Promise<unknown> {
+    return this.call("sendChatAction", { chat_id: chatId, action: "typing" });
   }
 
   answerCallback(id: string, text?: string): Promise<unknown> {

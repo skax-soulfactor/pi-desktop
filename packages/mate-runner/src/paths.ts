@@ -29,6 +29,16 @@ export function matePaths(home: string) {
     activity: join(home, "activity.jsonl"),
     /** 휴대폰 연결 상태 (실행기가 씀) */
     remote: join(home, "remote.json"),
+    /** Mate 대화 기록 (추가만) */
+    chat: join(home, "chat.jsonl"),
+    /** 대화의 Pi 세션 (이어 쓴다) */
+    chatSessions: join(home, "chat", "sessions"),
+    /** 앱이 넣는 대화 요청 */
+    chatRequests: join(home, "chat", "requests"),
+    /** 대화 한 차례의 할 일 목록 (mate_do) */
+    chatActions: join(home, "chat", "actions"),
+    /** 대화 상태 (실행기가 씀: 세션 번호·생각 중·결과를 기다리는 실행) */
+    chatState: join(home, "chat", "state.json"),
   };
 }
 

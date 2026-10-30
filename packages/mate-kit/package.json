@@ -15,7 +15,8 @@
   "pi": {
     "extensions": [
       "./extensions/mate-guard/index.ts",
-      "./extensions/mate-propose/index.ts"
+      "./extensions/mate-propose/index.ts",
+      "./extensions/mate-chat/index.ts"
     ]
   },
   "scripts": {

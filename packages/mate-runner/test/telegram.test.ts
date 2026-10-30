@@ -4,7 +4,9 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { appendProposal, makeProposal } from "@pi-desktop/mate-kit";
+import { appendChatAction, appendChatQuestion, appendProposal, makeProposal, readChat } from "@pi-desktop/mate-kit";
+import { ChatAgent } from "../src/chat/chat-agent";
+import type { RunInput, RunOutcome } from "../src/executor";
 import { withoutSecrets } from "../src/executor";
 import { matePaths, type MatePaths } from "../src/paths";
 import {
@@ -13,6 +15,7 @@ import {
   itemButtons,
   parseCallback,
   parseCommand,
+  parseOptionCallback,
   resolveFolder,
   safe,
   shouldNotify,
@@ -23,11 +26,14 @@ import { listDuties, loadInboxState, newRunId, saveConfig, saveDuty, writeRun } 
 const at = (h: number, m = 0) => new Date(2026, 9, 30, h, m).getTime();
 
 describe("휴대폰 글·명령", () => {
-  it("명령을 해석하고, 빗금 없는 글은 살펴보기 지시로 본다", () => {
+  it("명령을 해석하고, 빗금 없는 글은 대화로 본다", () => {
     expect(parseCommand("/start 123456")).toEqual({ kind: "start", code: "123456" });
     expect(parseCommand("/fix@mate_bot pi 고쳐줘")).toEqual({ kind: "fix", text: "pi 고쳐줘" });
-    expect(parseCommand("CI 왜 깨졌어?")).toEqual({ kind: "ask", text: "CI 왜 깨졌어?" });
-    expect(parseCommand("/모름")).toEqual({ kind: "ask", text: "/모름" });
+    expect(parseCommand("CI 왜 깨졌어?")).toEqual({ kind: "chat", text: "CI 왜 깨졌어?" });
+    expect(parseCommand("/모름")).toEqual({ kind: "chat", text: "/모름" });
+    expect(parseCommand("/new")).toEqual({ kind: "new" });
+    expect(parseOptionCallback("o:abc-1:2")).toEqual({ lineId: "abc-1", index: 2 });
+    expect(parseOptionCallback("o:abc:7")).toBeUndefined();
     expect(parseCommand("/unknown")).toEqual({ kind: "help" });
     expect(parseCallback("A:abc-1")).toEqual({ action: "apply", itemId: "abc-1" });
     expect(parseCallback("z:abc")).toBeUndefined();
@@ -101,14 +107,26 @@ describe("TelegramRemote", () => {
   let paths: MatePaths;
   let tg: Awaited<ReturnType<typeof fakeTelegram>>;
   let remote: TelegramRemote;
+  let chat: ChatAgent;
   let clock = at(12);
   const noGit = async () => ({ code: 1, stdout: "" });
+  /** 가짜 Pi: 받은 입력을 남기고, 정해 둔 답과 할 일(mate_do)을 돌려준다 */
+  let piCalls: RunInput[] = [];
+  let piReply: { summary: string; actions?: Array<Record<string, unknown>> } = { summary: "네" };
+  const fakePi = async (_launch: unknown, input: RunInput): Promise<RunOutcome> => {
+    piCalls.push(input);
+    for (const a of piReply.actions ?? []) await appendChatAction(input.chat!.actionsPath, a);
+    return { status: "done", summary: piReply.summary, costUsd: 0.001, tokens: 10, proposals: 0 };
+  };
 
   beforeEach(async () => {
     paths = matePaths(await mkdtemp(join(tmpdir(), "mate-tg-")));
     tg = await fakeTelegram();
     clock = at(12);
-    remote = new TelegramRemote(paths, "TOKEN", noGit, () => {}, () => clock, tg.base);
+    piCalls = [];
+    piReply = { summary: "네" };
+    chat = new ChatAgent({ paths, kitDir: join(__dirname, "..", "..", "mate-kit"), locatePi: async () => ({ cliPath: "pi" }), exec: noGit, log: () => {}, now: () => clock, runPi: fakePi as never });
+    remote = new TelegramRemote(paths, "TOKEN", noGit, () => {}, chat, () => clock, tg.base);
     await saveConfig(paths, { telegram: { enabled: true, pairingCode: "123456", pairingExpires: at(13), allowFix: false } });
   });
   afterEach(async () => {
@@ -162,23 +180,68 @@ describe("TelegramRemote", () => {
     await remote.cycle(0);
     expect(tg.texts().at(-1)).toMatch(/고치기는 꺼져 있어요/);
 
-    // 살펴보기 지시는 한 번만 도는 임무와 실행 요청을 만든다
-    tg.message(7, "pi-desktop CI 실패 원인 찾아줘");
+    // /ask 지시는 한 번만 도는 임무와 실행 요청을 만든다
+    tg.message(7, "/ask pi-desktop CI 실패 원인 찾아줘");
     await remote.cycle(0);
     const phone = (await listDuties(paths)).find((d) => d.id.startsWith("phone-"));
     expect(phone).toMatchObject({ cwd: "/w/pi-desktop", prompt: "CI 실패 원인 찾아줘", profile: "propose" });
     expect(await readdir(paths.requests)).toHaveLength(1);
-    expect(tg.texts().at(-1)).toMatch(/받았어요/);
+    expect(tg.texts().at(-1)).toMatch(/할게요/);
 
-    // 그 실행이 끝나면 결과를 보낸다
+    // 그 실행이 끝나면 대화 담당이 결과를 남기고, 휴대폰으로 보낸다
     clock = at(12, 10);
     await writeRun(paths, {
       id: newRunId(clock), dutyId: phone!.id, dutyName: phone!.name, reason: "manual", status: "done",
       startedAt: clock, endedAt: clock, model: "m", profile: "propose", summary: "원인은 타임존입니다", proposals: 1,
     });
+    await chat.checkPending();
     await remote.cycle(0);
     expect(tg.texts().at(-1)).toMatch(/끝났어요[\s\S]*원인은 타임존입니다[\s\S]*1건/);
-    expect((await loadRemoteState(paths)).pendingRuns).toEqual({});
+  });
+
+  it("빗금 없는 말은 Mate 대화로 답하고, 맡긴 일을 처리한다", async () => {
+    tg.message(7, "/start 123456");
+    await remote.cycle(0);
+    await saveDuty(paths, { id: "brief", name: "아침 브리핑", cwd: "/w/pi-desktop", prompt: "p", profile: "observe", trigger: { kind: "manual" } });
+    piReply = { summary: "살펴보라고 맡겼어요.", actions: [{ action: "ask", folder: "pi-desktop", prompt: "CI 실패 원인 찾기" }] };
+    tg.message(7, "pi-desktop CI 왜 깨졌는지 봐줘");
+    await remote.cycle(0);
+    await chat.whenIdle();
+    await remote.cycle(0);
+    expect(tg.sent.some((s) => s.method === "sendChatAction")).toBe(true);
+    expect(piCalls).toHaveLength(1);
+    expect(piCalls[0]!.duty.prompt).toBe("pi-desktop CI 왜 깨졌는지 봐줘");
+    expect(piCalls[0]!.chat!.sessionId).toBe("mate-chat-1");
+    expect(piCalls[0]!.chat!.systemPrompt).toContain("아침 브리핑");
+    const texts = tg.texts();
+    expect(texts.some((t) => t.includes("살펴보라고 맡겼어요."))).toBe(true);
+    expect(texts.at(-1)).toMatch(/pi-desktop에서 할게요/);
+    expect((await listDuties(paths)).some((d) => d.id.startsWith("phone-") && d.prompt === "CI 실패 원인 찾기")).toBe(true);
+
+    // 관찰 중 Mate가 물은 질문은 선택지 버튼으로 오고, 누르면 그 답으로 대화가 이어진다
+    clock = at(12, 20);
+    await appendChatQuestion(paths.chat, { text: "테스트를 추가할까요?", options: ["예", "아니요"], cwd: "/w/pi-desktop" }, clock);
+    await remote.cycle(0);
+    const q = tg.sent.filter((s) => s.method === "sendMessage").at(-1)!;
+    expect(q.body.text).toContain("테스트를 추가할까요?");
+    const opts = q.body.reply_markup.inline_keyboard.flat() as Array<{ text: string; callback_data: string }>;
+    expect(opts.map((b) => b.text)).toEqual(["예", "아니요"]);
+    piReply = { summary: "좋아요" };
+    tg.tap(7, opts[0]!.callback_data);
+    await remote.cycle(0);
+    await chat.whenIdle();
+    expect(piCalls.at(-1)!.duty.prompt).toMatch(/테스트를 추가할까요\?[\s\S]*예/);
+    const lines = await readChat(paths.chat);
+    expect(lines.find((l) => l.role === "user" && l.text === "예")?.answerTo).toBe(lines.find((l) => l.kind === "question")!.id);
+
+    // /new는 새 대화(세션 번호)를 시작한다
+    tg.message(7, "/new");
+    await remote.cycle(0);
+    await chat.whenIdle();
+    tg.message(7, "안녕");
+    await remote.cycle(0);
+    await chat.whenIdle();
+    expect(piCalls.at(-1)!.chat!.sessionId).toBe("mate-chat-2");
   });
 
   it("앱에서 연결을 해제하면(연결 번호가 바뀌면) 연결을 버린다", async () => {

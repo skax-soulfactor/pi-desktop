@@ -55,7 +55,7 @@ export function InboxPanel({ overview, now, act }: { overview: Overview; now: nu
   );
 }
 
-function InboxCard({ item, now, act }: { item: InboxView; now: number; act: Act }) {
+export function InboxCard({ item, now, act }: { item: InboxView; now: number; act: Act }) {
   const [open, setOpen] = useState(false);
   return (
     <li className={`card inbox-card sev-${item.severity}`}>

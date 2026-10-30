@@ -1,5 +1,5 @@
 import { spawn, execFile } from "node:child_process";
-import { MATE_ENV, PROPOSE_TOOL, profileTools, type MateProfile } from "@pi-desktop/mate-kit";
+import { ASK_TOOL, MATE_ENV, PROPOSE_TOOL, profileTools, type MateProfile } from "@pi-desktop/mate-kit";
 import type { Duty } from "./types";
 
 /**
@@ -31,6 +31,10 @@ export interface RunInput {
   maxCostUsd: number;
   /** act: Pi를 띄울 폴더(작업 공간 안)와 write·edit를 허용할 작업 공간 루트 */
   workspace?: { cwd: string; root: string };
+  /** Mate 대화 기록 경로 (mate_ask가 질문을 남김) */
+  chatPath?: string;
+  /** 대화(chat): 권한 단계·시스템 안내·이어 쓸 세션을 바꾼다 (임무 실행에는 쓰지 않음) */
+  chat?: { sessionId: string; systemPrompt: string; actionsPath: string };
 }
 
 export interface RunOutcome {
@@ -60,6 +64,9 @@ export function mateSystemPrompt(duty: Duty, cause?: string): string {
       `- 사용자에게 알릴 발견이나 제안할 일이 있으면 ${PROPOSE_TOOL} 도구로 남겨라. 주제마다 한 번씩, 알릴 것이 없으면 남기지 마라.`,
     );
   }
+  if (duty.profile !== "observe") {
+    lines.push(`- 사용자의 판단이 꼭 필요하면 ${ASK_TOOL}로 짧게 물어라 (선택지를 주면 버튼으로 답한다). 답을 기다리지 말고 할 수 있는 만큼만 하고 끝내라.`);
+  }
   if (cause) lines.push(`- 이번 실행은 변화를 감지해 시작했다: ${cause}. 바뀐 부분을 중심으로 살펴라.`);
   lines.push("- 마지막에 결과를 한국어로 두세 문장 요약하라.");
   return lines.join("\n");
@@ -70,18 +77,22 @@ export function piArgs(input: RunInput): string[] {
   return [
     "--mode", "json",
     "--session-dir", input.sessionsDir,
+    // 대화는 같은 세션을 이어 써서 앞의 말을 기억한다
+    ...(input.chat ? ["--session-id", input.chat.sessionId] : []),
     ...input.extensions.flatMap((e) => ["-e", e]),
-    "--tools", profileTools(duty.profile).join(","),
+    "--tools", profileTools(input.chat ? "chat" : duty.profile).join(","),
     // 모델을 정하지 않았으면 Pi 기본 모델(settings.json)을 따른다
     ...(input.model ? ["--model", input.model] : []),
-    "--append-system-prompt", mateSystemPrompt(duty, input.cause),
+    "--append-system-prompt", input.chat?.systemPrompt ?? mateSystemPrompt(duty, input.cause),
     duty.prompt,
   ];
 }
 
 export function piEnv(input: RunInput, profile: MateProfile): Record<string, string> {
   return {
-    [MATE_ENV.profile]: profile,
+    [MATE_ENV.profile]: input.chat ? "chat" : profile,
+    ...(input.chatPath ? { [MATE_ENV.chat]: input.chatPath } : {}),
+    ...(input.chat ? { [MATE_ENV.actions]: input.chat.actionsPath } : {}),
     [MATE_ENV.inbox]: input.inboxPath,
     [MATE_ENV.dutyId]: input.duty.id,
     [MATE_ENV.runId]: input.runId,

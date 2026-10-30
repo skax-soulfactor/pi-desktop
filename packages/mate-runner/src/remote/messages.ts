@@ -95,6 +95,16 @@ export function parseCallback(data: string | undefined): Callback | undefined {
   return m ? { action: CALLBACKS[m[1]!]!, itemId: m[2]! } : undefined;
 }
 
+/** 대화 질문의 선택지 버튼: "o:<대화 줄 id>:<번호>" */
+export function optionButtons(lineId: string, options: string[]): Button[][] {
+  return options.slice(0, 4).map((text, i) => [{ text: text.slice(0, 40), callback_data: `o:${lineId}:${i}` }]);
+}
+
+export function parseOptionCallback(data: string | undefined): { lineId: string; index: number } | undefined {
+  const m = /^o:([\w-]{1,60}):([0-3])$/.exec(data ?? "");
+  return m ? { lineId: m[1]!, index: Number(m[2]) } : undefined;
+}
+
 export type Command =
   | { kind: "start"; code?: string }
   | { kind: "help" }
@@ -103,14 +113,17 @@ export type Command =
   | { kind: "duties" }
   | { kind: "folders" }
   | { kind: "run"; query: string }
-  | { kind: "ask" | "fix"; text: string };
+  | { kind: "ask" | "fix"; text: string }
+  | { kind: "new" }
+  /** 빗금 없는 글: Mate와 대화 (설계 §13) */
+  | { kind: "chat"; text: string };
 
-/** 받은 글을 명령으로. 빗금 없이 보낸 글은 /ask로 본다 */
+/** 받은 글을 명령으로. 빗금 없이 보낸 글은 대화로 본다 */
 export function parseCommand(text: string): Command | undefined {
   const t = text.trim();
   if (!t) return undefined;
   const m = /^\/(\w+)(?:@\w+)?(?:\s+([\s\S]*))?$/.exec(t);
-  if (!m) return { kind: "ask", text: t };
+  if (!m) return { kind: "chat", text: t };
   const arg = (m[2] ?? "").trim();
   switch (m[1]!.toLowerCase()) {
     case "start":
@@ -131,6 +144,8 @@ export function parseCommand(text: string): Command | undefined {
       return { kind: "ask", text: arg };
     case "fix":
       return { kind: "fix", text: arg };
+    case "new":
+      return { kind: "new" };
     default:
       return { kind: "help" };
   }
@@ -165,11 +180,14 @@ export const HELP_TEXT = [
   "<b>Pi Desktop Mate</b>",
   "알림의 버튼으로 적용·버리기·맡기기를 할 수 있어요.",
   "",
-  "/ask [폴더] 지시 — 읽기만 하며 살펴보고 결과·제안을 보냅니다 (빗금 없이 보내도 같아요)",
+  "그냥 말로 물어보거나 시켜도 됩니다 (예: 오늘 뭐 했어? / pi-desktop 테스트 깨진 거 살펴봐 줘).",
+  "",
+  "/ask [폴더] 지시 — 읽기만 하며 살펴보고 결과·제안을 보냅니다",
   "/fix [폴더] 지시 — 별도 작업 공간에서 고치고, 적용은 다시 묻습니다 (설정에서 허용해야 함)",
   "/run 임무 — 임무를 지금 실행",
   "/inbox — 새 제안 다시 보기",
   "/duties — 임무 목록",
   "/folders — 지시할 수 있는 폴더",
   "/status — 실행기 상태",
+  "/new — 새 대화 시작",
 ].join("\n");
