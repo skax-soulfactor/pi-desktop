@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, loadRemoteState, mateHome, matePaths, saveConfig, type ConfigPatch, type InboxStatus } from "@pi-desktop/mate-runner";
+import { loadConfig, loadRemoteState, mateHome, matePaths, saveConfig, TELEGRAM_TOKEN_ENV, type ConfigPatch, type InboxStatus, type MateConfig } from "@pi-desktop/mate-runner";
 import { IpcChannels, type CurrentHost, type HostView, type DutyDraft, type McpCheckResult, type Overview, type PiReadiness, type PiSetupView, type RunnerView, type SkillInput } from "../shared/api";
 import { RunnerConnection, type RunnerConnectionState } from "./runner-connection";
 import { listWslDistros, LOCAL_HOST_ID, readHostChoice, SSH_PREFIX, SshHostStore, WSL_PREFIX, writeHostChoice, type SshHostConfig } from "@pi-desktop/host-deploy";
@@ -73,10 +73,16 @@ const localStore: TelegramStore = {
   remoteState: () => loadRemoteState(paths),
 };
 
+/**
+ * 설정 바꾸기를 실행기에 보낸다. JSON(RPC)은 값이 undefined인 키를 빼 버리므로, 지우려는 값(토큰·연결 코드·조용한 시간)은
+ * null로 바꿔 보낸다. 실행기의 설정 정리(loadConfig)가 null을 지운다.
+ */
+const saveConfigOnRunner = (patch: ConfigPatch) => call<MateConfig>("saveConfig", JSON.parse(JSON.stringify(patch, (_key, value: unknown) => (value === undefined ? null : value))));
+
 /** 실행기 RPC로 설정과 휴대폰 연결 상태를 읽고 쓰는 저장소 */
 const runnerStore: TelegramStore = {
   config: () => call("config"),
-  saveConfig: (patch: ConfigPatch) => call("saveConfig", patch),
+  saveConfig: saveConfigOnRunner,
   remoteState: () => call("remoteState"),
 };
 
@@ -97,9 +103,16 @@ function localOnly(what: string): void {
   if (isRemote()) throw new Error(`${what}은(는) 원격 호스트에서는 할 수 없습니다 (이 PC의 Mate에서만 됩니다)`);
 }
 
-/** 원격 호스트의 휴대폰 연결은 D5-4에서 (토큰을 RPC로 넘겨 실행기 메모리에만 둔다) */
-function phoneLocalOnly(): void {
-  if (isRemote()) throw new Error("원격 호스트의 휴대폰 연결은 아직 지원하지 않습니다. 로컬 호스트에서 설정하세요");
+/**
+ * 휴대폰 연결 토큰을 실행기에 넘긴다 (설계 DESIGN-MATE-REMOTE.md §5). 실행기는 메모리에만 둔다.
+ * 원격 실행기는 명령 줄·환경 변수로 받지 않으므로(그 호스트의 ps·셸 기록) 붙을 때마다 넘긴다.
+ * 로컬도 같은 길로 넘겨, 토큰을 바꿔도 실행기를(도는 임무를) 다시 띄우지 않는다.
+ * 토큰이 있는데 이 PC에서 풀 수 없으면(다른 PC가 저장한 토큰) 그 PC가 넘긴 연결을 끄지 않게 아무것도 하지 않는다.
+ */
+async function pushTelegramToken(): Promise<void> {
+  const token = (await telegramEnv(runnerStore))[TELEGRAM_TOKEN_ENV];
+  if (token) await call("setTelegramToken", token);
+  else if (!(await runnerStore.config()).telegram.tokenEnc) await call("setTelegramToken", null);
 }
 
 async function launchFor(hostId: string) {
@@ -149,6 +162,7 @@ function startConnection(): void {
     onChanged: () => mainWindow?.webContents.send(IpcChannels.changed),
     onState: (state: RunnerConnectionState) => {
       runnerError = state.status === "disconnected" ? `실행기에 연결하지 못했습니다: ${state.reason}` : undefined;
+      if (state.status === "connected") void pushTelegramToken().catch(() => undefined);
       mainWindow?.webContents.send(IpcChannels.changed);
     },
   });
@@ -161,7 +175,7 @@ async function stopRunner(): Promise<void> {
   else await runnerCommand(runnerScript(), "stop", runnerEnv());
 }
 
-/** 실행기를 멈췄다가 다시 띄운다 (토큰이 바뀌어 환경 변수를 다시 넘겨야 할 때). 연결은 끊긴 뒤 다시 붙으며 새로 띄운다 */
+/** 실행기를 멈췄다가 다시 띄운다. 연결은 끊긴 뒤 다시 붙으며 새로 띄운다 */
 async function restartRunner(): Promise<void> {
   await stopRunner().catch(() => undefined);
 }
@@ -254,7 +268,7 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannels.checkMcp, () => call<McpCheckResult>("mcpCheck"));
   forward(IpcChannels.runNow, "runNow");
   ipcMain.handle(IpcChannels.setInbox, (_e, ids: string[], status: InboxStatus | undefined) => call("setInbox", ids, status));
-  ipcMain.handle(IpcChannels.saveConfig, (_e, patch: ConfigPatch) => call("saveConfig", patch));
+  ipcMain.handle(IpcChannels.saveConfig, (_e, patch: ConfigPatch) => saveConfigOnRunner(patch));
   ipcMain.handle(IpcChannels.pickDirectory, async () => {
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory"] }) : await dialog.showOpenDialog({ properties: ["openDirectory"] });
     return result.canceled ? undefined : result.filePaths[0];
@@ -286,19 +300,16 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannels.getAutostart, () => getAutostart());
   ipcMain.handle(IpcChannels.telegramView, () => telegramView(runnerStore));
   ipcMain.handle(IpcChannels.telegramSetToken, async (_e, token: string) => {
-    phoneLocalOnly();
     await saveTelegramToken(runnerStore, String(token));
-    await restartRunner();
+    await pushTelegramToken();
     return telegramView(runnerStore);
   });
   ipcMain.handle(IpcChannels.telegramRemove, async () => {
-    phoneLocalOnly();
     await removeTelegram(runnerStore);
-    await restartRunner();
+    await pushTelegramToken();
     return telegramView(runnerStore);
   });
   ipcMain.handle(IpcChannels.telegramPair, async () => {
-    phoneLocalOnly();
     await createPairingCode(runnerStore);
     return telegramView(runnerStore);
   });
@@ -306,7 +317,7 @@ function registerIpc(): void {
     await unpairTelegram(runnerStore);
     return telegramView(runnerStore);
   });
-  ipcMain.handle(IpcChannels.telegramTest, () => (phoneLocalOnly(), sendTelegramTest(runnerStore)));
+  ipcMain.handle(IpcChannels.telegramTest, () => sendTelegramTest(runnerStore));
   ipcMain.handle(IpcChannels.chatSend, (_e, text: string, answerTo?: string) => call("chatSend", String(text ?? ""), typeof answerTo === "string" ? answerTo : undefined));
   ipcMain.handle(IpcChannels.piReadiness, (_e, refresh: boolean) => readiness(refresh === true));
   ipcMain.handle(IpcChannels.installPiDesktop, () =>

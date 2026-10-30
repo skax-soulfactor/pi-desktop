@@ -6,8 +6,9 @@ import { relativeTime } from "./mate-view";
 /**
  * 휴대폰(텔레그램) 연결 (설계 DESIGN-MATE.md §12).
  * 1) 봇 토큰 저장 → 2) 연결 코드로 짝짓기 → 3) 알림 범위·조용한 시간·고치기 허용
+ * 원격 호스트면 그 호스트의 실행기가 텔레그램에 붙고, 토큰은 앱이 붙을 때 넘겨 실행기 메모리에만 둔다 (DESIGN-MATE-REMOTE.md §5).
  */
-export function PhoneView({ overview, act }: { overview: Overview; act: Act }) {
+export function PhoneView({ overview, act, remoteHost }: { overview: Overview; act: Act; remoteHost?: string }) {
   const t = overview.config.telegram;
   const [view, setView] = useState<TelegramView>();
   const [token, setToken] = useState("");
@@ -39,6 +40,19 @@ export function PhoneView({ overview, act }: { overview: Overview; act: Act }) {
         바깥으로만 연결하므로 포트를 열 필요가 없습니다. 보내는 글은 비밀값을 가리고 줄여서 보냅니다(텔레그램 서버를 거칩니다).
       </p>
 
+      {remoteHost && (
+        <p className="muted small-text">
+          지금 호스트는 {remoteHost}입니다. 그 호스트의 실행기가 텔레그램에 연결합니다(그 호스트에서 api.telegram.org에 나갈 수 있어야 합니다). 봇 토큰은 이
+          PC의 키체인으로 암호화해 두고, 앱이 붙을 때마다 풀어서 실행기에 넘깁니다. 실행기는 토큰을 메모리에만 두므로, 그 호스트의 실행기가 다시 뜨면 이
+          앱이 다시 붙을 때까지 휴대폰 연결이 쉽니다.
+        </p>
+      )}
+      {view.hasToken && !overview.runner.phone && overview.runner.alive && (
+        <div className="bad-text small-text">
+          휴대폰 연결이 쉬고 있습니다. 실행기가 아직 토큰을 받지 못했습니다{remoteHost ? " (다른 PC에서 저장한 토큰이면 이 PC에서는 풀 수 없으니 토큰을 다시 저장하세요)" : ""}.
+        </div>
+      )}
+
       {!view.hasToken ? (
         <>
           <ol className="steps">
@@ -46,7 +60,7 @@ export function PhoneView({ overview, act }: { overview: Overview; act: Act }) {
               텔레그램에서 <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">@BotFather</a>에게 <code>/newbot</code>을 보내 봇을 만듭니다
               (이름은 자유, 예: my_pi_mate_bot).
             </li>
-            <li>BotFather가 준 토큰(<code>123456789:ABC…</code>)을 아래에 붙여 넣습니다. OS 키체인으로 암호화해 이 PC에만 저장합니다.</li>
+            <li>BotFather가 준 토큰(<code>123456789:ABC…</code>)을 아래에 붙여 넣습니다. OS 키체인으로 암호화해 저장하며, 이 PC에서만 풀 수 있습니다.</li>
           </ol>
           {!view.keychain && <div className="bad-text">이 PC에서 OS 키체인을 쓸 수 없어 토큰을 저장할 수 없습니다.</div>}
           <div className="row">
