@@ -125,7 +125,7 @@ export interface Prepared {
  * 원격 공통 절차: Node 확인 → Host Agent 올리기 → kit 올리기 → Agent 홈으로 데몬에 붙는 명령.
  * launch는 그 호스트에서 셸 스크립트를 실행하는 명령을 만든다 (wsl.exe·ssh).
  */
-async function prepareRemote(
+export async function prepareRemote(
   label: string,
   run: RemoteRunner,
   launch: (script: string) => { command: string; args: string[] },
