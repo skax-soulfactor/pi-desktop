@@ -139,3 +139,10 @@ export async function askPeer(peer: Peer, question: string, callChain: string[],
   if (status === 401) throw new Error(`${peer.name}이(가) 페어링을 끊었다. 다시 페어링해야 한다`);
   return replyText(body);
 }
+
+/** 피어의 A2A 주소로 JSON-RPC를 보내고 응답 본문을 돌려준다 (작업 맡기기·상태·취소) */
+export async function peerRpc(peer: Peer, body: unknown, timeoutMs = 30_000): Promise<unknown> {
+  const { status, body: reply } = await postJson(`${peer.address}${A2A_PATH}`, body, { token: peer.theirToken, timeoutMs });
+  if (status === 401) throw new Error(`${peer.name}이(가) 페어링을 끊었다. 다시 페어링해야 한다`);
+  return reply;
+}

@@ -1,3 +1,4 @@
+import { posix, resolve, win32 } from "node:path";
 import type { ApprovalRequest, Risk } from "../../src/approval";
 import { defaultOutputPath, inferMode } from "../documents/chunks";
 import { argvLine, compileElevated, ELEVATED_TOOL, type ElevatedInput } from "../elevation/compile";
@@ -89,6 +90,13 @@ export function classify(toolName: string, input: Record<string, unknown>): Clas
       risk: "exec",
       request: { toolName, risk: "exec", summary: "관리자 권한으로 실행", target, pattern: "", onceOnly: true },
       ...(invalid ? { invalid } : {}),
+    };
+  }
+  if (toolName === "delegate_to_peer") {
+    const peer = String(input.peer ?? "");
+    return {
+      risk: "network",
+      request: { toolName, risk: "network", summary: "피어에게 작업 맡기기", target: `${peer}: ${String(input.title ?? "")}\n${String(input.instruction ?? "")}`, pattern: `${peer}:*` },
     };
   }
   if (toolName === "ask_peer") {
@@ -218,6 +226,45 @@ export function hardBlockReason(command: string): string | undefined {
   }
   if (DESTRUCTIVE_WHOLE.some((re) => re.test(command)) || commandHeads(command).some((h) => DESTRUCTIVE_HEAD.some((re) => re.test(h)))) {
     return "시스템을 끄거나 디스크·파일 시스템 전체를 지우는 명령은 실행할 수 없다";
+  }
+  return undefined;
+}
+
+/** 경로를 다루는 도구와 그 경로 칸 (없으면 작업 폴더) */
+const PATH_TOOLS: Record<string, string[]> = {
+  read: ["path"],
+  write: ["path"],
+  edit: ["path"],
+  ls: ["path"],
+  grep: ["path"],
+  find: ["path"],
+  process_document: ["path", "output"],
+};
+
+/** 기억을 바꾸는 도구. 남이 맡긴 작업이 이 PC의 기억을 바꾸지 못하게 한다 */
+const MEMORY_WRITE_TOOLS = new Set(["memory_save", "memory_forget"]);
+
+/** path가 root 안인가 (Windows는 대소문자를 가리지 않는다) */
+export function insideRoot(path: string, root: string, platform: NodeJS.Platform = process.platform): boolean {
+  // 경로 규칙은 그 플랫폼의 것으로 (Windows 경로를 다른 OS에서 판단할 때도 맞게)
+  const p = platform === "win32" ? win32 : posix;
+  const norm = (x: string) => (platform === "win32" ? x.toLowerCase() : x);
+  const rel = p.relative(norm(p.resolve(root)), norm(p.resolve(path)));
+  return rel === "" || (!rel.startsWith("..") && !p.isAbsolute(rel));
+}
+
+/**
+ * 피어가 맡긴 작업(폴더에 갇힌 워커)에서 막을 호출이면 그 이유. 경로 도구는 root 밖을 못 보고, 기억은 못 바꾼다.
+ * 경로 칸이 없으면 작업 폴더(cwd)로 본다.
+ */
+export function confinementViolation(toolName: string, input: Record<string, unknown>, cwd: string, root: string): string | undefined {
+  if (MEMORY_WRITE_TOOLS.has(toolName)) return "맡겨진 작업에서는 이 PC의 기억을 바꿀 수 없다";
+  const fields = PATH_TOOLS[toolName];
+  if (!fields) return undefined;
+  for (const field of fields) {
+    const raw = input[field];
+    const path = typeof raw === "string" && raw.trim() ? resolve(cwd, raw) : cwd;
+    if (!insideRoot(path, root)) return `맡겨진 작업은 승인된 폴더(${root}) 밖을 읽거나 쓸 수 없다: ${path}`;
   }
   return undefined;
 }
