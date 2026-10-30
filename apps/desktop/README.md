@@ -3,8 +3,10 @@
 [Pi coding agent](https://pi.dev)를 **포크하지 않고**, 설치된 `pi` 그대로 GUI로 쓰는 데스크톱 앱입니다.
 Pi를 업데이트하면 앱도 그대로 따라갑니다.
 
-- 설계: [docs/DESIGN.md](docs/DESIGN.md)
-- 현재 단계: **M5 진행 중** — M1(채팅)·M2(Pi 관리·프로바이더)·M3(WSL 보강·SSH)·M4(리소스·Marketplace·호스트 간 복사)를 마치고, 개발자 도구와 배포를 만드는 중
+이 모노레포의 첫 앱이며, Pi 설치·로그인·프로바이더·모델 관리는 이 앱이 맡습니다. 다른 두 앱([Pi Desktop Agent](../agent/README.md), [Pi Desktop Mate](../mate/README.md))도 여기서 설정한 Pi를 함께 씁니다.
+
+- 설계: [docs/DESIGN.md](../../docs/DESIGN.md)
+- 현재 단계: 로드맵 M1~M5(채팅, Pi 관리·프로바이더, WSL·SSH, 리소스·Marketplace·호스트 간 복사, 개발자 도구·배포)를 마치고 `v*` 릴리스로 배포 중
 
 ## 구조
 
@@ -33,12 +35,7 @@ packages/host-agent    대상 호스트에서 도는 상주 데몬(agentd)과 �
 - 직접 확인했는데 새 버전이 없으면 "최신 버전입니다"라고 알리고, 확인하지 못하면 이유를 보입니다.
  `npm run dist`로 직접 만든 빌드(버전 0.0.1)는 확인하지 않습니다.
 
-**코드 서명**: 운영체제가 "이 프로그램을 누가 만들었고 그 뒤 바뀌지 않았다"를 확인하는 디지털 서명입니다. 지금은 인증서가 없어 서명하지 않으므로 다음처럼 동작합니다.
-- Windows: 처음 설치할 때 SmartScreen이 "알 수 없는 게시자" 경고를 띄웁니다. "추가 정보 → 실행"을 누르면 됩니다. 자동 업데이트는 정상으로 동작합니다.
-  - 서명하려면 코드 서명 인증서(연 수십만 원 수준)를 사서 CI 비밀 값으로 넣으면 됩니다.
-- macOS: Gatekeeper가 처음 실행을 막습니다. Finder에서 앱을 우클릭 → "열기"로 엽니다. 서명이 없으면 macOS의 자동 설치가 거부되므로, 앱은 새 버전을 알리고 릴리스 페이지를 엽니다.
-  - 서명하려면 Apple Developer Program(연 99달러) 가입과 공증(notarization)이 필요합니다.
-- Linux: 서명이 필요 없습니다.
+**코드 서명**: 세 앱 모두 서명하지 않습니다. 처음 실행할 때의 경고와 넘어가는 법은 [루트 README의 "코드 서명"](../../README.md#코드-서명)을 보세요. macOS는 서명이 없으면 자동 설치가 거부되므로, 앱은 새 버전을 알리고 릴리스 페이지를 엽니다.
 
 **릴리스를 올리는 곳**: 지금은 이 저장소의 GitHub Releases입니다(공개 저장소라 토큰 없이 확인합니다). `apps/desktop/electron-builder.yml`의 `publish`만 바꾸면 다른 곳을 쓸 수 있습니다.
 - 다른 GitHub 저장소: `owner`·`repo`를 바꿉니다. 예를 들어 소스는 비공개로 두고 배포용 공개 저장소만 따로 둘 수 있습니다.
@@ -48,7 +45,7 @@ packages/host-agent    대상 호스트에서 도는 상주 데몬(agentd)과 �
 **릴리스 만들기**(관리자): 버전 태그를 올리면 GitHub Actions(`.github/workflows/release.yml`)가 세 OS에서 설치 파일을 만들어 Releases에 올립니다. 앱 버전은 태그를 따릅니다.
 
 ```bash
-git tag v0.1.0
+git tag -a v0.1.0 -m "Pi Desktop v0.1.0"
 ```
 
 ```bash
@@ -59,12 +56,7 @@ Actions 탭에서 "Release"를 손으로 돌리면 만들기만 하고 올리지
 
 ## 개발 환경
 
-- Node.js 22.19 이상 (Pi 요구 사항)
-- Windows에서는 Git Bash (Pi의 bash 툴용)
-
-```bash
-npm install
-```
+Node.js·Git Bash 같은 공통 준비와 `npm install`은 [루트 README의 "개발"](../../README.md#개발)을 따릅니다.
 
 앱 아이콘 원본은 `apps/desktop/build/icon.svg`입니다. 고친 뒤 `npx electron apps/desktop/scripts/render-icon.mjs`로 `build/icon.png`(1024px)를 다시 만들면, 설치 파일을 만들 때 각 OS 아이콘이 이것으로 만들어집니다.
 
@@ -87,10 +79,10 @@ npm run dev:mock -w @pi-desktop/desktop
 ### 설치된 Pi로 실행
 
 ```bash
-npm run dev
+npm run dev -w @pi-desktop/desktop
 ```
 
-상단의 호스트 선택에서 Pi가 설치된 곳을 고릅니다.
+루트의 `npm run dev`도 같은 명령입니다. 상단의 호스트 선택에서 Pi가 설치된 곳을 고릅니다.
 
 - **로컬 (Windows)**: `npm install -g @earendil-works/pi-coding-agent`로 설치하고 `pi`에서 `/login`을 해 두어야 합니다.
 - **WSL: <배포판>**: WSL 안에 Pi가 설치되어 있고(공식 설치기 또는 npm) 로그인되어 있으면 됩니다.
@@ -109,8 +101,10 @@ npm run dev
 
 ## 테스트
 
+이 앱과 이 앱이 쓰는 패키지만 돌릴 때는 다음처럼 합니다. 루트의 `npm test`는 모든 워크스페이스를 돌립니다.
+
 ```bash
-npm test
+npm test -w @pi-desktop/host-protocol -w @pi-desktop/host-agent -w @pi-desktop/desktop
 ```
 
 - `host-protocol`: 프레이밍(U+2028, 멀티바이트 경계 등)과 JSON-RPC
@@ -370,7 +364,7 @@ npm test
 
 ## 알려진 한계
 
-- 디자인 시스템과 패키징(인스톨러)은 아직 없습니다.
+- 디자인 시스템은 아직 없습니다.
 - 탭을 끌어 순서를 바꾸거나 새 창으로 떼어 내는 기능은 아직 없습니다.
 - 세션 트리에서는 분기(fork)와 복제(clone)만 됩니다. TUI의 `/tree`처럼 같은 세션 안에서 다른 갈래로 옮겨 가는 명령은 Pi RPC에 없습니다.
 - SSH는 `~/.ssh/config`의 호스트를 아직 자동으로 가져오지 않습니다. 대상에 Host 이름을 직접 적으면 그 설정을 씁니다.

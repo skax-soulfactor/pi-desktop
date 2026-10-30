@@ -4,7 +4,8 @@ Pi를 엔진으로 쓰는 데스크톱 에이전트입니다. Pi Desktop과는 *
 [`packages/agent-kit`](../../packages/agent-kit)(확장·스킬)으로 구현합니다.
 
 - 설계: [docs/DESIGN-AGENT.md](../../docs/DESIGN-AGENT.md)
-- 현재 단계: **P2** — 로컬 모델 대응(local-model)과 제자리 돌기 차단(loop-guard). qwen3.5:9b 실측은 설계 §7 절차로
+- 현재 단계: P0~P4(골격·승인·로컬 모델·기본 기능·백그라운드)를 마치고 P5(네트워크·피어 작업·권한 상승)를 진행 중이며, `agent-v*` 릴리스로 배포 중. 단계별 메모는 설계 §5
+- 남은 확인: qwen3.5:9b 로컬 모델 실측(설계 §7 절차), 중계 서버는 설계만(설계 §8)
 
 ## 화면
 
@@ -76,7 +77,7 @@ git tag -a agent-v0.1.0 -m "Pi Desktop Agent v0.1.0"
 git push origin agent-v0.1.0
 ```
 
-Actions 탭에서 "Release Agent"를 손으로 돌리면 만들기만 하고 올리지 않습니다. 코드 서명은 하지 않습니다 (Pi Desktop README "코드 서명"과 같음).
+Actions 탭에서 "Release Agent"를 손으로 돌리면 만들기만 하고 올리지 않습니다. 코드 서명은 하지 않습니다 ([루트 README의 "코드 서명"](../../README.md#코드-서명)).
 
 ## 테스트
 
