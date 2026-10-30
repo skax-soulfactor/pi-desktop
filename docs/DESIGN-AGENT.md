@@ -1,6 +1,6 @@
 # Pi Desktop Agent — 설계 문서 (v0.3)
 
-> 관련 문서: [Pi Desktop 설계](DESIGN.md) — 이 문서는 그 위에 올라가는 두 번째 앱을 다룬다.
+> 관련 문서: [Pi Desktop 설계](DESIGN.md) — 이 문서는 그 위에 올라가는 두 번째 앱을 다룬다. [Pi Desktop Mate 설계](DESIGN-MATE.md), [개발 방식](CONTRIBUTING.md). 사용법은 [apps/agent/README.md](../apps/agent/README.md)
 
 Pi Desktop이 "설치된 Pi를 그대로 GUI로 쓰는 앱"이라면, Pi Desktop Agent는 **Pi를 엔진으로 삼아 내가 원하는 기능을 가진
 데스크톱 에이전트**다. 사용자가 채팅으로 요청하면 에이전트가 LLM과 로컬 도구를 조합해 처리하되,
@@ -22,7 +22,7 @@ Pi Desktop이 "설치된 Pi를 그대로 GUI로 쓰는 앱"이라면, Pi Desktop
 | 제품 이름 | Pi Desktop Agent (`@pi-desktop/agent`). 단, Host Agent 실행 파일 이름이 이미 `pi-desktop-agent`이므로 문서·로그에서는 "에이전트 앱"과 "Host Agent"를 구분해 쓴다 |
 | Pi 관리 | 에이전트 앱은 Pi 설치·업데이트·로그인·프로바이더·모델 관리 화면을 두지 않는다. **Pi Desktop이 맡는다** (Mate와 같은 방식). 에이전트는 데몬의 `pi.status`·`pi.models`로 상태를 보여 주고, 문제가 있으면 Pi Desktop을 열거나 Latest 릴리스에서 설치하게 안내한다. 대화 화면에서 바꾸는 모델은 그 대화(세션)에만 적용된다 |
 | Pi Desktop Mate와의 분리 | 같은 저장소의 다른 앱(`apps/mate`, `packages/mate-*`, 별도 세션에서 진행). 폴더·데이터 홈(`~/.pi-desktop-mate`)·개발 포트(Mate 18913, Agent 18912)·태그(`mate-v*`)가 모두 다르다. Agent 작업은 Mate 파일을 고치지 않는다 |
-| Pi Desktop과의 분리 | `apps/desktop`과 루트 README는 고치지 않는다. 겹치는 파일은 `package-lock.json`뿐이다. 작업은 별도 worktree(`../pi-desktop-agent`)의 `feat/agent-*` 브랜치에서 한다 |
+| Pi Desktop과의 분리 | `apps/desktop`은 고치지 않는다 (루트 README는 세 앱 공통 안내라, 앱 구성이 바뀔 때만 고친다). 겹치는 파일은 `package-lock.json`뿐이다. 작업은 별도 worktree(`../pi-desktop-agent`)의 `feat/agent-*` 브랜치에서 한다 |
 | 릴리스 | **이 저장소(pi-desktop)의 GitHub Releases**에 올린다. Pi Desktop의 `v*`, Pi Desktop Mate의 `mate-v*`와 섞지 않고 `agent-v*` 태그와 별도 워크플로(`.github/workflows/release-agent.yml`)를 쓴다. Agent 릴리스는 **Latest로 표시하지 않는다** (Pi Desktop 자동 업데이트가 Latest 릴리스의 latest.yml을 보기 때문). **자동 업데이트(v0.1.2~)**: 앱이 릴리스 목록에서 가장 높은 `agent-v*`를 찾아 그 릴리스의 내려받기 주소를 generic 방식으로 쓴다 (Mate와 같은 방식). 릴리스에 latest.yml·latest-linux.yml·blockmap을 함께 올린다. Windows·AppImage는 내려받아 설치, 서명 없는 macOS·deb는 알리기만 |
 | 기존 desktop-agent | 자동 업데이트로 배포된 상태라 그 저장소에서 갈아엎지 않는다. 기능 목록과 설계 근거를 참고하는 용도로만 남긴다 |
 
@@ -151,6 +151,7 @@ desktop-agent에 있던 기능을 Pi의 어느 부분으로 옮길지 정한다.
 | | **구현 메모 (P4-②)**: 앱이 데몬에 붙을 때마다 `<데몬 홈>/scheduler` 폴더의 세션이 돌고 있는지 보고 없으면 `PI_DESKTOP_AGENT_SCHEDULER=1`로 연다. 그 세션의 schedule 확장이 30초마다 `schedules.json`을 보고 도래한 예약(놓친 것은 한 번)을 사람 없는 워커로 돌려 `tasks/<id>.json`에 남긴다. 대화 세션의 `schedule_task`는 "쓰기"로 승인. dev:mock 앱으로 앱 창을 모두 닫은 뒤에도 예약이 도는 것을 확인했다. PC를 다시 켜면 데몬이 없으므로 앱을 한 번 열어야 다시 돈다(OS 스케줄러 연동은 하지 않음) | |
 | | **구현 메모 (P4-③)**: 앱 메인의 `TaskWatcher`가 `tasks/`를 5초마다 읽어 새로 끝난 작업을 Electron Notification으로 알린다(창을 보고 있으면 생략, 앱을 켤 때 이미 끝난 것은 알리지 않음). "작업" 화면에서 예약 켜기·끄기·지우기와 최근 작업 결과를 본다. 로컬 호스트만 지원(앱이 상태 폴더를 직접 읽음). P4 완료 | |
 | P5 확장 | `peers`/네트워크, 권한 상승, 배포 설정 | |
+| | **구현 메모 (P5 진행 중)**: 네트워크(카드·페어링·질문 N1~N3, 피어 작업 맡기기 N4)와 권한 상승은 §4 표에 적은 대로 들어갔다. 중계 서버(N5)는 보류하고 설계만 남겼다(§8) | |
 
 ## 6. 리스크
 

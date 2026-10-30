@@ -1,6 +1,6 @@
 # Pi Desktop Mate — 설계 문서 (v0.1)
 
-> 관련 문서: [Pi Desktop 설계](DESIGN.md), [Pi Desktop Agent 설계](DESIGN-AGENT.md) (별도 세션에서 작업 중)
+> 관련 문서: [Pi Desktop 설계](DESIGN.md), [Pi Desktop Agent 설계](DESIGN-AGENT.md), [개발 방식](CONTRIBUTING.md). 사용법은 [apps/mate/README.md](../apps/mate/README.md)
 
 Pi Desktop Mate는 **사용자가 묻기 전에 Pi가 스스로 살펴보고, 알릴 것은 알리고, 할 일은 허락을 받은 뒤 하는** 능동형 코딩 동료다.
 Pi Desktop(설치된 Pi의 GUI)과 Pi Desktop Agent(채팅형 데스크톱 에이전트)와는 **별도 앱**이다.
