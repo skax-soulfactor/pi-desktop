@@ -174,6 +174,9 @@ export function useSession(tabId: string = MAIN_TAB) {
   const [writer, setWriter] = useState<WriterState>("you");
   /** 세션을 열기 전에 프로젝트 신뢰를 묻는 중이면 그 폴더의 상태와 답을 받을 함수 */
   const [trustAsk, setTrustAsk] = useState<{ info: ProjectTrustInfo; resolve: (answer: TrustAnswer | undefined) => void }>();
+  /** Pi를 띄워 세션을 여는 중인 폴더. 여는 데 몇 초 걸리므로 화면이 바로 알리고, 그동안 다시 열지 않는다 */
+  const [opening, setOpening] = useState<string | undefined>();
+  const openingRef = useRef(false);
   const followRef = useRef<FollowState | undefined>(undefined);
   /** attach 진행 중이면 그 사이 알림으로 온 이벤트를 모으는 곳 */
   const attachQueueRef = useRef<SessionEventNotification[] | undefined>(undefined);
@@ -307,27 +310,46 @@ export function useSession(tabId: string = MAIN_TAB) {
     return api().openSession(host, once ? { ...request, trust: once } : request);
   }, []);
 
+  /**
+   * 세션을 여는 동작을 한 번에 하나만 돌린다. 버튼을 여러 번 누르거나 메뉴·팔레트로 겹쳐 불러도
+   * Pi가 여러 개 뜨지 않게, 여는 중에 온 요청은 무시한다. cwd는 화면에 "여는 중"으로 보일 폴더.
+   */
+  const exclusiveOpen = useCallback(async (cwd: string, task: () => Promise<void>) => {
+    if (openingRef.current) return;
+    openingRef.current = true;
+    setOpening(cwd);
+    try {
+      await task();
+    } finally {
+      openingRef.current = false;
+      setOpening(undefined);
+    }
+  }, []);
+
   const openSession = useCallback(
-    async (cwd: string) => {
-      const created = await openWithTrust({ cwd });
-      if (!created) return;
-      await refreshSessions();
-      await switchTo(created);
-    },
-    [openWithTrust, refreshSessions, switchTo],
+    (cwd: string) =>
+      exclusiveOpen(cwd, async () => {
+        const created = await openWithTrust({ cwd });
+        if (!created) return;
+        await refreshSessions();
+        await switchTo(created);
+      }),
+    [exclusiveOpen, openWithTrust, refreshSessions, switchTo],
   );
 
   /** 사라진 세션을 같은 Pi 세션 파일로 다시 열어 대화를 이어 간다. */
   const reopenLost = useCallback(async () => {
     const target = lost;
     if (!target) return;
-    const request = target.sessionFile ? { cwd: target.cwd, sessionFile: target.sessionFile } : { cwd: target.cwd };
-    const created = await openWithTrust(request);
-    if (!created) return;
-    await refreshSessions();
-    // 새로 띄운 Pi의 저널에는 이전 대화가 없으므로 스냅샷으로 채운다.
-    await switchTo(created);
-  }, [lost, openWithTrust, refreshSessions, switchTo]);
+    await exclusiveOpen(target.cwd, async () => {
+      const request = target.sessionFile ? { cwd: target.cwd, sessionFile: target.sessionFile } : { cwd: target.cwd };
+      const created = await openWithTrust(request);
+      if (!created) return;
+      await refreshSessions();
+      // 새로 띄운 Pi의 저널에는 이전 대화가 없으므로 스냅샷으로 채운다.
+      await switchTo(created);
+    });
+  }, [lost, exclusiveOpen, openWithTrust, refreshSessions, switchTo]);
 
   const send = useCallback(async (command: Record<string, unknown>) => {
     const current = sessionRef.current;
@@ -403,14 +425,16 @@ export function useSession(tabId: string = MAIN_TAB) {
         await startFollow({ path: stored.path, cwd: stored.cwd, title: stored.name ?? stored.firstMessage });
         return;
       }
-      stopFollow();
-      const request = mode === "fork" ? { cwd: stored.cwd, forkFrom: stored.path } : { cwd: stored.cwd, sessionFile: stored.path };
-      const created = await openWithTrust(request);
-      if (!created) return;
-      await refreshSessions();
-      await switchTo(created);
+      await exclusiveOpen(stored.cwd, async () => {
+        stopFollow();
+        const request = mode === "fork" ? { cwd: stored.cwd, forkFrom: stored.path } : { cwd: stored.cwd, sessionFile: stored.path };
+        const created = await openWithTrust(request);
+        if (!created) return;
+        await refreshSessions();
+        await switchTo(created);
+      });
     },
-    [openWithTrust, refreshSessions, switchTo, startFollow, stopFollow],
+    [exclusiveOpen, openWithTrust, refreshSessions, switchTo, startFollow, stopFollow],
   );
 
   /** 다른 앱이 가지고 있던 입력 권한을 가져온다. 그 앱은 읽기 전용이 된다. */
@@ -440,21 +464,25 @@ export function useSession(tabId: string = MAIN_TAB) {
   const resumeFollowed = useCallback(async () => {
     const current = followRef.current;
     if (!current) return;
-    const created = await openWithTrust({ cwd: current.cwd, sessionFile: current.path });
-    if (!created) return;
-    await refreshSessions();
-    await switchTo(created);
-  }, [openWithTrust, refreshSessions, switchTo]);
+    await exclusiveOpen(current.cwd, async () => {
+      const created = await openWithTrust({ cwd: current.cwd, sessionFile: current.path });
+      if (!created) return;
+      await refreshSessions();
+      await switchTo(created);
+    });
+  }, [exclusiveOpen, openWithTrust, refreshSessions, switchTo]);
 
   /** 팔로우 중인 세션을 같은 파일에 쓰지 않고, 분기한 새 세션으로 이어 쓴다. */
   const continueFollowedAsFork = useCallback(async () => {
     const current = followRef.current;
     if (!current) return;
-    const created = await openWithTrust({ cwd: current.cwd, forkFrom: current.path });
-    if (!created) return;
-    await refreshSessions();
-    await switchTo(created);
-  }, [openWithTrust, refreshSessions, switchTo]);
+    await exclusiveOpen(current.cwd, async () => {
+      const created = await openWithTrust({ cwd: current.cwd, forkFrom: current.path });
+      if (!created) return;
+      await refreshSessions();
+      await switchTo(created);
+    });
+  }, [exclusiveOpen, openWithTrust, refreshSessions, switchTo]);
 
   /**
    * 지금 세션을 터미널 Pi(TUI)로 넘긴다. 같은 파일에 GUI와 TUI가 함께 쓰지 않도록 GUI 쪽 Pi를 먼저 닫고,
@@ -512,26 +540,28 @@ export function useSession(tabId: string = MAIN_TAB) {
   const restartSession = useCallback(async () => {
     const current = sessionRef.current;
     if (!current) return;
-    const exists = current.sessionFile
-      ? await api()
-          .inspectStored(hostRef.current, current.sessionFile)
-          .then(
-            () => true,
-            () => false,
-          )
-      : false;
-    await api().closeSession(hostRef.current, current.sessionId);
-    const created = await openWithTrust(
-      exists && current.sessionFile ? { cwd: current.cwd, sessionFile: current.sessionFile } : { cwd: current.cwd },
-    );
-    await refreshSessions();
-    if (created) await switchTo(created);
-    else {
-      sessionRef.current = undefined;
-      setSession(undefined);
-      dispatch({ type: "reset" });
-    }
-  }, [openWithTrust, refreshSessions, switchTo]);
+    await exclusiveOpen(current.cwd, async () => {
+      const exists = current.sessionFile
+        ? await api()
+            .inspectStored(hostRef.current, current.sessionFile)
+            .then(
+              () => true,
+              () => false,
+            )
+        : false;
+      await api().closeSession(hostRef.current, current.sessionId);
+      const created = await openWithTrust(
+        exists && current.sessionFile ? { cwd: current.cwd, sessionFile: current.sessionFile } : { cwd: current.cwd },
+      );
+      await refreshSessions();
+      if (created) await switchTo(created);
+      else {
+        sessionRef.current = undefined;
+        setSession(undefined);
+        dispatch({ type: "reset" });
+      }
+    });
+  }, [exclusiveOpen, openWithTrust, refreshSessions, switchTo]);
 
   /**
    * 이 호스트에서 실행 중인 세션을 모두 닫는다 (Pi를 제거한 뒤 남은 Pi 프로세스 정리). 닫은 수를 돌려준다.
@@ -746,6 +776,8 @@ export function useSession(tabId: string = MAIN_TAB) {
     claimWriter,
     /** 세션을 열기 전에 묻는 프로젝트 신뢰 (없으면 묻는 중이 아님) */
     trustAsk: trustAsk?.info,
+    /** Pi를 띄워 세션을 여는 중인 폴더 (없으면 여는 중이 아님) */
+    opening,
     answerTrust: (answer: TrustAnswer | undefined) => trustAsk?.resolve(answer),
     dismissToast: (key: string) => dispatchUi({ type: "dismiss", key }),
     send,

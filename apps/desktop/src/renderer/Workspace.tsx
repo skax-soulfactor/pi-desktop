@@ -118,6 +118,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     claimWriter,
     trustAsk,
     answerTrust,
+    opening,
     dismissToast,
   } = useSession(tabId);
   const isLocal = host?.kind === "local";
@@ -988,10 +989,17 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         <button
           type="button"
           className="primary"
-          disabled={!connected || busy || !cwd.trim()}
+          disabled={!connected || busy || Boolean(opening) || !cwd.trim()}
           onClick={() => void guard(() => openSession(cwd.trim()))}
         >
-          새 세션
+          {opening ? (
+            <>
+              <span className="spinner" aria-hidden="true" />
+              여는 중…
+            </>
+          ) : (
+            "새 세션"
+          )}
         </button>
       </section>
 
@@ -1108,6 +1116,13 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         </div>
       )}
       {error && <div className="banner error">{error}</div>}
+      {opening && !trustAsk && (
+        // Pi를 띄우는 데 몇 초 걸린다. 눌린 것을 바로 보여 주어 여러 번 누르지 않게 한다.
+        <div className="banner info opening" role="status">
+          <span className="spinner" aria-hidden="true" />
+          <span>{baseName(opening)}에서 세션을 여는 중… Pi를 시작하고 있습니다.</span>
+        </div>
+      )}
       {info && (
         <div className="banner info">
           <span>{info}</span>
