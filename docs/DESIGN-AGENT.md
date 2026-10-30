@@ -1,5 +1,7 @@
 # Pi Desktop Agent — 설계 문서 (v0.3)
 
+> **데이터 경계는 [세 앱의 역할과 데이터 경계](DESIGN-APPS.md)를 따른다.** 이 문서의 v0.3까지는 Pi Desktop·터미널 `pi`와 세션·스킬·MCP를 함께 쓴다고 적었지만, Agent는 혼자 쓰는 커스텀 Pi이므로 데이터를 나눈다 (§1·§2.2·§3을 그에 맞게 고쳤다).
+>
 > 관련 문서: [Pi Desktop 설계](DESIGN.md) — 이 문서는 그 위에 올라가는 두 번째 앱을 다룬다. [Pi Desktop Mate 설계](DESIGN-MATE.md), [개발 방식](CONTRIBUTING.md). 사용법은 [apps/agent/README.md](../apps/agent/README.md)
 
 Pi Desktop이 "설치된 Pi를 그대로 GUI로 쓰는 앱"이라면, Pi Desktop Agent는 **Pi를 엔진으로 삼아 내가 원하는 기능을 가진
@@ -31,7 +33,7 @@ Pi Desktop이 "설치된 Pi를 그대로 GUI로 쓰는 앱"이라면, Pi Desktop
 | 원칙 | 의미 |
 |---|---|
 | **Zero-fork** | Pi 소스를 수정하지 않는다. 확장 API, RPC, 설정 파일만 쓴다 (DESIGN.md §1) |
-| **Pi가 소유한 파일이 진실의 원천** | 세션 JSONL, `settings.json`, `models.json`, 스킬, `AGENTS.md`를 그대로 쓴다. 에이전트 앱에서 만든 세션을 터미널 `pi`나 Pi Desktop에서 이어 갈 수 있다 |
+| **Pi 형식 그대로, 데이터는 따로** | 세션 JSONL·스킬·`AGENTS.md`·`mcp.json`은 Pi 형식 그대로 쓰되, Pi 기본 폴더가 아니라 앱 홈(`~/.pi-desktop-agent`)에 둔다. Pi Desktop·터미널 `pi`의 세션·스킬·확장이 끼어들지 않는다. 로그인·모델·설정만 Pi와 함께 쓴다 (DESIGN-APPS.md §2) |
 | **기능은 확장으로, 어디서나 동작** | `agent-kit`의 확장은 `ctx.ui`로만 사용자와 대화한다. 앱 전용 경로(풍부한 승인 화면 등)는 있으면 쓰고, 없으면 `ctx.ui`로 대체한다. 그래서 터미널 `pi`에 설치해도 동작한다 |
 | **사람이 없으면 안전한 쪽으로** | `ctx.hasUI`가 false인 실행(예약 작업, 피어 요청)에서는 승인이 필요한 도구를 거부한다 |
 | **승인은 동의 절차이지 보안 경계가 아니다** | Pi security.md가 밝히듯 확장 hook은 경계가 아니다. 강한 격리는 샌드박스 옵션으로 따로 제공한다 |
@@ -72,7 +74,7 @@ DESIGN.md §5.3의 bridge 확장과 같은 방식이다. 세션을 열 때 `sess
 Host Agent 연결기는 떠 있는 데몬의 빌드 식별자가 자기 번들과 다르면, 세션이 없을 때 데몬을 교체한다(agent-build.ts).
 두 앱이 따로 배포되면 번들이 달라지므로 같은 데몬을 쓰면 서로 교체하려 든다.
 에이전트 앱은 연결기 환경에 `PI_DESKTOP_HOME`을 주어 데몬·소켓·저널을 따로 쓴다.
-Pi 설정과 세션(`~/.pi/agent`)은 나누지 않는다. 같은 Pi를 쓰는 것이 이 구조의 핵심이다.
+Pi 설치본·로그인·모델·설정(`~/.pi/agent`)은 함께 쓰고, 세션·스킬·프롬프트·확장·MCP·`AGENTS.md`는 앱 홈에 둔다. Pi를 띄울 때 `--session-dir`·`-ns --skill`·`-np --prompt-template`·`-ne -e`·`-nc`로 들어오는 길을 바꾼다 (DESIGN-APPS.md §3.1).
 
 ### 2.3 재사용 경계
 
@@ -92,8 +94,11 @@ P0는 `@desktop` 별칭으로 Pi Desktop 소스를 직접 가져다 썼다. 처�
 
 | 무엇 | 어디 | 비고 |
 |---|---|---|
-| 세션, 설정, 모델, 스킬, 프롬프트, `AGENTS.md` | `~/.pi/agent/` | Pi 형식 그대로. Pi Desktop·TUI와 공유 |
-| agent-kit 상태 (승인 정책, 감사 로그, 기억, 스케줄, 피어) | `~/.pi/agent/pi-desktop-agent/` | 확장이 쓰는 파일. 사람이 읽고 고칠 수 있는 JSON·JSONL·Markdown |
+| 로그인·모델·설정·신뢰 | `~/.pi/agent/` | Pi Desktop·터미널 `pi`와 함께 씀 (Pi Desktop이 관리) |
+| 세션 | `~/.pi-desktop-agent/sessions/` | Pi 형식 그대로. Pi Desktop·터미널 `pi`와 섞이지 않음 |
+| 스킬·프롬프트·`AGENTS.md`·`mcp.json` | `~/.pi-desktop-agent/` | Pi 형식 그대로. MCP는 agent-kit의 MCP 확장이 읽음 (DESIGN-APPS.md §3.1) |
+| agent-kit 상태 (승인 정책, 감사 로그, 기억, 스케줄, 피어, 사용량) | `~/.pi-desktop-agent/data/` | 확장이 쓰는 파일. 사람이 읽고 고칠 수 있는 JSON·JSONL·Markdown. 예전 위치(`~/.pi/agent/pi-desktop-agent/`)는 읽지 않는다 |
+| 휴지통·아카이브 | `~/.pi-desktop-agent/session-trash/`, `archive.json` | 데몬이 맡음 |
 | 세션 안의 확장 상태 | 세션 JSONL의 `custom` 엔트리 | LLM에 보이지 않음 (예: 이 세션 한정 승인) |
 | 모델이 알아야 하는 주입 내용 | 세션 JSONL의 `custom_message` 엔트리 | 예: 작업 완료 알림, 피어 응답 |
 | 데몬·저널 | `~/.pi-desktop-agent/` | Host Agent 런타임 파일 |

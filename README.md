@@ -11,10 +11,11 @@ Pi를 업데이트하면 세 앱도 그대로 따라갑니다.
 | **Pi Desktop Agent** | Pi를 엔진으로 쓰는 데스크톱 에이전트. 승인, 지식베이스, 스킬, 예약 작업, 다른 사람의 에이전트와 연결 | [apps/agent](apps/agent/README.md) | [DESIGN-AGENT.md](docs/DESIGN-AGENT.md) | `agent-v*` |
 | **Pi Desktop Mate** | 묻기 전에 먼저 살펴보고 알려 주는 능동형 코딩 동료. 임무 시간표, 인박스, 별도 작업 공간에서 고치기, 텔레그램 | [apps/mate](apps/mate/README.md) | [DESIGN-MATE.md](docs/DESIGN-MATE.md) | `mate-v*` |
 
-세 앱은 따로 설치하고 따로 업데이트합니다. 함께 쓰는 것과 나눠 쓰는 것은 다음과 같습니다.
+세 앱은 따로 설치하고 따로 업데이트합니다. Pi Desktop은 Pi를 GUI로 쓰는 놀이터, Agent는 혼자 쓰는 커스텀 Pi, Mate는 개인 데이터를 먼저 챙기는 Pi 기반 비서입니다. 함께 쓰는 것과 나눠 쓰는 것은 다음과 같습니다 (자세히는 [DESIGN-APPS.md](docs/DESIGN-APPS.md)).
 
-- **함께 씀**: Pi 설치와 Pi 설정·로그인·세션(`~/.pi/agent`). API 키와 모델은 Pi Desktop에서 한 번 넣으면 다른 두 앱도 씁니다. Agent·Mate는 Pi 관리 화면을 따로 두지 않고, Pi가 없으면 Pi Desktop을 열거나 설치하라고 안내합니다.
-- **나눠 씀**: 앱 데이터 홈(`~/.pi-desktop`, `~/.pi-desktop-agent`, `~/.pi-desktop-mate`), 릴리스 태그, 개발 실행의 mock LLM 포트. 그래서 한 앱이 다른 앱의 데몬이나 실행기를 바꾸지 않습니다.
+- **함께 씀**: Pi 설치본, 로그인, 모델·프로바이더 설정(`~/.pi/agent`의 `auth.json`·`models.json`·`settings.json`). 로그인과 모델은 Pi Desktop에서 한 번 하면 다른 두 앱도 씁니다. Agent·Mate는 Pi 관리 화면을 따로 두지 않고, Pi가 없으면 Pi Desktop을 열거나 설치하라고 안내합니다.
+- **나눠 씀**: 세션, 스킬·프롬프트·확장, MCP 서버, 사용자 지침(`AGENTS.md`), 기억·권한·작업 같은 앱 데이터, 휴지통·아카이브. Pi Desktop은 Pi의 기본 폴더(`~/.pi/agent`)를 그대로 쓰고, Agent는 `~/.pi-desktop-agent`, Mate는 `~/.pi-desktop-mate`에 둡니다. 데몬·실행기, 릴리스 태그, 개발 실행의 mock LLM 포트도 나눕니다.
+- **어디서 도는가**: 앱은 클라이언트이고, 실제로 도는 곳은 Pi가 설치된 호스트(로컬·WSL·SSH)입니다. Pi Desktop은 이미 그렇고, Agent·Mate도 같은 구조로 옮기는 중입니다.
 
 ## 구성
 
@@ -107,6 +108,7 @@ CI(`.github/workflows/ci.yml`)는 Windows·Linux와 Node 22·24에서 타입 검
 
 | 문서 | 내용 |
 |---|---|
+| [docs/DESIGN-APPS.md](docs/DESIGN-APPS.md) | 세 앱의 역할과 데이터 경계: 함께 쓰는 것·나눠 쓰는 것, 데이터 위치, 클라이언트·호스트 구조, 재설계 단계 |
 | [docs/DESIGN.md](docs/DESIGN.md) | Pi Desktop 설계: 원칙, Host Agent·상주 세션, 기능 모듈, 로드맵 |
 | [docs/DESIGN-AGENT.md](docs/DESIGN-AGENT.md) | Agent 설계: agent-kit 구조, 기능 배치, 단계별 구현 메모, 중계 서버안 |
 | [docs/DESIGN-MATE.md](docs/DESIGN-MATE.md) | Mate 설계: 임무·권한 단계·인박스, 활동 관찰, 텔레그램, Mate 대화 |

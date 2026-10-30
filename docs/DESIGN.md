@@ -2,7 +2,7 @@
 
 > 목표: **Pi를 포크하지 않고**, 사용자가 설치한 `pi` 그대로(업데이트 계속 받으며) 위에 GUI를 얹는다.
 > 기준 버전: `@earendil-works/pi-coding-agent` 1.3.0 (2026-10). ※ 구 패키지명 `@mariozechner/pi-coding-agent`는 0.73.1에서 멈춰 있음.
-> 관련 문서: [Pi Desktop Agent 설계](DESIGN-AGENT.md), [Pi Desktop Mate 설계](DESIGN-MATE.md), [개발 방식](CONTRIBUTING.md). 사용법은 [apps/desktop/README.md](../apps/desktop/README.md)
+> 관련 문서: [세 앱의 역할과 데이터 경계](DESIGN-APPS.md), [Pi Desktop Agent 설계](DESIGN-AGENT.md), [Pi Desktop Mate 설계](DESIGN-MATE.md), [개발 방식](CONTRIBUTING.md). 사용법은 [apps/desktop/README.md](../apps/desktop/README.md)
 
 ## 0. 확정된 결정 (v0.2)
 
