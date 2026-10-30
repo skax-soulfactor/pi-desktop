@@ -229,10 +229,10 @@ export function ChatPage({
           <h2>{session ? "무엇을 도와드릴까요?" : "새 대화를 시작하세요"}</h2>
           {!session && (
             <div className="row">
-              <button className="primary" disabled={!connected} onClick={() => guard(() => onNewChat())}>
-                새 대화
+              <button className="primary" disabled={!connected || Boolean(agent.opening)} onClick={() => guard(() => onNewChat())}>
+                {agent.opening ? "여는 중…" : "새 대화"}
               </button>
-              <button disabled={!connected} onClick={() => guard(onNewChatInFolder)}>
+              <button disabled={!connected || Boolean(agent.opening)} onClick={() => guard(onNewChatInFolder)}>
                 폴더를 골라 새 대화
               </button>
             </div>

@@ -118,10 +118,17 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     claimWriter,
     trustAsk,
     answerTrust,
+    opening,
     dismissToast,
   } = useSession(tabId);
   const isLocal = host?.kind === "local";
   const [cwd, setCwd] = useState("");
+  // 새 세션 폴더는 지금 보고 있는(따라 보는) 세션의 폴더로 채운다. 세션을 바꾸면 그 세션의 폴더로 바뀐다.
+  // 폴더가 같은 세션 사이를 오가면 그대로 두어, 직접 고쳐 둔 경로를 덮어쓰지 않는다.
+  const activeCwd = session?.cwd ?? follow?.cwd;
+  useEffect(() => {
+    if (activeCwd) setCwd(activeCwd);
+  }, [activeCwd]);
   const [draft, setDraftState] = useState("");
   const [commands, setCommands] = useState<PiCommand[] | undefined>();
   const [busy, setBusy] = useState(false);
@@ -982,10 +989,17 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         <button
           type="button"
           className="primary"
-          disabled={!connected || busy || !cwd.trim()}
+          disabled={!connected || busy || Boolean(opening) || !cwd.trim()}
           onClick={() => void guard(() => openSession(cwd.trim()))}
         >
-          새 세션
+          {opening ? (
+            <>
+              <span className="spinner" aria-hidden="true" />
+              여는 중…
+            </>
+          ) : (
+            "새 세션"
+          )}
         </button>
       </section>
 
@@ -1102,6 +1116,13 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         </div>
       )}
       {error && <div className="banner error">{error}</div>}
+      {opening && !trustAsk && (
+        // Pi를 띄우는 데 몇 초 걸린다. 눌린 것을 바로 보여 주어 여러 번 누르지 않게 한다.
+        <div className="banner info opening" role="status">
+          <span className="spinner" aria-hidden="true" />
+          <span>{baseName(opening)}에서 세션을 여는 중… Pi를 시작하고 있습니다.</span>
+        </div>
+      )}
       {info && (
         <div className="banner info">
           <span>{info}</span>

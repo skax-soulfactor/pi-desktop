@@ -1405,6 +1405,32 @@ button.toggled {
   word-break: break-all;
 }
 
+/* 세션을 여는 중 표시 */
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: -2px;
+}
+
+.banner.info .spinner {
+  flex: none;
+}
+
+button .spinner {
+  margin-right: 6px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* 검색할 수 있는 모델 선택기 */
 .model-picker {
   position: relative;

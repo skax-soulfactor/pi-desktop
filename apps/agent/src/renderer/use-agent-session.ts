@@ -38,6 +38,9 @@ const api = () => window.piAgent;
 export function useAgentSession() {
   const [connection, setConnection] = useState<ConnectionState>({ status: "connecting" });
   const [session, setSession] = useState<SessionSummary>();
+  /** Pi를 띄워 대화를 여는 중인 폴더 (없으면 여는 중이 아님) */
+  const [opening, setOpening] = useState<string>();
+  const openingRef = useRef(false);
   const [chat, setChat] = useState<ChatState>(initialChatState);
   const [ui, setUi] = useState<ExtensionUiState>(initialExtensionUiState);
   const [kit, setKit] = useState<KitState>();
@@ -133,11 +136,24 @@ export function useAgentSession() {
     [applyNotification, checkKit, refreshModel],
   );
 
-  /** 새 세션을 열고 붙는다. forkFrom을 주면 그 세션 파일의 대화를 이어 가는 새 세션으로 연다 (pi --fork) */
+  /**
+   * 새 세션을 열고 붙는다. forkFrom을 주면 그 세션 파일의 대화를 이어 가는 새 세션으로 연다 (pi --fork)
+   * Pi를 띄우는 데 몇 초 걸리므로 여는 동안 opening으로 알리고, 그 사이 온 요청은 무시한다 (여러 번 눌러도 하나만 열림).
+   * @returns 열었으면 true, 이미 여는 중이라 무시했으면 false
+   */
   const open = useCallback(
-    async (cwd: string, from?: SessionSource) => {
-      const opened = await api().openSession(cwd, from);
-      await attachTo(opened);
+    async (cwd: string, from?: SessionSource): Promise<boolean> => {
+      if (openingRef.current) return false;
+      openingRef.current = true;
+      setOpening(cwd);
+      try {
+        const opened = await api().openSession(cwd, from);
+        await attachTo(opened);
+        return true;
+      } finally {
+        openingRef.current = false;
+        setOpening(undefined);
+      }
     },
     [attachTo],
   );
@@ -150,13 +166,16 @@ export function useAgentSession() {
   const moveTo = useCallback(
     async (folder: string) => {
       const current = sessionRef.current;
-      if (!current) return open(folder);
+      if (!current) {
+        await open(folder);
+        return;
+      }
       const state = await api().sendCommand(current.sessionId, { type: "get_state" });
       const data = state.data as { sessionFile?: string; messageCount?: number; isStreaming?: boolean } | undefined;
       if (data?.isStreaming) throw new Error("응답하는 중에는 폴더를 바꿀 수 없습니다. 끝난 뒤 다시 시도하세요.");
       if (!data?.messageCount || !data.sessionFile) {
-        await open(folder);
-        await api().closeSession(current.sessionId);
+        // 다른 대화를 여는 중이라 열지 않았으면 원래 대화도 그대로 둔다.
+        if (await open(folder)) await api().closeSession(current.sessionId);
         return;
       }
       await open(folder, { forkFrom: data.sessionFile });
@@ -222,5 +241,5 @@ export function useAgentSession() {
 
   const dismiss = useCallback((key: string) => setUi((prev) => dismissToast(prev, key)), []);
 
-  return { connection, session, chat, ui, kit, model, models, open, attachTo, moveTo, changeModel, close, send, abort, answer, dismiss, notice };
+  return { connection, session, opening, chat, ui, kit, model, models, open, attachTo, moveTo, changeModel, close, send, abort, answer, dismiss, notice };
 }

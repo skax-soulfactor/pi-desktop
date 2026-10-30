@@ -141,16 +141,23 @@ export function App() {
         <div className="row">
           <button
             className="primary grow"
-            disabled={!connected}
+            disabled={!connected || Boolean(agent.opening)}
             onClick={() => guard(() => newChat())}
             title={`마지막으로 쓴 폴더에서 새 대화 (Ctrl+N)\n${recent[0] ?? home ?? ""}`}
           >
-            + 새 대화
+            {agent.opening ? (
+              <>
+                <span className="spinner" aria-hidden="true" />
+                여는 중…
+              </>
+            ) : (
+              "+ 새 대화"
+            )}
           </button>
           <FolderMenu
             label="📁 ▾"
             title="폴더를 골라 새 대화 (Ctrl+O)"
-            disabled={!connected}
+            disabled={!connected || Boolean(agent.opening)}
             heading="이 폴더에서 새 대화"
             recent={recent}
             home={home}
@@ -231,6 +238,13 @@ export function App() {
             <button className="small" onClick={() => setError(undefined)}>
               닫기
             </button>
+          </div>
+        )}
+        {agent.opening && (
+          // Pi를 띄우는 데 몇 초 걸린다. 눌린 것을 바로 보여 주어 여러 번 누르지 않게 한다.
+          <div className="opening-banner" role="status">
+            <span className="spinner" aria-hidden="true" />
+            <span>📁 {folderName(agent.opening)}에서 대화를 여는 중… Pi를 시작하고 있습니다.</span>
           </div>
         )}
         {setup && page !== "settings" && <PiSetupBanner setup={setup} onRefresh={() => guard(refreshSetup)} onError={onError} />}
