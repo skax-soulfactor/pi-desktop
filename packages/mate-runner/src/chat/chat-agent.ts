@@ -386,6 +386,7 @@ export class ChatAgent {
           return `🛠 맡겼어요: ${item.title}`;
         }
         if (item.change) return `⚠️ "${item.title}"은(는) 고친 변경이라 앱·휴대폰의 적용·버리기 버튼으로 처리해 주세요.`;
+        if (item.install && action.action === "accept") return `⚠️ "${item.title}"은(는) 설치 제안이라 앱·휴대폰의 적용 버튼으로 처리해 주세요 (내용을 직접 보고 정하도록).`;
         await setInboxStatus(paths, [item.id], action.action === "accept" ? "accepted" : "dismissed");
         return `${action.action === "accept" ? "👍 확인함" : "🗑 버림"}: ${item.title}`;
       }

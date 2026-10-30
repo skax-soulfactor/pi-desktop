@@ -26,7 +26,7 @@ export function safe(text: string, limit = 800): string {
 /** 알릴 항목인지: action이면 할 일·확인 필요·고친 변경만 */
 export function shouldNotify(item: InboxItem, notify: TelegramConfig["notify"]): boolean {
   if (notify === "all") return true;
-  return item.severity !== "info" || !!item.change || !!item.followUp;
+  return item.severity !== "info" || !!item.change || !!item.followUp || !!item.install;
 }
 
 /** 조용한 시간 안인지 (자정을 넘는 구간도: 23:00~08:00) */
@@ -57,13 +57,17 @@ export function itemText(item: InboxItem, dutyName: string): string {
     lines.push("적용 전까지 PC의 작업 폴더는 그대로입니다.");
   }
   if (item.followUp) lines.push("", `맡길 일: ${safe(item.followUp.prompt, 300)}`);
+  if (item.install) {
+    const what = item.install.kind === "skill" ? `새 스킬 ${item.install.name}` : item.install.kind === "mcp" ? `MCP 서버 ${item.install.preset}` : `${item.install.from === "agent" ? "Agent" : "Pi Desktop"} 스킬 ${item.install.name} 복사`;
+    lines.push("", `설치 제안: ${safe(what, 120)}. 적용하면 Mate에 넣습니다 ("자세히"로 내용 확인)`);
+  }
   return lines.join("\n");
 }
 
 /** 항목에 붙일 버튼 (callback_data는 64바이트 이하: 한 글자 동작 + ":" + 항목 id) */
 export function itemButtons(item: InboxItem, opts: { sendDetail: boolean; allowFix: boolean }): Button[][] {
-  const detail = opts.sendDetail && (item.detail || item.change) ? [{ text: item.change ? "diff 보기" : "자세히", callback_data: `v:${item.id}` }] : [];
-  if (item.change) {
+  const detail = opts.sendDetail && (item.detail || item.change || item.install) ? [{ text: item.change ? "diff 보기" : "자세히", callback_data: `v:${item.id}` }] : [];
+  if (item.change || item.install) {
     return [[{ text: "적용", callback_data: `a:${item.id}` }, { text: "버리기", callback_data: `x:${item.id}` }], detail].filter((r) => r.length > 0);
   }
   const first: Button[] = [];

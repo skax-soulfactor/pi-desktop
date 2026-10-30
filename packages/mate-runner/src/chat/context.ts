@@ -45,7 +45,7 @@ export async function chatSystemPrompt(paths: MatePaths, now: number): Promise<s
     "",
     `새 제안 ${fresh.length}건:`,
     ...fresh.slice(0, 15).map(
-      (i) => `- [${i.id}] (${i.severity}) ${clip(i.title, 100)} — ${clip(i.summary, 200)}${i.change ? " [고친 변경: 적용은 앱·휴대폰 버튼으로]" : ""}${i.followUp ? " [맡길 일 있음: delegate]" : ""}`,
+      (i) => `- [${i.id}] (${i.severity}) ${clip(i.title, 100)} — ${clip(i.summary, 200)}${i.change ? " [고친 변경: 적용은 앱·휴대폰 버튼으로]" : ""}${i.followUp ? " [맡길 일 있음: delegate]" : ""}${i.install ? " [설치 제안: 적용은 앱·휴대폰 버튼으로]" : ""}`,
     ),
   ];
   if (open.length) {

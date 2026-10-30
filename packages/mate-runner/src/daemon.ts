@@ -4,6 +4,7 @@ import { appendFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:
 import { join, relative, resolve } from "node:path";
 import { appendProposal, extensionEntries, makeProposal } from "@pi-desktop/mate-kit";
 import { askPermission } from "./permission";
+import { installHints } from "./install";
 import { isolationDirOf, runPi, type PiLaunch, type RunOutcome } from "./executor";
 import type { MatePaths } from "./paths";
 import { isDue, localDateKey } from "./schedule";
@@ -167,6 +168,7 @@ export async function runDuty(
         extensions,
         home: paths.home,
         isolationDir: isolationDirOf(options.kitDir),
+        ...(duty.profile !== "observe" ? { installHints: await installHints(paths).catch(() => []) } : {}),
         inboxPath: paths.inbox,
         chatPath: paths.chat,
         blockedPath,

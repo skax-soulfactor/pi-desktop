@@ -3,6 +3,7 @@ import { runCommand, freshItems } from "../chat/commands";
 import type { ChatAgent } from "../chat/chat-agent";
 import { delegateInboxItem } from "../delegate";
 import { applyInboxChange, discardInboxChange } from "../inbox-change";
+import { applyInstall, describeInstall } from "../install";
 import { OBSERVER_DUTY_ID, OBSERVER_NAME } from "../observer";
 import type { MatePaths } from "../paths";
 import { listDuties, loadConfig, loadInboxState, readJson, setInboxStatus, writeJsonAtomic } from "../store";
@@ -279,15 +280,17 @@ export class TelegramRemote {
       switch (cb.action) {
         case "confirmApply":
           await this.api.editButtons(chatId, messageId, confirmApplyButtons(item.id));
-          return void (await this.api.answerCallback(id, "PC의 작업 폴더에 적용할까요?"));
+          return void (await this.api.answerCallback(id, item.install ? "Mate에 넣을까요?" : "PC의 작업 폴더에 적용할까요?"));
         case "cancel":
           await this.api.editButtons(chatId, messageId, itemButtons(item, config.telegram));
           return void (await this.api.answerCallback(id));
         case "apply":
+          if (item.install) return void (await done(`✅ ${await applyInstall(this.paths, item.id)}`));
           await applyInboxChange(this.paths, item.id, this.exec);
           return void (await done("✅ 적용했어요 (커밋은 PC에서)"));
         case "discard":
-          await discardInboxChange(this.paths, item.id, this.exec);
+          if (item.install) await setInboxStatus(this.paths, [item.id], "dismissed");
+          else await discardInboxChange(this.paths, item.id, this.exec);
           return void (await done("🗑 버렸어요"));
         case "accept":
           await setInboxStatus(this.paths, [item.id], "accepted");
@@ -304,7 +307,7 @@ export class TelegramRemote {
         case "view": {
           await this.api.answerCallback(id);
           if (!config.telegram.sendDetail) return;
-          const text = item.detail ?? "(자세한 내용 없음)";
+          const text = [item.detail, item.install ? await describeInstall(item.install) : undefined].filter(Boolean).join("\n\n") || "(자세한 내용 없음)";
           for (const part of chunks(text)) await this.api.sendMessage(chatId, `<pre>${safe(part, 4000)}</pre>`);
           return;
         }

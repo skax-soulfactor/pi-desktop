@@ -41,6 +41,8 @@ export interface RunInput {
   chatPath?: string;
   /** 허용 목록에 없어 막힌 명령을 mate-guard가 남길 파일. 실행이 끝나면 실행기가 읽어 허용을 묻는다 */
   blockedPath?: string;
+  /** 설치 제안 안내 (넣을 수 있는 MCP 서버, 다른 앱에만 있는 스킬). 제안할 수 있는 단계에서만 붙인다 */
+  installHints?: string[];
   /** 대화(chat): 권한 단계·시스템 안내·이어 쓸 세션을 바꾼다 (임무 실행에는 쓰지 않음) */
   chat?: { sessionId: string; systemPrompt: string; actionsPath: string };
 }
@@ -63,7 +65,7 @@ export function isolationDirOf(kitDir: string): string {
 }
 
 /** 모든 실행의 시스템 프롬프트 뒤에 붙이는 안내 */
-export function mateSystemPrompt(duty: Duty, cause?: string): string {
+export function mateSystemPrompt(duty: Duty, cause?: string, installHints: string[] = []): string {
   const lines = [
     `너는 Pi Desktop Mate의 백그라운드 임무 "${duty.name}"를 수행하고 있다. 사용자는 지금 화면을 보고 있지 않다.`,
     duty.profile === "act"
@@ -84,6 +86,12 @@ export function mateSystemPrompt(duty: Duty, cause?: string): string {
     lines.push(`- 사용자가 이 임무에 bash로 ${duty.grants.join(", ")}을(를) 허용했다. 읽어 오는 데만 쓰고, 파일을 쓰거나 데이터를 보내지 마라.`);
   }
   lines.push("- 필요한 명령이 막히면 다른 명령으로 우회하지 마라. 사용자에게 허용을 요청해 두었으니, 무엇이 막혔는지 요약에 적고 끝내라.");
+  if (duty.profile !== "observe") {
+    lines.push(
+      `- 임무에 필요한 작업 방법(스킬)이나 외부 서비스(MCP 서버)가 없으면 ${PROPOSE_TOOL}의 install로 제안할 수 있다: 새 스킬 초안(kind=skill), 정해 둔 목록의 MCP 서버(kind=mcp), 다른 앱의 스킬 복사(kind=copy). 사용자가 적용해야 들어가니 이번 실행에서는 없는 채로 할 수 있는 만큼만 하라.`,
+    );
+    lines.push(...installHints);
+  }
   if (cause) lines.push(`- 이번 실행은 변화를 감지해 시작했다: ${cause}. 바뀐 부분을 중심으로 살펴라.`);
   lines.push("- 마지막에 결과를 한국어로 두세 문장 요약하라.");
   return lines.join("\n");
@@ -110,7 +118,7 @@ export function piArgs(input: RunInput): string[] {
     "--tools", [...profileTools(input.chat ? "chat" : duty.profile), ...servers.map(mcpToolPattern)].join(","),
     // 모델을 정하지 않았으면 Pi 기본 모델(settings.json)을 따른다
     ...(input.model ? ["--model", input.model] : []),
-    "--append-system-prompt", input.chat?.systemPrompt ?? mateSystemPrompt(duty, input.cause),
+    "--append-system-prompt", input.chat?.systemPrompt ?? mateSystemPrompt(duty, input.cause, input.installHints),
     duty.prompt,
   ];
 }
