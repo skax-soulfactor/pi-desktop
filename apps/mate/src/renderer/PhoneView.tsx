@@ -126,6 +126,16 @@ export function PhoneView({ overview, act }: { overview: Overview; act: Act }) {
                   <input type="checkbox" checked={t.sendDetail} onChange={() => save({ sendDetail: !t.sendDetail })} />
                   diff·근거 내용도 보내기 <span className="muted">(끄면 제목·요약만 갑니다)</span>
                 </label>
+                <label className="radio">
+                  <input
+                    type="checkbox"
+                    checked={t.mirrorApp}
+                    // 켠 뒤의 대화만 보낸다. 켜자마자 지난 대화가 한꺼번에 가지 않게 켠 시각을 남긴다
+                    onChange={() => save(t.mirrorApp ? { mirrorApp: false } : { mirrorApp: true, mirrorAppSince: Date.now() })}
+                  />
+                  앱 대화도 휴대폰으로 보내기{" "}
+                  <span className="muted">(앱에서 나눈 말과 답을 🖥 표시로 보냅니다. 조용한 시간에는 건너뛰고, 지난 대화는 /history로 봅니다)</span>
+                </label>
               </fieldset>
               <fieldset>
                 <legend>휴대폰에서 할 수 있는 일</legend>
