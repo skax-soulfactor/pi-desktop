@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve } from "node:path";
+import { posix, resolve, win32 } from "node:path";
 import type { ApprovalRequest, Risk } from "../../src/approval";
 import { defaultOutputPath, inferMode } from "../documents/chunks";
 import { argvLine, compileElevated, ELEVATED_TOOL, type ElevatedInput } from "../elevation/compile";
@@ -246,9 +246,11 @@ const MEMORY_WRITE_TOOLS = new Set(["memory_save", "memory_forget"]);
 
 /** path가 root 안인가 (Windows는 대소문자를 가리지 않는다) */
 export function insideRoot(path: string, root: string, platform: NodeJS.Platform = process.platform): boolean {
-  const norm = (p: string) => (platform === "win32" ? p.toLowerCase() : p);
-  const rel = relative(norm(resolve(root)), norm(resolve(path)));
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  // 경로 규칙은 그 플랫폼의 것으로 (Windows 경로를 다른 OS에서 판단할 때도 맞게)
+  const p = platform === "win32" ? win32 : posix;
+  const norm = (x: string) => (platform === "win32" ? x.toLowerCase() : x);
+  const rel = p.relative(norm(p.resolve(root)), norm(p.resolve(path)));
+  return rel === "" || (!rel.startsWith("..") && !p.isAbsolute(rel));
 }
 
 /**

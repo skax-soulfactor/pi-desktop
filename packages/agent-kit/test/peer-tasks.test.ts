@@ -186,7 +186,8 @@ describe("피어 작업 맡기기 (실제 Pi)", () => {
 
     await approvePeerTask(dataDir, mine!.peer!.remoteId!, work);
     let finished: TaskRecord | undefined;
-    for (let i = 0; i < 100 && !finished; i++) {
+    // CI(특히 Windows)에서는 워커 Pi가 뜨는 데 오래 걸린다
+    for (let i = 0; i < 400 && !finished; i++) {
       await new Promise((r) => setTimeout(r, 200));
       finished = await refreshRemoteTask(env.a, (await tasksOf(env.a))[0]!, [env.aPeerOfB]).then((r) => (r?.status === "done" ? r : undefined));
     }
@@ -194,7 +195,7 @@ describe("피어 작업 맡기기 (실제 Pi)", () => {
     const audit = readFileSync(join(dataDir, "audit.jsonl"), "utf8");
     expect(audit).toContain('"decision":"blocked"');
     expect(audit).toContain("secret.txt");
-  });
+  }, 120_000);
 
   it("맡기는 쪽 대화: delegate_to_peer는 승인 후 맡기고, 끝나면 [작업 알림]이 들어온다", async () => {
     const env = await pair();
@@ -219,11 +220,11 @@ describe("피어 작업 맡기기 (실제 Pi)", () => {
 
     // 대화가 상대 상태를 확인해 끝난 것을 알면 [작업 알림]을 넣고 한 턴을 일으킨다
     let sent = "";
-    for (let i = 0; i < 100 && !sent.includes("[작업 알림]"); i++) {
+    for (let i = 0; i < 400 && !sent.includes("[작업 알림]"); i++) {
       await new Promise((r) => setTimeout(r, 100));
       sent = JSON.stringify(llm.requests.at(-1)?.messages ?? []);
     }
     expect(sent).toContain("[작업 알림] 정리");
     expect(sent).toContain("정리 끝");
-  });
+  }, 60_000);
 });
