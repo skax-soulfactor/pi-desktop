@@ -1,5 +1,5 @@
 import { networkInterfaces } from "node:os";
-import { fetchCard, checkOutbound, requestPairing } from "@pi-desktop/agent-kit/peers-client";
+import { fetchCard, checkOutbound, requestPairing } from "../extensions/peers/client";
 import {
   approveInbound,
   loadCardDraft,
@@ -16,12 +16,12 @@ import {
   type CardDraft,
   type PeerPolicy,
   type PeerSettings,
-} from "@pi-desktop/agent-kit/peers";
-import { loadTasks, tasksDir } from "@pi-desktop/agent-kit/tasks";
-import type { AgentCard, NetworkState } from "../shared/network";
+} from "../extensions/peers/store";
+import { loadTasks, tasksDir } from "../extensions/tasks/store";
+import type { AgentCard, NetworkState } from "./network-types";
 
 /**
- * 네트워크(피어) 화면의 메인 쪽 (설계 DESIGN-AGENT.md §4 "에이전트 네트워크"). 상태는 agent-kit 상태 폴더의 peers/에 있고,
+ * 네트워크(피어) 화면의 데이터 쪽 (설계 DESIGN-AGENT.md §4 "에이전트 네트워크"). 그 호스트의 데몬이 app-api로 부른다 (D4). 상태는 agent-kit 상태 폴더의 peers/에 있고,
  * 수신 서버는 스케줄러 세션이 설정을 읽어 띄운다. 여기서는 설정·카드·페어링·피어를 고치고 화면에 보일 모양을 만든다.
  */
 

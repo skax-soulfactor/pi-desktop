@@ -6,7 +6,7 @@ import type { AgentCard, CardDraft, NetworkState } from "../shared/network";
  * 다른 사람의 Pi Desktop Agent와 카드를 주고받고(페어링), 서로 질문할 수 있게 한다. 지식은 옮기지 않고 답만 준다.
  * 수신 서버는 스케줄러 세션이 이 설정을 읽어 띄운다 (앱을 닫아도 데몬이 떠 있으면 받는다).
  */
-export function NetworkPage({ onError }: { onError: (message: string) => void }) {
+export function NetworkPage({ onError, pickFolder }: { onError: (message: string) => void; /** 그 호스트의 폴더를 고른다 (원격이면 데몬으로 훑음) */ pickFolder: () => Promise<string | undefined> }) {
   const [state, setState] = useState<NetworkState>();
   const [card, setCard] = useState<CardDraft>();
   const [address, setAddress] = useState("");
@@ -62,7 +62,7 @@ export function NetworkPage({ onError }: { onError: (message: string) => void })
                       className="small link-button"
                       onClick={() =>
                         run(async () => {
-                          const folder = await window.piAgent.pickDirectory();
+                          const folder = await pickFolder();
                           if (folder) setFolders((prev) => ({ ...prev, [t.id]: folder }));
                         })
                       }

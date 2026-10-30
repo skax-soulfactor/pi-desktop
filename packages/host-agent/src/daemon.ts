@@ -650,7 +650,11 @@ export class AgentDaemon {
       const p = params as AgentCallParams | undefined;
       if (!p?.name || typeof p.name !== "string") throw new JsonRpcError(ErrorCodes.InvalidParams, "name이 필요합니다");
       const home = agentHome(this.env);
-      const api = appApi({ home, dataDir: this.env.PI_DESKTOP_AGENT_DATA || join(home, "data") });
+      const api = appApi({
+        home,
+        dataDir: this.env.PI_DESKTOP_AGENT_DATA || join(home, "data"),
+        locatePi: (piCliPath) => locatePi({ piCliPath, env: this.env }),
+      });
       const fn = Object.hasOwn(api, p.name) ? api[p.name] : undefined;
       if (!fn) throw new JsonRpcError(ErrorCodes.InvalidParams, `모르는 에이전트 함수입니다: ${p.name}`);
       const result = await fn(...(Array.isArray(p.args) ? p.args : [])).catch(invalidParams);

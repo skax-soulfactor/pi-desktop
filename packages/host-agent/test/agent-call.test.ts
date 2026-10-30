@@ -1,8 +1,9 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Methods } from "@pi-desktop/host-protocol";
 import { isolatedEnv, TestClient } from "./helpers/agent-client";
+import { PI_CLI } from "./helpers/real-pi";
 
 /**
  * 에이전트 앱의 데이터 함수를 데몬으로 부른다 (설계 DESIGN-APPS.md §6 D4).
@@ -44,5 +45,35 @@ describe("agent.call", () => {
     expect(await call("getElevation")).toBe(true);
     await expect(call("nope")).rejects.toThrow(/모르는 에이전트 함수/);
     await expect(call("toString")).rejects.toThrow(/모르는 에이전트 함수/);
+  });
+
+  it("MCP 설정은 데몬 홈의 mcp.json을 고치고, 연결 확인은 그 호스트의 Pi로 돈다", async () => {
+    const views = await call<Array<{ name: string }>>("mcpAddPreset", "exa");
+    expect(views.map((v) => v.name)).toEqual(["exa"]);
+    expect(existsSync(join(home, "mcp.json"))).toBe(true);
+    expect(await call("mcpSetEnabled", "exa", false)).toEqual([expect.objectContaining({ name: "exa", enabled: false })]);
+    expect(await call("mcpRemove", "exa")).toEqual([]);
+    const check = await call<{ ok: boolean; output: string }>("mcpCheck", { piCliPath: PI_CLI });
+    expect(check.output).toMatch(/mcp/i);
+  }, 60_000);
+
+  it("본문 검색은 데몬 홈의 세션 폴더 안 파일만 읽는다", async () => {
+    const dir = join(home, "sessions");
+    mkdirSync(dir, { recursive: true });
+    const inside = join(dir, "a.jsonl");
+    const line = (role: string, text: string) => JSON.stringify({ type: "message", message: { role, content: [{ type: "text", text }] } });
+    writeFileSync(inside, `${JSON.stringify({ type: "session", id: "a", cwd: "/w" })}\n${line("user", "배포 스크립트 고치기")}\n`);
+    const outside = join(home, "secret.jsonl");
+    writeFileSync(outside, `${line("user", "배포 비밀")}\n`);
+    const hits = await call<Array<{ path: string }>>("searchHistory", [{ path: inside, firstMessage: "" }, { path: outside, firstMessage: "" }], "배포");
+    expect(hits.map((h) => h.path)).toEqual([inside]);
+  });
+
+  it("사용량과 네트워크 상태를 그 호스트에서 만든다", async () => {
+    const usage = await call<{ range: string; total: unknown }>("usageSummary", "7d");
+    expect(usage).toMatchObject({ range: "7d", total: expect.any(Object) });
+    const network = await call<{ settings: { enabled: boolean }; peers: unknown[] }>("networkState");
+    expect(network.settings.enabled).toBe(false);
+    expect(network.peers).toEqual([]);
   });
 });

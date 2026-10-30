@@ -23,9 +23,6 @@ import { useAgentSession } from "./use-agent-session";
 /** 화면. 대화 말고는 메뉴바(보기)에서 연다 (main/app-menu.ts) */
 type Page = "chat" | "tasks" | "memory" | "skills" | "rules" | "usage" | "history" | "mcp" | "network" | "settings";
 
-/** 데몬을 거치지 않아 아직 이 PC의 데이터만 보이는 화면 (DESIGN-APPS.md §6 D4에서 옮긴다) */
-const LOCAL_ONLY_PAGES: Page[] = ["usage", "mcp", "network"];
-
 /** 호스트 id를 사람이 읽는 이름으로 ("wsl:Ubuntu" → "WSL: Ubuntu") */
 export function hostLabel(id: string): string {
   if (id === "local") return "로컬";
@@ -282,11 +279,6 @@ export function App() {
             <span>📁 {folderName(agent.opening)}에서 대화를 여는 중… Pi를 시작하고 있습니다.</span>
           </div>
         )}
-        {host?.remote && LOCAL_ONLY_PAGES.includes(page) && (
-          <div className="notice-line small-text">
-            이 화면은 아직 이 PC의 데이터만 보여 줍니다. 지금 호스트({hostLabel(host.id)})의 것은 이후 버전에서 보입니다.
-          </div>
-        )}
         {setup && page !== "settings" && <PiSetupBanner setup={setup} onRefresh={() => guard(refreshSetup)} onError={onError} />}
         {page !== "chat" && (
           <div className="back-bar">
@@ -340,7 +332,7 @@ export function App() {
         {page === "rules" && <RulesPage onError={onError} />}
         {page === "usage" && <UsagePage onError={onError} />}
         {page === "mcp" && <McpPage onError={onError} />}
-        {page === "network" && <NetworkPage onError={onError} />}
+        {page === "network" && <NetworkPage onError={onError} pickFolder={pickFolder} />}
         {page === "history" && (
           <HistoryPage
             openFiles={new Set(sessions.flatMap((s) => (s.sessionFile ? [s.sessionFile] : [])))}
