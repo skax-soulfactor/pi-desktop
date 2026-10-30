@@ -186,12 +186,18 @@ describe("피어 작업 맡기기 (실제 Pi)", () => {
 
     await approvePeerTask(dataDir, mine!.peer!.remoteId!, work);
     let finished: TaskRecord | undefined;
+    /** 끝나지 않으면 어디서 멈췄는지 보이도록 마지막으로 본 양쪽 기록 */
+    let last: { mine?: TaskRecord; theirs?: TaskRecord } = {};
     // CI(특히 Windows)에서는 워커 Pi가 뜨는 데 오래 걸린다
     for (let i = 0; i < 400 && !finished; i++) {
       await new Promise((r) => setTimeout(r, 200));
-      finished = await refreshRemoteTask(env.a, (await tasksOf(env.a))[0]!, [env.aPeerOfB]).then((r) => (r?.status === "done" ? r : undefined));
+      const mine = await refreshRemoteTask(env.a, (await tasksOf(env.a))[0]!, [env.aPeerOfB]);
+      last = { ...(mine ? { mine } : {}), theirs: (await tasksOf(dataDir))[0] };
+      if (mine?.status === "done") finished = mine;
     }
-    expect(finished).toMatchObject({ status: "done", result: "결과: 안의 내용을 읽었다" });
+    expect(finished, `끝나지 않음: ${JSON.stringify(last)}`).toMatchObject({ status: "done", result: "결과: 안의 내용을 읽었다" });
+    // 같은 승인 작업에 워커를 한 번만 띄운다 (주기 동기화가 겹쳐도)
+    expect((await tasksOf(dataDir)).filter((t) => t.origin === "peer-in")).toHaveLength(1);
     const audit = readFileSync(join(dataDir, "audit.jsonl"), "utf8");
     expect(audit).toContain('"decision":"blocked"');
     expect(audit).toContain("secret.txt");
