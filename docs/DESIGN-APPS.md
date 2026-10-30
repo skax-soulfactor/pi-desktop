@@ -1,6 +1,6 @@
 # 세 앱의 역할과 데이터 경계 — 설계 문서 (v0.1)
 
-> 관련 문서: [Pi Desktop 설계](DESIGN.md), [Pi Desktop Agent 설계](DESIGN-AGENT.md), [Pi Desktop Mate 설계](DESIGN-MATE.md), [개발 방식](CONTRIBUTING.md)
+> 관련 문서: [Pi Desktop 설계](DESIGN.md), [Pi Desktop Agent 설계](DESIGN-AGENT.md), [Pi Desktop Mate 설계](DESIGN-MATE.md), [Mate 원격 실행기](DESIGN-MATE-REMOTE.md), [개발 방식](CONTRIBUTING.md)
 
 이 저장소의 세 앱은 같은 Pi를 엔진으로 쓰지만 하는 일이 다르다. 이 문서는 세 앱이 **무엇을 함께 쓰고 무엇을 나누는지**,
 그리고 **어디서 도는지**를 정한다. 각 앱의 설계 문서가 이 문서와 어긋나면 이 문서를 따른다.
@@ -128,4 +128,4 @@ Agent와 같은 방식으로 Mate 홈에 따로 두고, Pi Desktop의 것은 섞
 | **D2.5 Mate 스킬·MCP** | §3.4: 스킬·MCP 탭, 임무별 스킬·MCP 서버 고르기, MCP 도구 권한 요청, 대화에서 쓸 MCP 서버, Mate가 제안하는 스킬 초안·MCP 서버 추가·다른 앱에서 복사 | **완료** (#121·#122·#123). Mate의 MCP 도구는 codemode 대신 바로 선언(direct)해 도구마다 허용한다 |
 | **D3 Agent 호스트 선택** | 호스트 연결을 가져와 대화·지난 대화·휴지통·아카이브를 WSL·SSH에서 쓴다 | **완료**. 한 번에 한 호스트에 붙고 설정에서 바꾼다. kit은 그 호스트의 `~/.pi-desktop-agent/kits/<내용 해시>/`에 올린다 |
 | **D4 Agent 화면의 데몬 이전** | 앱이 직접 읽던 화면을 데몬 명령으로 하나씩 옮긴다. 다 옮기면 원격에서 모든 화면이 된다 | **완료** (#125·#126). 함수 표는 agent-kit `src/app-api.ts`, 데몬은 `agent.call` 하나로 부른다 |
-| **D5 Mate 원격 실행기** | 실행기 배포·JSON-RPC 통신·원격 관찰. 세부 설계를 먼저 쓴다 | 가장 큼 |
+| **D5 Mate 원격 실행기** | 실행기 배포·JSON-RPC 통신·원격 관찰. 세부 설계: [DESIGN-MATE-REMOTE.md](DESIGN-MATE-REMOTE.md) (D5-1 실행기 RPC → D5-2 공용 배포 패키지 → D5-3 호스트 고르기 → D5-4 원격 텔레그램) | 가장 큼 |
