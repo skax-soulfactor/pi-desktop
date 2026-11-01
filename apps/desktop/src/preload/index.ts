@@ -30,6 +30,7 @@ const api: PiDesktopApi = {
   unwatchStored: (hostId, path) => ipcRenderer.invoke(IpcChannels.unwatchStored, hostId, path),
   watchTree: (hostId, watchId, roots) => ipcRenderer.invoke(IpcChannels.watchTree, hostId, watchId, roots),
   playgroundRun: (hostId, params) => ipcRenderer.invoke(IpcChannels.playgroundRun, hostId, params),
+  usageSummary: (hostId, range) => ipcRenderer.invoke(IpcChannels.usageSummary, hostId, range),
   playgroundStop: (hostId, runId) => ipcRenderer.invoke(IpcChannels.playgroundStop, hostId, runId),
   unwatchTree: (hostId, watchId) => ipcRenderer.invoke(IpcChannels.unwatchTree, hostId, watchId),
   openSession: (hostId, request) => ipcRenderer.invoke(IpcChannels.openSession, hostId, request),
