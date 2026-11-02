@@ -9,12 +9,17 @@
   - PC에서는 `skax-soulfactor` 계정으로 일한다.
   - 클라우드에서는 `soulfactorx` 계정으로 일한다. 이 계정은 이 저장소에 쓰기 권한이 있다.
   - 두 계정 모두 이 저장소에 직접 브랜치를 만들고 PR을 연다.
-- 포크 `soulfactorx/pi-desktop-mobile`에서는 개발하지도 릴리스하지도 않는다. 휴대폰 웹 버전(pi-web)은 이 저장소로 옮겼다(`packages/web-shell`, `apps/agent-web`, `apps/mate-web`, `apps/desktop/src/server`·`src/web`).
+- 포크 `soulfactorx/pi-desktop-mobile`에서는 개발하지도 릴리스하지도 않는다. 휴대폰 웹 버전(pi-web)은 이 저장소로 옮겼다(`packages/web-shell`, 각 앱의 `src/server`·`src/web`, 루트 `scripts/build-web.mjs`·`scripts/web`).
 - 클라우드 세션은 리눅스에서 돈다. 타입 검사·테스트·웹 빌드는 되지만, Windows 전용 동작과 Electron 창은 확인할 수 없다. 이런 것은 CI의 windows 칸에 맡기고, PR 본문에 "PC에서 확인 필요"라고 남긴다.
 
 ### 휴대폰 웹 버전(pi-web)
 
 - 세 앱의 화면 코드를 휴대폰 브라우저에서도 쓴다. 화면 코드를 고치면 웹도 함께 바뀐다. CI가 웹도 빌드한다.
+- **웹은 별도 제품이 아니라 같은 앱의 다른 빌드 대상이다.** `-web` 패키지를 따로 만들지 않는다.
+  - 웹 진입점은 각 앱 안에 둔다: `src/server`(웹 서버), `src/web`(화면 시작점·web.css), `vite.web.config.ts`, `scripts/build-web.mjs`. 앱마다 `npm run build:web -w <앱>` → `out/web`.
+  - 세 앱 묶음은 루트에서 만든다: `npm run build:web`(→ `out/pi-web`), `npm run dist:web`(→ `release/web`의 `pi-web.tar.gz`, `install-termux.sh`).
+  - 서버의 주소·토큰 확인, 화면 파일, 공유 받기, 서비스 워커, 푸시는 `packages/web-shell`에서 함께 쓴다. 앱 서버에 다시 만들지 않는다.
+  - 웹에서만 쓰는 의존성(ws, web-push 등)은 앱의 `dependencies`에 넣지 않는다. electron-builder가 `dependencies`를 설치 파일에 담기 때문이다. 웹 서버는 esbuild로 한 파일에 묶으므로 `devDependencies`로 충분하다. `out/web`도 electron-builder.yml에서 뺀다.
 - **휴대폰 전용 동작은 `isWebClient()`(각 앱 `renderer/clipboard-images.ts`) 뒤에 둔다.** CSS는 선택자를 `:root[data-client="web"]`로 묶는다.
   - `pointer: coarse`, `hover: none` 같은 터치 판정만으로 켜지 않는다. 터치 노트북·S펜 기기의 Electron 앱도 이 판정에 걸린다.
   - 화면 폭(`max-width`)으로 줄바꿈만 바꾸는 것은 데스크톱에도 해가 없으므로 그대로 써도 된다.
@@ -44,9 +49,9 @@
 
 | 앱 | 태그 | 이 경로가 바뀌면 릴리스 |
 |---|---|---|
-| Pi Desktop (+ 웹 묶음) | `v*` | `apps/desktop`, `apps/agent-web`, `apps/mate-web`, `packages/web-shell`, `host-agent`, `host-protocol`, `agent-kit`, `pi-resources`, `pi-isolation`. 웹 묶음이 Agent·Mate 화면도 담으므로 `apps/agent`·`apps/mate`의 화면을 고쳐도 |
-| Pi Desktop Agent | `agent-v*` | `apps/agent`, `packages/host-agent`, `host-protocol`, `host-deploy`, `agent-kit`, `pi-resources`, `pi-isolation` |
-| Pi Desktop Mate | `mate-v*` | `apps/mate`, `packages/mate-kit`, `mate-runner`, `host-agent`, `host-protocol`, `host-deploy`, `agent-kit`, `pi-resources`, `pi-isolation` |
+| Pi Desktop (+ 웹 묶음) | `v*` | `apps/desktop`, `packages/web-shell`, `host-agent`, `host-protocol`, `agent-kit`, `pi-resources`, `pi-isolation`, 루트 `scripts/build-web.mjs`·`scripts/web`. 웹 묶음이 Agent·Mate 웹 빌드(main·화면 포함)도 담으므로 `apps/agent`·`apps/mate`를 고쳐도 |
+| Pi Desktop Agent | `agent-v*` | `apps/agent`, `packages/host-agent`, `host-protocol`, `host-deploy`, `agent-kit`, `pi-resources`, `pi-isolation`. 단 `apps/agent`의 웹 빌드 파일(`src/server`, `src/web`, `vite.web.config.ts`, `scripts/build-web.mjs`)만 바뀌었으면 Pi Desktop만 |
+| Pi Desktop Mate | `mate-v*` | `apps/mate`, `packages/mate-kit`, `mate-runner`, `host-agent`, `host-protocol`, `host-deploy`, `agent-kit`, `pi-resources`, `pi-isolation`. 단 `apps/mate`의 웹 빌드 파일(`src/server`, `src/web`, `vite.web.config.ts`, `scripts/build-web.mjs`)만 바뀌었으면 Pi Desktop만 |
 
 확인하는 방법:
 

@@ -49,4 +49,4 @@ jobs:
         run: npm run build -w @pi-desktop/desktop
 
       - name: 웹(pi-web) 빌드
-        run: npm run build:web -w @pi-desktop/desktop
+        run: npm run build:web

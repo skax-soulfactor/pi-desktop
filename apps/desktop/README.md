@@ -90,7 +90,8 @@ Electron 앱은 Android에서 돌지 않습니다. 대신 휴대폰의 [Termux](
 - 갤럭시가 Termux를 멈추지 않게: 설정 → 애플리케이션 → Termux → 배터리 → **제한 없음**, 개발자 옵션 → **하위 프로세스 제한 사용 중지**(Android 14 이상). `pi-web`은 켤 때 Termux wake lock을 겁니다.
 - 서버는 휴대폰 안(127.0.0.1)에서만 열립니다. 다른 기기(태블릿·PC)에서 휴대폰의 Pi를 쓰려면 `PI_WEB_HOST=0.0.0.0 pi-web restart`로 열 수 있지만, 같은 Wi-Fi의 누구나 접속을 시도할 수 있으니 Tailscale 같은 VPN 안에서만 쓰기를 권합니다.
 - 일반 Linux 서버에서도 같은 스크립트로 설치할 수 있습니다 (Node.js 22.19 이상, 명령은 `~/.local/bin/pi-web`).
-- 직접 만들기: `npm run dist:web -w @pi-desktop/desktop` → `apps/desktop/release/web/`. 개발 실행(mock LLM): `npm run dev:web -w @pi-desktop/desktop`. 릴리스 태그(`v*`)를 올리면 Actions가 두 파일을 Releases에 함께 올립니다.
+- 웹은 같은 앱의 다른 빌드 대상입니다. Pi Desktop 웹 빌드(`src/server`·`src/web`, `vite.web.config.ts`)는 `npm run build:web -w @pi-desktop/desktop` → `apps/desktop/out/web/`이고, 개발 실행(mock LLM)은 `npm run dev:web -w @pi-desktop/desktop`입니다.
+- 세 앱을 담은 묶음은 루트에서 만듭니다: `npm run dist:web` → `release/web/` (루트 `scripts/build-web.mjs`). 릴리스 태그(`v*`)를 올리면 Actions가 두 파일을 Releases에 함께 올립니다.
 
 ## 개발 환경
 
