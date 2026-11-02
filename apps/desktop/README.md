@@ -54,6 +54,43 @@ git push origin v0.1.0
 
 Actions 탭에서 "Release"를 손으로 돌리면 만들기만 하고 올리지 않습니다(릴리스 전 미리 확인). 로컬에서 지금 OS용 설치 파일만 만들 때는 `npm run dist -w @pi-desktop/desktop`을 씁니다(결과는 `apps/desktop/release/`).
 
+## Android 휴대폰에서 쓰기 (웹 버전 pi-web)
+
+Electron 앱은 Android에서 돌지 않습니다. 대신 휴대폰의 [Termux](https://termux.dev)에서 Pi와 웹 서버 **pi-web**을 돌리고, 휴대폰 브라우저(Chrome·삼성 인터넷)로 같은 화면을 엽니다. VS Code의 code-server와 같은 방식입니다 (설계 §5.10).
+
+1. Termux를 [F-Droid](https://f-droid.org/packages/com.termux/)나 [GitHub](https://github.com/termux/termux-app/releases)에서 설치합니다 (Play 스토어 판은 오래되었습니다).
+2. Termux에서 한 줄로 설치하고 켭니다. Node.js·Pi·pi-web을 설치하고 브라우저를 엽니다.
+
+   ```bash
+   curl -fsSL https://github.com/soulfactorx/pi-desktop-mobile/releases/latest/download/install-termux.sh | bash
+   ```
+
+   - 내장 터미널(셸, OAuth `/login`)도 쓰려면 끝에 `-s -- --terminal`을 붙입니다. node-pty를 휴대폰에서 빌드하느라 빌드 도구(수백 MB)를 받습니다.
+   - 인터넷 없이: 릴리스의 `pi-web.tar.gz`와 `install-termux.sh`를 받아 `bash install-termux.sh --file pi-web.tar.gz`.
+3. 브라우저가 `http://127.0.0.1:8787/#token=…`로 열립니다. 주소 끝의 토큰은 이 브라우저에 기억됩니다. Chrome 메뉴의 "홈 화면에 추가"로 앱처럼 쓸 수 있습니다.
+4. "프로바이더"에서 API 키를 넣고, "폴더 선택"으로 휴대폰 안의 작업 폴더(예: `~/projects/app`)를 고르면 데스크톱과 똑같이 씁니다.
+
+| 명령 | 하는 일 |
+|---|---|
+| `pi-web` | 서버를 켜고 브라우저를 엽니다 (`pi-web start`) |
+| `pi-web url` | 토큰이 든 주소를 보여 줍니다 (다른 브라우저에서 열 때) |
+| `pi-web stop` / `restart` / `status` / `log` | 끄기·다시 켜기·상태·서버 기록 |
+| `pi-web update` | 최신 릴리스로 업데이트 (토큰·설정은 그대로) |
+| `pi-web uninstall` | 지우기 (데이터 `~/.pi-web/data`는 남깁니다) |
+| `pi-web agent` | **Pi Desktop Agent** 웹 버전을 켜고 엽니다 (포트 8788). 승인·지식베이스·스킬·예약 작업. 기능 화면은 오른쪽 위 ⋮ 메뉴에서 엽니다 |
+| `pi-web mate` | **Pi Desktop Mate** 웹 버전을 켜고 엽니다 (포트 8789). 임무 시간표·인박스·텔레그램. 서버를 꺼도 실행기는 임무를 계속 돌립니다 |
+| `pi-web all` | 세 앱을 모두 켭니다. `stop`·`status`·`url`도 앱 이름 뒤에 씁니다 (예: `pi-web mate stop`, `pi-web all status`) |
+
+- 설치 중 `CANNOT LINK EXECUTABLE "curl": cannot locate symbol …`이 나오면 Termux 패키지가 일부만 업데이트된 것입니다. `pkg upgrade -y` 뒤에 설치 명령을 다시 실행하세요 (v0.1.1부터 설치 스크립트가 먼저 업그레이드합니다).
+- **파일 관리자**: ⋮ 메뉴 → **파일 관리자**에서 Termux 홈 폴더를 훑고, 새 폴더·파일, 이름 바꾸기, 복사·이동, 지우기, 글 파일 보기·고치기를 합니다. **올리기**로 휴대폰의 사진·문서를 넣고, 파일의 ⋯ → **휴대폰으로 내려받기**로 꺼냅니다. **📱 저장소**는 휴대폰 공용 저장소(`~/storage`, 한 번 `termux-setup-storage`를 실행해야 생깁니다)입니다. **이 폴더에서 새 세션**으로 바로 Pi 세션을 엽니다.
+- **휴대폰 알림**: Pi Web·Agent·Mate 화면을 처음 열면 아래에 "휴대폰 알림을 켤까요?"가 뜹니다. **알림 켜기**를 누르고 허용하면, 화면을 보고 있지 않을 때(브라우저를 닫아도) 휴대폰 알림으로 받습니다. Pi Web은 작업 끝남·답을 기다림, Agent는 대화 답·승인 요청·작업 끝남, Mate는 답·질문(승인 요청)·임무 결과·새 제안. 구글 푸시 서버를 거치므로 휴대폰이 인터넷에 붙어 있어야 합니다. 앱마다 따로 켭니다.
+- Agent·Mate 웹 버전은 각 앱 화면을 그대로 씁니다 (설계 §5.11). 폴더·파일 고르기는 화면 안의 창으로 휴대폰(Termux) 폴더를 훑고, 파일 첨부는 "휴대폰에서 올리기"로 사진·문서를 올립니다. Pi 로그인·모델은 Pi Desktop(`pi-web`)에서 한 번 하면 함께 씁니다.
+- 서버를 끄거나 브라우저를 닫아도 Pi 작업은 데몬에서 계속 돕니다. 다시 열면 이어서 보여 줍니다. 브라우저가 백그라운드에서 연결을 끊어도 화면으로 돌아오면 다시 붙습니다.
+- 갤럭시가 Termux를 멈추지 않게: 설정 → 애플리케이션 → Termux → 배터리 → **제한 없음**, 개발자 옵션 → **하위 프로세스 제한 사용 중지**(Android 14 이상). `pi-web`은 켤 때 Termux wake lock을 겁니다.
+- 서버는 휴대폰 안(127.0.0.1)에서만 열립니다. 다른 기기(태블릿·PC)에서 휴대폰의 Pi를 쓰려면 `PI_WEB_HOST=0.0.0.0 pi-web restart`로 열 수 있지만, 같은 Wi-Fi의 누구나 접속을 시도할 수 있으니 Tailscale 같은 VPN 안에서만 쓰기를 권합니다.
+- 일반 Linux 서버에서도 같은 스크립트로 설치할 수 있습니다 (Node.js 22.19 이상, 명령은 `~/.local/bin/pi-web`).
+- 직접 만들기: `npm run dist:web -w @pi-desktop/desktop` → `apps/desktop/release/web/`. 개발 실행(mock LLM): `npm run dev:web -w @pi-desktop/desktop`. 릴리스 태그(`v*`)를 올리면 Actions가 두 파일을 Releases에 함께 올립니다.
+
 ## 개발 환경
 
 Node.js·Git Bash 같은 공통 준비와 `npm install`은 [루트 README의 "개발"](../../README.md#개발)을 따릅니다.

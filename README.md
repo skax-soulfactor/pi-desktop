@@ -64,6 +64,16 @@ Mate ───────── mate-runner → pi --mode json -e mate-kit     
   - 서명하려면 Apple Developer Program(연 99달러) 가입과 공증(notarization)이 필요합니다.
 - Linux: 서명이 필요 없습니다.
 
+## Android 휴대폰에서 쓰기 (웹 버전 pi-web)
+
+이 포크(soulfactorx/pi-desktop-mobile)는 세 앱을 휴대폰 브라우저에서 쓰는 웹 버전 **pi-web**을 더합니다 (Pi Desktop은 `pi-web`, Agent는 `pi-web agent`, Mate는 `pi-web mate`). Electron 앱은 Android에서 돌지 않으므로, 휴대폰의 [Termux](https://termux.dev)에서 Pi와 웹 서버를 돌리고 휴대폰 브라우저(Chrome·삼성 인터넷)로 같은 화면을 엽니다. VS Code의 code-server와 같은 방식입니다 (설계 §5.10).
+
+```bash
+curl -fsSL https://github.com/soulfactorx/pi-desktop-mobile/releases/latest/download/install-termux.sh | bash
+```
+
+설치·명령(`pi-web`, `pi-web update` 등)·갤럭시 설정은 [apps/desktop 설명서의 "Android 휴대폰에서 쓰기"](apps/desktop/README.md#android-휴대폰에서-쓰기-웹-버전-pi-web)에 있습니다.
+
 ## 개발
 
 - Node.js 22.19 이상 (Pi 요구 사항)

@@ -5,7 +5,7 @@ import type { ChatImage, ChatLine, InboxView, Overview } from "../shared/api";
 import type { Act } from "./App";
 import { InboxCard } from "./InboxPanel";
 import { costLabel, formatTokens, relativeTime } from "./mate-view";
-import { canReadClipboard, enterHint, isSendKey, readBase64, readClipboardImages, transferFiles, useDraftImages, useSharedImages } from "./clipboard-images";
+import { canReadClipboard, enterHint, isSendKey, readBase64, readClipboardImages, transferFiles, useDraftImages, useSharedImages, isWebClient } from "./clipboard-images";
 import { ImagePasteBox } from "./ImagePasteBox";
 import { ChatNavigator } from "./ChatNavigator";
 import { ComposerGrip, useComposerSize } from "./composer-size";
@@ -125,6 +125,17 @@ export function ChatView({ overview, now, act }: { overview: Overview; now: numb
    * 브라우저가 클립보드를 읽게 해 주면 거기 있는 이미지는 바로 붙이고 칸을 닫는다
    */
   const pasteFromClipboard = async () => {
+    // 데스크톱 앱은 클립보드를 바로 읽는다. 붙여넣기 칸은 휴대폰 웹 버전에서만 연다
+    if (!isWebClient()) {
+      try {
+        const files = await readClipboardImages();
+        if (files.length === 0) return setImageNote("클립보드에 이미지가 없어요");
+        await addImageFiles(files);
+      } catch (error) {
+        setImageNote((error as Error).message);
+      }
+      return;
+    }
     setPasteBox(true);
     if (!canReadClipboard()) return;
     const files = await readClipboardImages().catch(() => []);

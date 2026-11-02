@@ -9,8 +9,16 @@
   - PC에서는 `skax-soulfactor` 계정으로 일한다.
   - 클라우드에서는 `soulfactorx` 계정으로 일한다. 이 계정은 이 저장소에 쓰기 권한이 있다.
   - 두 계정 모두 이 저장소에 직접 브랜치를 만들고 PR을 연다.
-- 포크 `soulfactorx/pi-desktop-mobile`에서는 개발하지도 릴리스하지도 않는다. 휴대폰 웹 버전(pi-web)을 이 저장소로 옮기는 중이고, 다 옮기면 보관한다.
+- 포크 `soulfactorx/pi-desktop-mobile`에서는 개발하지도 릴리스하지도 않는다. 휴대폰 웹 버전(pi-web)은 이 저장소로 옮겼다(`packages/web-shell`, `apps/agent-web`, `apps/mate-web`, `apps/desktop/src/server`·`src/web`).
 - 클라우드 세션은 리눅스에서 돈다. 타입 검사·테스트·웹 빌드는 되지만, Windows 전용 동작과 Electron 창은 확인할 수 없다. 이런 것은 CI의 windows 칸에 맡기고, PR 본문에 "PC에서 확인 필요"라고 남긴다.
+
+### 휴대폰 웹 버전(pi-web)
+
+- 세 앱의 화면 코드를 휴대폰 브라우저에서도 쓴다. 화면 코드를 고치면 웹도 함께 바뀐다. CI가 웹도 빌드한다.
+- **휴대폰 전용 동작은 `isWebClient()`(각 앱 `renderer/clipboard-images.ts`) 뒤에 둔다.** CSS는 선택자를 `:root[data-client="web"]`로 묶는다.
+  - `pointer: coarse`, `hover: none` 같은 터치 판정만으로 켜지 않는다. 터치 노트북·S펜 기기의 Electron 앱도 이 판정에 걸린다.
+  - 화면 폭(`max-width`)으로 줄바꿈만 바꾸는 것은 데스크톱에도 해가 없으므로 그대로 써도 된다.
+- 웹 묶음(`pi-web.tar.gz`)과 Termux 설치 스크립트(`install-termux.sh`)는 Pi Desktop 릴리스(`v*`)에 함께 올라간다. 그래서 웹 쪽만 바뀌어도 Pi Desktop을 릴리스한다.
 
 ## 2. 작업이 끝나면: push·PR·머지·릴리스까지
 
@@ -36,7 +44,7 @@
 
 | 앱 | 태그 | 이 경로가 바뀌면 릴리스 |
 |---|---|---|
-| Pi Desktop | `v*` | `apps/desktop`, `packages/host-agent`, `host-protocol`, `agent-kit`, `pi-resources`, `pi-isolation` |
+| Pi Desktop (+ 웹 묶음) | `v*` | `apps/desktop`, `apps/agent-web`, `apps/mate-web`, `packages/web-shell`, `host-agent`, `host-protocol`, `agent-kit`, `pi-resources`, `pi-isolation`. 웹 묶음이 Agent·Mate 화면도 담으므로 `apps/agent`·`apps/mate`의 화면을 고쳐도 |
 | Pi Desktop Agent | `agent-v*` | `apps/agent`, `packages/host-agent`, `host-protocol`, `host-deploy`, `agent-kit`, `pi-resources`, `pi-isolation` |
 | Pi Desktop Mate | `mate-v*` | `apps/mate`, `packages/mate-kit`, `mate-runner`, `host-agent`, `host-protocol`, `host-deploy`, `agent-kit`, `pi-resources`, `pi-isolation` |
 
@@ -54,7 +62,7 @@ git diff --name-only <그 앱의 마지막 태그>..origin/main -- <위 경로�
 
 | 테스트 | 증상 | 지금까지 한 것 |
 |---|---|---|
-| agent-kit `peer-tasks.test.ts` "받는 쪽 스케줄러" | windows / Node 22에서 받은 작업이 `running`에서 끝나지 않음 | #115 동기화 겹침 막기, #163 워커 안에서 피어 서버가 돌던 것 고침과 워커 기록 진단. 또 실패하면 실패 메시지의 "워커 기록"을 본다 |
+| agent-kit `peer-tasks.test.ts` "받는 쪽 스케줄러" | windows에서 받은 작업이 `running`에서 끝나지 않음, 또는 `EPERM: operation not permitted, rename …tasks…json` | **원인 찾음:** Windows는 다른 곳이 읽는 파일로 이름을 바꾸지 못한다. 작업 기록 저장(`tasks/store.ts`)이 잠깐 기다렸다 다시 하게 고쳤다(포크에서 옮김). 그 전에 #115 동기화 겹침, #163 워커 안의 피어 서버도 고쳤다. 또 실패하면 실패 메시지의 "워커 기록"을 본다 |
 | mate-runner `real-pi.test.ts` "git 계기" | Windows에서 시간 초과 | #116 pid 파일 재사용 문제 고침 |
 
 새로 이런 테스트를 만나면 이 표에 더한다.

@@ -3223,12 +3223,13 @@ details > summary.settings-section {
 }
 
 /* 터치 화면(마우스 오버가 없음): 줄에 올려야 보이던 단추를 늘 보인다 */
+/* 휴대폰 웹 버전에서만: 터치 화면은 마우스를 올릴 수 없어 줄 단추를 늘 보인다. Electron 앱(터치 노트북 포함)에는 적용하지 않는다 */
 @media (hover: none), (pointer: coarse) {
-  .rename-button,
-  .close-session-button {
+  :root[data-client="web"] .rename-button,
+  :root[data-client="web"] .close-session-button {
     opacity: 1;
   }
-  .tree-fork {
+  :root[data-client="web"] .tree-fork {
     visibility: visible;
   }
 }

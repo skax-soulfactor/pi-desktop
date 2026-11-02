@@ -2352,11 +2352,51 @@ button .spinner {
   position: relative;
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-view[hidden] {
+  display: none;
 }
 
 .terminal-screen {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 터치 기기의 기능키 줄 (TerminalView.tsx, terminal-touch.ts). 넘치면 옆으로 밀어 본다 */
+.terminal-keys {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.terminal-keys button {
+  flex-shrink: 0;
+  min-width: 40px;
+  padding: 6px 8px;
+  font: 13px ui-monospace, Consolas, monospace;
+  touch-action: manipulation;
+}
+
+/*
+ * "바로 입력"은 입력한 글자를 바로 보내 셸이 찍으므로 xterm의 조합 미리보기를 보이지 않게 한다 (글자가 두 번 보이지 않게).
+ * display: none은 쓰면 안 된다: xterm은 조합 중 미리보기의 크기로 숨은 입력 칸의 크기를 정하는데, 크기가 0이 되면
+ * 입력 칸이 1px·줄 높이 0이 되어 안드로이드 키보드가 더 이상 글자를 넣지 않는다 (v0.1.6·v0.1.7에서 입력이 멈춘 원인).
+ */
+.terminal-screen.live-input .composition-view {
+  opacity: 0 !important;
+}
+
+.terminal-keys button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 /* 터미널 오른쪽 클릭 메뉴 */
@@ -3397,6 +3437,299 @@ details > summary.settings-section {
   font-size: 12px;
 }
 
+/* ── 좁은 화면 (휴대폰 브라우저로 연 웹 버전 pi-web, 설계 §5.10) ─────────────────── */
+.drawer-toggle,
+.drawer-backdrop {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .topbar,
+  .toolbar {
+    flex-wrap: wrap;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .drawer-toggle {
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 16px;
+  }
+
+  /* 로고 글자와 세션 경로는 자리가 없어 감춘다 (탭 제목에 세션 이름이 나온다) */
+  .brand {
+    font-size: 0;
+  }
+
+  .host-select {
+    max-width: 46vw;
+  }
+
+  .session-meta {
+    display: none;
+  }
+
+  .toolbar-label {
+    display: none;
+  }
+
+  /* 새 세션 폴더 줄은 세션을 보는 동안 서랍과 함께 연다 */
+  .app.has-session:not(.drawer-open) .toolbar {
+    display: none;
+  }
+
+  .topbar button:not(.drawer-toggle),
+  .session-bar button {
+    font-size: 13px;
+    padding: 3px 8px;
+  }
+
+  .session-bar {
+    gap: 6px 10px;
+    padding: 4px 8px;
+  }
+
+  .toolbar .cwd {
+    flex-basis: 100%;
+  }
+
+  .toolbar button {
+    flex: 1;
+    padding: 6px 8px;
+  }
+
+  /* 사이드바는 왼쪽에서 밀려 나오는 서랍 */
+  .workspace {
+    position: relative;
+  }
+
+  .workspace .sidebar {
+    display: none;
+  }
+
+  .workspace.drawer-open .sidebar {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    width: min(85vw, 320px);
+    box-shadow: 4px 0 20px rgb(0 0 0 / 30%);
+  }
+
+  .workspace.drawer-open .drawer-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 19;
+    background: rgb(0 0 0 / 35%);
+  }
+
+  /* 파일 트리 등 오른쪽 패널은 본문 위에 겹쳐 띄운다 */
+  .tree-panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    z-index: 20;
+    width: min(92vw, 360px);
+    box-shadow: -4px 0 20px rgb(0 0 0 / 30%);
+  }
+
+  .chat {
+    padding: 10px 8px;
+  }
+
+  .composer {
+    flex-wrap: wrap;
+    padding: 8px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .composer-input {
+    flex-basis: 100%;
+  }
+
+  .composer textarea {
+    min-height: 44px;
+    resize: none;
+  }
+
+  .composer .actions {
+    flex-direction: row;
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+
+  /* 대화상자(Pi 관리 등)는 화면을 거의 다 쓴다 */
+  .modal,
+  .pi-manager {
+    width: calc(100vw - 16px);
+    max-width: none;
+    max-height: calc(100dvh - 16px);
+    padding: 12px;
+  }
+
+  .settings-copy-head {
+    flex-wrap: wrap;
+  }
+
+  .settings-copy-head button {
+    white-space: nowrap;
+  }
+
+  /* 설정 폼: 이름·설명을 위에, 값을 그 아래 한 줄 전체에 둔다 (이름이 잘리지 않게) */
+  .settings-field {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 4px;
+  }
+
+  .settings-field-label code {
+    word-break: break-all;
+  }
+
+  .settings-field-control {
+    flex: none;
+    width: 100%;
+  }
+}
+
+/* ── 웹(pi-web) 메뉴: 메뉴바 대신 탭 줄 오른쪽의 "⋮ 메뉴" (WebMenu.tsx) ─────────────────── */
+.web-menu-button {
+  padding: 2px 10px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+.web-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.web-menu {
+  position: absolute;
+  top: 40px;
+  right: 8px;
+  width: 300px;
+  max-height: calc(100dvh - 56px);
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 35%);
+}
+
+.web-menu-group h3 {
+  margin: 8px 8px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.web-menu-group:first-child h3 {
+  margin-top: 2px;
+}
+
+.web-menu-group button,
+.web-menu-group a {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.web-menu-group button:hover,
+.web-menu-group a:hover,
+.web-menu-group button:focus-visible,
+.web-menu-group a:focus-visible {
+  background: var(--panel-2);
+}
+
+.web-menu-group kbd {
+  font: 11px ui-monospace, Consolas, monospace;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  /* 휴대폰: 탭 줄 아래로 화면 폭 전체를 쓰는 판. 손가락으로 누르기 쉽게 줄을 높인다 */
+  .web-menu-backdrop {
+    background: rgb(0 0 0 / 35%);
+  }
+
+  .web-menu {
+    top: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 85dvh;
+    border-radius: 0 0 12px 12px;
+    padding: 6px 8px 12px;
+  }
+
+  .web-menu-group button,
+  .web-menu-group a {
+    padding: 11px 12px;
+  }
+
+  /* 단축키는 휴대폰에서 쓸 일이 없다 */
+  .web-menu-group kbd {
+    display: none;
+  }
+}
+
+/* 입력 진단 (⋮ 메뉴 → 터미널 입력 진단). 터미널 위에 겹쳐 키보드 이벤트와 보낸 글자를 보여 준다 */
+.terminal-debug {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  max-height: 45%;
+  overflow: auto;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.terminal-debug-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+.terminal-debug-head strong {
+  flex: 1;
+}
+
+.terminal-debug pre {
+  margin: 0;
+  padding: 0 6px 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font: 11px/1.35 ui-monospace, Consolas, monospace;
+}
+
+.web-menu-check {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 /* 휴대폰 키보드의 클립보드(스크린샷)를 받는 붙여넣기 칸 */
 .image-paste {
   display: flex;
@@ -3570,11 +3903,12 @@ details > summary.settings-section {
 
 /* 터치 화면(마우스 오버가 없거나 손가락이 주 입력. S펜 기기는 hover가 있다고 알린다): 세션 줄의 ✎·🗑·📦·✕와 트리의 분기 단추를 늘 보이고, 손가락으로 누르기 좋게 키운다.
    단추가 이름·시각 글자를 가리지 않게 줄 오른쪽을 비운다 */
+/* 휴대폰 웹 버전에서만: 터치 화면은 마우스를 올릴 수 없어 줄 단추를 늘 보인다. Electron 앱(터치 노트북 포함)에는 적용하지 않는다 */
 @media (hover: none), (pointer: coarse) {
-  .rename-button,
-  .close-session-button,
-  .delete-session-button,
-  .archive-session-button {
+  :root[data-client="web"] .rename-button,
+  :root[data-client="web"] .close-session-button,
+  :root[data-client="web"] .delete-session-button,
+  :root[data-client="web"] .archive-session-button {
     opacity: 1;
     top: 50%;
     transform: translateY(-50%);
@@ -3583,28 +3917,28 @@ details > summary.settings-section {
     padding: 0 6px;
     font-size: 14px;
   }
-  .close-session-button {
+  :root[data-client="web"] .close-session-button {
     right: 2px;
   }
-  .delete-session-button {
+  :root[data-client="web"] .delete-session-button {
     right: 34px;
   }
-  .rename-button {
+  :root[data-client="web"] .rename-button {
     right: 66px;
   }
-  .history-row .delete-session-button {
+  :root[data-client="web"] .history-row .delete-session-button {
     right: 2px;
   }
-  .archive-session-button {
+  :root[data-client="web"] .archive-session-button {
     right: 34px;
   }
-  .session-row .session-item {
+  :root[data-client="web"] .session-row .session-item {
     padding-right: 100px;
   }
-  .history-row .session-item {
+  :root[data-client="web"] .history-row .session-item {
     padding-right: 68px;
   }
-  .tree-fork {
+  :root[data-client="web"] .tree-fork {
     visibility: visible;
   }
 }

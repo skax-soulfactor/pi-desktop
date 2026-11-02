@@ -1060,8 +1060,9 @@ button.danger {
 }
 
 /* 터치 화면(마우스 오버가 없음): 열린 대화의 아카이브·삭제를 늘 보인다 */
+/* 휴대폰 웹 버전에서만: 터치 화면은 마우스를 올릴 수 없어 줄 단추를 늘 보인다. Electron 앱(터치 노트북 포함)에는 적용하지 않는다 */
 @media (hover: none), (pointer: coarse) {
-  .nav-sessions li .nav-act {
+  :root[data-client="web"] .nav-sessions li .nav-act {
     visibility: visible;
     padding: 4px 6px;
   }
