@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionEventNotification, SessionSummary } from "@pi-desktop/host-protocol/messages";
 import { STATUS_COMMAND } from "@pi-desktop/agent-kit/constants";
-import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState } from "../vendor/renderer/chat-state";
+import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState, type PendingQueue } from "../vendor/renderer/chat-state";
 import {
   applyUiEvent,
   dialogResponse,
@@ -238,26 +238,46 @@ export function useAgentSession() {
     setModel(undefined);
   }, []);
 
-  /** 프롬프트를 보낸다. 응답 중이면 끝난 뒤에 이어서 처리하도록 follow-up으로 넣는다 */
+  /**
+   * 프롬프트를 보낸다. 응답 중이면 Pi가 언제 받을지 정해야 한다:
+   * steer(끼어들기)는 지금 하던 도구 호출이 끝나는 대로, followUp(끝나면 보내기)은 작업이 모두 끝난 뒤.
+   * 정하지 않으면 끝나면 보내기로 넣는다
+   */
   const send = useCallback(
-    async (message: string, images: Array<{ mimeType: string; data: string }> = []) => {
+    async (message: string, images: Array<{ mimeType: string; data: string }> = [], behavior?: "steer" | "followUp") => {
       const current = sessionRef.current;
       if (!current) return;
       const response = await api().sendCommand(current.sessionId, {
         type: "prompt",
         message,
         ...(images.length > 0 ? { images: images.map((i) => ({ type: "image", data: i.data, mimeType: i.mimeType })) } : {}),
-        ...(chat.running ? { streamingBehavior: "followUp" } : {}),
+        ...(chat.running ? { streamingBehavior: behavior ?? "followUp" } : {}),
       });
       if (response.success === false) notice("error", String(response.error ?? "보내지 못했습니다"));
     },
     [chat.running, notice],
   );
 
-  const abort = useCallback(async () => {
+  /** 대기 중인 끼어들기·끝나면 보내기를 취소하고, 그 글을 입력창에 되돌릴 수 있게 돌려준다 (Pi Desktop과 같음) */
+  const clearQueue = useCallback(async (): Promise<Partial<PendingQueue> | undefined> => {
     const current = sessionRef.current;
-    if (current) await api().sendCommand(current.sessionId, { type: "abort" });
+    if (!current) return undefined;
+    const response = await api().sendCommand(current.sessionId, { type: "clear_queue" });
+    if (response.success === false) throw new Error(String(response.error ?? "대기 중인 메시지를 비우지 못했습니다"));
+    return response.data as Partial<PendingQueue> | undefined;
   }, []);
+
+  /**
+   * 중단. Pi는 abort만 하면 대기 중인 메시지를 이어서 처리하므로, 대기열을 먼저 비운 뒤 멈춘다.
+   * 비운 메시지는 돌려주어 입력창에 되돌린다
+   */
+  const abort = useCallback(async (): Promise<Partial<PendingQueue> | undefined> => {
+    const current = sessionRef.current;
+    if (!current) return undefined;
+    const pending = chat.queue.steering.length + chat.queue.followUp.length > 0 ? await clearQueue() : undefined;
+    await api().sendCommand(current.sessionId, { type: "abort" });
+    return pending;
+  }, [chat.queue, clearQueue]);
 
   const answer = useCallback(
     async (dialog: DialogRequest, reply: { value?: string; confirmed?: boolean; cancelled?: boolean }) => {
@@ -272,5 +292,5 @@ export function useAgentSession() {
   const dismiss = useCallback((key: string) => setUi((prev) => dismissToast(prev, key)), []);
 
   statsRef.current = (sessionId: string) => void refreshStats(sessionId);
-  return { connection, session, opening, chat, ui, kit, model, models, stats, open, attachTo, moveTo, changeModel, close, send, abort, answer, dismiss, notice };
+  return { connection, session, opening, chat, ui, kit, model, models, stats, open, attachTo, moveTo, changeModel, close, send, clearQueue, abort, answer, dismiss, notice };
 }
