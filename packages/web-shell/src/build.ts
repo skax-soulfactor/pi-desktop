@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { build as esbuild, type Plugin } from "esbuild";
 
 /**
- * 웹 껍데기 묶음을 만드는 도구 (설계 DESIGN.md §5.11). apps/agent-web·apps/mate-web의 scripts/build.mjs가 쓴다.
+ * 웹 껍데기 묶음을 만드는 도구 (설계 DESIGN.md §5.11). apps/agent·apps/mate의 scripts/build-web.mjs가 쓴다.
  *
  * 서버: 앱의 main 코드를 고치지 않고 Node용 한 파일로 묶는다. 그때
  * - "electron"은 web-shell의 Electron 대체 모듈로
@@ -15,6 +15,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 /** 화면 묶기(vite)에서 "electron" 대신 쓸 파일 */
 export const electronRendererShim = join(here, "client", "electron-renderer.ts");
 const electronMainShim = join(here, "electron", "main.ts");
+/** 웹에서 할 일이 다른 모듈의 대체 (replace의 with에 준다) */
+export const shellStubs = {
+  updater: join(here, "stubs", "updater.ts"),
+  autostart: join(here, "stubs", "autostart.ts"),
+};
 
 export interface Replacement {
   /** 바꿀 모듈 파일 (확장자 없이 절대 경로, 예: apps/agent/src/main/updater) */

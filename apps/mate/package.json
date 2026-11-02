@@ -14,6 +14,7 @@
     "dev": "electron-vite dev",
     "dev:mock": "node scripts/dev-mock.mjs",
     "build": "npm run build -w @pi-desktop/mate-runner && electron-vite build",
+    "build:web": "npm run build -w @pi-desktop/mate-runner && node scripts/build-web.mjs",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "test": "vitest run",
     "dist": "npm run build && electron-builder --config electron-builder.yml --publish never",
@@ -36,7 +37,8 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "vite": "^8.3.4",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "@pi-desktop/web-shell": "*"
   },
   "dependencies": {
     "@pi-desktop/pi-resources": "*",

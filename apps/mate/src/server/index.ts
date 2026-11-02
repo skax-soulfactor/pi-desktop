@@ -5,11 +5,11 @@ import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { app, appReady, configureShell, emitApp, hub, onQuit } from "@pi-desktop/web-shell/electron-main";
 import { startWebServer } from "@pi-desktop/web-shell/server";
-import { IpcChannels } from "../../mate/src/shared/api";
+import { IpcChannels } from "../shared/api";
 
 /**
- * Pi Desktop Mate 웹 버전의 서버 (설계 DESIGN.md §5.11). Mate의 main 코드(apps/mate/src/main)를 고치지 않고 Node에서 돌린다.
- * "electron"은 web-shell의 대체 모듈로, 자동 업데이트·로그인 항목은 웹 대체로 바뀌어 묶인다 (scripts/build.mjs).
+ * Pi Desktop Mate 웹 버전의 서버 (설계 DESIGN.md §5.11). Mate의 main 코드(src/main)를 고치지 않고 Node에서 돌린다.
+ * "electron"은 web-shell의 대체 모듈로, 자동 업데이트·로그인 항목은 웹 대체로 바뀌어 묶인다 (scripts/build-web.mjs).
  *
  * 실행기(mate-runner)는 Mate 설치본처럼 따로 떠서 서버를 꺼도 임무 시간표를 지키고 텔레그램에 연결한다.
  * 묶음 구조: server.mjs 옆에 public/(화면), resources/(mate-runner·mate-kit·pi-isolation: Mate 설치본의 extraResources와 같다)
@@ -44,7 +44,7 @@ configureShell({ name: "Pi Desktop Mate", version: version(), dataDir, appPath: 
 (process as unknown as { resourcesPath: string }).resourcesPath = process.env.PI_WEB_RESOURCES ?? join(here, "resources");
 
 // Mate main: ipcMain 처리기를 걸고, app.whenReady 뒤에 실행기에 붙는다 (없으면 띄운다)
-await import("../../mate/src/main/index");
+await import("../main/index");
 
 /**
  * Pi 설치·로그인은 Pi Desktop이 맡는다. 휴대폰에서는 같은 묶음의 Pi Web(pi-web, 8787)이 그 자리다.
