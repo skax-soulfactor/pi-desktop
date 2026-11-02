@@ -196,8 +196,8 @@ textarea {
   overflow: auto;
   padding: 16px;
 }
+/* 화면 폭은 창 폭을 따라간다. 고정 최대 폭을 두면 창을 키워도 내용이 넓어지지 않고 멈춘다 */
 .content > section {
-  max-width: 920px;
   margin: 0 auto;
 }
 

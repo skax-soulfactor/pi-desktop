@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification, screen, shell } from "electron";
+import { loadWindowState, trackWindowState } from "@pi-desktop/window-state";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -415,9 +416,17 @@ function registerIpc(): void {
 }
 
 function createWindow(): void {
+  // 지난번 창 크기·위치·최대화를 되살린다 (화면 밖이면 위치는 버린다)
+  const windowStateFile = join(app.getPath("userData"), "window-state.json");
+  const windowState = loadWindowState(
+    windowStateFile,
+    { width: 1100, height: 760, minWidth: 720, minHeight: 480 },
+    screen.getAllDisplays().map((d) => d.workArea),
+  );
   mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 760,
+    ...(windowState.x !== undefined && windowState.y !== undefined ? { x: windowState.x, y: windowState.y } : {}),
+    width: windowState.width,
+    height: windowState.height,
     minWidth: 720,
     minHeight: 480,
     title: "Pi Desktop Mate",
@@ -430,6 +439,8 @@ function createWindow(): void {
       contextIsolation: true,
     },
   });
+  if (windowState.maximized) mainWindow.maximize();
+  trackWindowState(mainWindow, windowStateFile);
   mainWindow.on("closed", () => (mainWindow = undefined));
   // 링크는 앱 안이 아니라 기본 브라우저로 연다
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

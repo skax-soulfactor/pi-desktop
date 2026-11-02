@@ -1,0 +1,15 @@
+{
+  "name": "@pi-desktop/window-state",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "세 데스크톱 앱이 창 크기·위치·최대화를 기억했다가 다음 실행 때 되살리는 모듈",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}
