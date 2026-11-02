@@ -43,7 +43,7 @@ Mate ───────── mate-runner → pi --mode json -e mate-kit     
 
 ## 설치
 
-[Releases](https://github.com/skax-soulfactor/pi-desktop/releases)에서 앱과 OS에 맞는 파일을 받습니다. **Latest**로 표시되는 것은 Pi Desktop 릴리스이고, Agent·Mate는 `agent-v*`·`mate-v*` 릴리스에서 찾습니다.
+[Releases](https://github.com/skax-soulfactor/pi-desktop/releases)에서 앱과 OS에 맞는 파일을 받습니다. 0.6.4부터 세 앱이 한 릴리스(**Latest**)에 함께 올라가며, 파일 이름 앞부분(`Pi-Desktop-`, `Pi-Desktop-Agent-`, `Pi-Desktop-Mate-`)으로 구분합니다.
 
 | OS | Pi Desktop | Pi Desktop Agent | Pi Desktop Mate |
 |---|---|---|---|

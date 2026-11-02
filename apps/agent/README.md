@@ -69,19 +69,11 @@ npm run dist -w @pi-desktop/agent
 지금 OS용 설치 파일을 `apps/agent/release/`에 만듭니다 (올리지 않음). 설치본은 Host Agent 번들과 agent-kit 소스를 리소스로 싣고,
 **대상 PC에 설치된 Pi**(`npm install -g @earendil-works/pi-coding-agent`)를 씁니다.
 
-릴리스는 `agent-v`로 시작하는 태그를 올리면 `.github/workflows/release-agent.yml`이 세 OS에서 만들어
-이 저장소의 GitHub Releases에 올립니다. **Latest로 표시하지 않아** Pi Desktop(`v*`)의 자동 업데이트와 섞이지 않습니다 (Pi Desktop Mate의 `mate-v*`와 같은 방식, 설계 §0).
-릴리스에는 자동 업데이트용 latest.yml·latest-linux.yml·blockmap도 함께 올라갑니다.
+릴리스는 0.6.4부터 세 앱이 함께 나갑니다. `v`로 시작하는 태그를 올리면 `.github/workflows/release.yml`이 세 앱을 세 OS에서 만들어
+이 저장소의 GitHub Releases 한 릴리스에 올립니다 (규칙은 저장소 [CLAUDE.md](../../CLAUDE.md) §3).
+Agent의 자동 업데이트 정보는 Pi Desktop의 latest.yml과 겹치지 않게 agent.yml·agent-linux.yml(·agent-mac.yml)입니다.
 
-```bash
-git tag -a agent-v0.1.0 -m "Pi Desktop Agent v0.1.0"
-```
-
-```bash
-git push origin agent-v0.1.0
-```
-
-Actions 탭에서 "Release Agent"를 손으로 돌리면 만들기만 하고 올리지 않습니다. 코드 서명은 하지 않습니다 ([루트 README의 "코드 서명"](../../README.md#코드-서명)).
+Actions 탭에서 "Release"를 손으로 돌리면 만들기만 하고 올리지 않습니다. 코드 서명은 하지 않습니다 ([루트 README의 "코드 서명"](../../README.md#코드-서명)).
 
 ## 테스트
 

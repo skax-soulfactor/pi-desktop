@@ -1,25 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { availablePrompt, compareVersions, isLocalBuild, latestAgentRelease, releaseDownloadBase, updateMode } from "../src/main/update-policy";
+import { availablePrompt, compareVersions, isLocalBuild, latestAgentRelease, releaseDownloadBase, UPDATE_CHANNEL, updateMode } from "../src/main/update-policy";
 
 describe("자동 업데이트 규칙", () => {
-  it("같은 저장소의 릴리스 중 가장 높은 agent-v*만 고른다 (Pi Desktop·Mate·초안·사전 릴리스 제외)", () => {
+  it("세 앱을 함께 올린 릴리스(v*) 중 가장 높은 것을 고른다 (옛 agent-v*·mate-v*, 초안·사전 릴리스 제외)", () => {
     const releases = [
-      { tag_name: "v0.1.15" },
-      { tag_name: "mate-v0.9.0" },
-      { tag_name: "agent-v0.1.1", html_url: "u1" },
-      { tag_name: "agent-v0.1.10" },
-      { tag_name: "agent-v0.2.0", draft: true },
-      { tag_name: "agent-v0.3.0", prerelease: true },
-      { tag_name: "agent-v0.1.2" },
+      { tag_name: "agent-v0.6.4" },
+      { tag_name: "mate-v0.6.4" },
+      { tag_name: "v0.6.3", html_url: "u1" },
+      { tag_name: "v0.6.10" },
+      { tag_name: "v0.7.0", draft: true },
+      { tag_name: "v0.8.0", prerelease: true },
+      { tag_name: "v0.6.4" },
     ];
-    expect(latestAgentRelease(releases)).toEqual({ tag: "agent-v0.1.10", version: "0.1.10" });
-    expect(latestAgentRelease([{ tag_name: "v1.0.0" }])).toBeUndefined();
+    expect(latestAgentRelease(releases)).toEqual({ tag: "v0.6.10", version: "0.6.10" });
+    expect(latestAgentRelease([{ tag_name: "agent-v1.0.0" }, { tag_name: "mate-v1.0.0" }])).toBeUndefined();
   });
 
   it("버전 비교와 내려받기 주소", () => {
     expect(compareVersions("0.1.10", "0.1.9")).toBeGreaterThan(0);
     expect(compareVersions("v0.2.0", "0.2.0")).toBe(0);
-    expect(releaseDownloadBase("o", "r", "agent-v0.2.0")).toBe("https://github.com/o/r/releases/download/agent-v0.2.0");
+    expect(releaseDownloadBase("o", "r", "v0.6.4")).toBe("https://github.com/o/r/releases/download/v0.6.4");
+    // 한 릴리스 안에서 Pi Desktop의 latest.yml과 겹치지 않는 업데이트 정보 파일 (agent.yml)
+    expect(UPDATE_CHANNEL).toBe("agent");
   });
 
   it("Windows·AppImage는 내려받아 설치, macOS·deb는 알리기만", () => {

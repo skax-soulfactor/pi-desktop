@@ -20,7 +20,7 @@ Pi를 포크하지 않는다는 원칙은 같다. Pi는 그대로 두고, 확장
 | 메타 파일 | **`~/.pi-desktop-mate/`** 에 따로 둔다 (`MATE_HOME`으로 바꿈). Pi 설치본·로그인·모델·설정(`~/.pi/agent`)만 같이 쓴다 (API 키를 다시 넣지 않도록). Pi를 띄울 때 `-ns -np -ne -nc`로 Pi Desktop의 스킬·프롬프트·확장·사용자 지침이 임무에 끼어들지 않게 한다 (DESIGN-APPS.md §3.1) |
 | 기본 모델 | `anthropic/claude-haiku-5-5` (설정에서 목록으로 바꿈. "Pi 기본 모델 따르기"를 고르면 `--model`을 넘기지 않아 Pi Desktop에서 바꾼 기본 모델을 따름. 임무마다 덮어쓸 수 있음) |
 | 알림 | 인박스에 쌓여 앱을 켰을 때 본다. 앱 창을 보고 있지 않으면 PC 알림(OS 알림)으로 대화 답·질문(승인 요청)·임무 결과·새 제안을 알린다(설정에서 끔, 앱의 main이 실행기의 "바뀜" 알림마다 overview를 견줘 새것만, 처음 읽은 것은 기준만). 휴대폰(텔레그램)을 연결하면 바로 알림을 받고 버튼으로 처리·지시할 수 있다 (§12) |
-| 릴리스 | Pi Desktop의 `v*`, Agent의 `agent-v*`와 섞지 않고 `mate-v*` 태그와 별도 워크플로(`.github/workflows/mate-release.yml`)를 쓴다. Mate 릴리스는 GitHub에서 **Latest로 표시하지 않는다** (Pi Desktop 자동 업데이트가 Latest 릴리스를 보기 때문). Mate 자동 업데이트는 §11 |
+| 릴리스 | **0.6.4부터** 세 앱은 태그 하나(`v*`)·워크플로 하나(`.github/workflows/release.yml`)로 한 릴리스에 함께 올라간다 (규칙: 저장소 CLAUDE.md §3). Mate 자동 업데이트는 그 릴리스의 `mate.yml`을 본다. 아래는 0.6.3까지의 방식이다: Pi Desktop의 `v*`, Agent의 `agent-v*`와 섞지 않고 `mate-v*` 태그와 별도 워크플로(`.github/workflows/mate-release.yml`)를 쓴다. Mate 릴리스는 GitHub에서 **Latest로 표시하지 않는다** (Pi Desktop 자동 업데이트가 Latest 릴리스를 보기 때문). Mate 자동 업데이트는 §11 |
 
 ## 1. 참고한 제품
 
@@ -197,7 +197,7 @@ Pi 세션을 `~/.pi/agent/sessions`가 아니라 Mate 홈에 두는 것은 백�
 | 데이터 홈 | `~/.pi-desktop` | `~/.pi-desktop-agent`, `~/.pi/agent/pi-desktop-agent` | `~/.pi-desktop-mate` |
 | 개발 mock LLM 포트 | 18911 | 18912 | 18913 |
 | 개발 데이터 | `.dev/home` | `.dev/agent-home` | `.dev/mate-home` |
-| 태그 | `v*` | `agent-v*` | `mate-v*` |
+| 태그 | `v*` (0.6.4부터 세 앱 공통) | 0.6.3까지 `agent-v*` | 0.6.3까지 `mate-v*` |
 
 Agent 설계의 P4(데몬 스케줄러·백그라운드 작업)는 Mate와 목적이 겹친다. 둘 다 자리 잡으면 실행기를 공용 패키지로 합칠지 그때 정한다.
 지금은 서로의 코드를 import하지 않는다.
@@ -251,10 +251,11 @@ Mate는 Pi 설치·로그인·모델 관리 화면을 따로 만들지 않는다
 
 ## 11. 자동 업데이트
 
-Mate 릴리스는 같은 저장소에 Latest가 아닌 릴리스로 올라가므로, electron-updater의 GitHub 방식(Latest만 봄)을 쓰지 않는다.
+0.6.4부터 세 앱이 한 릴리스(`vX.Y.Z`)에 함께 올라간다. 그 릴리스의 `latest.yml`은 Pi Desktop 것이므로, Mate는 electron-updater의 GitHub 방식을 쓰지 않고 자기 채널 파일(`mate.yml`)을 generic 방식으로 읽는다.
 
-1. 시작 20초 뒤·6시간마다(설정의 "업데이트 확인"으로도) GitHub 릴리스 목록에서 가장 높은 `mate-vX.Y.Z`를 찾는다 (초안·사전 릴리스, Pi Desktop `v*`·Agent 제외).
-2. 지금보다 높으면 그 릴리스 내려받기 주소를 generic 방식으로 넘겨 `latest.yml`(Windows)·`latest-linux.yml`(AppImage)을 읽는다.
+1. 시작 20초 뒤·6시간마다(설정의 "업데이트 확인"으로도) GitHub 릴리스 목록에서 가장 높은 `vX.Y.Z`를 찾는다 (초안·사전 릴리스, 옛 `agent-v*`·`mate-v*` 제외).
+2. 지금보다 높으면 그 릴리스 내려받기 주소와 채널(`mate`)을 generic 방식으로 넘겨 `mate.yml`(Windows)·`mate-linux.yml`(AppImage)을 읽는다.
+   0.6.3 이하 설치본은 가장 높은 `mate-v*` 릴리스의 `latest.yml`을 보므로, `mate-v0.6.4` 징검다리 릴리스로 0.6.4까지 올라온 뒤 이 방식으로 바뀐다.
 3. Pi Desktop과 같은 확인 흐름: 새 버전 배지 → 업데이트할지 묻기 → 내려받기 → 다시 시작해 설치할지 묻기. 고르기 전에는 내려받지 않는다.
 4. 설치 직전(지금 또는 앱을 끌 때) 실행기를 멈춘다. 다시 시작하면 바뀐 번들의 실행기가 뜬다.
 5. macOS(서명 없음)·deb는 찾은 버전을 알리고 릴리스 페이지를 연다. `latest.yml`이 없는 릴리스(v0.2.0 이전)도 알리기로 대신한다.

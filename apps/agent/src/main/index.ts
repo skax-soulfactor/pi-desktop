@@ -661,7 +661,7 @@ app.whenReady().then(() => {
   connection = connectTo(currentHostId);
   registerIpc(() => connection!);
 
-  // 자동 업데이트 (Pi Desktop Mate와 같은 방식: 가장 높은 agent-v* 릴리스를 generic으로)
+  // 자동 업데이트 (Pi Desktop Mate와 같은 방식: 가장 높은 v* 릴리스의 agent.yml을 generic으로)
   const updater = new Updater((state) => sendToRenderer(IpcChannels.updateStateChanged, state), () => mainWindow);
   ipcMain.handle(IpcChannels.updateState, () => updater.current);
   ipcMain.handle(IpcChannels.checkForUpdates, (_event, interactive?: boolean) => updater.check(interactive === true));

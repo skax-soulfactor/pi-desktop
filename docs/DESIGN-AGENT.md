@@ -23,9 +23,9 @@ Pi Desktop이 "설치된 Pi를 그대로 GUI로 쓰는 앱"이라면, Pi Desktop
 | 데몬 | Pi Desktop과 **같은 Host Agent 코드, 다른 데몬 홈**(`~/.pi-desktop-agent`). 두 앱이 서로의 데몬을 교체하지 않게 한다 |
 | 제품 이름 | Pi Desktop Agent (`@pi-desktop/agent`). 단, Host Agent 실행 파일 이름이 이미 `pi-desktop-agent`이므로 문서·로그에서는 "에이전트 앱"과 "Host Agent"를 구분해 쓴다 |
 | Pi 관리 | 에이전트 앱은 Pi 설치·업데이트·로그인·프로바이더·모델 관리 화면을 두지 않는다. **Pi Desktop이 맡는다** (Mate와 같은 방식). 에이전트는 데몬의 `pi.status`·`pi.models`로 상태를 보여 주고, 문제가 있으면 Pi Desktop을 열거나 Latest 릴리스에서 설치하게 안내한다. 대화 화면에서 바꾸는 모델은 그 대화(세션)에만 적용된다 |
-| Pi Desktop Mate와의 분리 | 같은 저장소의 다른 앱(`apps/mate`, `packages/mate-*`, 별도 세션에서 진행). 폴더·데이터 홈(`~/.pi-desktop-mate`)·개발 포트(Mate 18913, Agent 18912)·태그(`mate-v*`)가 모두 다르다. Agent 작업은 Mate 파일을 고치지 않는다 |
+| Pi Desktop Mate와의 분리 | 같은 저장소의 다른 앱(`apps/mate`, `packages/mate-*`, 별도 세션에서 진행). 폴더·데이터 홈(`~/.pi-desktop-mate`)·개발 포트(Mate 18913, Agent 18912)·태그(0.6.3까지 `mate-v*`)가 모두 다르다. Agent 작업은 Mate 파일을 고치지 않는다 |
 | Pi Desktop과의 분리 | `apps/desktop`은 고치지 않는다 (루트 README는 세 앱 공통 안내라, 앱 구성이 바뀔 때만 고친다). 겹치는 파일은 `package-lock.json`뿐이다. 작업은 별도 worktree(`../pi-desktop-agent`)의 `feat/agent-*` 브랜치에서 한다 |
-| 릴리스 | **이 저장소(pi-desktop)의 GitHub Releases**에 올린다. Pi Desktop의 `v*`, Pi Desktop Mate의 `mate-v*`와 섞지 않고 `agent-v*` 태그와 별도 워크플로(`.github/workflows/release-agent.yml`)를 쓴다. Agent 릴리스는 **Latest로 표시하지 않는다** (Pi Desktop 자동 업데이트가 Latest 릴리스의 latest.yml을 보기 때문). **자동 업데이트(v0.1.2~)**: 앱이 릴리스 목록에서 가장 높은 `agent-v*`를 찾아 그 릴리스의 내려받기 주소를 generic 방식으로 쓴다 (Mate와 같은 방식). 릴리스에 latest.yml·latest-linux.yml·blockmap을 함께 올린다. Windows·AppImage는 내려받아 설치, 서명 없는 macOS·deb는 알리기만 |
+| 릴리스 | **이 저장소(pi-desktop)의 GitHub Releases**에 올린다. **0.6.4부터** 세 앱은 태그 하나(`v*`)·워크플로 하나(`.github/workflows/release.yml`)로 한 릴리스에 함께 올라간다 (규칙: 저장소 CLAUDE.md §3). Agent 자동 업데이트는 그 릴리스의 `agent.yml`을 본다. 아래는 0.6.3까지의 방식이다: Pi Desktop의 `v*`, Pi Desktop Mate의 `mate-v*`와 섞지 않고 `agent-v*` 태그와 별도 워크플로(`.github/workflows/release-agent.yml`)를 쓴다. Agent 릴리스는 **Latest로 표시하지 않는다** (Pi Desktop 자동 업데이트가 Latest 릴리스의 latest.yml을 보기 때문). **자동 업데이트(v0.1.2~)**: 앱이 릴리스 목록에서 가장 높은 `agent-v*`를 찾아 그 릴리스의 내려받기 주소를 generic 방식으로 쓴다 (Mate와 같은 방식). 릴리스에 latest.yml·latest-linux.yml·blockmap을 함께 올린다. Windows·AppImage는 내려받아 설치, 서명 없는 macOS·deb는 알리기만 |
 | 기존 desktop-agent | 자동 업데이트로 배포된 상태라 그 저장소에서 갈아엎지 않는다. 기능 목록과 설계 근거를 참고하는 용도로만 남긴다 |
 
 ## 1. 핵심 원칙
