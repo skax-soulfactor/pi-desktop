@@ -226,6 +226,11 @@ export class BrowserWindow {
   isFocused = () => hub.anyVisible();
   isVisible = () => true;
   isMinimized = () => false;
+  // 창 크기 기억(window-state)은 웹에서 할 일이 없다: 크기는 브라우저가 정한다
+  isMaximized = () => false;
+  isFullScreen = () => false;
+  maximize = () => {};
+  getNormalBounds = () => ({ x: 0, y: 0, width: 0, height: 0 });
   restore = () => {};
   focus = () => {};
   show = () => {};
@@ -236,6 +241,13 @@ export class BrowserWindow {
     this.destroyed = true;
   };
 }
+
+// ── screen ───────────────────────────────────────────────────────────
+
+/** 화면 정보는 웹에서 쓸 일이 없다. 화면이 없으면 창 크기는 기본값을 쓴다 */
+export const screen = {
+  getAllDisplays: (): Array<{ workArea: { x: number; y: number; width: number; height: number } }> => [],
+};
 
 // ── dialog ───────────────────────────────────────────────────────────
 
@@ -460,5 +472,5 @@ export const safeStorage = {
   },
 };
 
-const electron = { app, ipcMain, BrowserWindow, dialog, shell, Menu, Notification, net, nativeTheme, safeStorage };
+const electron = { app, ipcMain, BrowserWindow, screen, dialog, shell, Menu, Notification, net, nativeTheme, safeStorage };
 export default electron;
