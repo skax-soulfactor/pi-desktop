@@ -81,11 +81,12 @@ CI 작업 이름(`.github/workflows/ci.yml`의 매트릭스)을 바꾸면 룰셋
 
 | 앱 | 태그 | 워크플로 | Latest 표시 |
 |---|---|---|---|
-| Pi Desktop | `v*` (예: `v0.1.18`) | `.github/workflows/release.yml` | 한다 (자동 업데이트가 Latest의 latest.yml을 봄) |
+| Pi Desktop (+ 웹 묶음) | `v*` (예: `v0.6.0`) | `.github/workflows/release.yml` | 한다 (자동 업데이트가 Latest의 latest.yml을 봄) |
 | Pi Desktop Agent | `agent-v*` | `.github/workflows/release-agent.yml` | 하지 않는다 |
 | Pi Desktop Mate | `mate-v*` | `.github/workflows/mate-release.yml` | 하지 않는다 |
 
-- 지난 태그 이후 바뀐 경로로 릴리스할 앱을 고른다. 문서만 바뀌었으면 릴리스하지 않는다.
-- 같은 앱의 릴리스를 겹쳐 돌리지 않는다. 앞 빌드가 끝난 뒤 다음 태그를 붙인다.
-- 태그는 주석 태그로 붙인다: `git tag -a mate-v0.5.2 -m "Pi Desktop Mate v0.5.2"`.
+- **세 앱은 같은 버전 번호로 함께 릴리스한다** (0.6.0부터). 세 태그를 같은 번호로 붙이고, 한 앱만 바뀌었어도 함께 낸다. 자세한 규칙은 저장소 [CLAUDE.md](../CLAUDE.md) §3.
+- 문서만 바뀌었으면 릴리스하지 않는다.
+- 릴리스를 겹쳐 돌리지 않는다. 세 빌드가 끝난 뒤 다음 번호를 붙인다.
+- 태그는 주석 태그로 붙인다: `git tag -a mate-v0.6.0 -m "Pi Desktop Mate v0.6.0"`.
 - Actions 탭에서 워크플로를 손으로 돌리면 만들기만 하고 올리지 않는다 (릴리스 전 미리 확인).
