@@ -77,16 +77,18 @@ CI 작업 이름(`.github/workflows/ci.yml`의 매트릭스)을 바꾸면 룰셋
 
 ## 6. 릴리스
 
-세 앱은 같은 저장소의 GitHub Releases에 올리되 태그와 워크플로를 나눈다.
+0.6.4부터 세 앱과 웹 묶음을 **태그 하나(`v*`, 예: `v0.6.4`), 워크플로 하나(`.github/workflows/release.yml`), 릴리스 하나**로 올린다. 그 릴리스가 Latest다.
 
-| 앱 | 태그 | 워크플로 | Latest 표시 |
-|---|---|---|---|
-| Pi Desktop (+ 웹 묶음) | `v*` (예: `v0.6.0`) | `.github/workflows/release.yml` | 한다 (자동 업데이트가 Latest의 latest.yml을 봄) |
-| Pi Desktop Agent | `agent-v*` | `.github/workflows/release-agent.yml` | 하지 않는다 |
-| Pi Desktop Mate | `mate-v*` | `.github/workflows/mate-release.yml` | 하지 않는다 |
+| 앱 | 설치 파일 이름 | 자동 업데이트 정보 파일 |
+|---|---|---|
+| Pi Desktop (+ 웹 묶음) | `Pi-Desktop-*` | `latest.yml`·`latest-mac.yml`·`latest-linux.yml` (Latest 릴리스를 봄) |
+| Pi Desktop Agent | `Pi-Desktop-Agent-*` | `agent.yml`·`agent-mac.yml`·`agent-linux.yml` |
+| Pi Desktop Mate | `Pi-Desktop-Mate-*` | `mate.yml`·`mate-mac.yml`·`mate-linux.yml` |
 
-- **세 앱은 같은 버전 번호로 함께 릴리스한다** (0.6.0부터). 세 태그를 같은 번호로 붙이고, 한 앱만 바뀌었어도 함께 낸다. 자세한 규칙은 저장소 [CLAUDE.md](../CLAUDE.md) §3.
+0.6.3까지는 앱마다 태그(`v*`·`agent-v*`·`mate-v*`)와 릴리스가 따로 있었다. `agent-v0.6.4`·`mate-v0.6.4`는 옛 설치본이 0.6.4로 올라오는 징검다리 릴리스이므로 지우지 않는다.
+
+- **세 앱은 같은 버전 번호로 함께 릴리스한다** (0.6.0부터). 한 앱만 바뀌었어도 함께 낸다. 자세한 규칙은 저장소 [CLAUDE.md](../CLAUDE.md) §3.
 - 문서만 바뀌었으면 릴리스하지 않는다.
-- 릴리스를 겹쳐 돌리지 않는다. 세 빌드가 끝난 뒤 다음 번호를 붙인다.
-- 태그는 주석 태그로 붙인다: `git tag -a mate-v0.6.0 -m "Pi Desktop Mate v0.6.0"`.
+- 릴리스를 겹쳐 돌리지 않는다. 앞 빌드가 끝난 뒤 다음 번호를 붙인다.
+- 태그는 주석 태그로 붙인다: `git tag -a v0.6.4 -m "Pi Desktop v0.6.4"`.
 - Actions 탭에서 워크플로를 손으로 돌리면 만들기만 하고 올리지 않는다 (릴리스 전 미리 확인).
