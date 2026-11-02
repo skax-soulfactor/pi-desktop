@@ -1,6 +1,9 @@
 import { bootWebApp } from "@pi-desktop/web-shell/client";
 import { setupCompactHeader } from "@pi-desktop/web-shell/compact-header";
 
+// 휴대폰 웹 버전임을 화면 코드에 알린다. 휴대폰 전용 동작은 이 표시가 있을 때만 켠다 (clipboard-images.ts의 isWebClient, CSS의 :root[data-client="web"])
+document.documentElement.dataset.client = "web";
+
 /**
  * Pi Desktop Agent 웹 화면의 시작점 (설계 DESIGN.md §5.11).
  * 연결이 열리면 Agent의 preload(window.piAgent를 둔다)와 화면을 그대로 불러온다. "electron"은 web-shell 대체 모듈로 묶인다.

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } 
 import { ChatView } from "../vendor/renderer/ChatView";
 import { StatusLine, Widgets } from "../vendor/renderer/ExtensionUi";
 import { acceptsImages, MAX_IMAGE_BYTES, splitAttachments, withAttachments } from "./attachments";
-import { canReadClipboard, enterHint, isSendKey, readBase64, readClipboardImages, transferFiles, useDraftImages, useSharedImages, submitOnEnterUp } from "./clipboard-images";
+import { canReadClipboard, enterHint, isSendKey, readBase64, readClipboardImages, transferFiles, useDraftImages, useSharedImages, submitOnEnterUp, isWebClient } from "./clipboard-images";
 import { ImagePasteBox } from "./ImagePasteBox";
 import { ComposerGrip, useComposerSize } from "./composer-size";
 import type { ImageAttachment } from "../shared/api";
@@ -158,6 +158,17 @@ export function ChatPage({
    * 브라우저가 클립보드를 읽게 해 주면 거기 있는 이미지는 바로 붙이고 칸을 닫는다
    */
   const pasteFromClipboard = async () => {
+    // 데스크톱 앱은 클립보드를 바로 읽는다. 붙여넣기 칸은 휴대폰 웹 버전에서만 연다
+    if (!isWebClient()) {
+      try {
+        const files = await readClipboardImages();
+        if (files.length === 0) return setAttachNote("클립보드에 이미지가 없습니다");
+        addImageFiles(files);
+      } catch (error) {
+        setAttachNote((error as Error).message);
+      }
+      return;
+    }
     setPasteBox(true);
     if (!canReadClipboard()) return;
     const files = await readClipboardImages().catch(() => []);

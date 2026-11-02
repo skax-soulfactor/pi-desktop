@@ -141,9 +141,18 @@ export function useDraftImages<T extends { data: string }>(key: string | undefin
   }, [key, images]);
 }
 
-/** 휴대폰처럼 터치가 주 입력인 화면인지. 그런 화면은 Shift를 누르기 어려워 Enter를 줄바꿈으로 쓴다 */
+/**
+ * 휴대폰 브라우저용 웹 버전(pi-web)에서 도는지. 웹 진입점이 `<html data-client="web">`을 붙인다.
+ * Electron 앱에서는 늘 false다. 휴대폰 전용 동작(Enter 줄바꿈, 붙여넣기 칸, 늘 보이는 줄 단추)은 이것이 true일 때만 켠다.
+ * 터치 노트북·S펜 기기도 `pointer: coarse`라서, 터치 판정만으로 켜면 데스크톱 앱의 동작까지 바뀐다.
+ */
+export function isWebClient(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.client === "web";
+}
+
+/** 휴대폰 웹 버전에서 터치가 주 입력인 화면인지. 그런 화면은 Shift를 누르기 어려워 Enter를 줄바꿈으로 쓴다 */
 export function touchTyping(): boolean {
-  return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  return isWebClient() && typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 }
 
 /**

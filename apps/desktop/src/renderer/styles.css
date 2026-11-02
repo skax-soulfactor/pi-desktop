@@ -3903,11 +3903,12 @@ details > summary.settings-section {
 
 /* 터치 화면(마우스 오버가 없거나 손가락이 주 입력. S펜 기기는 hover가 있다고 알린다): 세션 줄의 ✎·🗑·📦·✕와 트리의 분기 단추를 늘 보이고, 손가락으로 누르기 좋게 키운다.
    단추가 이름·시각 글자를 가리지 않게 줄 오른쪽을 비운다 */
+/* 휴대폰 웹 버전에서만: 터치 화면은 마우스를 올릴 수 없어 줄 단추를 늘 보인다. Electron 앱(터치 노트북 포함)에는 적용하지 않는다 */
 @media (hover: none), (pointer: coarse) {
-  .rename-button,
-  .close-session-button,
-  .delete-session-button,
-  .archive-session-button {
+  :root[data-client="web"] .rename-button,
+  :root[data-client="web"] .close-session-button,
+  :root[data-client="web"] .delete-session-button,
+  :root[data-client="web"] .archive-session-button {
     opacity: 1;
     top: 50%;
     transform: translateY(-50%);
@@ -3916,28 +3917,28 @@ details > summary.settings-section {
     padding: 0 6px;
     font-size: 14px;
   }
-  .close-session-button {
+  :root[data-client="web"] .close-session-button {
     right: 2px;
   }
-  .delete-session-button {
+  :root[data-client="web"] .delete-session-button {
     right: 34px;
   }
-  .rename-button {
+  :root[data-client="web"] .rename-button {
     right: 66px;
   }
-  .history-row .delete-session-button {
+  :root[data-client="web"] .history-row .delete-session-button {
     right: 2px;
   }
-  .archive-session-button {
+  :root[data-client="web"] .archive-session-button {
     right: 34px;
   }
-  .session-row .session-item {
+  :root[data-client="web"] .session-row .session-item {
     padding-right: 100px;
   }
-  .history-row .session-item {
+  :root[data-client="web"] .history-row .session-item {
     padding-right: 68px;
   }
-  .tree-fork {
+  :root[data-client="web"] .tree-fork {
     visibility: visible;
   }
 }

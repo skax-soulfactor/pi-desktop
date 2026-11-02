@@ -10,6 +10,9 @@ import "@pi-desktop/web-shell/client.css";
 import "../renderer/styles.css";
 import "./web.css";
 
+// 휴대폰 웹 버전임을 화면 코드에 알린다. 휴대폰 전용 동작은 이 표시가 있을 때만 켠다 (clipboard-images.ts의 isWebClient, CSS의 :root[data-client="web"])
+document.documentElement.dataset.client = "web";
+
 /**
  * 웹(pi-web) 화면의 시작점 (설계 §5.10). 데스크톱 앱의 preload 자리를 맡는다.
  *
