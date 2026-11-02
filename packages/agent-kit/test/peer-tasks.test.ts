@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { createServer, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -20,6 +20,7 @@ import {
   taskView,
 } from "../extensions/peers/tasks";
 import { loadTasks, saveTask, tasksDir, type TaskRecord } from "../extensions/tasks/store";
+import { WORKER_LOG_ENV } from "../extensions/tasks/worker";
 import { startPi, type RpcPi, type RpcRecord } from "./helpers/rpc-pi";
 import { startScriptLlm, type ScriptLlm } from "./helpers/script-llm";
 
@@ -154,8 +155,16 @@ describe("피어 작업 맡기기 (실제 Pi)", () => {
 
   it("받는 쪽 스케줄러: 승인된 작업만 폴더에 갇힌 워커로 돌리고, 폴더 밖 읽기는 막는다", async () => {
     const env = await pair(false);
+    // 워커가 끝을 알리지 않고 멈추면 어디까지 갔는지 실패 메시지에 보인다 (CI windows / Node 22에서 가끔 생김)
+    const workerLog = join(mkdtempSync(join(tmpdir(), "ptask-log-")), "worker.log");
     const { pi, dataDir } = await startPi(llm.baseUrl, {
-      env: { PI_DESKTOP_AGENT_SCHEDULER: "1", PI_DESKTOP_AGENT_UNATTENDED: "1", PI_DESKTOP_AGENT_PEER_SYNC_MS: "200", PI_DESKTOP_AGENT_SCHEDULER_TICK_MS: "60000" },
+      env: {
+        PI_DESKTOP_AGENT_SCHEDULER: "1",
+        PI_DESKTOP_AGENT_UNATTENDED: "1",
+        PI_DESKTOP_AGENT_PEER_SYNC_MS: "200",
+        PI_DESKTOP_AGENT_SCHEDULER_TICK_MS: "60000",
+        [WORKER_LOG_ENV]: workerLog,
+      },
     });
     started.push(pi);
     // 스케줄러 Pi의 데이터 폴더를 B로 꾸민다
@@ -195,7 +204,8 @@ describe("피어 작업 맡기기 (실제 Pi)", () => {
       last = { ...(mine ? { mine } : {}), theirs: (await tasksOf(dataDir))[0] };
       if (mine?.status === "done") finished = mine;
     }
-    expect(finished, `끝나지 않음: ${JSON.stringify(last)}`).toMatchObject({ status: "done", result: "결과: 안의 내용을 읽었다" });
+    const logTail = () => (existsSync(workerLog) ? readFileSync(workerLog, "utf8").split("\n").slice(-40).join("\n") : "(워커 기록 없음)");
+    expect(finished, `끝나지 않음: ${JSON.stringify(last)}\n워커 기록:\n${logTail()}`).toMatchObject({ status: "done", result: "결과: 안의 내용을 읽었다" });
     // 같은 승인 작업에 워커를 한 번만 띄운다 (주기 동기화가 겹쳐도)
     expect((await tasksOf(dataDir)).filter((t) => t.origin === "peer-in")).toHaveLength(1);
     const audit = readFileSync(join(dataDir, "audit.jsonl"), "utf8");
