@@ -19,7 +19,6 @@
     "dist": "npm run build -w @pi-desktop/host-agent && electron-vite build && electron-builder --config electron-builder.yml --publish never"
   },
   "dependencies": {
-    "@pi-desktop/pi-resources": "*",
     "electron-updater": "^6.8.9"
   },
   "devDependencies": {
@@ -27,6 +26,7 @@
     "@pi-desktop/host-deploy": "*",
     "@pi-desktop/host-protocol": "*",
     "@pi-desktop/pi-isolation": "*",
+    "@pi-desktop/pi-resources": "*",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
