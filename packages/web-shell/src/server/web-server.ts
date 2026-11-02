@@ -1,19 +1,15 @@
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
-import { createServer, type IncomingMessage, type Server } from "node:http";
+import type { Server } from "node:http";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { writeFileSync } from "node:fs";
-import { WebSocketServer } from "ws";
 import { clickMenu, clickNotification, hub, onBackgroundNotify } from "../electron/main";
-import { CLICK_OPEN, SERVICE_WORKER_PATH, ShellChannels, WebPaths, type DirEntry, type DirListing } from "../protocol";
+import { CLICK_OPEN, ShellChannels, type DirEntry, type DirListing } from "../protocol";
+import { listenWebServer } from "./http-server";
 import { PushCenter } from "./push";
-import { SERVICE_WORKER_SOURCE } from "./service-worker";
-import { bearerToken, isLoopbackAddress, loadOrCreateToken, requestAllowed, tokenMatches } from "./auth";
-import { serveStatic } from "./static-files";
-import { handleShareRequest } from "./share-inbox";
 
 export { hub };
 export { bearerToken, isLoopbackAddress, loadOrCreateToken, requestAllowed, tokenMatches } from "./auth";
+export { listenWebServer, type HttpServerOptions, type RunningServer } from "./http-server";
 
 export interface WebServerOptions {
   /** 화면에 보일 이름 (hello) */
@@ -35,92 +31,37 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
  * 앱 main 코드는 electron 대체 모듈(electron/main.ts)로 hub에 처리기를 건다.
  * 서버가 뜨면 토큰이 든 주소를 dataDir/url에 쓴다 (실행 명령이 읽어 보여 준다).
  */
-export function startWebServer(options: WebServerOptions): Promise<{ server: Server; url: string; close: () => void }> {
-  const token = loadOrCreateToken(join(options.dataDir, "token"));
-  const loopbackOnly = isLoopbackAddress(options.host);
-  const allowed = (req: IncomingMessage) => requestAllowed({ host: req.headers.host, origin: req.headers.origin }, loopbackOnly);
+export async function startWebServer(options: WebServerOptions): Promise<{ server: Server; url: string; close: () => void }> {
   registerShellHandlers(options.dataDir);
   const push = new PushCenter(options.dataDir);
   registerPush(push, options.app);
 
-  const server = createServer((req, res) => {
-    // 다른 앱이 보낸 공유는 Origin이 이 서버가 아니므로 주소(Host)만 본다
-    if (handleShareRequest(req, res, requestAllowed({ host: req.headers.host }, loopbackOnly))) return;
-    if (!allowed(req)) {
-      res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" }).end("허용하지 않는 주소입니다");
-      return;
-    }
-    if (req.url?.split("?")[0] === SERVICE_WORKER_PATH) {
-      // 서비스 워커는 사이트 전체(/)를 맡는다. 바뀌면 바로 새것을 쓰도록 캐시하지 않는다
-      res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "Service-Worker-Allowed": "/" });
-      res.end(SERVICE_WORKER_SOURCE);
-      return;
-    }
-    if (req.url?.split("?")[0] === WebPaths.auth) {
-      const ok = tokenMatches(token, bearerToken(req.headers.authorization));
-      res.writeHead(ok ? 200 : 401, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-      res.end(JSON.stringify(ok ? { ok: true, app: options.app, version: options.version } : { ok: false }));
-      return;
-    }
-    void serveStatic(options.publicDir, req, res).catch(() => {
-      if (!res.headersSent) res.writeHead(500).end();
-    });
-  });
-
-  // 이미지·파일 올리기가 base64로 한 메시지에 담기므로 넉넉히 받는다
-  const sockets = new WebSocketServer({ noServer: true, maxPayload: 100 * 1024 * 1024 });
-  server.on("upgrade", (req, socket, head) => {
-    const url = new URL(req.url ?? "/", "http://localhost");
-    const clientId = url.searchParams.get("client") ?? "";
-    const last = Number(url.searchParams.get("last") ?? "0");
-    if (
-      url.pathname !== WebPaths.socket ||
-      !allowed(req) ||
-      !tokenMatches(token, url.searchParams.get("token")) ||
-      !/^[\w-]{8,64}$/.test(clientId) ||
-      !Number.isInteger(last) ||
-      last < 0
-    ) {
-      socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
-      return;
-    }
-    sockets.handleUpgrade(req, socket, head, (ws) => {
-      let alive = true;
-      ws.on("pong", () => (alive = true));
-      // 휴대폰 브라우저가 백그라운드로 가면 연결이 말없이 끊긴다. 응답 없는 연결은 정리한다 (세션은 남는다)
-      const timer = setInterval(() => {
-        if (!alive) return void ws.terminate();
-        alive = false;
-        ws.ping();
-      }, 30_000);
-      ws.once("close", () => clearInterval(timer));
+  const running = await listenWebServer({
+    ...options,
+    // 이미지·파일 올리기가 base64로 한 메시지에 담기므로 넉넉히 받는다
+    maxPayload: 100 * 1024 * 1024,
+    accept: (url) => {
+      const last = Number(url.searchParams.get("last") ?? "0");
+      return /^[\w-]{8,64}$/.test(url.searchParams.get("client") ?? "") && Number.isInteger(last) && last >= 0;
+    },
+    connect: (ws, url) => {
+      // 끊긴 탭이 다시 붙으면 같은 세션을 이어 놓친 것을 받는다 (세션은 연결이 끊겨도 남는다)
+      const clientId = url.searchParams.get("client") ?? "";
+      const last = Number(url.searchParams.get("last") ?? "0");
       const { session, resumed } = hub.sessions.open(clientId, last);
       session.attach(ws, { t: "hello", resumed, app: options.app, version: options.version }, last);
       hub.attached(session, resumed);
-    });
+    },
   });
-
-  return new Promise((resolvePromise, reject) => {
-    server.once("error", (error: NodeJS.ErrnoException) =>
-      reject(error.code === "EADDRINUSE" ? new Error(`포트 ${options.port}를 이미 쓰고 있습니다. --port로 다른 포트를 고르세요.`) : error),
-    );
-    server.listen(options.port, options.host, () => {
-      const shown = options.host === "0.0.0.0" || options.host === "::" ? "127.0.0.1" : options.host.includes(":") ? `[${options.host}]` : options.host;
-      const url = `http://${shown}:${options.port}/#token=${token}`;
-      writeFileSync(join(options.dataDir, "url"), `${url}\n`, { mode: 0o600 });
-      const sweeper = setInterval(() => hub.sessions.sweep(), 60_000);
-      sweeper.unref();
-      resolvePromise({
-        server,
-        url,
-        close: () => {
-          clearInterval(sweeper);
-          sockets.close();
-          server.close();
-        },
-      });
-    });
-  });
+  const sweeper = setInterval(() => hub.sessions.sweep(), 60_000);
+  sweeper.unref();
+  return {
+    ...running,
+    close: () => {
+      clearInterval(sweeper);
+      running.close();
+    },
+  };
 }
 
 /**

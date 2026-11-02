@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { dirname } from "node:path";
 
 /**
- * 웹 서버의 접근 확인 (설계 DESIGN.md §5.10 "보안", apps/desktop/src/server/auth.ts와 같다).
+ * 웹 서버의 접근 확인 (설계 DESIGN.md §5.10 "보안"). Pi Desktop·Agent·Mate 웹 서버가 함께 쓴다 (http-server.ts).
  *
  * 이 서버는 데스크톱 앱의 main 프로세스와 같은 힘을 가진다(명령 실행, 파일 쓰기). 그래서
  * - 토큰: 처음 실행할 때 만들어 데이터 폴더에 0600으로 둔다. WebSocket과 /api/auth는 이 토큰이 있어야 한다.
