@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import type { PendingQueue, RetryState } from "./chat-state";
 import { secondsLeft } from "./run-status";
 
-/** Steer·Follow-up으로 보내 두고 Pi가 아직 처리하지 않은 메시지. 입력창 바로 위에 보인다 */
+/** 끼어들기(steer)·끝나면 보내기(follow-up)로 보내 두고 Pi가 아직 처리하지 않은 메시지. 입력창 바로 위에 보인다 */
 export function QueuePanel({ queue, onClear }: { queue: PendingQueue; onClear: () => void }) {
   const entries = [
-    ...queue.steering.map((text) => ({ kind: "Steer", text })),
-    ...queue.followUp.map((text) => ({ kind: "Follow-up", text })),
+    ...queue.steering.map((text) => ({ kind: "끼어들기", text })),
+    ...queue.followUp.map((text) => ({ kind: "끝나면", text })),
   ];
   if (entries.length === 0) return null;
   return (
@@ -20,7 +20,7 @@ export function QueuePanel({ queue, onClear }: { queue: PendingQueue; onClear: (
       <ul>
         {entries.map((entry, i) => (
           <li key={i}>
-            <span className={`queue-kind ${entry.kind === "Steer" ? "steer" : "follow"}`}>{entry.kind}</span>
+            <span className={`queue-kind ${entry.kind === "끼어들기" ? "steer" : "follow"}`}>{entry.kind}</span>
             <span className="queue-text">{entry.text}</span>
           </li>
         ))}

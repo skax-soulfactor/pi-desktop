@@ -589,36 +589,71 @@ code.copy {
   font-size: 13px;
 }
 .chat-input {
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid var(--border);
   padding-top: 8px;
 }
-.chat-row {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-.chat-row textarea {
-  flex: 1;
-  resize: none;
-  font: inherit;
-  padding: 8px;
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-.chat-buttons {
+/* 입력 상자: 글 칸과 버튼 줄을 한 테두리 안에 담는다 (Pi Desktop·Agent와 같은 모양) */
+.composer-box {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
 }
-/* 클립보드 이미지·이미지 고르기 */
-.image-buttons {
+.composer-box:focus-within {
+  border-color: var(--accent);
+}
+/* 글 칸은 테두리 없이 상자를 채운다 */
+.composer-box textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  overflow-y: auto;
+  font: inherit;
+  padding: 4px 2px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+}
+/* 상자 아래 한 줄: 왼쪽 첨부·대화 정리, 오른쪽 보내기 */
+.composer-bar {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
 }
-.image-buttons button {
-  flex: 1;
+.composer-tools,
+.composer-send {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.composer-send {
+  margin-left: auto;
+}
+/* 첨부 같은 보조 버튼은 테두리 없이 */
+.tool-button {
+  border-color: transparent;
+  background: transparent;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.tool-button:hover:not(:disabled) {
+  background: var(--panel);
+}
+.tool-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--border);
 }
 .chat-images {
   display: flex;
@@ -991,20 +1026,6 @@ code.copy {
   white-space: nowrap;
 }
 
-/* 입력창 칸: 손잡이 + 글 칸 (글에 맞춰 늘어남) */
-.composer-field {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.composer-field textarea {
-  width: 100%;
-  box-sizing: border-box;
-  overflow-y: auto;
-}
-
 /* 입력창 높이: 글에 맞춰 늘어나고, 위 손잡이로 직접 조절한다 (composer-size.tsx) */
 .composer-grip {
   align-self: center;
@@ -1031,6 +1052,6 @@ code.copy {
 }
 
 /* 세로로 쌓인 칸 안에서는 flex가 높이를 정하지 않게 한다 (글에 맞춘 높이를 쓴다) */
-.composer-field textarea {
+.composer-box textarea {
   flex: none;
 }

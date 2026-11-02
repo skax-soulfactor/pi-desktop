@@ -9,7 +9,7 @@ P1에서 복사로 바꿨다. 공용 패키지로 옮기는 방식은 Pi Desktop
 | 폴더 | 원본 |
 |---|---|
 | `main/` | `apps/desktop/src/main/` — host-connection, agent-build, reconnect-policy, node-runtime, replay-collector, dev-overrides. 원격 배포(remote-agent·wsl·ssh·ssh-hosts)는 D5-2에서 공용 패키지 `packages/host-deploy`로 옮겼다 |
-| `renderer/` | `apps/desktop/src/renderer/` — chat-state, ChatView, ToolCards, tool-view, ExtensionUi, extension-ui-state, run-status, format, markdown/, styles.css. D3에서 FolderBrowser, folder-browser를 더 가져왔다 (출처 `ade26d1`) |
+| `renderer/` | `apps/desktop/src/renderer/` — chat-state, ChatView, ToolCards, tool-view, ExtensionUi, extension-ui-state, run-status, RunStatus(대기열 표시), format, markdown/, styles.css. D3에서 FolderBrowser, folder-browser를 더 가져왔다 (출처 `ade26d1`) |
 | `shared/api.ts` | `apps/desktop/src/shared/api.ts`의 `ConnectionState`만 (`SshHostConfig`는 host-deploy) |
 
 규칙

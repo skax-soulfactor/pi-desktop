@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { formatBytes, parseDataUrl, rejectReason, toDataUrl, type ImageAttachment } from "./attachments";
-import { canReadClipboard, enterHint, isSendKey, readClipboardImages, transferFiles, useDraftImages, useSharedImages, isWebClient } from "./clipboard-images";
+import {
+  canReadClipboard,
+  enterHint,
+  isSendKey,
+  isWebClient,
+  readClipboardImages,
+  touchTyping,
+  transferFiles,
+  useDraftImages,
+  useSharedImages,
+} from "./clipboard-images";
 import { ImagePasteBox } from "./ImagePasteBox";
 import { ComposerGrip, useComposerSize } from "./composer-size";
 import {
@@ -20,6 +30,16 @@ import {
 const HISTORY_KEY = "pi-desktop.inputHistory";
 
 const SOURCE_LABELS: Record<string, string> = { prompt: "프롬프트", skill: "스킬", extension: "확장" };
+
+/** Pi의 steer: 지금 하던 도구 호출이 끝나면 바로 전달한다 (남은 도구 호출은 건너뛴다) */
+const STEER_TITLE = "끼어들기 (Alt+Enter): 지금 하던 도구 호출이 끝나는 대로 바로 전달합니다";
+/** Pi의 follow-up: 지금 작업이 모두 끝난 뒤에 보낸다 */
+const FOLLOW_UP_TITLE = "끝나면 보내기 (Enter): 지금 작업이 모두 끝난 뒤에 이어서 보냅니다";
+
+/** 실행 중 입력창 아래 안내. 휴대폰은 키 설명 대신 버튼을 가리킨다 */
+function runningHint(): string {
+  return touchTyping() ? "처리 중 · 보낼 말을 쓰면 끼어들기·끝나면 보내기 중 고를 수 있습니다" : "처리 중 · Enter 끝나면 보내기 · Alt+Enter 끼어들기";
+}
 
 interface ComposerProps {
   value: string;
@@ -49,7 +69,7 @@ interface ComposerProps {
 
 /**
  * 입력창 (설계 §4.1).
- * - Enter 보내기, Shift+Enter 줄바꿈. 실행 중 Enter는 Follow-up
+ * - Enter 보내기, Shift+Enter 줄바꿈. 실행 중 Enter는 끝나면 보내기(follow-up), Alt+Enter는 끼어들기(steer)
  * - `!명령`·`!!명령`은 셸 명령 (`!!`는 결과를 컨텍스트에 넣지 않음)
  * - ↑·↓로 이전에 보낸 입력 불러오기 (모든 탭·세션 공통)
  * - `/`로 시작하면 Pi 명령(프롬프트 템플릿, 스킬, 확장 명령) 자동완성
@@ -265,7 +285,7 @@ export function Composer(props: ComposerProps) {
     // PC는 Enter로 보내고, 휴대폰은 Enter가 줄바꿈이다 (보내기 버튼·Ctrl+Enter로 보낸다)
     if (isSendKey(e.nativeEvent)) {
       e.preventDefault();
-      submit(running ? "followUp" : undefined);
+      submit(running ? (e.altKey ? "steer" : "followUp") : undefined);
       return;
     }
     if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
@@ -322,6 +342,7 @@ export function Composer(props: ComposerProps) {
           <li className="suggestion-loading">파일 찾는 중…</li>
         </ul>
       )}
+      <ComposerGrip {...gripProps} />
       <div className="composer-input">
         {(images.length > 0 || attachError) && (
           <div className="attachments">
@@ -353,7 +374,6 @@ export function Composer(props: ComposerProps) {
           onClose={() => setPasteBox(false)}
         />
       )}
-      <ComposerGrip {...gripProps} />
       <textarea
         ref={textarea}
         placeholder={enterHint(placeholder)}
@@ -370,13 +390,13 @@ export function Composer(props: ComposerProps) {
         rows={3}
         aria-autocomplete="list"
       />
-      </div>
-      <div className="actions">
-        <div className="image-buttons">
-          <button type="button" className="image-button" disabled={disabled} onClick={() => void pasteFromClipboard()} title="클립보드의 이미지 붙이기" aria-label="클립보드의 이미지 붙이기">
+      {/* 입력 상자 아래 한 줄: 왼쪽은 첨부, 오른쪽은 보내기 (실행 중이면 끼어들기·끝나면 보내기·중단) */}
+      <div className="composer-bar">
+        <div className="composer-tools">
+          <button type="button" className="tool-button" disabled={disabled} onClick={() => void pasteFromClipboard()} title="클립보드의 이미지 붙이기" aria-label="클립보드의 이미지 붙이기">
             📋
           </button>
-          <button type="button" className="image-button" disabled={disabled} onClick={() => imageInput.current?.click()} title="이미지 고르기" aria-label="이미지 고르기">
+          <button type="button" className="tool-button" disabled={disabled} onClick={() => imageInput.current?.click()} title="이미지 고르기" aria-label="이미지 고르기">
             🖼
           </button>
           <input
@@ -392,31 +412,37 @@ export function Composer(props: ComposerProps) {
             }}
           />
         </div>
-        {running && parsed.kind !== "bash" ? (
-          <>
-            <button type="button" disabled={parsed.kind === "empty"} onClick={() => submit("steer")} title="현재 턴이 끝나면 바로 끼워 넣기">
-              Steer
+        {running && <span className="composer-hint">{runningHint()}</span>}
+        <div className="composer-send">
+          {running && parsed.kind !== "bash" ? (
+            parsed.kind !== "empty" && (
+              <>
+                <button type="button" onClick={() => submit("steer")} title={STEER_TITLE}>
+                  끼어들기
+                </button>
+                <button type="button" className="primary" onClick={() => submit("followUp")} title={FOLLOW_UP_TITLE}>
+                  끝나면 보내기
+                </button>
+              </>
+            )
+          ) : (
+            <button
+              type="button"
+              className="primary"
+              disabled={disabled || parsed.kind === "empty"}
+              onClick={() => submit()}
+              title={parsed.kind === "bash" ? "셸 명령 실행" : undefined}
+            >
+              {parsed.kind === "bash" ? "실행" : "보내기"}
             </button>
-            <button type="button" disabled={parsed.kind === "empty"} onClick={() => submit("followUp")} title="작업이 모두 끝난 뒤 보내기">
-              Follow-up
+          )}
+          {running && (
+            <button type="button" className="danger" onClick={onAbort} title="작업을 멈춥니다. 대기 중인 메시지는 입력창으로 돌아옵니다">
+              ■ 중단
             </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="primary"
-            disabled={disabled || parsed.kind === "empty"}
-            onClick={() => submit()}
-            title={parsed.kind === "bash" ? "셸 명령 실행" : undefined}
-          >
-            {parsed.kind === "bash" ? "실행" : "보내기"}
-          </button>
-        )}
-        {running && (
-          <button type="button" className="danger" onClick={onAbort}>
-            중단
-          </button>
-        )}
+          )}
+        </div>
+      </div>
       </div>
     </footer>
   );

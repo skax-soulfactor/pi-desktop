@@ -2,7 +2,19 @@ import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } 
 import { ChatView } from "../vendor/renderer/ChatView";
 import { StatusLine, Widgets } from "../vendor/renderer/ExtensionUi";
 import { acceptsImages, MAX_IMAGE_BYTES, splitAttachments, withAttachments } from "./attachments";
-import { canReadClipboard, enterHint, isSendKey, readBase64, readClipboardImages, transferFiles, useDraftImages, useSharedImages, submitOnEnterUp, isWebClient } from "./clipboard-images";
+import {
+  canReadClipboard,
+  enterHint,
+  isSendKey,
+  isWebClient,
+  readBase64,
+  readClipboardImages,
+  submitOnEnterUp,
+  touchTyping,
+  transferFiles,
+  useDraftImages,
+  useSharedImages,
+} from "./clipboard-images";
 import { ImagePasteBox } from "./ImagePasteBox";
 import { ComposerGrip, useComposerSize } from "./composer-size";
 import type { ImageAttachment } from "../shared/api";
@@ -10,6 +22,13 @@ import { EXAMPLES } from "./examples";
 import { FolderMenu } from "./FolderMenu";
 import type { SessionStats, useAgentSession } from "./use-agent-session";
 import { formatCost, formatPercent, formatTokens } from "../vendor/renderer/format";
+import { QueuePanel } from "../vendor/renderer/RunStatus";
+import { restoreQueueToDraft } from "../vendor/renderer/run-status";
+
+/** Pi의 steer: 지금 하던 도구 호출이 끝나는 대로 바로 전달한다 */
+const STEER_TITLE = "끼어들기 (Alt+Enter): 지금 하던 도구 호출이 끝나는 대로 바로 전달합니다";
+/** Pi의 follow-up: 지금 작업이 모두 끝난 뒤에 보낸다 */
+const FOLLOW_UP_TITLE = "끝나면 보내기 (Enter): 지금 작업이 모두 끝난 뒤에 이어서 보냅니다";
 
 type Session = ReturnType<typeof useAgentSession>;
 
@@ -99,15 +118,32 @@ export function ChatPage({
       onRenamed();
     });
 
-  const submit = () => {
+  /** 보낸다. 실행 중이면 behavior로 끼어들기(steer)·끝나면 보내기(followUp)를 고른다 */
+  const submit = (behavior?: "steer" | "followUp") => {
     const message = draft.trim() || (images.length > 0 ? "첨부한 이미지를 봐 주세요." : "");
     if (!message || !session) return;
     const sending = images;
     setDraft("");
     setImages([]);
     setAttachNote(undefined);
-    guard(() => agent.send(message, sending));
+    guard(() => agent.send(message, sending, behavior));
   };
+
+  /** 대기 중인 메시지를 취소하고 그 글을 입력창으로 되돌린다 */
+  const clearQueue = () =>
+    guard(async () => {
+      const cleared = await agent.clearQueue();
+      setDraft((prev) => restoreQueueToDraft(cleared, prev));
+    });
+
+  /** 중단. 대기 중이던 메시지는 입력창으로 돌아온다 */
+  const abort = () =>
+    guard(async () => {
+      const cleared = await agent.abort();
+      if (cleared) setDraft((prev) => restoreQueueToDraft(cleared, prev));
+    });
+
+  const hasDraft = Boolean(draft.trim()) || images.length > 0;
 
   /** 고른 파일: 이미지는 볼 수 있는 모델이면 함께 보내고, 나머지는 경로를 적는다 */
   const attach = async (paths: string[]) => {
@@ -179,9 +215,10 @@ export function ChatPage({
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // PC는 Enter로 보내고, 휴대폰은 Enter가 줄바꿈이다 (보내기 버튼·Ctrl+Enter로 보낸다)
+    // 실행 중 Enter는 끝나면 보내기, Alt+Enter는 끼어들기
     if (isSendKey(e.nativeEvent)) {
       e.preventDefault();
-      submit();
+      submit(chat.running ? (e.altKey ? "steer" : "followUp") : undefined);
     }
   };
 
@@ -302,31 +339,33 @@ export function ChatPage({
       )}
 
       <Widgets ui={ui} placement="aboveEditor" />
-      {(images.length > 0 || attachNote) && (
-        <div className="attach-tray">
-          {images.map((image, i) => (
-            <span key={i} className="attach-chip" title={image.name}>
-              <img src={`data:${image.mimeType};base64,${image.data}`} alt={image.name} />
-              <button className="icon-button" title="빼기" onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}>
-                ×
-              </button>
-            </span>
-          ))}
-          {attachNote && <span className="muted small-text">{attachNote}</span>}
-        </div>
-      )}
-      {pasteBox && session && (
-        <ImagePasteBox
-          onFiles={(files) => {
-            setPasteBox(false);
-            addImageFiles(files);
-          }}
-          onClose={() => setPasteBox(false)}
-        />
-      )}
+      <QueuePanel queue={chat.queue} onClear={clearQueue} />
       <div className="composer">
-        <div className="composer-field">
-          <ComposerGrip {...gripProps} />
+        <ComposerGrip {...gripProps} />
+        {/* 입력 상자: 첨부·글 칸·버튼 줄을 한 테두리 안에 담는다 */}
+        <div className="composer-box">
+          {(images.length > 0 || attachNote) && (
+            <div className="attach-tray">
+              {images.map((image, i) => (
+                <span key={i} className="attach-chip" title={image.name}>
+                  <img src={`data:${image.mimeType};base64,${image.data}`} alt={image.name} />
+                  <button className="icon-button" title="빼기" onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}>
+                    ×
+                  </button>
+                </span>
+              ))}
+              {attachNote && <span className="muted small-text">{attachNote}</span>}
+            </div>
+          )}
+          {pasteBox && session && (
+            <ImagePasteBox
+              onFiles={(files) => {
+                setPasteBox(false);
+                addImageFiles(files);
+              }}
+              onClose={() => setPasteBox(false)}
+            />
+          )}
           <textarea
             ref={input}
             value={draft}
@@ -336,42 +375,70 @@ export function ChatPage({
             disabled={!session || !connected}
             placeholder={session ? enterHint("메시지 입력 (Enter 전송, Shift+Enter 줄바꿈, 이미지는 붙여 넣기도 됩니다)") : "먼저 새 대화를 여세요"}
           />
-        </div>
-        <div className="actions">
-          {chat.running && <button onClick={() => guard(agent.abort)}>중지</button>}
-          <button
-            disabled={!session}
-            onClick={() =>
-              guard(async () => {
-                await attach(await window.piAgent.pickFiles());
-              })
-            }
-          >
-            파일 첨부
-          </button>
-          <div className="image-buttons">
-            <button disabled={!session} onClick={() => void pasteFromClipboard()} title="클립보드의 이미지 붙이기" aria-label="클립보드의 이미지 붙이기">
-              📋
-            </button>
-            <button disabled={!session} onClick={() => imageInput.current?.click()} title="이 기기에서 이미지 고르기" aria-label="이 기기에서 이미지 고르기">
-              🖼
-            </button>
-            <input
-              ref={imageInput}
-              type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp"
-              multiple
-              hidden
-              onChange={(e) => {
-                const files = [...(e.target.files ?? [])];
-                e.target.value = "";
-                if (files.length > 0) addImageFiles(files);
-              }}
-            />
+          {/* 아래 한 줄: 왼쪽은 첨부, 오른쪽은 보내기 (실행 중이면 끼어들기·끝나면 보내기·중단) */}
+          <div className="composer-bar">
+            <div className="composer-tools">
+              <button
+                className="tool-button"
+                disabled={!session}
+                title="파일 첨부 (이미지는 함께 보내고, 나머지는 경로를 적습니다)"
+                aria-label="파일 첨부"
+                onClick={() =>
+                  guard(async () => {
+                    await attach(await window.piAgent.pickFiles());
+                  })
+                }
+              >
+                📎
+              </button>
+              <button className="tool-button" disabled={!session} onClick={() => void pasteFromClipboard()} title="클립보드의 이미지 붙이기" aria-label="클립보드의 이미지 붙이기">
+                📋
+              </button>
+              <button className="tool-button" disabled={!session} onClick={() => imageInput.current?.click()} title="이 기기에서 이미지 고르기" aria-label="이 기기에서 이미지 고르기">
+                🖼
+              </button>
+              <input
+                ref={imageInput}
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                multiple
+                hidden
+                onChange={(e) => {
+                  const files = [...(e.target.files ?? [])];
+                  e.target.value = "";
+                  if (files.length > 0) addImageFiles(files);
+                }}
+              />
+            </div>
+            {chat.running && (
+              <span className="composer-hint">
+                {touchTyping() ? "처리 중 · 보낼 말을 쓰면 끼어들기·끝나면 보내기 중 고를 수 있습니다" : "처리 중 · Enter 끝나면 보내기 · Alt+Enter 끼어들기"}
+              </span>
+            )}
+            <div className="composer-send">
+              {chat.running ? (
+                hasDraft && (
+                  <>
+                    <button onClick={() => submit("steer")} title={STEER_TITLE}>
+                      끼어들기
+                    </button>
+                    <button className="primary" onClick={() => submit("followUp")} title={FOLLOW_UP_TITLE}>
+                      끝나면 보내기
+                    </button>
+                  </>
+                )
+              ) : (
+                <button className="primary" disabled={!session || !hasDraft} onClick={() => submit()}>
+                  보내기
+                </button>
+              )}
+              {chat.running && (
+                <button className="danger" onClick={abort} title="작업을 멈춥니다. 대기 중인 메시지는 입력창으로 돌아옵니다">
+                  ■ 중단
+                </button>
+              )}
+            </div>
           </div>
-          <button className="primary" disabled={!session || (!draft.trim() && images.length === 0)} onClick={submit}>
-            보내기
-          </button>
         </div>
       </div>
       <Widgets ui={ui} placement="belowEditor" />

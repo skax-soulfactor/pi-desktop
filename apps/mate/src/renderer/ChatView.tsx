@@ -221,34 +221,30 @@ export function ChatView({ overview, now, act }: { overview: Overview; now: numb
             onClose={() => setPasteBox(false)}
           />
         )}
-        <div className="chat-row">
-          <div className="composer-field">
-            <ComposerGrip {...gripProps} />
-            <textarea
-              ref={inputRef}
-              value={text}
-              rows={2}
-              placeholder={answerTo ? "답을 쓰세요" : enterHint("Mate에게 말하기 (Enter 보내기, Shift+Enter 줄바꿈, /로 명령)")}
-              onChange={(e) => setText(e.target.value)}
-              onPaste={onPaste}
-              onKeyDown={(e) => {
-                // PC는 Enter로 보내고, 휴대폰은 Enter가 줄바꿈이다 (보내기 버튼·Ctrl+Enter로 보낸다)
-                if (isSendKey(e.nativeEvent)) {
-                  e.preventDefault();
-                  void send(text, answerTo?.id, true);
-                }
-              }}
-            />
-          </div>
-          <div className="chat-buttons">
-            <button className="primary" disabled={(!text.trim() && images.length === 0) || sending} onClick={() => void send(text, answerTo?.id, true)}>
-              보내기
-            </button>
-            <div className="image-buttons">
-              <button className="small" disabled={sending} onClick={() => void pasteFromClipboard()} title="클립보드의 이미지 붙이기" aria-label="클립보드의 이미지 붙이기">
+        <ComposerGrip {...gripProps} />
+        {/* 입력 상자: 글 칸 아래 한 줄에 왼쪽 첨부·대화 정리, 오른쪽 보내기 (Pi Desktop·Agent와 같은 모양) */}
+        <div className="composer-box">
+          <textarea
+            ref={inputRef}
+            value={text}
+            rows={2}
+            placeholder={answerTo ? "답을 쓰세요" : enterHint("Mate에게 말하기 (Enter 보내기, Shift+Enter 줄바꿈, /로 명령)")}
+            onChange={(e) => setText(e.target.value)}
+            onPaste={onPaste}
+            onKeyDown={(e) => {
+              // PC는 Enter로 보내고, 휴대폰은 Enter가 줄바꿈이다 (보내기 버튼·Ctrl+Enter로 보낸다)
+              if (isSendKey(e.nativeEvent)) {
+                e.preventDefault();
+                void send(text, answerTo?.id, true);
+              }
+            }}
+          />
+          <div className="composer-bar">
+            <div className="composer-tools">
+              <button className="tool-button" disabled={sending} onClick={() => void pasteFromClipboard()} title="클립보드의 이미지 붙이기" aria-label="클립보드의 이미지 붙이기">
                 📋
               </button>
-              <button className="small" disabled={sending} onClick={() => imageInput.current?.click()} title="이미지 고르기" aria-label="이미지 고르기">
+              <button className="tool-button" disabled={sending} onClick={() => imageInput.current?.click()} title="이미지 고르기" aria-label="이미지 고르기">
                 🖼
               </button>
               <input
@@ -263,20 +259,26 @@ export function ChatView({ overview, now, act }: { overview: Overview; now: numb
                   if (files.length > 0) void addImageFiles(files);
                 }}
               />
+              <span className="tool-sep" aria-hidden="true" />
+              <button className="tool-button" title="앞의 대화를 잊고 새로 시작합니다" disabled={sending} onClick={() => void send("/new")}>
+                새 대화
+              </button>
+              <button
+                className="tool-button"
+                title="지금까지의 대화 기록을 휴지통으로 옮깁니다 (휴지통 탭에서 되살릴 수 있음)"
+                disabled={sending || overview.chat.lines.length === 0}
+                onClick={() => {
+                  if (confirm("대화 기록을 지울까요? 휴지통으로 옮겨져 되살릴 수 있고, 다음 말부터 새 대화가 됩니다.")) void act(() => window.mate.clearChat());
+                }}
+              >
+                기록 지우기
+              </button>
             </div>
-            <button className="small" title="앞의 대화를 잊고 새로 시작합니다" disabled={sending} onClick={() => void send("/new")}>
-              새 대화
-            </button>
-            <button
-              className="small"
-              title="지금까지의 대화 기록을 휴지통으로 옮깁니다 (휴지통 탭에서 되살릴 수 있음)"
-              disabled={sending || overview.chat.lines.length === 0}
-              onClick={() => {
-                if (confirm("대화 기록을 지울까요? 휴지통으로 옮겨져 되살릴 수 있고, 다음 말부터 새 대화가 됩니다.")) void act(() => window.mate.clearChat());
-              }}
-            >
-              기록 지우기
-            </button>
+            <div className="composer-send">
+              <button className="primary" disabled={(!text.trim() && images.length === 0) || sending} onClick={() => void send(text, answerTo?.id, true)}>
+                보내기
+              </button>
+            </div>
           </div>
         </div>
       </div>

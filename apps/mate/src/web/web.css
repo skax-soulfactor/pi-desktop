@@ -80,18 +80,8 @@
     margin-top: 6px;
   }
 
-  /* 대화 입력: 글 칸을 넓게, 단추는 아래 한 줄 */
-  .chat-row {
-    flex-direction: column;
-  }
-
-  .chat-buttons {
-    flex-direction: row;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-  }
-
-  .chat-buttons button {
+  /* 대화 입력: 버튼은 손가락으로 누르기 쉽게 */
+  .composer-bar button {
     min-height: 40px;
   }
 
