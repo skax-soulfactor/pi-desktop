@@ -21,7 +21,9 @@ import type { Exec } from "./watchers";
  * 활동 관찰자 (설계 DESIGN-MATE.md §10, M4).
  *
  * 실행기가 확인할 때마다(30초):
- * 1. 사용자의 Pi 세션 파일에 새로 붙은 줄을 읽어 세션 요약을 모은다
+ * 1. 사용자의 Pi 세션 파일(Pi Desktop·터미널 pi·Agent)과 Mate 자신의 임무·대화 세션에 새로 붙은 줄을 읽어 세션 요약을 모은다
+ *    Mate 자신의 작업은 활동 기록에만 남긴다. "작업을 마치면" 계기·제안·저장소 살피기에 쓰면
+ *    Mate가 자기 작업을 보고 다시 일을 만드는 순환이 생기기 때문이다
  * 2. 세션이 조용해지면(기본 5분) "작업이 끝남"으로 본다 → 활동 기록, "작업을 마치면" 계기, 규칙 후보
  * 3. 10분마다 최근 작업한 저장소의 git 상태를 본다 → push 안 함·커밋 안 함 후보
  * 4. 규칙 후보는 바로 인박스에, 분석이 필요한 후보는 사용자가 쉬는 때 관찰자 실행(모델)으로 넘긴다
@@ -82,9 +84,16 @@ export class Observer {
     const today = localDateKey(now);
     if (obs.today.date !== today) obs.today = { date: today, count: 0 };
 
-    const ended = await this.scanSessions(obs, config, now);
+    const finished = await this.scanSessions(obs, config, now);
     const candidates: Candidate[] = [];
-    for (const session of ended) {
+    const ended: SessionAggregate[] = [];
+    for (const session of finished) {
+      if (session.app === "mate") {
+        // Mate 자신의 작업: 기록만 (관찰자 실행 자체는 기록하지 않는다)
+        if (!isObserverRun(session)) await this.record({ at: now, kind: "session-ended", session });
+        continue;
+      }
+      ended.push(session);
       candidates.push(...sessionCandidates(session, obs.recent, now));
       obs.recent = [...obs.recent, session].slice(-RECENT_KEEP);
       await this.record({ at: now, kind: "session-ended", session });
@@ -103,7 +112,10 @@ export class Observer {
     if (!config.observe.enabled || !obs || obs.queue.length === 0) return undefined;
     if (obs.today.count >= config.observe.dailySuggestionLimit) return undefined;
     const quiet = config.observe.quietMinutes * 60_000;
-    const busy = Object.values(obs.files).some((f) => f.aggregate && f.aggregate.prompts > 0 && now - f.aggregate.lastAt < quiet);
+    // Mate 자신이 일하는 중인 것은 사용자가 바쁜 것이 아니다
+    const busy = Object.values(obs.files).some(
+      (f) => f.aggregate && f.aggregate.app !== "mate" && f.aggregate.prompts > 0 && now - f.aggregate.lastAt < quiet,
+    );
     if (busy) return undefined;
     const job = obs.queue.shift()!;
     obs.today.count += 1;
@@ -113,9 +125,11 @@ export class Observer {
 
   private async scanSessions(obs: ObserverState, config: MateConfig, now: number): Promise<SessionAggregate[]> {
     const quiet = config.observe.quietMinutes * 60_000;
-    const sources = observedSessions(this.env);
+    const sources = observedSessions(this.env, [this.paths.sessions, this.paths.chatSessions]);
     const since = now - 2 * 24 * 3_600_000;
-    const files = (await Promise.all(sources.dirs.map((dir) => recentSessionFiles(dir, since)))).flat();
+    const files = (
+      await Promise.all(sources.sources.map(async ({ dir, app }) => (await recentSessionFiles(dir, since)).map((file) => ({ ...file, app }))))
+    ).flat();
     const excluded = [...config.observe.excluded, ...sources.internal];
     const ended: SessionAggregate[] = [];
     for (const file of files) {
@@ -130,6 +144,7 @@ export class Observer {
         const { lines, offset } = await readNewLines(file.path, entry.offset, file.size);
         let aggregate = entry.aggregate;
         for (const line of lines) aggregate = applySessionLine(aggregate, line, calls);
+        if (aggregate) aggregate.app = file.app;
         entry.offset = offset;
         if (aggregate) entry.aggregate = aggregate;
       } else if (file.size < entry.offset) {
@@ -139,7 +154,8 @@ export class Observer {
       if (!agg || agg.prompts === 0 || now - Math.max(agg.lastAt, file.mtime) < quiet) continue;
       if (entry.endedAt && entry.endedAt >= agg.lastAt) continue;
       entry.endedAt = now;
-      if (isObserved(agg.cwd, excluded)) ended.push(agg);
+      // Mate 자신의 세션은 Mate 홈 안에서 열기도 하므로(대화) 앱 홈 제외는 하지 않는다
+      if (isObserved(agg.cwd, agg.app === "mate" ? config.observe.excluded : excluded)) ended.push(agg);
       // 같은 세션을 이어 쓰면 다음 작업은 새로 센다
       entry.aggregate = { ...agg, startedAt: agg.lastAt, prompts: 0, firstPrompt: undefined, editedFiles: [], commands: 0, ranTests: false, failures: [], modelErrors: [] };
       delete entry.aggregate.firstPrompt;
@@ -199,10 +215,17 @@ export class Observer {
   }
 }
 
+const OBSERVER_PROMPT_HEAD = "너는 사용자가 방금까지 한 작업을 지켜본 Mate 관찰자다.";
+
+/** 관찰자 실행의 세션인지 (첫 요청이 관찰자 지시로 시작한다) */
+function isObserverRun(session: SessionAggregate): boolean {
+  return session.firstPrompt?.startsWith(OBSERVER_PROMPT_HEAD) ?? false;
+}
+
 /** 관찰자 실행의 지시 (후보 하나를 살펴보고 0~1개 제안) */
 export function observerPrompt(job: Candidate): string {
   return [
-    "너는 사용자가 방금까지 한 작업을 지켜본 Mate 관찰자다. 아래 관찰을 바탕으로 이 저장소를 읽기만 하며 살펴보고,",
+    OBSERVER_PROMPT_HEAD + " 아래 관찰을 바탕으로 이 저장소를 읽기만 하며 살펴보고,",
     "사용자에게 실제로 도움이 되는 제안이 있으면 mate_propose로 하나만 남겨라. 확신이 없거나 이미 괜찮으면 아무것도 남기지 마라.",
     "고칠 일이면 followUp에 구체적인 고치기 지시를 넣어라 (사용자가 \"Mate에게 맡기기\"를 누르면 그 지시로 실행된다).",
     "",

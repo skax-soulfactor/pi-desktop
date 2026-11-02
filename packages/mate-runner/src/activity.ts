@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { open, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
-import type { Candidate, ProjectSnapshot, SessionAggregate } from "./activity-types";
+import type { Candidate, ProjectSnapshot, SessionAggregate, SessionApp } from "./activity-types";
 import type { Exec } from "./watchers";
 
 /**
@@ -247,12 +247,23 @@ export function agentHomeDir(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /**
- * 관찰하는 세션 폴더 (설계 DESIGN-APPS.md §3.3): Pi Desktop·터미널 pi와 Agent. 읽기만 한다.
+ * 관찰하는 세션 폴더 (설계 DESIGN-APPS.md §3.3): Pi Desktop·터미널 pi와 Agent, 그리고 Mate 자신의 임무·대화 세션. 다른 앱 것은 읽기만 한다.
  * Agent의 예약을 돌리는 스케줄러 세션처럼 앱 홈 안에서 연 세션은 사람의 작업이 아니므로 관찰에서 뺄 폴더로 돌려준다.
+ * @param mateDirs Mate의 세션 폴더 (임무 실행, 대화). 활동 기록에만 남기고 계기·제안에는 쓰지 않는다 (observer.ts)
  */
-export function observedSessions(env: NodeJS.ProcessEnv = process.env): { dirs: string[]; internal: string[] } {
+export function observedSessions(
+  env: NodeJS.ProcessEnv = process.env,
+  mateDirs: readonly string[] = [],
+): { sources: Array<{ dir: string; app: SessionApp }>; internal: string[] } {
   const agentHome = agentHomeDir(env);
-  return { dirs: [piSessionsDir(env), join(agentHome, "sessions")], internal: [agentHome] };
+  return {
+    sources: [
+      { dir: piSessionsDir(env), app: "pi" },
+      { dir: join(agentHome, "sessions"), app: "agent" },
+      ...mateDirs.map((dir) => ({ dir, app: "mate" as const })),
+    ],
+    internal: [agentHome],
+  };
 }
 
 /** 최근 바뀐 세션 파일 (sessions/<폴더>/<파일>.jsonl 또는 sessions/<파일>.jsonl) */

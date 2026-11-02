@@ -1,4 +1,4 @@
-import { TOPIC_LABELS, type InsightTopic } from "@pi-desktop/mate-runner/activity-types";
+import { SESSION_APP_LABELS, TOPIC_LABELS, type InsightTopic } from "@pi-desktop/mate-runner/activity-types";
 import { useEffect, useState } from "react";
 import type { ActivityRecord, Overview } from "../shared/api";
 import type { Act } from "./App";
@@ -29,7 +29,7 @@ export function ActivityView({ overview, now, act }: { overview: Overview; now: 
       </label>
       <div className="muted small-text privacy">
         <div>
-          <strong>보는 것</strong>: Pi Desktop·터미널 Pi·Pi Desktop Agent 세션 기록(요청, 고친 파일, 실패한 명령, 오류. 읽기만 함)과 최근 작업한 저장소의 git 상태.
+          <strong>보는 것</strong>: Pi Desktop·터미널 Pi·Pi Desktop Agent 세션 기록(요청, 고친 파일, 실패한 명령, 오류. 읽기만 함)과 최근 작업한 저장소의 git 상태. Mate 자신의 임무·대화도 활동에 남깁니다 (알림·"작업을 마치면" 계기에는 쓰지 않음).
         </div>
         <div>
           <strong>보지 않는 것</strong>: 화면, 키 입력, 다른 프로그램. 파일 내용·모델 답변은 기록하지 않고, 요청·명령은 앞부분만 남기며 비밀값처럼
@@ -126,11 +126,14 @@ function FragmentRow({ label, children }: { label: string; children: React.React
 function ActivityRow({ record, now }: { record: ActivityRecord; now: number }) {
   if (record.kind === "session-ended") {
     const s = record.session;
-    const name = s.cwd.replace(/\\/g, "/").split("/").filter(Boolean).at(-1);
+    const folder = s.cwd.replace(/\\/g, "/").split("/").filter(Boolean).at(-1);
+    // Mate 대화는 Mate 홈의 chat 폴더에서 연다
+    const name = s.app === "mate" && folder === "chat" ? "Mate 대화" : folder;
     return (
       <li className="card activity">
         <div className="card-head">
           <span className="chip">작업 끝</span>
+          {s.app && <span className={`chip app-${s.app}`}>{SESSION_APP_LABELS[s.app]}</span>}
           <strong className="title">{s.firstPrompt ?? "(요청 없음)"}</strong>
           <span className="muted">
             {name} · {relativeTime(record.at, now)}

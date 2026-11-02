@@ -9,6 +9,7 @@ import { canReadClipboard, enterHint, isSendKey, readBase64, readClipboardImages
 import { ImagePasteBox } from "./ImagePasteBox";
 import { ChatNavigator } from "./ChatNavigator";
 import { ComposerGrip, useComposerSize } from "./composer-size";
+import { useDraftText } from "./draft-text";
 
 /** 한 번에 보낼 수 있는 이미지 (실행기와 같은 한도) */
 const MAX_IMAGES = 4;
@@ -37,7 +38,8 @@ type Entry = { kind: "line"; at: number; line: ChatLine } | { kind: "item"; at: 
  */
 export function ChatView({ overview, now, act }: { overview: Overview; now: number; act: Act }) {
   const { chat } = overview;
-  const [text, setText] = useState("");
+  // 쓰던 글은 보관해, 다른 화면에 갔다 와도 남긴다
+  const [text, setText] = useDraftText("pi-mate.draft.chat");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { gripProps } = useComposerSize(inputRef, text, "pi-mate:composer-height");
   const [answerTo, setAnswerTo] = useState<ChatLine>();
