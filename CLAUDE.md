@@ -42,26 +42,21 @@
 
 멈추고 묻는 경우: 강제 push, 히스토리 재작성, 브랜치·태그·릴리스 삭제, 저장소 설정 변경, 메이저·마이너 버전 올리기.
 
-## 3. 어느 앱을 릴리스하나
+## 3. 릴리스: 세 앱을 같은 버전으로 함께
 
-지난 태그 이후 아래 경로가 바뀐 앱을 **다음 패치 버전**으로 릴리스한다. 문서만 바뀌었으면 릴리스하지 않는다.
-패키지끼리도 서로 쓰므로, 공용 패키지를 고치면 대개 세 앱 모두에 영향이 간다.
+2026-11-02부터 **세 앱(Pi Desktop·Agent·Mate)과 웹 묶음은 같은 버전 번호를 쓴다** (0.6.0부터).
+세 앱이 공용 패키지를 함께 써서 거의 늘 같이 바뀌고, "어느 앱을 릴리스할지" 고르다 빠뜨리는 일(예: agent-kit을 고치고 Agent만 릴리스)이 생겼기 때문이다.
 
-| 앱 | 태그 | 이 경로가 바뀌면 릴리스 |
-|---|---|---|
-| Pi Desktop (+ 웹 묶음) | `v*` | `apps/desktop`, `packages/web-shell`, `host-agent`, `host-protocol`, `agent-kit`, `pi-resources`, `pi-isolation`, 루트 `scripts/build-web.mjs`·`scripts/web`. 웹 묶음이 Agent·Mate 웹 빌드(main·화면 포함)도 담으므로 `apps/agent`·`apps/mate`를 고쳐도 |
-| Pi Desktop Agent | `agent-v*` | `apps/agent`, `packages/host-agent`, `host-protocol`, `host-deploy`, `agent-kit`, `pi-resources`, `pi-isolation`. 단 `apps/agent`의 웹 빌드 파일(`src/server`, `src/web`, `vite.web.config.ts`, `scripts/build-web.mjs`)만 바뀌었으면 Pi Desktop만 |
-| Pi Desktop Mate | `mate-v*` | `apps/mate`, `packages/mate-kit`, `mate-runner`, `host-agent`, `host-protocol`, `host-deploy`, `agent-kit`, `pi-resources`, `pi-isolation`. 단 `apps/mate`의 웹 빌드 파일(`src/server`, `src/web`, `vite.web.config.ts`, `scripts/build-web.mjs`)만 바뀌었으면 Pi Desktop만 |
-
-확인하는 방법:
-
-```bash
-git diff --name-only <그 앱의 마지막 태그>..origin/main -- <위 경로들>
-```
-
-- 위 표는 2026-11-02 기준이다. 앱의 `package.json` 의존성이나 번들 설정(`electron.vite.config.ts`)이 바뀌면 표도 함께 고친다.
+- 릴리스할 때마다 **세 태그를 같은 번호로** 붙인다: `vX.Y.Z`(Pi Desktop, 웹 묶음 포함), `agent-vX.Y.Z`, `mate-vX.Y.Z`.
+  - 태그 이름(접두어)은 바꾸지 않는다. Agent·Mate의 자동 업데이트가 자기 접두어의 태그를 찾기 때문이다.
+  - 한 앱만 바뀌었어도 세 앱을 함께 낸다. 바뀌지 않은 앱도 같은 번호로 다시 빌드된다.
+- 다음 번호: 세 태그 중 가장 높은 번호의 **패치를 올린다** (예: 0.6.0 → 0.6.1). 마이너·메이저를 올릴 때는 사용자에게 묻는다.
+- 문서만 바뀌었으면 릴리스하지 않는다. 문서 밖의 파일(코드, 빌드 설정, 워크플로, `package.json`)이 바뀌었으면 릴리스한다.
+  ```bash
+  git diff --name-only v<마지막 번호>..origin/main -- . ':!*.md' ':!docs'
+  ```
 - 태그는 main CI가 통과한 머지 커밋에 붙인다. 붙이기 직전에 `origin/main`이 그 커밋인지 다시 본다.
-- 앱마다 워크플로가 다르므로 세 태그를 함께 붙여도 된다. 같은 앱의 다음 태그는 앞 빌드가 끝난 뒤에 붙인다.
+- 세 앱의 워크플로가 다르므로 세 태그를 함께 붙인다. 다음 번호는 세 빌드가 모두 끝난 뒤에 붙인다.
 
 ## 4. 가끔 실패하는 테스트
 
