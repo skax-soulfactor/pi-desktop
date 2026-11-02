@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell } from "electron";
+import { loadWindowState, trackWindowState } from "@pi-desktop/window-state";
 import { readFileSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -559,9 +560,17 @@ function windowIcon(): { icon?: string } {
 }
 
 function createWindow(): void {
+  // 지난번 창 크기·위치·최대화를 되살린다 (화면 밖이면 위치는 버린다)
+  const windowStateFile = join(app.getPath("userData"), "window-state.json");
+  const windowState = loadWindowState(
+    windowStateFile,
+    { width: 1000, height: 760, minWidth: 640, minHeight: 480 },
+    screen.getAllDisplays().map((d) => d.workArea),
+  );
   mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 760,
+    ...(windowState.x !== undefined && windowState.y !== undefined ? { x: windowState.x, y: windowState.y } : {}),
+    width: windowState.width,
+    height: windowState.height,
     minWidth: 640,
     minHeight: 480,
     title: "Pi Desktop Agent",
@@ -574,6 +583,8 @@ function createWindow(): void {
       nodeIntegration: false,
     },
   });
+  if (windowState.maximized) mainWindow.maximize();
+  trackWindowState(mainWindow, windowStateFile);
 
   // 응답 속 링크가 앱 창을 다른 페이지로 바꾸지 않게 한다. http(s) 링크만 외부 브라우저로 연다.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
