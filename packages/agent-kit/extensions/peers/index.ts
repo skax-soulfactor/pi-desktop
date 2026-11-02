@@ -35,11 +35,13 @@ const MAX_PEER_TASKS = 2;
  */
 export default function peers(pi: ExtensionAPI): void {
   const dir = dataDir();
+  // 워커를 먼저 거른다. 스케줄러가 띄운 워커(받은 작업 등)는 스케줄러의 환경 변수를 물려받아
+  // 스케줄러 표시도 켜져 있으므로, 순서가 바뀌면 워커 안에서도 피어 서버·동기화가 돈다 (다른 확장과 같은 순서)
+  if (isWorker()) return;
   if (isScheduler()) {
     runPeerServer(pi, dir);
     return;
   }
-  if (isWorker()) return;
 
   pi.on("before_agent_start", async (event) => {
     const list = await loadPeers(dir);

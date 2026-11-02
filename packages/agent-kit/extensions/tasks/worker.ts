@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { appendFileSync } from "node:fs";
 import { APPROVAL_MARKER } from "../../src/approval";
 import { UNATTENDED_ENV, WORKER_ENV } from "../../src/runtime";
 import { recordUsage, type PiUsage } from "../../src/usage";
@@ -43,6 +44,25 @@ export interface WorkerResult {
   /** 마지막 응답의 글 */
   text: string;
   aborted: boolean;
+}
+
+/**
+ * 이 환경 변수에 파일 경로를 주면 워커의 출력·오류·종료를 그 파일에 덧붙인다 (문제를 조사할 때만).
+ * 워커가 끝을 알리지 않고 멈출 때 어디까지 갔는지 보기 위해서다. 평소에는 아무것도 쓰지 않는다.
+ */
+export const WORKER_LOG_ENV = "PI_DESKTOP_AGENT_WORKER_LOG";
+
+function workerLog(path: string | undefined, label: string, pid: number | undefined): (kind: string, text: string) => void {
+  if (!path) return () => {};
+  const write = (line: string) => {
+    try {
+      appendFileSync(path, `${new Date().toISOString()} [${pid ?? "?"}] ${line}\n`);
+    } catch {
+      // 기록을 못 해도 워커는 그대로 돈다
+    }
+  };
+  write(`시작 ${label}`);
+  return (kind, text) => write(`${kind} ${text.length > 500 ? `${text.slice(0, 500)}…` : text}`);
 }
 
 /** 지금 Pi를 다시 띄우는 명령. node로 cli.js를 돌리는 경우가 기본이고, 아니면 PATH의 pi */
@@ -90,6 +110,7 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
   ];
   const env = { ...(options.env ?? process.env), [WORKER_ENV]: "1", ...(options.ui ? {} : { [UNATTENDED_ENV]: "1" }) };
   const child = spawn(pi.command, args, { cwd: options.cwd, env, shell: pi.command === "pi" && process.platform === "win32", windowsHide: true });
+  const log = workerLog((options.env ?? process.env)[WORKER_LOG_ENV], options.label, child.pid);
 
   return new Promise((resolve, reject) => {
     let buffer = "";
@@ -191,6 +212,7 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
+      log("out", chunk.trim());
       buffer += chunk;
       let index: number;
       while ((index = buffer.indexOf("\n")) >= 0) {
@@ -206,10 +228,12 @@ export function runWorker(options: WorkerOptions): Promise<WorkerResult> {
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {
+      log("err", chunk.trim());
       stderr = (stderr + chunk).slice(-2000);
     });
     child.on("error", (error) => finish(error));
     child.on("exit", (code) => {
+      log("exit", String(code));
       if (!settled) finish(aborted ? undefined : new Error(`워커가 끝났다 (code ${code})${stderr.trim() ? `: ${stderr.trim().split("\n").slice(-3).join(" ")}` : ""}`));
     });
 
