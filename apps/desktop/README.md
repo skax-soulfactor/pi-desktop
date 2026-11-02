@@ -62,10 +62,11 @@ Electron 앱은 Android에서 돌지 않습니다. 대신 휴대폰의 [Termux](
 2. Termux에서 한 줄로 설치하고 켭니다. Node.js·Pi·pi-web을 설치하고 브라우저를 엽니다.
 
    ```bash
-   curl -fsSL https://github.com/soulfactorx/pi-desktop-mobile/releases/latest/download/install-termux.sh | bash
+   curl -fsSL https://github.com/skax-soulfactor/pi-desktop/releases/latest/download/install-termux.sh | bash
    ```
 
    - 내장 터미널(셸, OAuth `/login`)도 쓰려면 끝에 `-s -- --terminal`을 붙입니다. node-pty를 휴대폰에서 빌드하느라 빌드 도구(수백 MB)를 받습니다.
+   - 예전 포크(`soulfactorx/pi-desktop-mobile`)에서 설치했으면 이 명령을 한 번 다시 실행합니다. `pi-web update`는 설치한 저장소(`~/.pi-web/repo`)에서 받으므로, 다시 설치해야 이 저장소의 릴리스를 받습니다. 토큰·설정은 그대로입니다.
    - 인터넷 없이: 릴리스의 `pi-web.tar.gz`와 `install-termux.sh`를 받아 `bash install-termux.sh --file pi-web.tar.gz`.
 3. 브라우저가 `http://127.0.0.1:8787/#token=…`로 열립니다. 주소 끝의 토큰은 이 브라우저에 기억됩니다. Chrome 메뉴의 "홈 화면에 추가"로 앱처럼 쓸 수 있습니다.
 4. "프로바이더"에서 API 키를 넣고, "폴더 선택"으로 휴대폰 안의 작업 폴더(예: `~/projects/app`)를 고르면 데스크톱과 똑같이 씁니다.
