@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { StringEnum } from "@earendil-works/pi-ai";
+import { stringEnum } from "../../src/string-enum";
 import { Type } from "typebox";
 import { isLocalBaseUrl } from "../local-model/budget";
 import { dataDir } from "../permissions/store";
@@ -128,7 +128,7 @@ export default function memory(pi: ExtensionAPI): void {
       "검증되지 않은 진단·해결책은 사실로 쓰지 말고, 확정된 것과 아닌 것을 구분해 적어라. 이번 대화에만 필요한 것은 남기지 않는다.",
     promptSnippet: "memory_save: 앞으로도 쓰일 선호·요구사항·교훈·자료 위치를 지식베이스에 남긴다",
     parameters: Type.Object({
-      type: StringEnum(MEMORY_TYPES, { description: "user·requirement·lesson·reference 중 하나" }),
+      type: stringEnum(MEMORY_TYPES, { description: "user·requirement·lesson·reference 중 하나" }),
       title: Type.String({ description: "한 줄 요약 (목록에 이것만 보인다)" }),
       content: Type.String({ description: "본문 (Markdown)" }),
       tags: Type.Optional(Type.Array(Type.String(), { description: "찾기 쉬운 낱말 몇 개" })),

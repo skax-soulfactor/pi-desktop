@@ -27,6 +27,7 @@ export const RELOAD_COMMAND = "desktop:reload";
  * 확장 툴 켜기 명령 (/desktop:enable-tools).
  * 이어 연 세션은 기록된 툴 목록을 지키므로, 나중에 설치한 확장의 툴은 Pi를 다시 띄우거나 다시 불러와도 꺼진 채로 있다.
  * 앱은 다시 불러온 뒤 이 명령으로 켜져 있지 않은 확장 툴(내장 툴 제외)을 켠다. 켠 툴은 세션 기록에 남는다.
+ * Pi 1.4.0부터는 이어 연 세션에서 Pi가 직접 켠다. 이 명령은 더 낮은 Pi를 쓰는 사용자를 위해 남겨 둔다 (켤 것이 없으면 아무 일도 하지 않는다).
  */
 export const ENABLE_TOOLS_COMMAND = "desktop:enable-tools";
 

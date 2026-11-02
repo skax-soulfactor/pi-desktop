@@ -31,7 +31,7 @@ describe("실제 Pi 계약 테스트", () => {
       piArgs: MOCK_MODEL_ARGS,
       env: piEnv,
     });
-    expect(session.piVersion).toBe("1.3.0");
+    expect(session.piVersion).toBe("1.5.0");
     expect(session.sessionFile).toMatch(/\.jsonl$/);
 
     await client.request(Methods.sessionAttach, { sessionId: session.sessionId, lastSeq: 0 });

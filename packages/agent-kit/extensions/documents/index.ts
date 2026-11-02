@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { extname, isAbsolute, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
-import { StringEnum } from "@earendil-works/pi-ai";
+import { stringEnum } from "../../src/string-enum";
 import { Type } from "typebox";
 import { chunkChars, defaultOutputPath, inferMode, splitIntoChunks, type DocumentMode } from "./chunks";
 import { docxText } from "./docx";
@@ -30,7 +30,7 @@ export default function documents(pi: ExtensionAPI): void {
     parameters: Type.Object({
       path: Type.String({ description: "처리할 문서 경로 (작업 폴더 기준 또는 절대 경로)" }),
       instruction: Type.String({ description: "문서에 할 일 (예: 영어로 번역, 핵심만 다섯 줄로 요약)" }),
-      mode: Type.Optional(StringEnum(["transform", "reduce"], { description: "transform·reduce. 없으면 지시로 짐작" })),
+      mode: Type.Optional(stringEnum(["transform", "reduce"], { description: "transform·reduce. 없으면 지시로 짐작" })),
       output: Type.Optional(Type.String({ description: "transform 결과를 쓸 경로. 없으면 원본 옆 <이름>.result.md" })),
     }),
     // 조각마다 모델을 부르므로 다른 도구와 동시에 돌리지 않는다

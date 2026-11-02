@@ -75,7 +75,7 @@ describe("bridge 확장 (실제 Pi)", () => {
     expect(fixture.llm.requests.length).toBe(requestsBefore);
   });
 
-  it("확장을 넣기 전에 대화한 세션을 다시 열면 그 툴이 꺼져 있고, /desktop:enable-tools로 켠다", async () => {
+  it("확장을 넣기 전에 대화한 세션을 다시 열면 그 툴이 켜져 있고, /desktop:enable-tools도 그대로 성공한다", async () => {
     const toolNames = () => {
       const body = fixture.llm.requests.at(-1) as { tools?: Array<{ function?: { name?: string } }> } | undefined;
       return (body?.tools ?? []).map((t) => t.function?.name);
@@ -102,7 +102,7 @@ describe("bridge 확장 (실제 Pi)", () => {
 }
 `,
     );
-    // 세션을 닫고 같은 파일로 다시 연다: 기록된 툴 목록을 지켜 새 확장의 툴이 꺼져 있다
+    // 세션을 닫고 같은 파일로 다시 연다: Pi 1.4.0부터 기록 뒤에 등록된 확장 툴도 켠다 (그 전에는 꺼져 있었다)
     await client.request(Methods.sessionClose, { sessionId: session.sessionId });
     ({ session } = await client.request<SessionOpenResult>(Methods.sessionOpen, {
       cwd: fixture.projectDir,
@@ -112,7 +112,9 @@ describe("bridge 확장 (실제 Pi)", () => {
     }));
     await client.request(Methods.sessionAttach, { sessionId: session.sessionId, lastSeq: 0 });
     await ask("다시 연 뒤");
-    expect(toolNames()).not.toContain("late_tool");
+    expect(toolNames()).toContain("late_tool");
+
+    // 앱은 옛 Pi를 위해 다시 연 뒤 이 명령을 보낸다. 이미 켜져 있으면 아무 일도 하지 않는다
 
     const response = await send<{ success: boolean }>({ type: "prompt", message: `/${ENABLE_TOOLS_COMMAND}` });
     expect(response.success).toBe(true);

@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { StringEnum } from "@earendil-works/pi-ai";
+import { stringEnum } from "../../src/string-enum";
 import { Type } from "typebox";
 import { dataDir } from "../permissions/store";
 import { isScheduler, isWorker } from "../../src/runtime";
@@ -43,7 +43,7 @@ export default function schedule(pi: ExtensionAPI): void {
     parameters: Type.Object({
       title: Type.String({ description: "예약을 알아볼 짧은 이름" }),
       instruction: Type.String({ description: "실행할 때 할 일 (혼자 끝낼 수 있게 구체적으로)" }),
-      kind: StringEnum(["once", "interval", "daily"], { description: "once·interval·daily" }),
+      kind: stringEnum(["once", "interval", "daily"], { description: "once·interval·daily" }),
       at: Type.Optional(Type.String({ description: "once: 실행 시각 ISO 8601 (시간대 포함, 예: 2026-10-30T15:00:00+09:00)" })),
       minutes: Type.Optional(Type.Number({ description: "interval: 몇 분마다 (5 이상)" })),
       time: Type.Optional(Type.String({ description: "daily: HH:MM (이 PC의 시간대)" })),
