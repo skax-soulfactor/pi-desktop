@@ -61,7 +61,7 @@
     "@pi-desktop/pi-resources": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^1.3.0",
+    "@earendil-works/pi-coding-agent": "^1.5.0",
     "@pi-desktop/host-protocol": "*"
   }
 }

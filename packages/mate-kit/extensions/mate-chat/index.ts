@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendChatQuestion, appendChatAction } from "../../src/chat";
 import { ASK_TOOL, DO_TOOL, MATE_ENV } from "../../src/shared";

@@ -89,7 +89,7 @@ export function packageJson(name: string, description: string, hasExtension: boo
   };
   // 확장이 import하는 Pi 제공 패키지는 직접 넣지 않고 peerDependencies "*"로 둔다 (docs/packages.md).
   if (hasExtension) {
-    json.peerDependencies = { "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-ai": "*" };
+    json.peerDependencies = { "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-ai": "*", typebox: "*" };
   }
   return `${JSON.stringify(json, null, 2)}\n`;
 }

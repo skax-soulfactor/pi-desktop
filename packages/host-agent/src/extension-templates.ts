@@ -5,7 +5,7 @@ import type { ExtensionTemplate } from "@pi-desktop/host-protocol";
  *
  * Pi 문서·예제(docs/extensions.md, examples/extensions/hello.ts·permission-gate.ts)의 형태를 그대로 따른다.
  * Pi가 jiti로 TypeScript를 바로 읽으므로 빌드 없이 저장하면 쓰인다. Pi가 넣어 주는 패키지
- * (@earendil-works/pi-coding-agent, @earendil-works/pi-ai 등)만 import하므로 따로 설치할 것이 없다.
+ * (@earendil-works/pi-coding-agent, @earendil-works/pi-ai, typebox 등)만 import하므로 따로 설치할 것이 없다.
  */
 
 export const EXTENSION_TEMPLATES: Record<ExtensionTemplate, string> = {
@@ -40,7 +40,7 @@ export default function (pi: ExtensionAPI) {
 }
 `;
     case "tool":
-      return `import { Type } from "@earendil-works/pi-ai";
+      return `import { Type } from "typebox";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /**

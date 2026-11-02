@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendProposal, installError, makeProposal } from "../../src/proposal";
 import { MATE_ENV, PROPOSE_TOOL, type InstallProposal, type Severity } from "../../src/shared";

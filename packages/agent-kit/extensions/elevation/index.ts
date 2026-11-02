@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { StringEnum } from "@earendil-works/pi-ai";
+import { stringEnum } from "../../src/string-enum";
 import { Type } from "typebox";
 import { attended, isScheduler, isWorker } from "../../src/runtime";
 import { dataDir } from "../permissions/store";
@@ -47,9 +47,9 @@ export default function elevation(pi: ExtensionAPI): void {
       "op: package_install·package_remove(names), package_update, service(action, unit), copy_file(from, to 절대 경로), raw(argv: 실행 파일과 인자를 하나씩, 셸을 거치지 않는다).",
     promptSnippet: "shell_exec_elevated: 관리자 권한이 꼭 필요한 작업을 OS 인증 창을 거쳐 한 번 실행한다",
     parameters: Type.Object({
-      op: StringEnum(ELEVATED_OPS, { description: "작업 종류" }),
+      op: stringEnum(ELEVATED_OPS, { description: "작업 종류" }),
       names: Type.Optional(Type.Array(Type.String(), { description: "package_* 의 패키지 이름들" })),
-      action: Type.Optional(StringEnum(SERVICE_ACTIONS, { description: "service의 동작" })),
+      action: Type.Optional(stringEnum(SERVICE_ACTIONS, { description: "service의 동작" })),
       unit: Type.Optional(Type.String({ description: "service의 서비스 이름" })),
       from: Type.Optional(Type.String({ description: "copy_file의 원본 절대 경로" })),
       to: Type.Optional(Type.String({ description: "copy_file의 대상 절대 경로" })),
