@@ -16,6 +16,7 @@ import {
   useSharedImages,
 } from "./clipboard-images";
 import { ImagePasteBox } from "./ImagePasteBox";
+import { useDraftText } from "./draft-text";
 import { ComposerGrip, useComposerSize } from "./composer-size";
 import type { ImageAttachment } from "../shared/api";
 import { EXAMPLES } from "./examples";
@@ -72,7 +73,8 @@ export function ChatPage({
   guard: (action: () => Promise<void>) => void;
 }) {
   const { session, chat, ui, kit, model, models, stats } = agent;
-  const [draft, setDraft] = useState("");
+  // 쓰던 글은 대화마다 따로 보관한다 (다른 대화·다른 화면에 갔다 와도 남는다)
+  const [draft, setDraft] = useDraftText(session ? `pi-agent.draft.${session.sessionFile ?? session.sessionId}` : undefined);
   const [renaming, setRenaming] = useState<string>();
   /** 메시지와 함께 보낼 이미지 (보내면 비운다) */
   const [images, setImages] = useState<Array<Required<Pick<ImageAttachment, "name" | "mimeType" | "data">>>>([]);
