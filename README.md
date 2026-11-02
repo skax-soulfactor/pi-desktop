@@ -66,11 +66,13 @@ Mate ───────── mate-runner → pi --mode json -e mate-kit     
 
 ## Android 휴대폰에서 쓰기 (웹 버전 pi-web)
 
-이 포크(soulfactorx/pi-desktop-mobile)는 세 앱을 휴대폰 브라우저에서 쓰는 웹 버전 **pi-web**을 더합니다 (Pi Desktop은 `pi-web`, Agent는 `pi-web agent`, Mate는 `pi-web mate`). Electron 앱은 Android에서 돌지 않으므로, 휴대폰의 [Termux](https://termux.dev)에서 Pi와 웹 서버를 돌리고 휴대폰 브라우저(Chrome·삼성 인터넷)로 같은 화면을 엽니다. VS Code의 code-server와 같은 방식입니다 (설계 §5.10).
+세 앱은 휴대폰 브라우저에서 쓰는 웹 버전 **pi-web**도 있습니다 (Pi Desktop은 `pi-web`, Agent는 `pi-web agent`, Mate는 `pi-web mate`). Electron 앱은 Android에서 돌지 않으므로, 휴대폰의 [Termux](https://termux.dev)에서 Pi와 웹 서버를 돌리고 휴대폰 브라우저(Chrome·삼성 인터넷)로 같은 화면을 엽니다. VS Code의 code-server와 같은 방식입니다 (설계 §5.10).
 
 ```bash
-curl -fsSL https://github.com/soulfactorx/pi-desktop-mobile/releases/latest/download/install-termux.sh | bash
+curl -fsSL https://github.com/skax-soulfactor/pi-desktop/releases/latest/download/install-termux.sh | bash
 ```
+
+웹 묶음(`pi-web.tar.gz`)과 설치 스크립트는 Pi Desktop 릴리스(`v*`, Latest)에 함께 올라갑니다. 예전 포크(`soulfactorx/pi-desktop-mobile`)에서 설치했다면 위 명령을 한 번 다시 실행해 이 저장소로 옮깁니다 (`pi-web update`는 설치한 저장소를 기억해 그곳에서 받기 때문입니다).
 
 설치·명령(`pi-web`, `pi-web update` 등)·갤럭시 설정은 [apps/desktop 설명서의 "Android 휴대폰에서 쓰기"](apps/desktop/README.md#android-휴대폰에서-쓰기-웹-버전-pi-web)에 있습니다.
 

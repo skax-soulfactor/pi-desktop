@@ -37,7 +37,7 @@ export class PushCenter {
   constructor(
     private readonly dataDir: string,
     /** VAPID subject (푸시 서버가 문제가 있을 때 연락할 곳) */
-    private readonly subject = "https://github.com/soulfactorx/pi-desktop-mobile",
+    private readonly subject = "https://github.com/skax-soulfactor/pi-desktop",
     private readonly sender: (subscription: PushSubscription, payload: string, options: webpush.RequestOptions) => Promise<unknown> = (s, p, o) =>
       webpush.sendNotification(s, p, o),
   ) {}
