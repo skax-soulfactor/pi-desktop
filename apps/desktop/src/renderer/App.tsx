@@ -17,6 +17,8 @@ import { sharedEventLog } from "./event-log";
 import { UpdateBadge, useUpdateState } from "./UpdateBadge";
 import { forgetTab, MAIN_TAB, setTabHost, setTabSession } from "./use-session";
 import { MENU_EVENT, Workspace, type WorkspaceStatus } from "./Workspace";
+import { WebMenu } from "./WebMenu";
+import { OPEN_SESSION_EVENT, type SessionTarget } from "../shared/web-files";
 
 /**
  * 워크스페이스 탭 (설계 §3.3). 탭마다 호스트와 세션을 따로 가지고, 숨긴 탭도 연결과 상태를 유지한다.
@@ -114,6 +116,39 @@ export function App() {
     [activate],
   );
 
+  // pi-web: 휴대폰 알림을 누르면 그 세션으로 간다 (보는 탭이 있으면 그 탭, 없으면 새 탭). 데스크톱 앱에는 piWeb이 없다
+  // 화면을 새로 읽은 직후에는 탭들이 호스트에 다시 붙어 세션을 알리기까지 걸리므로(휴대폰은 몇 초), 그 세션을 보는 탭이
+  // 나타나거나 호스트에 붙을 때까지 기다렸다가 고른다. 붙었는데 그 세션을 보는 탭이 없으면 새 탭으로 연다
+  const openNotified = useRef<(target: SessionTarget) => void>(() => {});
+  const openAttempt = useRef(0);
+  openNotified.current = (target) => {
+    const attempt = ++openAttempt.current;
+    const started = Date.now();
+    const tryOpen = async (): Promise<void> => {
+      if (attempt !== openAttempt.current) return;
+      const shown = tabShowing(statusesRef.current, target.hostId, target.sessionId);
+      if (shown) return activate(shown);
+      const hostReady = Object.values(statusesRef.current).some((s) => s?.hostId === target.hostId && !s.disconnected);
+      // 붙은 뒤에도 조금 더 기다린다 (탭이 세션을 다시 여는 중일 수 있다)
+      if (hostReady && Date.now() - started > 4000) {
+        const sessions = await window.piDesktop.listSessions(target.hostId).catch(() => undefined);
+        const session = sessions?.find((s) => s.sessionId === target.sessionId);
+        if (session) return openActivity({ hostId: target.hostId, hostLabel: "", session } as ActivityEntry);
+        if (sessions) return;
+      }
+      if (Date.now() - started < 30_000) setTimeout(() => void tryOpen(), 500);
+    };
+    void tryOpen();
+  };
+  useEffect(() => {
+    if (!window.piWeb) return;
+    const onOpen = (event: Event) => openNotified.current((event as CustomEvent<SessionTarget>).detail);
+    window.addEventListener(OPEN_SESSION_EVENT, onOpen);
+    const pending = window.piWeb.takeOpenSession();
+    if (pending) openNotified.current(pending);
+    return () => window.removeEventListener(OPEN_SESSION_EVENT, onOpen);
+  }, []);
+
   // 명령 팔레트의 탭 명령
   const appCommands = useMemo((): PaletteCommand[] => {
     const list: PaletteCommand[] = [
@@ -179,22 +214,20 @@ export function App() {
   // 메뉴바 명령: 앱 수준(탭·업데이트·활동)은 여기서, 나머지는 지금 탭의 Workspace가 처리한다 (MENU_EVENT).
   const appCommandsRef = useRef(appCommands);
   appCommandsRef.current = appCommands;
-  useEffect(
-    () =>
-      window.piDesktop.onMenuCommand((id) => {
-        if (id === "activity") {
-          setActivityOpen((n) => n + 1);
-          return;
-        }
-        const own = appCommandsRef.current.find((c) => c.id === id);
-        if (own) {
-          if (!own.disabled) own.run();
-          return;
-        }
-        window.dispatchEvent(new CustomEvent(MENU_EVENT, { detail: id }));
-      }),
-    [],
-  );
+  // 웹(pi-web)에는 메뉴바가 없어 화면 안의 메뉴(WebMenu)가 같은 처리를 부른다.
+  const runMenuCommand = useCallback((id: string) => {
+    if (id === "activity") {
+      setActivityOpen((n) => n + 1);
+      return;
+    }
+    const own = appCommandsRef.current.find((c) => c.id === id);
+    if (own) {
+      if (!own.disabled) own.run();
+      return;
+    }
+    window.dispatchEvent(new CustomEvent(MENU_EVENT, { detail: id }));
+  }, []);
+  useEffect(() => window.piDesktop.onMenuCommand(runMenuCommand), [runMenuCommand]);
 
   return (
     <div className="app-shell">
@@ -246,6 +279,7 @@ export function App() {
         <div className="tabbar-spacer" />
         <UpdateBadge state={update} />
         <ActivityButton entries={activity} onOpen={openActivity} openSignal={activityOpen} />
+        {window.piDesktop.shell === "web" && <WebMenu onCommand={runMenuCommand} />}
       </nav>
       <div className="workspaces">
         {tabs.ids.map((id) => (

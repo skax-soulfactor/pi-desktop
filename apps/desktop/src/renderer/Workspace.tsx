@@ -31,6 +31,7 @@ import { piSessionIdOf, tuiCommand } from "./tui-command";
 import { useSession } from "./use-session";
 import { ExtensionDialog, StatusLine, Toasts, Widgets } from "./ExtensionUi";
 import { FolderBrowser } from "./FolderBrowser";
+import { OPEN_SESSION_COMMAND } from "./web-menu";
 import { NewFolderDialog } from "./NewFolderDialog";
 import logoUrl from "../../build/icon.svg?url";
 import { SshHostsDialog } from "./SshHostsDialog";
@@ -129,7 +130,13 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     dismissToast,
   } = useSession(tabId);
   const isLocal = host?.kind === "local";
+  // OS 폴더 대화상자·탐색기는 데스크톱 앱에서만 쓴다. 웹(pi-web)은 서버의 폴더를 앱의 탐색 창으로 고른다.
+  const desktopShell = window.piDesktop.shell === "electron";
+  const osPicker = isLocal && desktopShell;
+  const canReveal = desktopShell && (host?.kind === "local" || host?.kind === "wsl");
   const [cwd, setCwd] = useState("");
+  /** 좁은 화면(휴대폰)에서 세션 목록(사이드바)을 서랍처럼 연다. 넓은 화면은 늘 보인다 (styles.css) */
+  const [drawerOpen, setDrawerOpen] = useState(false);
   // 새 세션 폴더는 지금 보고 있는(따라 보는) 세션의 폴더로 채운다. 세션을 바꾸면 그 세션의 폴더로 바뀐다.
   // 폴더가 같은 세션 사이를 오가면 그대로 두어, 직접 고쳐 둔 경로를 덮어쓰지 않는다.
   const activeCwd = session?.cwd ?? follow?.cwd;
@@ -866,12 +873,24 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   // 메뉴바 명령: 지금 탭만 처리한다. 대부분은 같은 id의 명령 팔레트 명령을 실행한다.
   const menuRef = useRef<(id: string) => void>(() => {});
   menuRef.current = (id: string) => {
+    // 웹 파일 관리자의 "이 폴더에서 새 세션" (폴더는 웹 서버, 곧 로컬 호스트의 것이다)
+    if (id.startsWith(OPEN_SESSION_COMMAND)) {
+      const path = id.slice(OPEN_SESSION_COMMAND.length);
+      if (!isLocal) {
+        setInfo("파일 관리자의 폴더는 이 기기(로컬)의 것입니다. 로컬 호스트 탭에서 여세요.");
+        return;
+      }
+      setCwd(path);
+      setDrawerOpen(false);
+      void guard(() => openSession(path));
+      return;
+    }
     switch (id) {
       case "palette":
         void openPalette();
         return;
       case "folder-pick":
-        if (isLocal) void guard(async () => {
+        if (osPicker) void guard(async () => {
           const picked = await window.piDesktop.pickDirectory();
           if (picked) setCwd(picked);
         });
@@ -911,8 +930,17 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
   }, [active]);
 
   return (
-    <div className="app" hidden={!active} ref={root}>
+    <div className={`app${session ? " has-session" : ""}${drawerOpen ? " drawer-open" : ""}`} hidden={!active} ref={root}>
       <header className="topbar">
+        <button
+          type="button"
+          className="drawer-toggle"
+          aria-label="세션 목록"
+          aria-expanded={drawerOpen}
+          onClick={() => setDrawerOpen((open) => !open)}
+        >
+          ☰
+        </button>
         <div className="brand">
           <img className="brand-logo" src={logoUrl} alt="" />
           Pi Desktop
@@ -1026,7 +1054,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           type="button"
           disabled={!connected || busy}
           onClick={() =>
-            isLocal
+            osPicker
               ? void guard(async () => {
                   const picked = await window.piDesktop.pickDirectory();
                   if (picked) setCwd(picked);
@@ -1043,7 +1071,10 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           type="button"
           className="primary"
           disabled={!connected || busy || Boolean(opening) || !cwd.trim()}
-          onClick={() => void guard(() => openSession(cwd.trim()))}
+          onClick={() => {
+            setDrawerOpen(false);
+            void guard(() => openSession(cwd.trim()));
+          }}
         >
           {opening ? (
             <>
@@ -1075,15 +1106,22 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           )}
         </div>
       )}
-      <div className="workspace">
+      <div className={`workspace${drawerOpen ? " drawer-open" : ""}`}>
+        {drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
         <Sidebar
           hostId={hostId}
           connected={connected}
           sessions={sessions}
           current={session}
           disabled={!connected || busy}
-          onSelect={(target) => void guard(() => switchTo(target))}
-          onOpenStored={(stored) => void guard(() => openStored(stored))}
+          onSelect={(target) => {
+            setDrawerOpen(false);
+            void guard(() => switchTo(target));
+          }}
+          onOpenStored={(stored) => {
+            setDrawerOpen(false);
+            void guard(() => openStored(stored));
+          }}
           onClose={(target) => void guard(() => closeSession(target))}
           onDelete={setDeleteAsk}
           onArchive={(path, title) =>
@@ -1093,7 +1131,10 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
               setInfo(`"${title}" 세션을 아카이브했습니다. 기록 아래 "아카이브"에서 되돌릴 수 있습니다.`);
             })
           }
-          onOpenBin={setBinTab}
+          onOpenBin={(tab) => {
+            setDrawerOpen(false);
+            setBinTab(tab);
+          }}
           {...(piState.status ? { piMissing: !piState.status.pi } : piState.error ? { piMissing: false } : {})}
           onInstallPi={() => {
             setPiManagerTab("status");
@@ -1265,7 +1306,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         actions={{
           onAbortBash: () => void guardQuiet(() => send({ type: "abort_bash" })),
           // 탐색기에서 볼 수 있는 호스트(로컬, WSL)만
-          ...(session && (host?.kind === "local" || host?.kind === "wsl")
+          ...(session && canReveal
             ? {
                 onReveal: (path: string) =>
                   void guardQuiet(async () => {
@@ -1490,7 +1531,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           hostLabel={hostLabel}
           hosts={hosts}
           cwd={resourcesCwd}
-          {...(host?.kind === "local" || host?.kind === "wsl"
+          {...(canReveal
             ? { onReveal: (path: string) => void guardQuiet(async () => void (await window.piDesktop.revealFile(hostId, resourcesCwd, path))) }
             : {})}
           {...(session && !lost && !readOnly && connected && resourcesCwd === session.cwd ? { onReload: reloadSessionResources } : {})}
@@ -1584,7 +1625,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           hostLabel={hostLabel}
           initialParent={cwd}
           onBrowse={async (current) => {
-            if (isLocal) return window.piDesktop.pickDirectory();
+            if (osPicker) return window.piDesktop.pickDirectory();
             return new Promise<string | undefined>((resolve) => {
               browseForParent.current = resolve;
               setFolderBrowserOpen(true);
