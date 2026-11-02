@@ -8,6 +8,7 @@ import {
   FIRST_CHECK_MS,
   isLocalBuild,
   latestMateRelease,
+  UPDATE_CHANNEL,
   releaseDownloadBase,
   restartPrompt,
   resultPrompt,
@@ -26,8 +27,8 @@ const REPO = "pi-desktop";
  * Mate 자동 업데이트 (설계 DESIGN-MATE.md §11).
  *
  * 설치한 앱에서만 돈다. 시작 20초 뒤와 6시간마다, 그리고 사용자가 요청할 때 확인한다.
- * 1. GitHub 릴리스 목록에서 가장 높은 mate-v* 릴리스를 찾는다 (Mate 릴리스는 Latest가 아니라서)
- * 2. 지금보다 높으면 그 릴리스 내려받기 주소를 generic 방식으로 넘겨 latest.yml을 확인한다
+ * 1. GitHub 릴리스 목록에서 가장 높은 vX.Y.Z 릴리스를 찾는다 (세 앱이 함께 올라간 릴리스)
+ * 2. 지금보다 높으면 그 릴리스 내려받기 주소를 generic 방식으로 넘겨 mate.yml을 확인한다
  * 3. 사용자가 고르기 전에는 내려받거나 설치하지 않는다 (Pi Desktop과 같은 확인 흐름)
  * 4. 설치 직전 beforeInstall(실행기 멈춤)을 부른다. 다시 시작하면 새 실행기가 뜬다
  * 시험용으로 PI_DESKTOP_MATE_UPDATE_URL을 주면 릴리스 목록 대신 그 주소(generic)에서 확인한다.
@@ -87,7 +88,7 @@ export class Updater {
   private async resolveFeed(): Promise<"feed" | "none" | "notified"> {
     const testUrl = process.env[TEST_FEED_ENV];
     if (testUrl) {
-      autoUpdater.setFeedURL({ provider: "generic", url: testUrl });
+      autoUpdater.setFeedURL({ provider: "generic", url: testUrl, channel: UPDATE_CHANNEL });
       return "feed";
     }
     const res = await net.fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=50`, {
@@ -103,7 +104,7 @@ export class Updater {
       this.set({ status: "available", version: latest.version });
       return "notified";
     }
-    autoUpdater.setFeedURL({ provider: "generic", url: releaseDownloadBase(OWNER, REPO, latest.tag) });
+    autoUpdater.setFeedURL({ provider: "generic", url: releaseDownloadBase(OWNER, REPO, latest.tag), channel: UPDATE_CHANNEL });
     return "feed";
   }
 
@@ -124,7 +125,7 @@ export class Updater {
       else if (feed === "none") this.set({ status: "none", checkedAt: Date.now() });
     } catch (e) {
       if (this.latestVersion && !process.env[TEST_FEED_ENV]) {
-        // 새 릴리스는 있는데 설치 정보(latest.yml)를 읽지 못했다 (예: 자동 업데이트 전에 만든 릴리스) → 알리기로 대신
+        // 새 릴리스는 있는데 설치 정보(mate.yml)를 읽지 못했다 (예: 자동 업데이트 전에 만든 릴리스) → 알리기로 대신
         this.manualOnly = true;
         this.set({ status: "available", version: this.latestVersion });
       } else {

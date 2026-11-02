@@ -1,7 +1,6 @@
 # Pi Desktop Agent 설치 파일 만들기 (설계 DESIGN-AGENT.md §0 "릴리스").
 # 로컬: npm run dist -w @pi-desktop/agent   (지금 OS용, 올리지 않음)
-# 릴리스: agent-v로 시작하는 태그를 올리면 .github/workflows/release-agent.yml이 세 OS에서 만들어
-#        이 저장소(pi-desktop)의 GitHub Releases에 올린다. Latest로 표시하지 않아 Pi Desktop의 v* 릴리스와 섞이지 않는다.
+# 릴리스: v로 시작하는 태그를 올리면 .github/workflows/release.yml이 세 앱을 세 OS에서 만들어 한 릴리스에 올린다 (0.6.4부터).
 appId: dev.pi-desktop.agent
 productName: Pi Desktop Agent
 copyright: Copyright © skax-soulfactor
@@ -49,12 +48,14 @@ extraResources:
 
 npmRebuild: false
 
-# 자동 업데이트(설계 DESIGN-AGENT.md §0): latest.yml(Windows)·latest-linux.yml(AppImage)과 blockmap을 만들게 한다.
-# 앱은 릴리스 목록에서 가장 높은 agent-v* 태그를 찾아 그 내려받기 주소를 generic 방식으로 쓴다 (Latest 릴리스를 보지 않음).
-# 이 url은 설치본의 app-update.yml에 들어가는 기본값이고, 실제로는 앱이 확인할 때마다 setFeedURL로 바꾼다. (Pi Desktop Mate와 같음)
+# 자동 업데이트(설계 DESIGN-AGENT.md §0): 세 앱이 한 릴리스(v<버전>)에 함께 올라가므로, Pi Desktop의 latest.yml과 겹치지 않게
+# 업데이트 정보 파일을 agent.yml(Windows)·agent-linux.yml(AppImage)·agent-mac.yml로 만든다 (channel). blockmap도 함께.
+# 앱은 릴리스 목록에서 가장 높은 v* 태그를 찾아 그 내려받기 주소와 같은 채널을 generic 방식으로 쓴다.
+# 이 url은 설치본의 app-update.yml에 들어가는 기본값이고, 실제로는 앱이 확인할 때마다 setFeedURL로 바꾼다.
 publish:
   provider: generic
-  url: https://github.com/skax-soulfactor/pi-desktop/releases/download/agent-v${version}
+  url: https://github.com/skax-soulfactor/pi-desktop/releases/download/v${version}
+  channel: agent
 
 win:
   target:

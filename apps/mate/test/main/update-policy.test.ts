@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { compareVersions, isLocalBuild, latestMateRelease, releaseDownloadBase, updateMode } from "../../src/main/update-policy";
+import { compareVersions, isLocalBuild, latestMateRelease, releaseDownloadBase, UPDATE_CHANNEL, updateMode } from "../../src/main/update-policy";
 
 describe("Mate 업데이트 규칙", () => {
-  it("가장 높은 mate-v* 릴리스를 고르고 Pi Desktop·Agent·초안·사전 릴리스는 뺀다", () => {
+  it("세 앱을 함께 올린 릴리스(v*) 중 가장 높은 것을 고른다 (옛 agent-v*·mate-v*, 초안·사전 릴리스 제외)", () => {
     const releases = [
-      { tag_name: "v0.1.15" },
-      { tag_name: "agent-v0.4.0" },
-      { tag_name: "mate-v0.10.0", draft: true },
-      { tag_name: "mate-v0.9.0", prerelease: true },
-      { tag_name: "mate-v0.2.0", html_url: "https://x/mate-v0.2.0" },
-      { tag_name: "mate-v0.3.1" },
-      { tag_name: "mate-v0.3.0" },
+      { tag_name: "agent-v0.6.4" },
+      { tag_name: "mate-v0.6.4" },
+      { tag_name: "v0.6.3", html_url: "u1" },
+      { tag_name: "v0.6.10" },
+      { tag_name: "v0.7.0", draft: true },
+      { tag_name: "v0.8.0", prerelease: true },
+      { tag_name: "v0.6.4" },
     ];
-    expect(latestMateRelease(releases)).toEqual({ tag: "mate-v0.3.1", version: "0.3.1" });
-    expect(latestMateRelease([{ tag_name: "v1.0.0" }])).toBeUndefined();
+    expect(latestMateRelease(releases)).toEqual({ tag: "v0.6.10", version: "0.6.10" });
+    expect(latestMateRelease([{ tag_name: "agent-v1.0.0" }, { tag_name: "mate-v1.0.0" }])).toBeUndefined();
   });
 
   it("버전 비교는 숫자로 (0.10 > 0.9)", () => {
@@ -23,7 +23,8 @@ describe("Mate 업데이트 규칙", () => {
   });
 
   it("내려받기 주소·자동 설치 여부·로컬 빌드", () => {
-    expect(releaseDownloadBase("o", "r", "mate-v0.3.0")).toBe("https://github.com/o/r/releases/download/mate-v0.3.0");
+    expect(releaseDownloadBase("o", "r", "v0.6.4")).toBe("https://github.com/o/r/releases/download/v0.6.4");
+    expect(UPDATE_CHANNEL).toBe("mate");
     expect(updateMode("win32", {})).toBe("auto");
     expect(updateMode("linux", { APPIMAGE: "/a.AppImage" })).toBe("auto");
     expect(updateMode("linux", {})).toBe("notify");

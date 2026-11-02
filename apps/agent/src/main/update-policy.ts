@@ -2,9 +2,10 @@
  * 자동 업데이트 규칙 (설계 DESIGN-AGENT.md §0 "릴리스"). electron 없이 판단하는 순수 함수라 테스트한다.
  * Pi Desktop Mate(apps/mate/src/main/update-policy.ts)와 같은 방식이고, 앱끼리 import하지 않으려고 따로 둔다.
  *
- * Agent 릴리스는 같은 저장소에 "Latest"가 아닌 릴리스로 올라간다(Pi Desktop 자동 업데이트와 섞이지 않게).
- * 그래서 electron-updater의 GitHub 방식(Latest만 봄)을 쓰지 않고, 릴리스 목록에서 가장 높은 agent-v* 태그를 찾아
- * 그 릴리스의 내려받기 주소를 generic 방식으로 넘긴다.
+ * 0.6.4부터 세 앱은 한 릴리스(vX.Y.Z)에 함께 올라간다. 그 릴리스에서 Agent의 업데이트 정보는 Pi Desktop의 latest.yml과
+ * 겹치지 않게 agent.yml(agent-linux.yml, agent-mac.yml)이다 (electron-builder.yml의 publish.channel).
+ * 그래서 릴리스 목록에서 가장 높은 vX.Y.Z를 찾아 그 내려받기 주소와 채널(agent)을 generic 방식으로 넘긴다.
+ * 0.6.3까지 쓰던 agent-v* 릴리스는 옛 설치본이 0.6.4로 올라오는 징검다리로만 남는다.
  */
 
 export type UpdateMode = "auto" | "notify";
@@ -31,7 +32,11 @@ export interface GithubRelease {
   html_url?: string;
 }
 
-const AGENT_TAG = /^agent-v(\d+)\.(\d+)\.(\d+)$/;
+/** 세 앱을 함께 올린 릴리스의 태그 */
+const RELEASE_TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
+
+/** 한 릴리스 안에서 Agent의 업데이트 정보 파일 이름 (agent.yml) */
+export const UPDATE_CHANNEL = "agent";
 
 function parts(version: string): [number, number, number] | undefined {
   const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(version);
@@ -45,11 +50,11 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** 릴리스 목록에서 가장 높은 Agent 릴리스(agent-vX.Y.Z, 초안·사전 릴리스 제외). Pi Desktop(v*)·Mate 릴리스는 고르지 않는다 */
+/** 릴리스 목록에서 가장 높은 vX.Y.Z 릴리스 (초안·사전 릴리스와 옛 앱별 태그 agent-v*·mate-v*는 고르지 않는다) */
 export function latestAgentRelease(releases: GithubRelease[]): { tag: string; version: string; url?: string } | undefined {
   let best: { tag: string; version: string; url?: string } | undefined;
   for (const r of releases) {
-    const m = AGENT_TAG.exec(r.tag_name);
+    const m = RELEASE_TAG.exec(r.tag_name);
     if (!m || r.draft || r.prerelease) continue;
     const version = `${m[1]}.${m[2]}.${m[3]}`;
     if (!best || compareVersions(version, best.version) > 0) best = { tag: r.tag_name, version, ...(r.html_url ? { url: r.html_url } : {}) };
@@ -57,7 +62,7 @@ export function latestAgentRelease(releases: GithubRelease[]): { tag: string; ve
   return best;
 }
 
-/** 그 릴리스의 내려받기 주소 (generic 방식 업데이트 주소: 여기서 latest.yml과 설치 파일을 받는다) */
+/** 그 릴리스의 내려받기 주소 (generic 방식 업데이트 주소: 여기서 agent.yml과 설치 파일을 받는다) */
 export function releaseDownloadBase(owner: string, repo: string, tag: string): string {
   return `https://github.com/${owner}/${repo}/releases/download/${tag}`;
 }
