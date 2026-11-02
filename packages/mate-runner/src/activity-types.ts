@@ -4,9 +4,16 @@
  * 저장하는 것은 요약뿐이다: 요청·명령은 앞부분만, 비밀값처럼 보이는 것은 가린다. 파일 내용·모델 답변은 저장하지 않는다.
  */
 
+/** 세션을 쓴 앱: pi = Pi Desktop·터미널 pi, agent = Agent, mate = Mate 자신(임무·대화) */
+export type SessionApp = "pi" | "agent" | "mate";
+
+export const SESSION_APP_LABELS: Record<SessionApp, string> = { pi: "Pi Desktop", agent: "Agent", mate: "Mate" };
+
 /** 세션 하나를 읽으며 모으는 요약 */
 export interface SessionAggregate {
   sessionId: string;
+  /** 어느 앱의 세션인지 (이 값이 생기기 전 기록에는 없다) */
+  app?: SessionApp;
   cwd: string;
   startedAt: number;
   lastAt: number;

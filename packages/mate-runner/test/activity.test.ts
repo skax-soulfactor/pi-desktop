@@ -175,6 +175,34 @@ describe("Observer", () => {
     expect(await readFile(join(agentSessions, "a.jsonl"), "utf8")).toBe(work);
   });
 
+  it("Mate 자신의 임무·대화는 활동에만 남기고, 계기·제안에는 쓰지 않는다 (관찰자 실행은 남기지 않음)", async () => {
+    const observer = new Observer(paths, noGit, sessionEnv());
+    const state: RunnerState = { duties: {}, today: { date: "", count: 0 } };
+    const now = Date.now();
+    await mkdir(paths.sessions, { recursive: true });
+    await mkdir(paths.chatSessions, { recursive: true });
+    // 임무 실행: 고치고 테스트 안 함 + 모델 오류 (사용자 세션이면 알림·관찰자 후보가 될 것)
+    await writeFile(join(paths.sessions, "run.jsonl"), `${sessionLines("/repo", now, { edit: true, modelError: "Connection error." }).join("\n")}\n`);
+    await writeFile(join(paths.chatSessions, "chat.jsonl"), `${sessionLines(join(paths.home, "chat"), now).join("\n")}\n`);
+    const observerRun = [
+      line({ type: "session", version: 3, id: "o1", timestamp: ts(now), cwd: "/repo" }),
+      line({ type: "message", timestamp: ts(now), message: { role: "user", content: "너는 사용자가 방금까지 한 작업을 지켜본 Mate 관찰자다. 아래 관찰을" } }),
+    ];
+    await writeFile(join(paths.sessions, "observer.jsonl"), `${observerRun.join("\n")}\n`);
+
+    // Mate가 일하는 중이어도 사용자가 바쁜 것은 아니다
+    await observer.tick(state, config(), now + 60_000);
+    const { ended } = await observer.tick(state, config(), now + 6 * 60_000);
+    expect(ended).toEqual([]);
+    expect(await readInbox(paths.inbox)).toEqual([]);
+    expect(observer.nextJob(state, config(), now + 6 * 60_000)).toBeUndefined();
+    const records = await readActivity(paths);
+    expect(records.map((r) => (r.kind === "session-ended" ? [r.session.app, r.session.cwd] : r.kind)).sort()).toEqual(
+      [["mate", "/repo"], ["mate", join(paths.home, "chat")]].sort(),
+    );
+    expect(state.observer?.recent).toEqual([]);
+  });
+
   it("관찰을 켜기 전에 이미 조용해진 세션은 읽지 않는다", async () => {
     const observer = new Observer(paths, noGit, sessionEnv());
     await writeFile(join(sessions, "old.jsonl"), `${sessionLines("/repo", Date.now() - 2 * H, { edit: true }).join("\n")}\n`);

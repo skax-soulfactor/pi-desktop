@@ -70,6 +70,7 @@ Pi의 설정 폴더(`PI_CODING_AGENT_DIR`)는 바꾸지 않는다. 바꾸면 로
 
 사용자가 켰을 때만, 같은 호스트에서 **Pi Desktop·터미널 `pi`의 세션(`~/.pi/agent/sessions`)과 Agent의 세션(`~/.pi-desktop-agent/sessions`)을 읽기만** 한다.
 요약(요청 앞부분, 고친 파일, 명령, 오류)만 Mate 홈에 남기고, 그 세션 파일을 옮기거나 고치지 않는다.
+Mate 자신의 임무·대화 세션(Mate 홈의 `sessions`·`chat/sessions`)도 활동에 남긴다. 다만 "작업을 마치면" 계기·알림·관찰자 분석에는 쓰지 않는다 (Mate가 자기 작업을 보고 다시 일을 만드는 순환을 막는다).
 
 ### 3.4 Mate의 스킬·프롬프트·MCP
 

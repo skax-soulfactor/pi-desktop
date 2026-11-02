@@ -231,7 +231,7 @@ Mate는 Pi 설치·로그인·모델 관리 화면을 따로 만들지 않는다
 
 ## 10. 활동 관찰 (M4)
 
-사용자가 켜야만 동작한다 (기본 꺼짐). 같은 호스트의 Pi Desktop·터미널 `pi` 세션(`~/.pi/agent/sessions`)과 Agent 세션(`~/.pi-desktop-agent/sessions`)을 **읽기만** 한다 (DESIGN-APPS.md §3.3). 세 제품(Muse·Dots·Duet)이 "예약 + 연결된 데이터 관찰 + 기억"이라면, Mate는 코딩 작업의 흐름을 보고 **작업이 끝났을 때** 돕는다.
+사용자가 켜야만 동작한다 (기본 꺼짐). 같은 호스트의 Pi Desktop·터미널 `pi` 세션(`~/.pi/agent/sessions`)과 Agent 세션(`~/.pi-desktop-agent/sessions`)을 **읽기만** 한다 (DESIGN-APPS.md §3.3). Mate 자신의 임무·대화도 활동 기록에 남기되, 계기·제안에는 쓰지 않는다. 세 제품(Muse·Dots·Duet)이 "예약 + 연결된 데이터 관찰 + 기억"이라면, Mate는 코딩 작업의 흐름을 보고 **작업이 끝났을 때** 돕는다.
 
 | | 내용 |
 |---|---|
