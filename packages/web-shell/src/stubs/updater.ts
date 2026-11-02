@@ -5,8 +5,8 @@ import { app, dialog } from "../electron/main";
  * Agent·Mate의 Updater와 같은 모양이다 (생성자 인자는 쓰지 않는다).
  */
 
-export const OWNER = "soulfactorx";
-export const REPO = "pi-desktop-mobile";
+export const OWNER = "skax-soulfactor";
+export const REPO = "pi-desktop";
 
 interface WebUpdateState {
   status: "disabled";
