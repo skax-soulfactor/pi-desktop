@@ -303,14 +303,16 @@ button.badge.warn {
   color: var(--muted);
 }
 
+/* 대화 폭은 창 폭을 따라간다. 고정 최대 폭을 두면 창을 키워도 내용이 넓어지지 않고 멈춘다 */
 .msg {
-  max-width: 860px;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .msg.user {
   align-self: flex-end;
+  /* 오른쪽에 붙는 사용자 말풍선은 폭의 80%까지 */
+  max-width: 80%;
   background: var(--user);
   padding: 8px 12px;
   border-radius: 10px;
@@ -387,7 +389,6 @@ button.badge.warn {
 }
 
 .tool {
-  max-width: 860px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
@@ -620,7 +621,6 @@ button.small {
   padding: 6px 10px;
   border-radius: 6px;
   white-space: pre-wrap;
-  max-width: 860px;
 }
 
 .notice.info {
