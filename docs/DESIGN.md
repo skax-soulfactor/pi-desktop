@@ -1215,8 +1215,9 @@ Pi는 세션 파일 잠금을 문서화하지 않았다. 그래서 **같은 세�
   - 처리기: `main/ipc-handlers.ts`의 `registerHandlers(router, deps)`. Electron은 ipcMain을, 웹 서버는 `server/web-router.ts`를 Router로 넘긴다. OS 대화상자·탐색기 보이기만 deps로 다르게 준다(웹은 없음).
   - 화면 API: `shared/api-client.ts`의 `createPiDesktopApi(transport, shell)`. preload는 ipcRenderer를, 웹은 `web/ws-transport.ts`를 넘긴다.
   - 화면은 `window.piDesktop.shell`이 `"web"`이면 로컬 호스트도 앱의 폴더 탐색 창을 쓰고, "탐색기에서 보기"를 감춘다.
+  - 서버 바탕: 주소·토큰 확인, 화면 파일, 공유 받기, 서비스 워커, WebSocket 받기와 끊긴 연결 정리는 web-shell의 `listenWebServer`(`server/http-server.ts`, §5.11)를 Agent·Mate와 함께 쓴다. Pi Desktop은 받은 WebSocket을 WebRouter에 붙이고 파일 내려받기 경로만 더한다.
 - **메시지** (`shared/web-protocol.ts`): JSON 한 개씩. `invoke`(id로 응답 짝짓기)·`send`·`event`. JSON은 배열 속 undefined를 null로 바꾸므로 undefined였던 인자 자리를 `u`에 적어 되살린다(settingsWrite의 baseMtime처럼 null이 다른 뜻인 인자가 있다). 오류 문구는 Electron과 같은 접두사("Error invoking remote method …")로 돌려줘 화면의 기존 처리를 그대로 쓴다.
-- **보안** (`server/auth.ts`): 서버는 main 프로세스와 같은 힘(명령 실행·파일 쓰기)을 가진다.
+- **보안** (web-shell `server/auth.ts`, 세 앱 공통): 서버는 main 프로세스와 같은 힘(명령 실행·파일 쓰기)을 가진다.
   - 기본으로 127.0.0.1에만 연다. 휴대폰의 다른 앱도 localhost에 붙을 수 있으므로 **토큰이 꼭 필요**하다. 토큰은 처음 실행할 때 만들어 데이터 폴더에 0600으로 둔다.
   - 서버가 알려 주는 주소는 `http://127.0.0.1:8787/#token=…`. `#` 뒤는 서버로 가지 않는다. 화면이 읽어 localStorage에 두고 주소창에서 지운다. WebSocket은 `?token=`, 확인용 `/api/auth`는 Bearer로 받는다. 비교는 해시끼리 timingSafeEqual.
   - localhost에만 열었으면 Host가 localhost·127.0.0.1·[::1]이 아닌 요청을 막는다(DNS rebinding). Origin이 있으면 Host와 같아야 한다(다른 웹사이트가 브라우저를 시켜 붙는 것).
@@ -1225,8 +1226,10 @@ Pi는 세션 파일 잠금을 문서화하지 않았다. 그래서 **같은 세�
   - 확인함: 서버를 껐다 켜도 열린 페이지가 다시 붙고, 데몬 아래의 Pi 세션이 그대로 이어진다.
 - **내장 터미널**: node-pty는 네이티브 모듈이고 Android용 미리 빌드된 파일이 없다. 터미널은 처음 열 때 node-pty를 불러오고, 없으면 그 터미널만 안내 오류로 실패한다(다른 기능은 그대로). 설치 스크립트를 `--terminal`로 실행하면 Termux에서 빌드한다(python·make·clang, node-gyp의 `android_ndk_path` 문제는 `~/.gyp/include.gypi`로 피한다).
 - **좁은 화면**(`max-width: 720px`): 사이드바는 ☰ 버튼으로 여는 서랍, 세션을 보는 동안 "새 세션 폴더" 줄은 서랍과 함께 연다. 파일 트리는 본문 위에 겹쳐 띄운다. 입력창은 한 줄 전체, 버튼은 그 아래.
-- **묶음과 설치** (`scripts/build-web.mjs`, `scripts/web/`):
-  - `pi-web.tar.gz`: `server.mjs`(ws까지 esbuild 한 파일, node-pty만 밖), `public/`(vite.web.config.ts), `host-agent/`, `bin/pi-web`, `package.json`. 플랫폼과 상관없는 JS라 Linux 한 곳에서 만든다(1.6MB 정도).
+- **빌드와 묶음** (앱마다 `npm run build:web`, 묶음은 루트 `scripts/build-web.mjs`와 `scripts/web/`):
+  - 웹은 별도 제품이 아니라 같은 앱의 다른 빌드 대상이다. 세 앱 모두 Electron 빌드(electron-vite)와 같은 소스에서 `src/server`(웹 서버 진입)·`src/web`(화면 시작점)·`vite.web.config.ts`·`scripts/build-web.mjs`로 `out/web`을 낸다. electron-builder는 `out/web`을 설치 파일에서 뺀다.
+  - Pi Desktop의 `out/web`: `server.mjs`(ws까지 esbuild 한 파일, node-pty만 밖), `public/`, `host-agent/`, `package.json`.
+  - 루트 `npm run build:web`이 세 앱의 웹 빌드를 `out/pi-web/`에 모은다(Pi Desktop을 바탕에, Agent·Mate를 `agent/`·`mate/`에, `bin/pi-web`). 버전은 Pi Desktop을 따른다. `npm run dist:web`은 `release/web/`에 `pi-web.tar.gz`와 `install-termux.sh`를 만든다. 플랫폼과 상관없는 JS라 Linux 한 곳에서 만든다(세 앱 합쳐 5MB 정도).
   - `install-termux.sh`: `pkg install nodejs-lts curl tar` → Pi가 없으면 `npm install -g` → 릴리스에서 묶음을 받아 `~/.pi-web/app`에 바꿔 넣기(데이터·토큰·빌드한 node-pty는 남긴다, 켜져 있었으면 다시 켠다) → `$PREFIX/bin/pi-web` → 켜고 브라우저 열기(`termux-open-url`). 릴리스 저장소는 빌드할 때 넣는다(GITHUB_REPOSITORY 또는 git origin). `latest/download/` 주소가 되도록 파일 이름에 버전을 넣지 않는다.
   - `pi-web`: start(백그라운드, `termux-wake-lock`)·run·stop·restart·status·url·open·log·update·uninstall. 서버를 꺼도 데몬과 Pi 세션은 계속 돈다.
   - 데이터: `~/.pi-web/data`(토큰, ssh-hosts.json, imports.json, copies.json, activity-log.jsonl, server.log). 데스크톱 앱의 userData에 해당한다. 데몬 홈(`~/.pi-desktop`)은 데스크톱과 같다.
@@ -1246,7 +1249,7 @@ Pi는 세션 파일 잠금을 문서화하지 않았다. 그래서 **같은 세�
 
 ### 5.11 Agent·Mate 웹 버전 — web-shell로 Electron 앱 감싸기 (v0.71)
 
-**목표**: 원래 저장소에서 더해진 Pi Desktop Agent(apps/agent)와 Pi Desktop Mate(apps/mate)도 휴대폰 브라우저로 쓴다. 두 앱은 원래 저장소가 계속 고치므로, **앱 코드는 한 줄도 고치지 않고** 감싼다. 그래야 원래 저장소를 합칠 때 충돌이 없다(Pi Desktop처럼 처리기를 옮기는 방식(§5.10)은 합칠 때마다 충돌이 난다).
+**목표**: 원래 저장소에서 더해진 Pi Desktop Agent(apps/agent)와 Pi Desktop Mate(apps/mate)도 휴대폰 브라우저로 쓴다. 두 앱은 원래 저장소가 계속 고치므로, **앱의 main·preload·renderer는 한 줄도 고치지 않고** 감싼다. 그래야 원래 저장소를 합칠 때 충돌이 없다(Pi Desktop처럼 처리기를 옮기는 방식(§5.10)은 합칠 때마다 충돌이 난다). 웹 진입점은 각 앱 안에 따로 둔다: `src/server/index.ts`(웹 서버), `src/web/`(화면 시작점·web.css·manifest), `vite.web.config.ts`, `scripts/build-web.mjs`(§5.10 "빌드와 묶음").
 
 ```
 [휴대폰 브라우저]  apps/agent/src/preload + renderer 그대로        [서버 (Termux의 Node)]  apps/agent/src/main 그대로
@@ -1276,7 +1279,8 @@ Pi는 세션 파일 잠금을 문서화하지 않았다. 그래서 **같은 세�
   - Agent: 옆 메뉴(`.nav`)가 서랍. 열렸을 때 transform을 없애야 안의 폴더 메뉴(position: fixed)가 화면 기준으로 뜬다.
   - Mate: 위쪽 탭 줄을 옆으로 밀어 본다.
 - **Pi 관리**: Agent·Mate는 Pi 설치·로그인을 Pi Desktop에 맡긴다. 웹에서는 "Pi Desktop 열기·설치"가 같은 묶음의 Pi Web(8787) 주소(`~/.pi-web/data/url`)를 새 탭으로 연다.
-- **묶음과 실행**: `pi-web.tar.gz` 안에 `agent/`·`mate/`로 들어간다(apps/desktop/scripts/build-web.mjs가 apps/agent-web·apps/mate-web의 scripts/build.mjs를 부른다. 버전은 Pi Web과 같다).
+- **묶음과 실행**: 각 앱의 `npm run build:web`이 `out/web/`(server.mjs, public/, resources/: 설치본의 extraResources와 같다)을 만들고, 루트 `scripts/build-web.mjs`가 그것을 `pi-web.tar.gz` 안의 `agent/`·`mate/`로 넣는다. 버전은 Pi Web과 같다.
+  - 서버는 web-shell의 `startWebServer`: 공통 바탕(`listenWebServer`) 위에서 WebSocket을 IpcHub 세션에 잇는다.
   - `pi-web agent`(8788, 데이터 `~/.pi-web/agent`), `pi-web mate`(8789, `~/.pi-web/mate`), `pi-web all`. 명령은 Pi Desktop과 같다(start·stop·status·url·log …).
   - 앱 홈은 설치본과 같다: Agent `~/.pi-desktop-agent`(데몬 홈), Mate `~/.pi-desktop-mate`(실행기 홈). 서버를 꺼도 Agent의 데몬·예약 세션과 Mate의 실행기(임무 시간표·텔레그램)는 계속 돈다.
   - 설치 스크립트로 업데이트하면 켜져 있던 서버만 다시 켠다. `pi-web uninstall`은 Mate 실행기도 멈춘다.

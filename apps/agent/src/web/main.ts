@@ -13,8 +13,8 @@ bootWebApp({
   urlCommand: "pi-web agent url",
   drawer: { panel: ".nav", keepOpen: ".folder-menu > button, .nav-close, .nav-act" },
   loadApp: async () => {
-    await import("../../../agent/src/preload/index");
-    await import("../../../agent/src/renderer/main");
+    await import("../preload/index");
+    await import("../renderer/main");
     // 앱 화면 CSS 뒤에 두어야 같은 선택자를 덮는다
     await import("./web.css");
     // 휴대폰: 대화 위 정보 줄(대화 이름·폴더·모델)을 접었다 편다. 키보드가 뜨면 저절로 접는다

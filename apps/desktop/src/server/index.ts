@@ -1,17 +1,14 @@
-import { createServer, type IncomingMessage } from "node:http";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
-import { WebSocketServer } from "ws";
 import { Methods, type SessionEventNotification, type SessionSummary } from "@pi-desktop/host-protocol";
+import { listenWebServer } from "@pi-desktop/web-shell/http-server";
+import { isLoopbackAddress } from "@pi-desktop/web-shell/auth";
 import { PushCenter } from "@pi-desktop/web-shell/push";
-import { SERVICE_WORKER_SOURCE } from "@pi-desktop/web-shell/service-worker";
-import { SERVICE_WORKER_PATH, ShellChannels } from "@pi-desktop/web-shell/protocol";
-import { handleShareRequest } from "@pi-desktop/web-shell/share-inbox";
+import { ShellChannels } from "@pi-desktop/web-shell/protocol";
 import { IpcChannels, type UpdateState } from "../shared/api";
-import { WebPaths } from "../shared/web-protocol";
 import { ActionLog } from "../main/action-log";
 import { agentVersion } from "../main/agent-build";
 import { CopyStore } from "../main/copies";
@@ -21,8 +18,6 @@ import { hostEventHandlers, registerHandlers } from "../main/ipc-handlers";
 import { ReplayCollector } from "../main/replay-collector";
 import { SshHostStore } from "../main/ssh-hosts";
 import { TerminalService } from "../main/terminal";
-import { bearerToken, isLoopbackAddress, loadOrCreateToken, requestAllowed, tokenMatches } from "./auth";
-import { serveStatic } from "./static-files";
 import { WebRouter } from "./web-router";
 import { sessionNote } from "./session-notify";
 import { FileManager } from "./file-manager";
@@ -33,6 +28,8 @@ import { FILE_DOWNLOAD_PATH, FileChannels, sessionOpenValue } from "../shared/we
  * Android 휴대폰에서는 Termux에서 이 서버와 Pi를 돌리고 휴대폰 브라우저로 http://127.0.0.1:<포트>를 연다.
  *
  * 묶음(release) 구조: server.mjs 옆에 public/(화면), host-agent/host-agent.mjs, package.json
+ * 주소·토큰 확인, 화면 파일, 공유 받기, 서비스 워커는 web-shell 서버(listenWebServer)가 맡는다.
+ * WebSocket 메시지는 Agent·Mate(web-shell의 IpcHub)와 달리 데스크톱 main의 처리기(main/ipc-handlers)를 WebRouter로 바로 부른다.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -62,7 +59,6 @@ function appVersion(): string {
 }
 const version = appVersion();
 
-const token = loadOrCreateToken(join(dataDir, "token"));
 const router = new WebRouter();
 const replays = new ReplayCollector<SessionEventNotification>();
 const sshHosts = new SshHostStore(join(dataDir, "ssh-hosts.json"));
@@ -146,84 +142,39 @@ router.handle(ShellChannels.pushSubscribe, (_peer, subscription: unknown) => {
 router.handle(ShellChannels.pushUnsubscribe, (_peer, endpoint: string) => push.unsubscribe(String(endpoint)));
 router.handle(ShellChannels.pushTest, async () => ({ sent: await push.send({ title: "Pi Web · 알림 시험", body: "휴대폰 알림이 잘 옵니다." }), total: push.count }));
 
-const allowed = (req: IncomingMessage) => requestAllowed({ host: req.headers.host, origin: req.headers.origin }, loopbackOnly);
-
-const server = createServer((req, res) => {
-  // 휴대폰 공유(스크린샷 등): 다른 앱이 보내 Origin이 이 서버가 아니므로 주소(Host)만 본다
-  if (handleShareRequest(req, res, requestAllowed({ host: req.headers.host }, loopbackOnly))) return;
-  if (!allowed(req)) {
-    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" }).end("허용하지 않는 주소입니다");
-    return;
-  }
-  if (req.url?.split("?")[0] === FILE_DOWNLOAD_PATH) {
+const running = await listenWebServer({
+  app: "Pi Desktop",
+  version,
+  port,
+  host: listenHost,
+  dataDir,
+  publicDir,
+  // 이미지 첨부(한 장 20MB, 열 장까지)가 base64로 한 메시지에 담길 수 있어 넉넉히 받는다.
+  maxPayload: 300 * 1024 * 1024,
+  route: (req, res) => {
+    if (req.url?.split("?")[0] !== FILE_DOWNLOAD_PATH) return false;
     // 브라우저가 링크로 받으므로 토큰 대신 화면이 받은 일회용 티켓을 확인한다
     const ticket = new URL(req.url, "http://localhost").searchParams.get("ticket");
     void files.serveDownload(ticket, res).then((ok) => {
       if (!ok && !res.headersSent) res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("내려받기 주소가 지났거나 맞지 않습니다");
     });
-    return;
-  }
-  if (req.url?.split("?")[0] === SERVICE_WORKER_PATH) {
-    // 서비스 워커는 사이트 전체(/)를 맡는다. 바뀌면 바로 새것을 쓰도록 캐시하지 않는다
-    res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "Service-Worker-Allowed": "/" });
-    res.end(SERVICE_WORKER_SOURCE);
-    return;
-  }
-  if (req.url?.split("?")[0] === WebPaths.auth) {
-    const ok = tokenMatches(token, bearerToken(req.headers.authorization));
-    res.writeHead(ok ? 200 : 401, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-    res.end(JSON.stringify(ok ? { ok: true, version } : { ok: false }));
-    return;
-  }
-  void serveStatic(publicDir, req, res).catch(() => {
-    if (!res.headersSent) res.writeHead(500).end();
-  });
-});
-
-// 이미지 첨부(한 장 20MB, 열 장까지)가 base64로 한 메시지에 담길 수 있어 넉넉히 받는다.
-const sockets = new WebSocketServer({ noServer: true, maxPayload: 300 * 1024 * 1024 });
-
-server.on("upgrade", (req, socket, head) => {
-  const url = new URL(req.url ?? "/", "http://localhost");
-  if (url.pathname !== WebPaths.socket || !allowed(req) || !tokenMatches(token, url.searchParams.get("token"))) {
-    socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
-    return;
-  }
-  sockets.handleUpgrade(req, socket, head, (ws) => {
-    let alive = true;
-    ws.on("pong", () => (alive = true));
-    // 휴대폰 브라우저가 백그라운드로 가면 연결이 말없이 끊긴다. 응답 없는 연결은 정리한다.
-    const timer = setInterval(() => {
-      if (!alive) return void ws.terminate();
-      alive = false;
-      ws.ping();
-    }, 30_000);
-    ws.once("close", () => clearInterval(timer));
-    router.attach(ws);
-  });
-});
-
-server.on("error", (error: NodeJS.ErrnoException) => {
-  console.error(error.code === "EADDRINUSE" ? `포트 ${port}를 이미 쓰고 있습니다. --port로 다른 포트를 고르세요.` : error.message);
+    return true;
+  },
+  connect: (ws) => void router.attach(ws),
+}).catch((error: Error) => {
+  console.error(error.message);
   process.exit(1);
 });
 
-server.listen(port, listenHost, () => {
-  const shown = listenHost === "0.0.0.0" || listenHost === "::" ? "127.0.0.1" : listenHost.includes(":") ? `[${listenHost}]` : listenHost;
-  const url = `http://${shown}:${port}/#token=${token}`;
-  // pi-web url이 이 파일을 읽어 보여 준다
-  writeFileSync(join(dataDir, "url"), `${url}\n`, { mode: 0o600 });
-  console.log(`Pi Web ${version}`);
-  console.log(`브라우저로 여세요: ${url}`);
-  if (!loopbackOnly) console.log(`주의: ${listenHost}에 열었습니다. 같은 네트워크의 다른 기기도 접속할 수 있으니 토큰을 남에게 보이지 마세요.`);
-});
+console.log(`Pi Web ${version}`);
+console.log(`브라우저로 여세요: ${running.url}`);
+if (!loopbackOnly) console.log(`주의: ${listenHost}에 열었습니다. 같은 네트워크의 다른 기기도 접속할 수 있으니 토큰을 남에게 보이지 마세요.`);
 
 // 서버를 꺼도 각 호스트의 데몬과 Pi 세션은 계속 돈다. 연결기와 터미널만 정리한다 (설계 §3.4).
 function shutdown(): void {
   terminals.dispose();
   hosts.dispose();
-  sockets.close();
-  server.close();
+  running.close();
   process.exit(0);
 }
 process.on("SIGINT", shutdown);

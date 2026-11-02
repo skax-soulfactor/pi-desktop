@@ -13,8 +13,8 @@ bootWebApp({
   // 첫 화면의 "Pi Desktop Mate" 옆에 웹앱 버전
   versionTarget: ".top .brand",
   loadApp: async () => {
-    await import("../../../mate/src/preload/index");
-    await import("../../../mate/src/renderer/main");
+    await import("../preload/index");
+    await import("../renderer/main");
     // 앱 화면 CSS 뒤에 두어야 같은 선택자를 덮는다
     await import("./web.css");
   },

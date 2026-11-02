@@ -18,6 +18,8 @@ extraMetadata:
 # electron-vite가 만든 결과물만 담는다. 화면(React 등)과 워크스페이스 패키지는 이미 번들에 들어 있다.
 files:
   - out/**
+  # 웹 빌드(npm run build:web, out/web)는 웹 묶음에 들어간다. 설치 파일에는 넣지 않는다
+  - "!out/web/**"
   - package.json
 
 extraResources:

@@ -74,6 +74,8 @@ curl -fsSL https://github.com/skax-soulfactor/pi-desktop/releases/latest/downloa
 
 웹 묶음(`pi-web.tar.gz`)과 설치 스크립트는 Pi Desktop 릴리스(`v*`, Latest)에 함께 올라갑니다. 예전 포크(`soulfactorx/pi-desktop-mobile`)에서 설치했다면 위 명령을 한 번 다시 실행해 이 저장소로 옮깁니다 (`pi-web update`는 설치한 저장소를 기억해 그곳에서 받기 때문입니다).
 
+웹은 별도 제품이 아니라 같은 앱의 다른 빌드 대상입니다. 각 앱 안의 `src/server`(웹 서버)·`src/web`(화면 시작점)과 `vite.web.config.ts`로 Electron 빌드와 같은 소스에서 웹 빌드(`npm run build:web -w <앱>`)를 내고, 루트의 `npm run build:web`(묶음만)·`npm run dist:web`(압축과 설치 스크립트까지, `release/web/`)이 세 앱을 한 묶음으로 모읍니다. 공통 웹 껍데기(서버 바탕·Electron 대체 모듈·이어지는 연결)는 `packages/web-shell`입니다.
+
 설치·명령(`pi-web`, `pi-web update` 등)·갤럭시 설정은 [apps/desktop 설명서의 "Android 휴대폰에서 쓰기"](apps/desktop/README.md#android-휴대폰에서-쓰기-웹-버전-pi-web)에 있습니다.
 
 ## 개발

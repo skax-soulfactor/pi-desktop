@@ -8,6 +8,8 @@
     "./electron-main": "./src/electron/main.ts",
     "./electron-renderer": "./src/client/electron-renderer.ts",
     "./server": "./src/server/web-server.ts",
+    "./http-server": "./src/server/http-server.ts",
+    "./auth": "./src/server/auth.ts",
     "./client": "./src/client/boot.ts",
     "./build": "./src/build.ts",
     "./client.css": "./src/client/shell.css",

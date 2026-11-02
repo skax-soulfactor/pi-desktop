@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { ShellChannels } from "@pi-desktop/web-shell/protocol";
 import type { Peer, Router } from "../main/ipc-handlers";
 import { packArgs, parseClientMessage, unpackArgs, type ServerMessage } from "../shared/web-protocol";
 
@@ -11,8 +12,6 @@ export interface PeerSocket {
 }
 
 const OPEN = 1;
-/** web-shell의 ShellChannels.visibility와 같다 (화면 쪽은 web-shell의 notify.ts를 쓴다) */
-const VISIBILITY_CHANNEL = "web-shell:visibility";
 
 /** 브라우저 탭 하나. Electron의 WebContents 자리를 맡는다 (터미널 출력은 그 탭에만 보낸다) */
 export class WsPeer implements Peer {
@@ -94,7 +93,7 @@ export class WebRouter implements Router {
     if (!message) return;
     const args = unpackArgs(message.args, message.u);
     if (message.t === "send") {
-      if (message.ch === VISIBILITY_CHANNEL) {
+      if (message.ch === ShellChannels.visibility) {
         peer.visible = args[0] === true;
         return;
       }

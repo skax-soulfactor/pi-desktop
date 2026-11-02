@@ -17,6 +17,8 @@ extraMetadata:
 
 files:
   - out/**
+  # 웹 빌드(npm run build:web, out/web)는 웹 묶음에 들어간다. 설치 파일에는 넣지 않는다
+  - "!out/web/**"
   - package.json
 
 # 실행기와 Pi 확장은 앱 밖의 node·Pi가 읽는 파일이라 asar에 넣지 않고 리소스로 둔다.

@@ -3,16 +3,15 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 // Agent 웹 화면 (설계 DESIGN.md §5.11). Agent의 renderer와 preload를 그대로 묶고 "electron"만 web-shell 대체 모듈로 바꾼다.
-// 결과는 out/web/public. scripts/build.mjs가 부른다.
+// 결과는 out/web/public. scripts/build-web.mjs가 부른다.
 const at = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
-const electronRendererShim = at("../../packages/web-shell/src/client/electron-renderer.ts");
 
 export default defineConfig({
   root: at("src/web"),
   base: "./",
   publicDir: at("src/web/public"),
   plugins: [react()],
-  resolve: { alias: { electron: electronRendererShim } },
+  resolve: { alias: { electron: "@pi-desktop/web-shell/electron-renderer" } },
   build: {
     outDir: at("out/web/public"),
     emptyOutDir: true,
