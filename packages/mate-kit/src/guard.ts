@@ -98,7 +98,19 @@ export function splitCommand(command: string): { segments: string[][] } | { reas
   return { segments };
 }
 
-function checkSegment(words: string[], grants: readonly string[]): CommandVerdict {
+/**
+ * 셸 문법 낱말 (반복문·조건문). 명령이 아니므로 허용을 묻지 않고, 뒤에 오는 명령만 검사한다.
+ * `for x in a b; do curl …; done`은 `;`로 나뉘어 [for x in a b] [do curl …] [done]이 된다.
+ */
+const SHELL_PREFIX = new Set(["do", "then", "else", "elif", "if", "while", "until", "!", "{"]);
+const SHELL_END = new Set(["done", "fi", "}"]);
+
+function checkSegment(segment: string[], grants: readonly string[]): CommandVerdict {
+  let words = segment;
+  while (words.length > 0 && SHELL_PREFIX.has(words[0]!)) words = words.slice(1);
+  // `for 이름 in 낱말…`은 값만 늘어놓는 머리다 (명령 치환은 splitCommand에서 이미 막았다)
+  if (words[0] === "for" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(words[1] ?? "") && (words.length === 2 || words[2] === "in")) return { allowed: true };
+  if (words.length === 0 || (words.length === 1 && SHELL_END.has(words[0]!))) return { allowed: true };
   const [cmd = "", ...args] = words;
   const name = cmd.replace(/\.exe$/i, "");
   if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(name)) return deny("환경 변수를 바꿔 실행할 수 없습니다");
