@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
 import { checkCommand, splitCommand } from "@pi-desktop/mate-kit";
 import { isChangeTrigger, type Duty, type RunnerState, type WatchState } from "./types";
+import { mateTunables } from "./tunables";
 
 /**
  * 변화 계기 감시 (설계 DESIGN-MATE.md §3, M2).
@@ -37,7 +38,6 @@ function addPending(pending: WatchState["pending"], cause: string, now: number):
   return pending ? { ...pending, lastAt: now, cause, count: pending.count + 1 } : { since: now, lastAt: now, cause, count: 1 };
 }
 
-const MAX_FILES = 20;
 
 /** 바깥(예: 활동 관찰)에서 알린 변화를 기다리는 변화로 더한다 */
 export function notePending(watch: WatchState, cause: string, now: number): WatchState {
@@ -48,7 +48,7 @@ export function notePending(watch: WatchState, cause: string, now: number): Watc
 export function noteFileChange(watch: WatchState, relative: string, now: number): WatchState {
   const known = watch.pending?.files ?? [];
   const seen = known.includes(relative);
-  const files = seen || known.length >= MAX_FILES ? known : [...known, relative];
+  const files = seen || known.length >= mateTunables().num("duty.maxWatchedFiles") ? known : [...known, relative];
   const count = (watch.pending?.count ?? 0) + (seen ? 0 : 1);
   const shown = files.slice(0, 3).join(", ") + (count > 3 ? " 등" : "");
   const cause = count === 1 ? `파일 바뀜: ${relative}` : `파일 ${count}개 바뀜 (${shown})`;

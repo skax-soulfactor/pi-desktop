@@ -1,0 +1,176 @@
+/* "프롬프트와 수치" 패널. 색은 앱의 변수(--border, --muted, --accent 등)를 쓴다 (Agent·Mate 모두 같은 이름) */
+.tun-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tun-panel p {
+  margin: 0;
+}
+.tun-panel code {
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+.tun-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.tun-toolbar input[type="search"] {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.tun-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tun-filter {
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.tun-filter.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tun-group h4 {
+  margin: 12px 0 4px;
+  font-size: 0.95em;
+  color: var(--muted);
+}
+.tun-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 4px 0;
+  background: var(--panel);
+}
+.tun-item.changed {
+  border-color: var(--accent);
+}
+.tun-item > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+.tun-label {
+  font-weight: 600;
+}
+.tun-value {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.9em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tun-item[open] > summary .tun-value {
+  display: none;
+}
+.tun-badge {
+  font-size: 0.75em;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.tun-badge.changed {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tun-badge.bad {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+.tun-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+.tun-purpose {
+  line-height: 1.5;
+}
+.tun-locked {
+  border-left: 3px solid var(--warn);
+  padding-left: 8px;
+}
+.tun-problem {
+  color: var(--bad);
+}
+.tun-warn {
+  color: var(--warn);
+}
+.tun-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font-size: 0.9em;
+}
+.tun-facts dt {
+  color: var(--muted);
+}
+.tun-facts dd {
+  margin: 0;
+  min-width: 0;
+}
+.tun-text {
+  margin: 0;
+  padding: 8px;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--panel-2);
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+.tun-default {
+  opacity: 0.8;
+}
+.tun-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+.tun-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tun-edit textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+.tun-edit input[type="number"] {
+  max-width: 200px;
+}
+.tun-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+@media (max-width: 520px) {
+  .tun-facts {
+    grid-template-columns: 1fr;
+  }
+  .tun-facts dd {
+    margin-bottom: 4px;
+  }
+  .tun-value {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}

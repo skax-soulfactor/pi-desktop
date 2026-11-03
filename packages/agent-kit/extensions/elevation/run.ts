@@ -3,6 +3,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LinuxPackageManager } from "./compile";
+import { agentTunables } from "../../src/tunables";
 
 /**
  * 승인이 끝난 argv를 OS 상승 경로로 한 번 실행한다 (desktop-agent tools/elevated.ts를 옮김).
@@ -17,15 +18,13 @@ export interface ElevatedResult {
   cancelled?: boolean;
 }
 
-const MAX_OUTPUT = 100 * 1024;
-/** 인증 창에 답하는 시간까지 포함한 상한 */
-const RUN_TIMEOUT_MS = 5 * 60 * 1000;
+// 출력 길이(elevation.maxOutputKb)와 인증 창에 답하는 시간까지 포함한 시간 제한(elevation.timeoutMinutes)은 설정에서 읽는다
 
-const truncate = (s: string) => (s.length > MAX_OUTPUT ? `${s.slice(0, MAX_OUTPUT)}\n...[출력 잘림]` : s);
+const truncate = (s: string, max = agentTunables().num("elevation.maxOutputKb") * 1024) => (s.length > max ? `${s.slice(0, max)}\n...[출력 잘림]` : s);
 
 function run(file: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    execFile(file, args, { timeout: RUN_TIMEOUT_MS, maxBuffer: 5 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
+    execFile(file, args, { timeout: agentTunables().num("elevation.timeoutMinutes") * 60_000, maxBuffer: 5 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
       // 종료 코드는 error.code에 숫자로 온다 (실행 자체가 실패하면 문자열 코드)
       const err = error as (Error & { code?: number | string }) | null;
       const code = !err ? 0 : typeof err.code === "number" ? err.code : 1;

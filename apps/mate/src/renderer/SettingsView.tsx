@@ -4,6 +4,7 @@ import { ModelSelect } from "./PiSetup";
 import type { Act } from "./App";
 import { relativeTime } from "./mate-view";
 import { GrantChips } from "./GrantChips";
+import { TunablesPanel } from "@pi-desktop/tunables-ui";
 import { HostSettings } from "./HostSettings";
 
 /** Mate 전체 설정과 실행기 상태 */
@@ -134,6 +135,14 @@ export function SettingsView({
           <button onClick={() => void act(() => window.mate.installPiDesktop())}>Pi Desktop 설치</button>
         )}
       </div>
+
+      <TunablesPanel
+        load={() => window.mate.tunablesList()}
+        save={(id, value) => window.mate.tunableSet(id, value)}
+        onError={(message) => void act(() => Promise.reject(new Error(message)))}
+        file={`${overview.home}/tunables.json`}
+        applyNote="실행기가 다음 실행·대화부터 바로 읽습니다. 실행기를 다시 시작할 필요가 없습니다."
+      />
 
       <h2>Mate</h2>
       <div className="kv">

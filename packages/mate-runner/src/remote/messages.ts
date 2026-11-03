@@ -2,6 +2,7 @@ import type { ChatLine, InboxItem } from "@pi-desktop/mate-kit";
 import { redact } from "../activity";
 import { parseTime } from "../schedule";
 import type { TelegramConfig } from "../types";
+import { mateTunables } from "../tunables";
 
 /**
  * 휴대폰(텔레그램)으로 보내는 글과 버튼, 받은 명령 해석 (설계 DESIGN-MATE.md §12). 모두 순수 함수다.
@@ -164,16 +165,14 @@ export function parseCommand(text: string): Command | undefined {
       return { kind: "new" };
     case "history": {
       const n = Number.parseInt(arg, 10);
-      return { kind: "history", count: Number.isFinite(n) ? Math.min(Math.max(n, 1), HISTORY_MAX) : HISTORY_DEFAULT };
+      return { kind: "history", count: Number.isFinite(n) ? Math.min(Math.max(n, 1), mateTunables().num("telegram.historyMax")) : mateTunables().num("telegram.historyDefault") };
     }
     default:
       return { kind: "help" };
   }
 }
 
-/** /history가 기본으로 보여 주는 줄 수와 최대 */
-export const HISTORY_DEFAULT = 10;
-export const HISTORY_MAX = 30;
+// /history가 기본으로 보여 주는 줄 수와 최대는 설정으로 꺼냈다 (tunables.ts의 telegram.historyDefault·historyMax)
 
 function hhmm(at: number): string {
   const d = new Date(at);

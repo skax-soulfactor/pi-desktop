@@ -1,5 +1,7 @@
+import { agentDefault } from "../../src/tunables-defs";
+
 /**
- * 지식베이스 항목의 모양. 앱 화면(렌더러)도 쓰므로 아무것도 import하지 않는다 (파일 읽기·쓰기는 store.ts).
+ * 지식베이스 항목의 모양. 앱 화면(렌더러)도 쓰므로 순수한 정의 파일(tunables-defs) 말고는 import하지 않는다 (파일 읽기·쓰기는 store.ts).
  * desktop-agent의 지식베이스(MemoryEntry)를 Pi 방식의 Markdown 파일로 옮겼다.
  */
 
@@ -9,7 +11,7 @@ export const MEMORY_TYPES: MemoryType[] = ["user", "requirement", "lesson", "ref
 export const TYPE_LABEL: Record<MemoryType, string> = { user: "사용자", requirement: "요구사항", lesson: "교훈", reference: "참조" };
 
 /** 피어 답변·카드 초안 같은 바깥으로 나가는 곳에 쓰지 않을 항목에 붙이는 태그 */
-export const NO_SHARE_TAG = "공유제외";
+export const NO_SHARE_TAG = agentDefault<string>("memory.noShareTag");
 
 export interface KnowledgeEntry {
   id: string;

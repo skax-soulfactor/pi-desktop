@@ -1,3 +1,5 @@
+import { agentDefault } from "../../src/tunables-defs";
+
 /**
  * 한 실행(run) 안의 "제자리 돌기" 신호를 센다. 파일·Pi에 손대지 않는 순수 로직이다.
  *
@@ -7,11 +9,17 @@
  * 작은 모델은 "조사 결과를 누적하라"는 프롬프트 규칙을 따르지 않으므로 코드로 막는다.
  */
 
-/** 이만큼 신호가 쌓이면 실행을 멈춘다 */
-export const SPIN_LIMIT = 3;
+/** 이만큼 신호가 쌓이면 실행을 멈춘다 (기본값, loopGuard.spinLimit) */
+export const SPIN_LIMIT = agentDefault<number>("loopGuard.spinLimit");
 
-/** 이보다 짧은 문단은 반복으로 세지 않는다 ("확인했습니다." 같은 말은 자연스럽게 되풀이된다) */
-const MIN_PARAGRAPH = 30;
+export interface GuardLimits {
+  /** 이만큼 신호가 쌓이면 실행을 멈춘다 */
+  spinLimit: number;
+  /** 이보다 짧은 문단은 반복으로 세지 않는다 ("확인했습니다." 같은 말은 자연스럽게 되풀이된다) */
+  minParagraph: number;
+}
+
+const DEFAULT_LIMITS = (): GuardLimits => ({ spinLimit: SPIN_LIMIT, minParagraph: agentDefault<number>("loopGuard.minParagraph") });
 
 const READ_TOOLS = new Set(["read", "grep", "find", "ls"]);
 
@@ -20,6 +28,9 @@ export class RunGuard {
   private readonly reads = new Set<string>();
   private readonly paragraphs = new Set<string>();
   private signals = 0;
+
+  /** limits는 쓸 때마다 부른다 (설정 화면에서 바꾼 값이 다음 판단부터 반영되도록) */
+  constructor(private readonly limits: () => GuardLimits = DEFAULT_LIMITS) {}
 
   reset(): void {
     this.reads.clear();
@@ -32,7 +43,7 @@ export class RunGuard {
   }
 
   get stopped(): boolean {
-    return this.signals >= SPIN_LIMIT;
+    return this.signals >= this.limits().spinLimit;
   }
 
   /** 막아야 할 호출이면 모델에 돌려줄 이유, 아니면 undefined */
@@ -50,9 +61,10 @@ export class RunGuard {
 
   /** 모델이 쓴 글. 이번 실행에서 이미 쓴 문단이 다시 나오면 신호로 센다 */
   recordText(text: string): void {
+    const { minParagraph } = this.limits();
     for (const paragraph of text.split(/\n\s*\n/)) {
       const key = paragraph.replace(/\s+/g, " ").trim().toLowerCase();
-      if (key.length < MIN_PARAGRAPH) continue;
+      if (key.length < minParagraph) continue;
       if (this.paragraphs.has(key)) this.signals++;
       else this.paragraphs.add(key);
     }

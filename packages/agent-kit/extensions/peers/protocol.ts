@@ -1,4 +1,5 @@
 import type { AgentCard } from "./store";
+import { agentDefault } from "../../src/tunables-defs";
 
 /**
  * 피어끼리 주고받는 모양. A2A(Agent2Agent) JSON-RPC를 따른다: 카드는 `GET /.well-known/agent-card.json`,
@@ -11,7 +12,7 @@ export const PAIR_PATH = "/pair";
 export const PAIR_STATUS_PATH = "/pair/status";
 
 /** 피어를 거쳐 다시 피어를 부르는 깊이 상한 (A→B→A 같은 순환과 꼬리 물기를 막는다) */
-export const MAX_HOPS = 2;
+export const MAX_HOPS = agentDefault<number>("peers.maxHops");
 
 export interface MessageSendMetadata {
   /** 지금까지 거친 에이전트 이름들 (홉 제한) */

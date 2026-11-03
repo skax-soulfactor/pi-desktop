@@ -1,9 +1,10 @@
 import type { TranscriptItem } from "./view-types";
+import { mateTunables } from "./tunables";
 
-const TEXT_LIMIT = 4000;
 
 function clip(text: string): string {
-  return text.length > TEXT_LIMIT ? `${text.slice(0, TEXT_LIMIT)}\n… (${text.length - TEXT_LIMIT}자 생략)` : text;
+  const limit = mateTunables().num("activity.transcriptChars");
+  return text.length > limit ? `${text.slice(0, limit)}\n… (${text.length - limit}자 생략)` : text;
 }
 
 function textOf(content: unknown): string {

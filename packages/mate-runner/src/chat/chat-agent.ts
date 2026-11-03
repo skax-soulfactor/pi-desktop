@@ -17,6 +17,7 @@ import { COMMAND_HELP, findDuty, findFolder, instruct, runCommand, type ChatSour
 import { chatImagesOf, removeChatImages } from "./chat-images";
 import { chatSystemPrompt, openQuestions } from "./context";
 import { parseSchedulePhrase } from "./schedule-phrase";
+import { mateDefault, mateTunables } from "../tunables";
 
 /**
  * Mate 대화 담당 (설계 DESIGN-MATE.md §13).
@@ -60,8 +61,7 @@ export interface ChatAgentOptions {
   runPi?: typeof defaultRunPi;
 }
 
-const TICK_MS = Number(process.env.PI_DESKTOP_MATE_CHAT_TICK_MS) || 3_000;
-const CHAT_TIMEOUT_SEC = 180;
+const TICK_MS = Number(process.env.PI_DESKTOP_MATE_CHAT_TICK_MS) || mateDefault<number>("chat.tickMs");
 
 export async function loadChatState(paths: MatePaths): Promise<ChatState> {
   const raw = await readJson<Partial<ChatState>>(paths.chatState, {});
@@ -366,7 +366,7 @@ export class ChatAgent {
           isolationDir: isolationDirOf(this.options.kitDir),
           inboxPath: paths.inbox,
           sessionsDir: paths.chatSessions,
-          timeoutSec: CHAT_TIMEOUT_SEC,
+          timeoutSec: mateTunables().num("chat.timeoutSec"),
           maxCostUsd: config.maxCostUsd,
           chat: { sessionId: `mate-chat-${this.state.epoch}`, systemPrompt, actionsPath },
           ...(request.images?.length ? { images: request.images } : {}),

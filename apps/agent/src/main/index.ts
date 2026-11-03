@@ -387,6 +387,8 @@ function registerIpc(conn: () => HostConnection): void {
   forward(IpcChannels.setElevation, "setElevation");
   forward(IpcChannels.getAutoLearn, "getAutoLearn");
   forward(IpcChannels.setAutoLearn, "setAutoLearn");
+  forward(IpcChannels.tunablesList, "tunablesList");
+  forward(IpcChannels.tunableSet, "tunableSet");
   forward(IpcChannels.listRules, "listRules");
   forward(IpcChannels.removeRule, "removeRule");
   forward(IpcChannels.listAudit, "listAudit");

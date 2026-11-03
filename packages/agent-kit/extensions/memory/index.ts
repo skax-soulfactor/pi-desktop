@@ -5,7 +5,8 @@ import { isLocalBaseUrl } from "../local-model/budget";
 import { dataDir } from "../permissions/store";
 import { attended, isPeerAnswer, isScheduler, isWorker, learning } from "../../src/runtime";
 import { recordUsage } from "../../src/usage";
-import { digestRun, EXTRACT_SYSTEM, extractPrompt, parseOps, UNVERIFIED_RULE, type RunDigest } from "./extract";
+import { digestRun, extractPrompt, parseOps, type RunDigest } from "./extract";
+import { agentDefault, agentTunables } from "../../src/tunables";
 import { buildKnowledgeSection, relevance } from "./recall";
 import {
   archiveEntry,
@@ -23,7 +24,7 @@ import {
 } from "./store";
 
 /** 시스템 프롬프트에서 지식베이스가 들어가는 섹션 이름 (XML 태그 이름이 된다) */
-export const MEMORY_SECTION = "agent_memory";
+export const MEMORY_SECTION = agentDefault<string>("memory.sectionName");
 
 /**
  * 지식베이스 (설계 DESIGN-AGENT.md §4 "지식베이스", desktop-agent의 지식베이스를 옮김).
@@ -66,8 +67,9 @@ export default function memory(pi: ExtensionAPI): void {
     if (!model || !(await loadAutoLearn(dir))) return;
     try {
       const existing = await loadEntries(dir);
+      const tunables = agentTunables();
       const reply = await ctx.modelRegistry.complete(model, {
-        systemPrompt: digest.verified ? EXTRACT_SYSTEM : EXTRACT_SYSTEM + UNVERIFIED_RULE,
+        systemPrompt: digest.verified ? tunables.text("memory.extractSystem") : tunables.text("memory.extractSystem") + tunables.text("memory.unverifiedRule"),
         messages: [{ role: "user", content: extractPrompt(existing, digest, extractBudgetChars(ctx)), timestamp: Date.now() }],
       });
       // 이 호출은 세션에 남지 않으므로 사용량을 따로 적는다
@@ -111,7 +113,11 @@ export default function memory(pi: ExtensionAPI): void {
   pi.on("before_agent_start", async (event, ctx) => {
     const prompt = event.messageType === "user" ? event.prompt : "";
     const entries = (await loadEntries(dir)).filter(shareable);
-    const { text, injected } = buildKnowledgeSection(entries, prompt, budgetChars(ctx));
+    const tunables = agentTunables();
+    const { text, injected } = buildKnowledgeSection(entries, prompt, budgetChars(ctx), {
+      minRelevance: tunables.num("memory.minRelevance"),
+      intro: tunables.text("memory.sectionIntro"),
+    });
     const sections = event.systemPromptOptions.sections;
     if (text) sections[MEMORY_SECTION] = text;
     else delete sections[MEMORY_SECTION];

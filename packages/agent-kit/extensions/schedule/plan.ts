@@ -1,3 +1,5 @@
+import { agentDefault } from "../../src/tunables-defs";
+
 /**
  * 예약의 순수 로직: 입력 검증, 다음 실행 시각, 도래 판정. 파일·Pi에 손대지 않는다.
  *
@@ -28,7 +30,8 @@ export interface Schedule {
   createdAt: string;
 }
 
-export const MIN_INTERVAL_MINUTES = 5;
+/** 반복 예약의 최소 간격 기본값 (schedule.minIntervalMinutes, 사용자가 바꿀 수 있다) */
+export const MIN_INTERVAL_MINUTES = agentDefault<number>("schedule.minIntervalMinutes");
 
 export interface ScheduleInput {
   kind: ScheduleKind;
@@ -38,7 +41,7 @@ export interface ScheduleInput {
 }
 
 /** 입력이 맞지 않으면 그 이유 (모델에 돌려줄 글), 맞으면 undefined */
-export function invalidReason(input: ScheduleInput, now: Date): string | undefined {
+export function invalidReason(input: ScheduleInput, now: Date, minIntervalMinutes = MIN_INTERVAL_MINUTES): string | undefined {
   if (input.kind === "once") {
     const at = input.at ? Date.parse(input.at) : Number.NaN;
     if (Number.isNaN(at)) return "once에는 실행 시각 at(ISO 8601, 예: 2026-10-30T15:00:00+09:00)이 필요하다";
@@ -46,8 +49,8 @@ export function invalidReason(input: ScheduleInput, now: Date): string | undefin
     return undefined;
   }
   if (input.kind === "interval") {
-    if (!input.minutes || !Number.isFinite(input.minutes) || input.minutes < MIN_INTERVAL_MINUTES) {
-      return `interval에는 ${MIN_INTERVAL_MINUTES}분 이상의 minutes가 필요하다`;
+    if (!input.minutes || !Number.isFinite(input.minutes) || input.minutes < minIntervalMinutes) {
+      return `interval에는 ${minIntervalMinutes}분 이상의 minutes가 필요하다`;
     }
     return undefined;
   }

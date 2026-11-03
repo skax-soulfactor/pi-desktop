@@ -4,11 +4,9 @@ import { dataDir } from "../permissions/store";
 import { attended, isWorker } from "../../src/runtime";
 import { loadTasks, newTaskId, saveTask, tasksDir, type TaskRecord } from "./store";
 import { runWorker } from "./worker";
+import { agentTunables } from "../../src/tunables";
 
-/** 한 세션에서 동시에 돌릴 워커 수 */
-export const MAX_RUNNING = 2;
-/** 대화에 들어가는 작업 결과의 최대 글자 수. 전문은 작업 기록 파일에 있다 */
-const RESULT_CHARS = 4000;
+// 한 세션에서 동시에 돌릴 워커 수(tasks.maxRunning)와 대화에 넣는 결과 길이(tasks.resultChars)는 설정에서 읽는다 (src/tunables-defs.ts)
 
 export const TASK_MESSAGE = "agent-task";
 
@@ -84,7 +82,7 @@ export default function tasks(pi: ExtensionAPI): void {
     }),
     executionMode: "sequential",
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      if (running.size >= MAX_RUNNING) {
+      if (running.size >= agentTunables().num("tasks.maxRunning")) {
         throw new Error(`이미 작업 ${running.size}개가 돌고 있다. 끝나기를 기다리거나 cancel_task로 하나를 멈춰라.`);
       }
       const record = start(ctx, params.title.trim() || "작업", params.instruction);
@@ -141,5 +139,6 @@ export function taskNotice(record: TaskRecord): string {
 const STATUS_LABEL: Record<TaskRecord["status"], string> = { waiting: "승인 기다림", running: "실행 중", done: "완료", failed: "실패", cancelled: "취소됨" };
 
 function clip(text: string): string {
-  return text.length > RESULT_CHARS ? `${text.slice(0, RESULT_CHARS)}\n[결과가 길어 앞부분만 넣었다. 전문은 작업 기록에 있다]` : text;
+  const limit = agentTunables().num("tasks.resultChars");
+  return text.length > limit ? `${text.slice(0, limit)}\n[결과가 길어 앞부분만 넣었다. 전문은 작업 기록에 있다]` : text;
 }

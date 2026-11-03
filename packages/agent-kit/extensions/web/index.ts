@@ -1,11 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { htmlTitle, htmlToText } from "./html";
+import { agentTunables } from "../../src/tunables";
 
-/** 받아 올 응답 크기 상한. 넘으면 앞부분만 읽는다 */
-const MAX_BYTES = 2 * 1024 * 1024;
-const TIMEOUT_MS = 20_000;
-const DEFAULT_MAX_CHARS = 20_000;
+// 받아 올 크기 상한(web.maxKb)·기다리는 시간(web.timeoutSeconds)·기본 글자 수(web.defaultMaxChars)는 설정에서 읽는다 (src/tunables-defs.ts)
 
 /**
  * 웹 페이지 읽기 도구 (설계 DESIGN-AGENT.md §4 "HTTP 요청, 웹 검색").
@@ -15,6 +13,7 @@ const DEFAULT_MAX_CHARS = 20_000;
  * 큰 결과는 local-model 확장이 창에 맞게 한 번 더 줄인다.
  */
 export default function web(pi: ExtensionAPI): void {
+  const defaultMaxChars = agentTunables().num("web.defaultMaxChars");
   pi.registerTool({
     name: "web_fetch",
     label: "웹 페이지 읽기",
@@ -24,11 +23,11 @@ export default function web(pi: ExtensionAPI): void {
     promptSnippet: "web_fetch: 주소의 페이지 내용을 읽는다",
     parameters: Type.Object({
       url: Type.String({ description: "읽을 http(s) 주소" }),
-      maxChars: Type.Optional(Type.Number({ description: `돌려받을 최대 글자 수 (기본 ${DEFAULT_MAX_CHARS})` })),
+      maxChars: Type.Optional(Type.Number({ description: `돌려받을 최대 글자 수 (기본 ${defaultMaxChars})` })),
     }),
     async execute(_toolCallId, params, signal) {
       const page = await fetchPage(params.url, signal);
-      const maxChars = Math.max(500, Math.floor(params.maxChars ?? DEFAULT_MAX_CHARS));
+      const maxChars = Math.max(500, Math.floor(params.maxChars ?? agentTunables().num("web.defaultMaxChars")));
       const body = page.text.length > maxChars ? `${page.text.slice(0, maxChars)}\n\n[앞 ${maxChars}자만 보냈다. 전체 ${page.text.length}자]` : page.text;
       const head = [`주소: ${page.url}`, page.title ? `제목: ${page.title}` : undefined, `형식: ${page.contentType || "알 수 없음"}`]
         .filter(Boolean)
@@ -60,7 +59,7 @@ export async function fetchPage(rawUrl: string, signal?: AbortSignal): Promise<F
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(`http(s) 주소만 읽을 수 있다: ${rawUrl}`);
 
-  const timeout = AbortSignal.timeout(TIMEOUT_MS);
+  const timeout = AbortSignal.timeout(agentTunables().num("web.timeoutSeconds") * 1000);
   const res = await fetch(url, {
     redirect: "follow",
     signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
@@ -72,7 +71,7 @@ export async function fetchPage(rawUrl: string, signal?: AbortSignal): Promise<F
   if (/^(image|audio|video|font)\/|application\/(octet-stream|zip|pdf)/i.test(contentType)) {
     throw new Error(`글이 아닌 응답이라 읽지 않았다 (${contentType})`);
   }
-  const { text: raw, truncated } = await readLimited(res, MAX_BYTES);
+  const { text: raw, truncated } = await readLimited(res, agentTunables().num("web.maxKb") * 1024);
   const isHtml = /html/i.test(contentType) || /^\s*<(!doctype html|html)/i.test(raw);
   return {
     url: res.url || url.href,

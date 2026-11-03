@@ -12,6 +12,7 @@ import { askPeer, checkOutbound } from "./client";
 import { delegateToPeer, isFinished, peerTaskPrompt, refreshRemoteTask } from "./tasks";
 import { startPeerServer } from "./server";
 import { findPeer, loadCardDraft, loadPeers, loadPeerSettings, peersDir, type Peer } from "./store";
+import { agentTunables } from "../../src/tunables";
 
 /** 시스템 프롬프트에서 피어 목록이 들어가는 섹션 이름 */
 export const PEERS_SECTION = "agent_peers";
@@ -20,8 +21,7 @@ export const PEERS_SECTION = "agent_peers";
 const SYNC_MS = Number(process.env.PI_DESKTOP_AGENT_PEER_SYNC_MS) || 30_000;
 /** 이 대화에서 맡긴 피어 작업의 상태를 확인하는 간격 */
 const TASK_POLL_MS = Number(process.env.PI_DESKTOP_AGENT_PEER_TASK_POLL_MS) || 15_000;
-/** 스케줄러가 동시에 돌리는 받은 작업 수 */
-const MAX_PEER_TASKS = 2;
+// 스케줄러가 동시에 돌리는 받은 작업 수는 설정에서 읽는다 (peers.maxTasks)
 
 /**
  * 에이전트 네트워크 (설계 DESIGN-AGENT.md §4 "에이전트 네트워크(A2A)", desktop-agent DESIGN-AGENT-NETWORK.md).
@@ -51,8 +51,7 @@ export default function peers(pi: ExtensionAPI): void {
       return undefined;
     }
     sections[PEERS_SECTION] = [
-      "다른 사람의 에이전트(피어)와 연결돼 있다. 요청이 내 전문 밖이고 맞는 피어가 있으면 ask_peer로 물어볼 수 있다.",
-      "물어보기 전에 어느 피어에게 무엇을 보낼지 사용자에게 알려라. 사용자의 개인정보·자격증명·파일 내용은 질문에 넣지 마라.",
+      agentTunables().text("peers.sectionIntro"),
       ...list.map((p) => `- ${p.name}: ${p.card?.description ?? ""}${p.card?.skills.length ? ` (잘하는 것: ${p.card.skills.map((s) => s.name).join(", ")})` : ""}`),
     ].join("\n");
     return undefined;
@@ -185,7 +184,7 @@ function runPeerServer(pi: ExtensionAPI, dir: string): void {
     const waiting = (await loadTasks(tasksDir(dir))).filter(
       (t) => t.origin === "peer-in" && t.status === "waiting" && t.approval === "approved" && !runningTasks.has(t.id),
     );
-    for (const record of waiting.slice(0, Math.max(0, MAX_PEER_TASKS - runningTasks.size))) {
+    for (const record of waiting.slice(0, Math.max(0, agentTunables().num("peers.maxTasks") - runningTasks.size))) {
       const controller = new AbortController();
       runningTasks.set(record.id, controller);
       const running: TaskRecord = { ...record, status: "running" };

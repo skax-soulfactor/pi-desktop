@@ -15,6 +15,7 @@ import type { MatePaths } from "./paths";
 import { piReadiness } from "./pi-readiness";
 import { loadRemoteState } from "./remote/telegram-remote";
 import { nextRunAt } from "./schedule";
+import { mateTunables } from "./tunables";
 import { parseTranscript } from "./session-transcript";
 import {
   addRequest,
@@ -134,6 +135,10 @@ export function mateAppApi(ctx: MateAppContext): MateAppApi {
     overview,
     config: () => loadConfig(paths),
     saveConfig: (patch: ConfigPatch) => saveConfig(paths, patch),
+    // 설정으로 꺼낸 프롬프트와 수치 (DESIGN-APPS.md §7). 실행기는 파일이 바뀌면 다음 사용부터 새 값을 읽는다
+    tunablesList: async () => mateTunables(paths.home).items(),
+    /** value가 null이면 기본값으로 되돌린다 */
+    tunableSet: async (id: string, value: number | string | null) => mateTunables(paths.home).set(id, value),
 
     // 임무
     saveDuty: async (draft: DutyDraft) => {

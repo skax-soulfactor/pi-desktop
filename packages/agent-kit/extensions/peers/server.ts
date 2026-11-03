@@ -15,6 +15,7 @@ import {
   type InboundLog,
   type Peer,
 } from "./store";
+import { agentDefault } from "../../src/tunables-defs";
 
 /**
  * 피어 수신 서버 (설계 DESIGN-AGENT.md §4 "에이전트 네트워크"). 스케줄러 세션이 띄운다.
@@ -37,8 +38,9 @@ export interface PeerServerOptions {
   now?: () => Date;
 }
 
-const MAX_BODY = 64 * 1024;
-const MAX_PENDING = 20;
+// 보안 한도라 바꿀 수 없다 (설정 화면에는 읽기 전용으로 보인다)
+const MAX_BODY = agentDefault<number>("peers.maxBodyKb") * 1024;
+const MAX_PENDING = agentDefault<number>("peers.maxPendingPairings");
 
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {

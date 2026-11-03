@@ -27,6 +27,7 @@ import {
   type Command,
 } from "./messages";
 import { TelegramApi, type TgUpdate } from "./telegram-api";
+import { mateDefault, mateTunables } from "../tunables";
 
 /** 실행기가 쓰는 휴대폰 연결 상태 (Mate 홈 remote.json). 앱은 읽기만 한다 */
 export interface RemoteState {
@@ -48,8 +49,8 @@ export interface RemoteState {
   lastError?: string;
 }
 
-const MAX_SEND_PER_CYCLE = 5;
-const POLL_TIMEOUT_SEC = 25;
+// 한 번에 보내는 알림 수는 설정으로 꺼냈다 (telegram.maxSendPerCycle). 롱 폴링 시간은 읽기 전용 (telegram.pollTimeoutSec)
+const POLL_TIMEOUT_SEC = mateDefault<number>("telegram.pollTimeoutSec");
 const MONTH_MS = 30 * 24 * 3_600_000;
 
 export function remoteStatePath(paths: MatePaths): string {
@@ -341,7 +342,7 @@ export class TelegramRemote {
     if (fresh.length === 0) return;
     const names = await this.dutyNames();
     // 오래된 것부터 보낸다
-    for (const item of fresh.reverse().slice(0, MAX_SEND_PER_CYCLE)) await this.sendItem(item, names, config, chatId);
+    for (const item of fresh.reverse().slice(0, mateTunables().num("telegram.maxSendPerCycle"))) await this.sendItem(item, names, config, chatId);
   }
 
   /**
@@ -369,7 +370,7 @@ export class TelegramRemote {
     );
     if (todo.length === 0) return;
     const map = { ...state.chatSent };
-    for (const line of todo.slice(0, MAX_SEND_PER_CYCLE)) {
+    for (const line of todo.slice(0, mateTunables().num("telegram.maxSendPerCycle"))) {
       if (quiet && mirrored(line)) {
         // 보낸 것으로 쳐서 다시 보내지 않는다 (message_id 0: 실제로는 보내지 않음)
         map[line.id] = { messageId: 0, at: this.now() };
