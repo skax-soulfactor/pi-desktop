@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import type { AutostartView, McpServerView, Overview, PiSetupView, UpdateState } from "../shared/api";
 import { ModelSelect } from "./PiSetup";
 import type { Act } from "./App";
-import { grantLabel, relativeTime } from "./mate-view";
+import { relativeTime } from "./mate-view";
+import { GrantChips } from "./GrantChips";
 import { HostSettings } from "./HostSettings";
 
 /** Mate 전체 설정과 실행기 상태 */
@@ -106,17 +107,11 @@ export function SettingsView({
         ))}
       </div>
       {config.chatGrants.length > 0 && (
-        <div className="row">
-          <span className="muted">대화에서 허용한 도구:</span>
-          {config.chatGrants.map((g) => (
-            <span key={g} className="badge">
-              <code>{grantLabel(g)}</code>{" "}
-              <button className="small" onClick={() => void act(() => window.mate.saveConfig({ chatGrants: config.chatGrants.filter((x) => x !== g) }))}>
-                빼기
-              </button>
-            </span>
-          ))}
-        </div>
+        <GrantChips
+          label="대화에서 허용한 도구"
+          grants={config.chatGrants}
+          onRemove={(g) => void act(() => window.mate.saveConfig({ chatGrants: config.chatGrants.filter((x) => x !== g) }))}
+        />
       )}
       <div className="muted small-text">처음 쓰는 도구는 대화 중에 Mate가 허용을 묻습니다. 허용한 도구만 다음부터 씁니다.</div>
 
