@@ -63,7 +63,7 @@ export async function loadRemoteState(paths: MatePaths): Promise<RemoteState> {
 
 /** 휴대폰으로 보낼 대화 줄: 휴대폰에서 시작한 대화의 Mate 답, 그리고 (어디서 왔든) Mate의 질문 */
 export function chatLineForPhone(line: ChatLine): boolean {
-  return line.role === "mate" && line.kind !== "divider" && (line.source === "telegram" || line.kind === "question");
+  return line.role === "mate" && line.kind !== "divider" && line.kind !== "expire" && (line.source === "telegram" || line.kind === "question");
 }
 
 /**
@@ -71,7 +71,7 @@ export function chatLineForPhone(line: ChatLine): boolean {
  * 켠 시각 뒤의 줄만 보낸다. 꺼져 있으면 아무것도 보내지 않는다.
  */
 export function mirroredAppLine(line: ChatLine, telegram: Pick<MateConfig["telegram"], "mirrorApp" | "mirrorAppSince">): boolean {
-  return telegram.mirrorApp && line.source === "app" && line.kind !== "divider" && line.at >= (telegram.mirrorAppSince ?? 0);
+  return telegram.mirrorApp && line.source === "app" && line.kind !== "divider" && line.kind !== "expire" && line.at >= (telegram.mirrorAppSince ?? 0);
 }
 
 /**

@@ -128,6 +128,32 @@ describe("ChatAgent", () => {
     expect((await readChat(paths.chat)).some((l) => l.kind === "question")).toBe(true);
   });
 
+  it("허용 질문에 답하지 않고 다음 말을 하면 그 질문은 닫고, 뒤늦은 답은 처리하지 않는다", async () => {
+    const duty = (await listDuties(paths)).find((d) => d.id === "brief")!;
+    const blocked = join(paths.runDir, "blocked", "r1.jsonl");
+    await appendBlocked(blocked, { name: "curl", command: "curl -s https://a", at: 1 });
+    await askPermission(paths, duty, "r1", blocked, Date.now());
+    // mate_ask 같은 일반 질문은 대화와 상관없으니 남긴다
+    await appendChatQuestion(paths.chat, { text: "테스트를 추가할까요?", options: ["예", "아니요"] });
+    const permission = (await readChat(paths.chat)).find((l) => l.permission)!;
+
+    agent.submit({ text: "다른 얘기인데, 오늘 할 일 알려 줘", source: "app" });
+    await agent.whenIdle();
+    const lines = await readChat(paths.chat);
+    expect(lines.find((l) => l.kind === "expire")).toMatchObject({ role: "mate", answerTo: permission.id });
+    expect(openQuestions(lines).map((q) => q.text)).toEqual(["테스트를 추가할까요?"]);
+    expect(calls[0]!.chat!.systemPrompt).not.toContain("curl을(를) 허용할까요");
+
+    // 휴대폰에 남은 버튼으로 뒤늦게 허용해도 임무를 바꾸지 않는다
+    agent.submit({ text: PERMISSION_OPTIONS[0], source: "telegram", answerTo: permission.id });
+    await agent.whenIdle();
+    expect((await listDuties(paths)).find((d) => d.id === "brief")!.grants).toBeUndefined();
+    expect((await readChat(paths.chat)).at(-1)!.text).toContain("지난 질문이라");
+    // 같은 명령이 다시 막히면 다시 묻는다
+    await appendBlocked(blocked, { name: "curl", command: "curl -s https://a", at: 2 });
+    expect(await askPermission(paths, duty, "r2", blocked, Date.now())).toBe(true);
+  });
+
   it("대화에서 시작한 실행이 끝나면 결과를 자르지 않고 남긴다", async () => {
     await agent.doAction({ action: "run_duty", duty: "brief" }, "app");
     const report = `보고서 ${"가".repeat(5000)} 끝`;

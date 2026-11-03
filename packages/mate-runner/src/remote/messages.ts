@@ -186,7 +186,7 @@ function hhmm(at: number): string {
  */
 export function historyMessages(lines: ChatLine[], count: number, limit = 3500): string[] {
   const lastDivider = lines.findLastIndex((l) => l.kind === "divider");
-  const shown = lines.slice(lastDivider + 1).filter((l) => l.kind !== "divider").slice(-count);
+  const shown = lines.slice(lastDivider + 1).filter((l) => l.kind !== "divider" && l.kind !== "expire").slice(-count);
   if (shown.length === 0) return ["아직 이 대화에서 나눈 말이 없어요."];
   const entries = shown.map((l) => {
     const where = l.source === "telegram" ? "📱" : "🖥";
