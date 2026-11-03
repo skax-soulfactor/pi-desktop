@@ -70,6 +70,20 @@ describe("piArgs", () => {
     expect(piEnv(input, "observe")).toMatchObject({ PI_ISOLATION_HOME: "/h" });
     expect(isolationDirOf(resolve("/r/mate-kit"))).toBe(resolve("/r/pi-isolation"));
   });
+
+  it("임무 안내: 지시한 범위를 끝까지 하게 하고, observe는 마지막 답을 보고서로 쓰게 한다 (파일 저장 대신)", () => {
+    const prompt = (d: Duty) => {
+      const args = piArgs({ ...input, duty: d });
+      return args[args.indexOf("--append-system-prompt") + 1]!;
+    };
+    const observe = prompt(duty);
+    expect(observe).toContain("끝까지 하라");
+    expect(observe).toContain("마지막 답이 그대로 사용자에게 가는 보고서");
+    expect(observe).toContain("파일은 쓰지 말고");
+    const propose = prompt({ ...duty, profile: "propose" });
+    expect(propose).toContain("끝까지 하라");
+    expect(propose).not.toContain("보고서");
+  });
 });
 
 describe("임무별 스킬·MCP 서버", () => {

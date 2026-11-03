@@ -91,7 +91,7 @@ export function mateSystemPrompt(duty: Duty, cause?: string, installHints: strin
   if (duty.grants?.length) {
     lines.push(`- 사용자가 이 임무에 bash로 ${duty.grants.join(", ")}을(를) 허용했다. 읽어 오는 데만 쓰고, 파일을 쓰거나 데이터를 보내지 마라.`);
   }
-  lines.push("- 필요한 명령이 막히면 다른 명령으로 우회하지 마라. 사용자에게 허용을 요청해 두었으니, 무엇이 막혔는지 요약에 적고 끝내라.");
+  lines.push("- 필요한 명령이 막히면 다른 명령으로 우회하지 마라. 사용자에게 허용을 요청해 두었으니, 그 부분은 무엇이 막혔는지 결과에 적고 나머지는 계속하라.");
   if (duty.profile !== "observe") {
     lines.push(
       `- 임무에 필요한 작업 방법(스킬)이나 외부 서비스(MCP 서버)가 없으면 ${PROPOSE_TOOL}의 install로 제안할 수 있다: 새 스킬 초안(kind=skill), 정해 둔 목록의 MCP 서버(kind=mcp), 다른 앱의 스킬 복사(kind=copy). 사용자가 적용해야 들어가니 이번 실행에서는 없는 채로 할 수 있는 만큼만 하라.`,
@@ -99,7 +99,14 @@ export function mateSystemPrompt(duty: Duty, cause?: string, installHints: strin
     lines.push(...installHints);
   }
   if (cause) lines.push(`- 이번 실행은 변화를 감지해 시작했다: ${cause}. 바뀐 부분을 중심으로 살펴라.`);
-  lines.push("- 마지막에 결과를 한국어로 두세 문장 요약하라.");
+  // 일찍 손을 놓지 않게 한다: 막히지 않았는데 "충분하다"며 범위의 일부만 하고 끝낸 일이 있었다 (HN 임무, Haiku)
+  lines.push("- 지시한 범위(항목 수·읽을 것·쓸 내용)를 끝까지 하라. 막히지 않았으면 시간이 걸려도 일부만 하고 멈추지 마라. 여러 개를 읽을 때는 도구를 한 번에 여러 개 불러 빨리 끝내라.");
+  if (duty.profile === "observe") {
+    lines.push(
+      "- 너의 마지막 답이 그대로 사용자에게 가는 보고서다. 지시가 파일로 저장하라고 해도 파일은 쓰지 말고, 저장할 내용을 마지막 답에 모두 담아라 (저장 실패를 보고하지 마라).",
+      "- 보고서 맨 끝에 한국어로 두세 문장 요약을 붙여라.",
+    );
+  } else lines.push("- 마지막에 결과를 한국어로 두세 문장 요약하라.");
   return lines.join("\n");
 }
 
@@ -195,7 +202,8 @@ export class EventSummary {
   }
 }
 
-const SUMMARY_LIMIT = 4000;
+/** 마지막 답의 상한. observe 임무는 이 답이 보고서 전체라 넉넉히 둔다 (4000자에서 뒷부분이 잘렸다) */
+const SUMMARY_LIMIT = 30_000;
 
 export function runPi(launch: PiLaunch, input: RunInput, signal?: AbortSignal): Promise<RunOutcome> {
   return new Promise((resolve) => {

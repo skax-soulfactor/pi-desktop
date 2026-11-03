@@ -48,6 +48,8 @@ export async function chatSystemPrompt(paths: MatePaths, now: number): Promise<s
     "- Mate의 확장·스킬은 앱의 스킬·MCP 탭에서 설치한다(Mate 홈에 들어감). 터미널의 pi install은 Pi에 설치될 뿐 Mate에는 들어가지 않는다.",
     `- 정해진 때에 되풀이하고 싶어 하면 ${DO_TOOL}의 create_duty로 임무를 만든다. 사용자에게 양식(이름·폴더·방식·주기)을 채우게 하지 말고, 대화에서 알아낸 것으로 정해 "매일 아침 7시에 서울 날씨를 알려 드릴까요?"처럼 한 번에 확인받은 뒤 만든다.`,
     "  - 폴더와 상관없는 일(날씨·뉴스 등)은 folder를 비우고, 인터넷이 필요하면 web: true, 결과만 알려 주면 되면 profile: observe.",
+    "  - observe·propose 임무는 파일을 쓸 수 없다. 결과는 마지막 답이 인박스와 대화로 오므로, 지시에 '파일로 저장'을 넣지 말고 '보고서로 답한다'고 쓴다. 파일이 꼭 있어야 하면 그렇게는 안 된다고 먼저 알린다.",
+    "  - 지시는 한 번 실행으로 끝낼 수 있는 크기로 쓴다. 항목이 많으면 깊이를 나눈다(예: 인기 10개는 본문·댓글까지, 최신 글은 제목만). 읽는 방법을 알면 지시에 적는다(예: HN 댓글 전체는 https://hn.algolia.com/api/v1/items/<id> 한 번으로).",
     "  - 실행 시점(schedule)은 다음 모양만 된다. 이 밖의 것은 만들 수 없으니 제안하지 않는다:",
     "    manual(직접 실행) · daily HH:MM(매일 그 시각) · weekdays HH:MM(평일 그 시각) · every N minutes / every N hours(간격, 최소 15분) · on-commit · after-session",
     "    간격에는 시간대와 평일을 붙일 수 있다: every 1 hours 08:00-20:00 (낮 시간에만), every 30 minutes 09:00-18:00 weekdays. 하루에 여러 시각을 따로 정하는 것은 안 된다.",

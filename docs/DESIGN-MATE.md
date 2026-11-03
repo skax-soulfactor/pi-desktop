@@ -147,6 +147,8 @@ Pi 세션을 `~/.pi/agent/sessions`가 아니라 Mate 홈에 두는 것은 백�
 - `--tools`로 도구 목록을 정하고(쓰기 도구는 선언조차 안 됨), `mate-guard` 확장이 `tool_call`에서 한 번 더 막는다.
 - 스킬·프롬프트·MCP 서버는 Mate 홈(`skills/`, `prompts/`, `mcp.json`)의 것만 쓰고 임무마다 고른다 (DESIGN-APPS.md §3.4). 스킬은 지침일 뿐 권한을 넓히지 않는다.
   Pi security.md가 말하듯 확장 hook은 보안 경계가 아니다. 이 단계는 "실수로 손대지 않게"하는 장치다. act는 여기에 더해 사용자 폴더 대신 별도 worktree에서 돌고, 적용 전까지 사용자 폴더를 바꾸지 않는다.
+- 실행 안내(`mateSystemPrompt`)는 지시한 범위를 끝까지 하게 한다. 막히지 않았는데 "충분하다"며 일부만 하고 멈춘 일이 있었다 (HN 임무, Haiku). 막힌 부분은 결과에 적고 나머지는 계속한다.
+- observe 임무는 마지막 답이 그대로 보고서다(인박스·대화로 감). 지시가 파일 저장을 말해도 쓰지 않고 내용을 답에 담게 한다. 대화에서 임무를 만들거나 고칠 때도 observe·propose 지시에 파일 저장을 넣지 않는다. 마지막 답은 30,000자까지 남기고, 대화의 결과 줄도 자르지 않는다(휴대폰은 메시지 한도에 맞춰 자름).
 - act의 쓰기 범위: Pi와 같이 `@`를 떼고 cwd 기준으로 풀어 작업 공간 안인지 본다. `~`(홈), 바깥, `.git` 안, 바깥을 가리키는 링크는 막는다.
 - bash 허용 목록: `git status/log/diff/show/branch/remote -v`, `gh pr|run|issue view|list|checks|status`, `ls/cat/head/tail/wc/grep/rg/find`(쓰기 옵션 제외), `npm ls/outdated/view`, `node -v` 등. 파이프는 각 단계가 모두 허용될 때만, 리다이렉트(`>`)·명령 치환은 막는다. 반복문·조건문 낱말(`for … in`·`do`·`done`·`if`·`then`·`fi` 등)은 명령으로 보지 않고 그 안의 명령만 검사한다 (낱말마다 허용을 묻지 않게).
 - 읽은 내용(코드·이슈·로그) 속 지시는 데이터로만 다루라고 시스템 프롬프트에 넣는다.
