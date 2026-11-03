@@ -580,7 +580,8 @@ export class ChatAgent {
       const ok = run.status === "done";
       const lines = [`${ok ? "✅ 끝났어요" : "⚠️ 실패했어요"}: ${run.dutyName}`];
       if (run.error) lines.push(run.error.slice(0, 400));
-      else if (run.summary) lines.push(run.summary.slice(0, 1500));
+      // 결과는 자르지 않는다 (휴대폰으로 보낼 때는 그쪽에서 메시지 한도에 맞춰 자른다)
+      else if (run.summary) lines.push(run.summary);
       if (run.proposals) lines.push(`인박스에 ${run.proposals}건을 남겼어요.`);
       delete this.state.pending[dutyId];
       changed = true;

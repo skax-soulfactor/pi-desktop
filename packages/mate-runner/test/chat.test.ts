@@ -9,7 +9,7 @@ import { chatSystemPrompt, openQuestions } from "../src/chat/context";
 import { parseSchedulePhrase } from "../src/chat/schedule-phrase";
 import type { RunInput, RunOutcome } from "../src/executor";
 import { matePaths, type MatePaths } from "../src/paths";
-import { listDuties, loadConfig, loadInboxState, saveConfig, saveDuty, takeRequests } from "../src/store";
+import { listDuties, loadConfig, loadInboxState, saveConfig, saveDuty, takeRequests, writeRun } from "../src/store";
 import { readFile } from "node:fs/promises";
 import { WEB_SEARCH } from "../src/chat/web-search";
 import { chatImagesOf, saveChatImages } from "../src/chat/chat-images";
@@ -126,6 +126,15 @@ describe("ChatAgent", () => {
     // 웹 검색이 꺼져 있으면 고치지 않고 켤지 묻는다
     expect(await agent.doAction({ action: "update_duty", duty: "hn", web: true }, "app")).toMatch(/고치지 않았어요/);
     expect((await readChat(paths.chat)).some((l) => l.kind === "question")).toBe(true);
+  });
+
+  it("대화에서 시작한 실행이 끝나면 결과를 자르지 않고 남긴다", async () => {
+    await agent.doAction({ action: "run_duty", duty: "brief" }, "app");
+    const report = `보고서 ${"가".repeat(5000)} 끝`;
+    await writeRun(paths, { id: "r-long", dutyId: "brief", dutyName: "아침 브리핑", reason: "manual", status: "done", startedAt: Date.now() + 1, model: "m", profile: "observe", summary: report });
+    await agent.checkPending();
+    const result = (await readChat(paths.chat)).find((l) => l.kind === "result")!;
+    expect(result.text).toContain(report);
   });
 
   it("맡긴 일의 처리 결과(알림)는 다음 차례의 맥락에 들어간다", async () => {
