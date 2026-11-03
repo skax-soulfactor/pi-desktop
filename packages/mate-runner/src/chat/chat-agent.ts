@@ -482,6 +482,54 @@ export class ChatAgent {
         const webNote = web && webGrants.length === 0 ? " 처음 실행할 때 웹 검색을 허용할지 물어요." : "";
         return `🗓 임무를 만들었어요: ${duty.name}${where}.${webNote} 임무 탭에서 고칠 수 있어요.`;
       }
+      case "update_duty": {
+        // 있는 임무를 고친다: 새로 만들면 허용한 명령(grants)과 실행 기록을 잃으므로 고치기를 먼저 쓴다
+        const duty = await findDuty(paths, str("duty"));
+        if (!duty) return `⚠️ 임무 "${str("duty")}"을(를) 찾지 못했어요. 고치지 않았어요.`;
+        const changed: string[] = [];
+        const next: Duty = { ...duty };
+        if (str("name") && str("name") !== duty.name) {
+          next.name = str("name");
+          changed.push("이름");
+        }
+        if (str("prompt") && str("prompt") !== duty.prompt) {
+          next.prompt = str("prompt");
+          changed.push("지시");
+        }
+        if (str("folder")) {
+          const folder = await this.resolveFolder(str("folder"));
+          if (!folder) return `⚠️ 폴더 "${str("folder")}"을(를) 모르겠어요. "${duty.name}"을(를) 고치지 않았어요.`;
+          if (folder !== duty.cwd) {
+            next.cwd = folder;
+            changed.push("폴더");
+          }
+        }
+        if (str("schedule")) {
+          const trigger = parseSchedulePhrase(str("schedule"));
+          if (!trigger) return `⚠️ 실행 시점 "${str("schedule")}"을(를) 이해하지 못했어요. "${duty.name}"을(를) 고치지 않았어요.`;
+          next.trigger = trigger;
+          changed.push("실행 시점");
+        }
+        if ((action.profile === "observe" || action.profile === "propose" || action.profile === "act") && action.profile !== duty.profile) {
+          next.profile = action.profile;
+          changed.push("방식");
+        }
+        if (action.web === true) {
+          const setup = await webSetup(paths);
+          if (!setup) {
+            const asked = await this.doAction({ action: "enable_web" }, source);
+            return `⚠️ 웹 검색이 아직 켜져 있지 않아 "${duty.name}"을(를) 고치지 않았어요. ${asked} 켠 뒤 다시 말씀해 주세요.`;
+          }
+          const mcpServers = [...new Set([...(duty.mcpServers ?? []), ...setup.mcpServers])];
+          const grants = [...new Set([...(duty.grants ?? []), ...setup.grants])];
+          if (mcpServers.length) next.mcpServers = mcpServers;
+          if (grants.length) next.grants = grants;
+          if (mcpServers.length !== (duty.mcpServers?.length ?? 0) || grants.length !== (duty.grants?.length ?? 0)) changed.push("인터넷");
+        }
+        if (changed.length === 0) return `"${duty.name}"은(는) 바뀐 것이 없어요.`;
+        await saveDuty(paths, { ...next, updatedAt: this.now() });
+        return `✏️ 임무를 고쳤어요: ${next.name} (${changed.join("·")}). 허용한 명령은 그대로예요.`;
+      }
       case "pause":
       case "resume":
         await saveConfig(paths, { paused: action.action === "pause" });

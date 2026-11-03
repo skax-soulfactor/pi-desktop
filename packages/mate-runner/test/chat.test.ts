@@ -113,6 +113,44 @@ describe("ChatAgent", () => {
     expect((await loadChatState(paths)).pending.brief).toBeDefined();
   });
 
+  it("update_duty: 있는 임무를 고치고, 허용한 명령은 그대로 둔다. 없는 임무·모르는 시점은 고치지 않는다", async () => {
+    await saveDuty(paths, { id: "hn", name: "HN 요약", cwd: "/w/pi-desktop", prompt: "요약", profile: "observe", trigger: { kind: "manual" }, grants: ["curl"] });
+    expect(await agent.doAction({ action: "update_duty", duty: "hn", prompt: "기사와 댓글 반응까지 자세히 요약", schedule: "daily 09:00" }, "app")).toMatch(
+      /고쳤어요: HN 요약 \(지시·실행 시점\)/,
+    );
+    expect((await listDuties(paths)).find((d) => d.id === "hn")).toMatchObject({ prompt: "기사와 댓글 반응까지 자세히 요약", trigger: { kind: "daily", time: "09:00" }, grants: ["curl"] });
+    expect(await agent.doAction({ action: "update_duty", duty: "hn" }, "app")).toMatch(/바뀐 것이 없어요/);
+    expect(await agent.doAction({ action: "update_duty", duty: "없는 임무", prompt: "x" }, "app")).toMatch(/찾지 못했어요/);
+    expect(await agent.doAction({ action: "update_duty", duty: "hn", prompt: "y", schedule: "가끔" }, "app")).toMatch(/고치지 않았어요/);
+    expect((await listDuties(paths)).find((d) => d.id === "hn")!.prompt).toBe("기사와 댓글 반응까지 자세히 요약");
+    // 웹 검색이 꺼져 있으면 고치지 않고 켤지 묻는다
+    expect(await agent.doAction({ action: "update_duty", duty: "hn", web: true }, "app")).toMatch(/고치지 않았어요/);
+    expect((await readChat(paths.chat)).some((l) => l.kind === "question")).toBe(true);
+  });
+
+  it("맡긴 일의 처리 결과(알림)는 다음 차례의 맥락에 들어간다", async () => {
+    agent = new ChatAgent({
+      paths,
+      kitDir,
+      locatePi: async () => ({ cliPath: "pi" }),
+      exec: noGit,
+      log: () => {},
+      runPi: (async (_l: unknown, input: RunInput) => {
+        calls.push(input);
+        if (calls.length === 1) await appendChatAction(input.chat!.actionsPath, { action: "run_duty", duty: "없는 임무" });
+        return { status: "done", costUsd: 0, tokens: 1, proposals: 0, summary: "맡겼어요" };
+      }) as never,
+    });
+    agent.submit({ text: "그 임무 돌려 줘", source: "app" });
+    await agent.whenIdle();
+    agent.submit({ text: "돌았어?", source: "app" });
+    await agent.whenIdle();
+    expect(calls[1]!.chat!.systemPrompt).toMatch(/실행기 알림[\s\S]*임무 "없는 임무"을\(를\) 찾지 못했어요/);
+    // 새 대화를 시작하면 앞 대화의 알림은 넣지 않는다
+    await agent.newConversation("app");
+    expect(await chatSystemPrompt(paths, Date.now())).not.toContain("찾지 못했어요");
+  });
+
   it("답하지 않은 질문은 맥락에 들어가고, 같은 질문은 다시 묻지 않는다", async () => {
     expect(await appendChatQuestion(paths.chat, { text: "테스트를 추가할까요?", options: ["예", "아니요"] })).toBe(true);
     expect(await appendChatQuestion(paths.chat, { text: "테스트를  추가할까요?" })).toBe(false);
@@ -267,6 +305,8 @@ describe("ChatAgent", () => {
         return { status: "done", costUsd: 0, tokens: 1, proposals: 0, summary: calls.length === 1 ? "웹 검색이 필요해요" : "서울은 맑아요" };
       }) as never,
     });
+    // 꺼져 있어도 설치한 확장의 웹 도구가 있음을 맥락에 알린다
+    expect(await chatSystemPrompt(paths, Date.now())).toContain("꺼짐 (설치한 확장의 웹 도구 web_search, fetch_content가 있음");
     // 웹 검색이 꺼져 있으면 임무를 만들지 않고 켤지 묻는다
     expect(await agent.doAction({ action: "create_duty", name: "아침 날씨", prompt: "날씨", schedule: "daily 07:00", web: true }, "app")).toMatch(/만들지 않았어요/);
     expect((await listDuties(paths)).some((d) => d.name === "아침 날씨")).toBe(false);
