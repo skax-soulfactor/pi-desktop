@@ -55,7 +55,7 @@ export function ChatView({ overview, now, act }: { overview: Overview; now: numb
 
   const answered = useMemo(() => {
     const map = new Map<string, string>();
-    for (const l of chat.lines) if (l.answerTo) map.set(l.answerTo, l.text);
+    for (const l of chat.lines) if (l.answerTo) map.set(l.answerTo, l.kind === "expire" ? "답하지 않고 넘어갔어요" : l.text);
     return map;
   }, [chat.lines]);
 
@@ -63,7 +63,8 @@ export function ChatView({ overview, now, act }: { overview: Overview; now: numb
   const entries = useMemo<Entry[]>(() => {
     const since = chat.lines[0]?.at ?? now - 7 * 24 * 3_600_000;
     const items = overview.inbox.filter((i) => !i.status && i.createdAt >= since).map((item): Entry => ({ kind: "item", at: item.createdAt, item }));
-    const lines = chat.lines.map((line): Entry => ({ kind: "line", at: line.at, line }));
+    // 넘어간 질문을 닫는 표시 줄은 그리지 않는다 (질문 카드에 "답하지 않고 넘어갔어요"로 보인다)
+    const lines = chat.lines.filter((line) => line.kind !== "expire").map((line): Entry => ({ kind: "line", at: line.at, line }));
     return [...lines, ...items].sort((a, b) => a.at - b.at);
   }, [chat.lines, overview.inbox, now]);
 

@@ -183,6 +183,57 @@ textarea {
   border-color: var(--accent);
 }
 
+/* 허용한 명령·도구 칩: 종류는 흐리게, 이름은 고정폭, ×로 뺀다 */
+.grant-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 6px 0;
+}
+.grant-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.grant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 2px 4px 2px 10px;
+  font-size: 12px;
+  max-width: 100%;
+}
+.grant-kind {
+  color: var(--muted);
+}
+.grant-name {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.grant-remove {
+  border: none;
+  background: none;
+  color: var(--muted);
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 18px;
+  font-size: 14px;
+}
+.grant-remove:hover {
+  background: var(--border);
+  color: var(--bad);
+}
+
 .banner {
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);

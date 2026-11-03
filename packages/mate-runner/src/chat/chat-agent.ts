@@ -15,7 +15,7 @@ import { askPermission } from "../permission";
 import type { Exec } from "../watchers";
 import { COMMAND_HELP, findDuty, findFolder, instruct, runCommand, type ChatSource, type CommandContext } from "./commands";
 import { chatImagesOf, removeChatImages } from "./chat-images";
-import { chatSystemPrompt } from "./context";
+import { chatSystemPrompt, openQuestions } from "./context";
 import { parseSchedulePhrase } from "./schedule-phrase";
 
 /**
@@ -219,6 +219,8 @@ export class ChatAgent {
     }
     const text = request.text.trim();
     if (request.answerTo && (await this.answerPermission(request))) return;
+    // 허용 질문에 답하지 않고 다음 말을 했으면 그 질문은 닫는다 (답하지 않은 질문 배지가 계속 남지 않게)
+    if (!request.answerTo) await this.expireQuestions(request.source);
     if (text.startsWith("/")) {
       const command = parseCommand(text);
       if (command && command.kind !== "chat") {
@@ -242,6 +244,11 @@ export class ChatAgent {
     const question = lines.find((l) => l.id === request.answerTo);
     const permission = question?.permission;
     if (!question || !permission) return false;
+    // 넘어가서 닫힌 질문: 휴대폰에 남은 버튼 등으로 뒤늦게 답해도 처리하지 않는다
+    if (lines.some((l) => l.kind === "expire" && l.answerTo === question.id)) {
+      await this.say(request.source, "지난 질문이라 처리하지 않았어요. 필요하면 다시 말씀해 주세요. 다시 막히면 그때 다시 물어요.", "notice");
+      return true;
+    }
     const text = request.text.trim();
     // 선택지가 여럿인 질문(웹 검색을 어떤 방법으로 켤지)은 고른 것만 허용한다. 번호로 답해도 된다
     const choices = permission.choices ?? [];
@@ -289,6 +296,17 @@ export class ChatAgent {
     this.options.log(`chat permission granted duty=${duty.id} commands=${permission.commands.join(",")}`);
     await this.say(request.source, `✅ "${duty.name}" 임무에 ${permission.commands.join(", ")}을(를) 허용했어요. 다시 실행하고, 끝나면 알려 드릴게요.`, "notice");
     return true;
+  }
+
+  /**
+   * 답하지 않은 허용 질문(permission)을 닫는다. 화면에 보이지 않는 expire 줄을 남겨 답한 것으로 친다.
+   * 같은 것이 다시 막히면 그때 다시 묻는다 (appendChatQuestion은 답한 질문을 중복으로 보지 않는다).
+   * mate_ask로 물은 일반 질문은 대화 흐름과 상관없으니 그대로 둔다.
+   */
+  private async expireQuestions(source: ChatSource): Promise<void> {
+    const open = openQuestions(await readChat(this.options.paths.chat)).filter((q) => q.permission);
+    for (const q of open) await this.append({ role: "mate", kind: "expire", text: "답하지 않고 넘어감", source, answerTo: q.id });
+    if (open.length) this.options.log(`chat expired questions ${open.map((q) => q.id).join(",")}`);
   }
 
   async newConversation(source: ChatSource): Promise<void> {

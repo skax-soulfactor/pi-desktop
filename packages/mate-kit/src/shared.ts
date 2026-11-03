@@ -110,8 +110,11 @@ export interface ChatLine {
   /** user: 사용자, mate: Mate 답·알림·질문 */
   role: "user" | "mate";
   text: string;
-  /** reply: 대화 답, question: Mate가 먼저 묻는 질문, notice: 할 일 처리 알림, result: 실행 결과, divider: 새 대화 */
-  kind?: "reply" | "question" | "notice" | "result" | "divider";
+  /**
+   * reply: 대화 답, question: Mate가 먼저 묻는 질문, notice: 할 일 처리 알림, result: 실행 결과, divider: 새 대화,
+   * expire: 답하지 않고 넘어간 허용 질문을 닫는 표시 (answerTo의 질문을 답한 것으로 친다. 화면·휴대폰에는 보이지 않는다)
+   */
+  kind?: "reply" | "question" | "notice" | "result" | "divider" | "expire";
   /** 어디서 온 말인지 / 답을 어디로 보낼지 */
   source?: "app" | "telegram";
   /** 질문의 선택지 (버튼) */

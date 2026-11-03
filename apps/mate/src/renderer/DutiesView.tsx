@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import type { DutyDraft, DutyView, McpServerView, Overview, PiSetupView, SkillView } from "../shared/api";
 import { ModelSelect } from "./PiSetup";
 import { pickFolder } from "./folder-pick";
+import { GrantChips } from "./GrantChips";
 import type { Act } from "./App";
 import {
   defaultTrigger,
   DUTY_TEMPLATES,
   emptyDraft,
-  grantLabel,
   nextRunLabel,
   PROFILE_LABELS,
   relativeTime,
@@ -199,24 +199,14 @@ function DutyForm({
           필요하면 실행한 뒤 Mate가 대화로 허용을 묻습니다.
         </div>
         {draft.grants?.length ? (
-          <div className="row">
-            <span className="muted">허용한 명령·도구:</span>
-            {draft.grants.map((g) => (
-              <span key={g} className="badge">
-                <code>{grantLabel(g)}</code>{" "}
-                <button
-                  className="small"
-                  title={`${g} 허용 빼기`}
-                  onClick={() => {
-                    const rest = draft.grants!.filter((x) => x !== g);
-                    set({ grants: rest.length ? rest : undefined });
-                  }}
-                >
-                  빼기
-                </button>
-              </span>
-            ))}
-          </div>
+          <GrantChips
+            label="허용한 명령·도구"
+            grants={draft.grants}
+            onRemove={(g) => {
+              const rest = draft.grants!.filter((x) => x !== g);
+              set({ grants: rest.length ? rest : undefined });
+            }}
+          />
         ) : null}
       </fieldset>
       <fieldset>

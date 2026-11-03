@@ -237,8 +237,16 @@ export const DUTY_TEMPLATES: Array<{ label: string; draft: Omit<DutyDraft, "cwd"
 
 /** 허용 이름을 화면에 보일 글로 (MCP 도구는 "MCP 서버 · 도구", 명령은 그대로) */
 export function grantLabel(name: string): string {
-  const match = /^mcp__(.+?)__(.+)$/.exec(name);
-  return match ? `MCP ${match[1]} · ${match[2]}` : name;
+  const { kind, tool } = grantParts(name);
+  return kind === "명령" ? tool : `${kind} · ${tool}`;
+}
+
+/** 허용 이름을 종류(명령·확장·MCP <서버>)와 이름으로 나눈다. 칩에 종류를 흐리게, 이름을 굵게 보인다 */
+export function grantParts(name: string): { kind: string; tool: string } {
+  const mcp = /^mcp__(.+?)__(.+)$/.exec(name);
+  if (mcp) return { kind: `MCP ${mcp[1]}`, tool: mcp[2]! };
+  if (name.startsWith("ext__")) return { kind: "확장", tool: name.slice("ext__".length) };
+  return { kind: "명령", tool: name };
 }
 
 /** 임무의 스킬 고르기를 바꾼다: 전부(undefined) ↔ 고르기(목록), 고르기에서 하나 켜고 끄기 */
