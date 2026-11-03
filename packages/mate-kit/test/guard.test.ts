@@ -83,6 +83,18 @@ describe("checkCommand — 임무에 허용한 명령 (권한 요청)", () => {
     expect(checkCommand("python -c 1", grants).allowed).toBe(false);
     expect(checkCommand("node -e 1", grants).allowed).toBe(false);
   });
+
+  it("반복문·조건문 낱말(for·do·done·if…)은 명령으로 보지 않고 안의 명령만 검사한다", () => {
+    const loop = "for id in 1 2 3; do curl -s https://hacker-news.firebaseio.com/v0/item/$id.json | head -c 300; echo; done";
+    expect(checkCommand(loop, ["curl"])).toEqual({ allowed: true });
+    // 안의 명령이 막히면 그 명령의 허용을 묻는다 (for·do·done을 하나씩 묻지 않는다)
+    expect(checkCommand(loop)).toMatchObject({ allowed: false, grantable: "curl" });
+    expect(checkCommand("for f in *.md\ndo\n  wc -l $f\ndone")).toEqual({ allowed: true });
+    expect(checkCommand("if test -f a; then cat a; else echo none; fi")).toEqual({ allowed: true });
+    expect(checkCommand("while true; do rm a; done").allowed).toBe(false);
+    // 값 자리의 명령 치환은 여전히 막는다
+    expect(checkCommand("for id in $(cat ids); do echo $id; done", ["curl"]).allowed).toBe(false);
+  });
 });
 
 describe("도구 허용 이름 (MCP·확장)", () => {
