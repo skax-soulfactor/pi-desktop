@@ -16,6 +16,7 @@ import { localDateKey } from "./schedule";
 import { loadInboxState } from "./store";
 import type { Duty, MateConfig, RunnerState } from "./types";
 import type { Exec } from "./watchers";
+import { mateDefault, mateTunables } from "./tunables";
 
 /**
  * 활동 관찰자 (설계 DESIGN-MATE.md §10, M4).
@@ -32,9 +33,7 @@ import type { Exec } from "./watchers";
 export const OBSERVER_DUTY_ID = "observer";
 export const OBSERVER_NAME = "Mate 관찰자";
 
-const PROJECT_INTERVAL_MS = 10 * 60_000;
-const RECENT_KEEP = 50;
-const ACTIVITY_KEEP = 1500;
+// 저장소 확인 간격·기억해 둘 세션 수·활동 기록 줄 수는 설정으로 꺼냈다 (tunables.ts의 observer.*)
 
 export function emptyObserverState(now: number): ObserverState {
   return { files: {}, projects: {}, today: { date: "", count: 0 }, suggested: {}, queue: [], recent: [], since: now };
@@ -95,10 +94,10 @@ export class Observer {
       }
       ended.push(session);
       candidates.push(...sessionCandidates(session, obs.recent, now));
-      obs.recent = [...obs.recent, session].slice(-RECENT_KEEP);
+      obs.recent = [...obs.recent, session].slice(-mateTunables().num("observer.recentSessions"));
       await this.record({ at: now, kind: "session-ended", session });
     }
-    if (!obs.projectsAt || now - obs.projectsAt >= PROJECT_INTERVAL_MS) {
+    if (!obs.projectsAt || now - obs.projectsAt >= mateTunables().num("observer.projectIntervalMinutes") * 60_000) {
       obs.projectsAt = now;
       candidates.push(...(await this.scanProjects(obs, config, now)));
     }
@@ -215,7 +214,8 @@ export class Observer {
   }
 }
 
-const OBSERVER_PROMPT_HEAD = "너는 사용자가 방금까지 한 작업을 지켜본 Mate 관찰자다.";
+/** 관찰자 실행을 알아보는 표시라 바꿀 수 없다 (observer.head, 읽기 전용) */
+const OBSERVER_PROMPT_HEAD = mateDefault<string>("observer.head");
 
 /** 관찰자 실행의 세션인지 (첫 요청이 관찰자 지시로 시작한다) */
 function isObserverRun(session: SessionAggregate): boolean {
@@ -225,9 +225,7 @@ function isObserverRun(session: SessionAggregate): boolean {
 /** 관찰자 실행의 지시 (후보 하나를 살펴보고 0~1개 제안) */
 export function observerPrompt(job: Candidate): string {
   return [
-    OBSERVER_PROMPT_HEAD + " 아래 관찰을 바탕으로 이 저장소를 읽기만 하며 살펴보고,",
-    "사용자에게 실제로 도움이 되는 제안이 있으면 mate_propose로 하나만 남겨라. 확신이 없거나 이미 괜찮으면 아무것도 남기지 마라.",
-    "고칠 일이면 followUp에 구체적인 고치기 지시를 넣어라 (사용자가 \"Mate에게 맡기기\"를 누르면 그 지시로 실행된다).",
+    `${OBSERVER_PROMPT_HEAD} ${mateTunables().text("observer.instruction")}`,
     "",
     `관찰: ${job.title}`,
     job.detail,
@@ -254,7 +252,8 @@ async function pruneActivity(paths: MatePaths): Promise<void> {
   try {
     const text = await readFile(paths.activity, "utf8");
     const lines = text.split("\n").filter(Boolean);
-    if (lines.length > ACTIVITY_KEEP * 1.5) await writeFile(paths.activity, `${lines.slice(-ACTIVITY_KEEP).join("\n")}\n`, "utf8");
+    const keep = mateTunables().num("observer.activityKeep");
+    if (lines.length > keep * 1.5) await writeFile(paths.activity, `${lines.slice(-keep).join("\n")}\n`, "utf8");
   } catch {
     // 없으면 지울 것도 없다
   }

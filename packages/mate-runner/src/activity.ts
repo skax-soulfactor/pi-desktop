@@ -4,15 +4,14 @@ import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import type { Candidate, ProjectSnapshot, SessionAggregate, SessionApp } from "./activity-types";
 import type { Exec } from "./watchers";
+import { mateTunables } from "./tunables";
 
 /**
  * 활동 관찰: 사용자의 Pi 세션 기록과 저장소 상태에서 도울 거리를 찾는다 (설계 DESIGN-MATE.md §10).
  * 이 파일의 해석·규칙 함수는 순수 함수다. 파일·git 읽기는 아래 IO 함수가 한다.
  */
 
-const TEXT_LIMIT = 160;
-const MAX_FILES = 30;
-const MAX_FAILURES = 10;
+// 요약에 남기는 요청 길이·고친 파일 수·오류 수는 설정으로 꺼냈다 (tunables.ts의 activity.*)
 
 /** 비밀값처럼 보이는 것을 가린다 (API 키·토큰·비밀번호 인자) */
 export function redact(text: string): string {
@@ -27,7 +26,8 @@ export function redact(text: string): string {
 
 function short(text: string): string {
   const one = redact(text.replace(/\s+/g, " ").trim());
-  return one.length > TEXT_LIMIT ? `${one.slice(0, TEXT_LIMIT)}…` : one;
+  const limit = mateTunables().num("activity.textChars");
+  return one.length > limit ? `${one.slice(0, limit)}…` : one;
 }
 
 /** 테스트를 돌리는 명령으로 보이는지 */
@@ -89,7 +89,7 @@ export function applySessionLine(aggregate: SessionAggregate | undefined, line: 
         const args = (part.arguments ?? {}) as Record<string, unknown>;
         if ((part.name === "write" || part.name === "edit") && typeof args.path === "string") {
           const file = args.path.replace(/^@/, "").replace(/\\/g, "/");
-          if (!next.editedFiles.includes(file) && next.editedFiles.length < MAX_FILES) next.editedFiles = [...next.editedFiles, file];
+          if (!next.editedFiles.includes(file) && next.editedFiles.length < mateTunables().num("activity.maxFiles")) next.editedFiles = [...next.editedFiles, file];
         } else if (part.name === "bash" && typeof args.command === "string") {
           const command = lastCommandLine(args.command);
           next.commands += 1;
@@ -108,7 +108,7 @@ export function applySessionLine(aggregate: SessionAggregate | undefined, line: 
       const command = toolCalls.get(String(message.toolCallId)) ?? "";
       const firstError = textOf(message.content).split("\n").find((l) => l.trim()) ?? "";
       const failure = short(`${command} → ${firstError}`);
-      if (next.failures.length < MAX_FAILURES) next.failures = [...next.failures, failure];
+      if (next.failures.length < mateTunables().num("activity.maxFailures")) next.failures = [...next.failures, failure];
       break;
     }
   }

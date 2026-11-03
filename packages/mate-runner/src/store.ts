@@ -6,12 +6,9 @@ import type { MatePaths } from "./paths";
 import { parseTime } from "./schedule";
 import { pollCommandError } from "./watchers";
 import { moveToTrash } from "./trash";
+import { mateTunables } from "./tunables";
 import {
-  DEFAULT_COOLDOWN_MINUTES,
-  DEFAULT_QUIET_SECONDS,
-  MIN_COOLDOWN_MINUTES,
   DEFAULT_CONFIG,
-  MIN_INTERVAL_MINUTES,
   type Duty,
   type InboxState,
   type InboxStatus,
@@ -160,11 +157,13 @@ const minutesOr = (value: unknown, fallback: number, min: number) =>
 function normalizeTrigger(raw: unknown): Trigger | string {
   const t = raw as Partial<Record<string, unknown>> | undefined;
   if (!t || typeof t !== "object") return "실행 시점이 잘못되었습니다";
+  const tunables = mateTunables();
+  const minInterval = tunables.num("duty.minIntervalMinutes");
   if (t.kind === "git" || t.kind === "files" || t.kind === "session") {
-    const cooldownMinutes = minutesOr(t.cooldownMinutes, DEFAULT_COOLDOWN_MINUTES, MIN_COOLDOWN_MINUTES);
+    const cooldownMinutes = minutesOr(t.cooldownMinutes, tunables.num("duty.defaultCooldownMinutes"), tunables.num("duty.minCooldownMinutes"));
     if (t.kind === "git") return { kind: "git", cooldownMinutes };
     if (t.kind === "session") return { kind: "session", cooldownMinutes };
-    const quietSeconds = minutesOr(t.quietSeconds, DEFAULT_QUIET_SECONDS, 10);
+    const quietSeconds = minutesOr(t.quietSeconds, tunables.num("duty.defaultQuietSeconds"), 10);
     return { kind: "files", quietSeconds, cooldownMinutes };
   }
   if (t.kind === "poll") {
@@ -172,11 +171,11 @@ function normalizeTrigger(raw: unknown): Trigger | string {
     if (!command) return "확인할 명령이 필요합니다";
     const error = pollCommandError(command);
     if (error) return `확인 명령: ${error}`;
-    return { kind: "poll", command, minutes: minutesOr(t.minutes, 60, MIN_INTERVAL_MINUTES) };
+    return { kind: "poll", command, minutes: minutesOr(t.minutes, Math.max(60, minInterval), minInterval) };
   }
   if (t.kind === "manual") return { kind: "manual" };
   if (t.kind === "interval" && typeof t.minutes === "number" && Number.isFinite(t.minutes)) {
-    const minutes = Math.max(MIN_INTERVAL_MINUTES, Math.round(t.minutes));
+    const minutes = Math.max(minInterval, Math.round(t.minutes));
     const weekdays = weekdaysOf(t.weekdays);
     const hasWindow = t.from !== undefined || t.to !== undefined;
     if (hasWindow && !(typeof t.from === "string" && parseTime(t.from) && typeof t.to === "string" && parseTime(t.to) && t.from !== t.to)) {

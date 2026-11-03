@@ -132,17 +132,10 @@ export const DEFAULT_CONFIG: MateConfig = {
   desktopNotify: true,
 };
 
-export const DEFAULT_TIMEOUT_SEC = 300;
-
 /** Mate 대화 한 차례를 실행할 때 쓰는 임무 id (파일로 저장되지 않는다). 대화의 허용 질문도 이 id로 묻는다 */
 export const CHAT_DUTY_ID = "mate-chat";
-/** interval·poll 계기의 최소 간격 (비용·소음 방지) */
-export const MIN_INTERVAL_MINUTES = 15;
-/** 변화 계기: 한 번 돈 뒤 다음 실행까지 기본 쉬는 시간 */
-export const DEFAULT_COOLDOWN_MINUTES = 15;
-export const MIN_COOLDOWN_MINUTES = 5;
-/** 파일 계기: 마지막 변경 뒤 이만큼 잠잠해야 실행 (저장이 몰릴 때 한 번만) */
-export const DEFAULT_QUIET_SECONDS = 60;
+// 임무 기본 시간 제한·최소 간격·쉬는 시간·잠잠한 시간은 설정으로 꺼냈다 (tunables.ts의 duty.*).
+// 이 파일은 앱 화면도 쓰므로 그것을 import하지 않는다.
 
 export type RunStatus = "running" | "done" | "failed" | "timeout" | "budget";
 

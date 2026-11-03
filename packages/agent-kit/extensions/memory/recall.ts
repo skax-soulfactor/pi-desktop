@@ -1,4 +1,5 @@
 import { TYPE_LABEL, type KnowledgeEntry } from "./types";
+import { agentDefault } from "../../src/tunables-defs";
 
 /**
  * 이번 요청에 실을 지식을 고른다 (desktop-agent buildMemoryContext). 파일·Pi에 손대지 않는 순수 로직이다.
@@ -37,8 +38,13 @@ export function relevance(entry: KnowledgeEntry, prompt: string): number {
   return Math.max(overlap(`${entry.title} ${entry.tags.join(" ")}`, prompt), overlap(entry.content, prompt) * 0.8);
 }
 
-/** 이보다 관련이 작으면 본문을 싣지 않는다 */
-const MIN_RELEVANCE = 0.2;
+/** 섹션을 만들 때 쓰는 설정값. 없으면 정의의 기본값 (src/tunables.ts의 memory.*) */
+export interface KnowledgeSectionOptions {
+  /** 이보다 관련이 작으면 본문을 싣지 않는다 */
+  minRelevance?: number;
+  /** 섹션 맨 앞의 안내 */
+  intro?: string;
+}
 
 export interface KnowledgeSection {
   /** 시스템 프롬프트 섹션 본문. 실을 것이 없으면 undefined */
@@ -50,7 +56,14 @@ export interface KnowledgeSection {
 const label = (e: KnowledgeEntry) => `[${TYPE_LABEL[e.type]}]${e.unverified ? "[확인 안 됨]" : ""}`;
 const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…(memory_read로 전문)` : text);
 
-export function buildKnowledgeSection(entries: KnowledgeEntry[], prompt: string, budgetChars: number): KnowledgeSection {
+export function buildKnowledgeSection(
+  entries: KnowledgeEntry[],
+  prompt: string,
+  budgetChars: number,
+  options: KnowledgeSectionOptions = {},
+): KnowledgeSection {
+  const minRelevance = options.minRelevance ?? agentDefault<number>("memory.minRelevance");
+  const intro = options.intro ?? agentDefault<string>("memory.sectionIntro");
   const active = entries.filter((e) => e.status === "active");
   if (active.length === 0) return { injected: [] };
   // 넉넉하면 목록 1/4, 본문 하나당 1,500자, 관련 5개. 좁으면 비율대로 줄인다
@@ -85,14 +98,13 @@ export function buildKnowledgeSection(entries: KnowledgeEntry[], prompt: string,
   active
     .filter((e) => !e.pinned)
     .map((e) => ({ e, score: relevance(e, prompt) }))
-    .filter((s) => s.score >= MIN_RELEVANCE)
+    .filter((s) => s.score >= minRelevance)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK)
     .forEach(({ e }) => addBody(e, "관련"));
 
   const text = [
-    "지식베이스: 사용자와 지난 작업에 대해 알고 있는 것이다. 지금 요청과 관련 있을 때만 따르고, 틀렸으면 memory_save로 고치거나 memory_forget으로 보관하라.",
-    "[확인 안 됨]은 도구로 확인하지 않은 대화에서 나온 것이니 근거로 삼기 전에 확인하라. 목록의 본문이 필요하면 memory_read(id)로 읽어라.",
+    intro,
     `## 목록 (${active.length}개)`,
     ...index,
     ...(omitted ? [`- …그 밖에 ${omitted}개 (memory_search로 찾기)`] : []),

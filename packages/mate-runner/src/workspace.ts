@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import type { ChangeInfo } from "@pi-desktop/mate-kit";
 import type { Exec } from "./watchers";
+import { mateTunables } from "./tunables";
 
 /**
  * act 단계의 작업 공간 (설계 DESIGN-MATE.md §4).
@@ -19,7 +20,6 @@ export interface Workspace {
   cwd: string;
 }
 
-const PATCH_LIMIT = 200_000;
 
 async function git(exec: Exec, cwd: string, ...args: string[]): Promise<string> {
   const result = await exec("git", args, cwd);
@@ -52,7 +52,8 @@ export async function collectChange(exec: Exec, ws: Workspace): Promise<{ info: 
   if (files.length === 0) return undefined;
   const stat = await git(exec, ws.worktree, "diff", "--cached", "--stat", ws.base);
   const full = await exec("git", ["diff", "--cached", ws.base], ws.worktree);
-  const patch = full.stdout.length > PATCH_LIMIT ? `${full.stdout.slice(0, PATCH_LIMIT)}\n… (diff가 길어 잘랐습니다)` : full.stdout;
+  const patchLimit = mateTunables().num("duty.patchChars");
+  const patch = full.stdout.length > patchLimit ? `${full.stdout.slice(0, patchLimit)}\n… (diff가 길어 잘랐습니다)` : full.stdout;
   return { info: { repo: ws.repo, worktree: ws.worktree, base: ws.base, files }, stat, patch };
 }
 

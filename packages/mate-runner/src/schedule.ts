@@ -1,6 +1,5 @@
+import { mateTunables } from "./tunables";
 import {
-  DEFAULT_COOLDOWN_MINUTES,
-  DEFAULT_QUIET_SECONDS,
   isChangeTrigger,
   type ChangeTrigger,
   type Duty,
@@ -45,8 +44,8 @@ export function isDue(duty: Duty, lastRunAt: number | undefined, now: number, wa
 export function changeReadyAt(trigger: ChangeTrigger, lastRunAt: number | undefined, watch: WatchState | undefined): number | undefined {
   const pending = watch?.pending;
   if (!pending) return undefined;
-  const cooldown = trigger.kind === "poll" ? 0 : (trigger.cooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES) * 60_000;
-  const quiet = trigger.kind === "files" ? (trigger.quietSeconds ?? DEFAULT_QUIET_SECONDS) * 1000 : 0;
+  const cooldown = trigger.kind === "poll" ? 0 : (trigger.cooldownMinutes ?? mateTunables().num("duty.defaultCooldownMinutes")) * 60_000;
+  const quiet = trigger.kind === "files" ? (trigger.quietSeconds ?? mateTunables().num("duty.defaultQuietSeconds")) * 1000 : 0;
   return Math.max(lastRunAt === undefined ? 0 : lastRunAt + cooldown, pending.lastAt + quiet);
 }
 

@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { MEMORY_TYPES, TYPE_LABEL, type BulkAction, type EntryInput, type KnowledgeEntry, type KnowledgeStats, type MemoryType, type ReviewItem } from "./types";
+import { agentDefault } from "../../src/tunables-defs";
 
 export * from "./types";
 
@@ -313,15 +314,20 @@ export function similarity(a: Pick<KnowledgeEntry, "title" | "tags">, b: Pick<Kn
   return hit / Math.min(x.size, y.size);
 }
 
-const DUP_THRESHOLD = 0.7;
-const STALE_DAYS = 30;
+/** 점검 기준. 없으면 정의의 기본값 (src/tunables.ts의 memory.dupThreshold·staleDays) */
+export interface ReviewOptions {
+  dupThreshold?: number;
+  staleDays?: number;
+}
 
 /**
  * 점검 대기함 (desktop-agent needsReview). 자동으로 쌓이는 지식의 문제는 "많다"가 아니라
  * "틀린 게 섞여 있는데 어느 것인지 모른다"이다. 사람이 볼 것만 골라 이유와 함께 보인다.
  * 확인한 것(reviewed)과 고정한 것은 다시 올리지 않는다.
  */
-export function needsReview(entries: KnowledgeEntry[], now = new Date()): ReviewItem[] {
+export function needsReview(entries: KnowledgeEntry[], now = new Date(), options: ReviewOptions = {}): ReviewItem[] {
+  const dupThreshold = options.dupThreshold ?? agentDefault<number>("memory.dupThreshold");
+  const staleDays = options.staleDays ?? agentDefault<number>("memory.staleDays");
   const active = entries.filter((e) => e.status === "active" && !e.reviewed && !e.pinned);
   const items: ReviewItem[] = [];
   const paired = new Set<string>();
@@ -329,7 +335,7 @@ export function needsReview(entries: KnowledgeEntry[], now = new Date()): Review
     for (let j = i + 1; j < active.length; j++) {
       const a = active[i]!;
       const b = active[j]!;
-      if (a.type !== b.type || paired.has(a.id) || paired.has(b.id) || similarity(a, b) < DUP_THRESHOLD) continue;
+      if (a.type !== b.type || paired.has(a.id) || paired.has(b.id) || similarity(a, b) < dupThreshold) continue;
       paired.add(a.id).add(b.id);
       items.push({ kind: "duplicate", id: a.id, title: a.title, type: a.type, reason: "제목·태그가 크게 겹칩니다. 하나로 합칠 수 있습니다.", pairId: b.id, pairTitle: b.title });
     }
@@ -337,7 +343,7 @@ export function needsReview(entries: KnowledgeEntry[], now = new Date()): Review
   for (const e of active) {
     if (paired.has(e.id)) continue;
     const age = (now.getTime() - Date.parse(e.lastRecalledAt ?? e.created)) / 86_400_000;
-    if (!(e.recallCount ?? 0) && age >= STALE_DAYS) {
+    if (!(e.recallCount ?? 0) && age >= staleDays) {
       items.push({ kind: "stale", id: e.id, title: e.title, type: e.type, reason: `${Math.floor(age)}일 동안 한 번도 쓰이지 않았습니다.` });
     }
   }

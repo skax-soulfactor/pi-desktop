@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve, isAbsolute } from "node:path";
 import type { MatePaths } from "../paths";
+import { mateTunables } from "../tunables";
 
 /**
  * 대화에 붙인 이미지 (붙여넣기·고르기). 앱이 보낸 이미지를 Mate 홈의 chat/images에 두었다가
@@ -14,22 +15,24 @@ export interface ChatImageInput {
   name?: string;
 }
 
-export const MAX_CHAT_IMAGES = 4;
-export const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024;
+// 한 번에 붙일 이미지 수(chat.maxImages)와 크기 상한(chat.maxImageMb)은 설정으로 꺼냈다 (tunables.ts)
 const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
 
 /** 받은 이미지를 검사해 파일로 둔다. 받을 수 없는 이미지면 오류 */
 export async function saveChatImages(paths: MatePaths, images: unknown, now = Date.now()): Promise<string[]> {
   if (images === undefined || images === null) return [];
   if (!Array.isArray(images)) throw new Error("이미지 목록이 잘못되었습니다");
-  if (images.length > MAX_CHAT_IMAGES) throw new Error(`이미지는 한 번에 ${MAX_CHAT_IMAGES}장까지 보낼 수 있습니다`);
+  const tunables = mateTunables(paths.home);
+  const maxImages = tunables.num("chat.maxImages");
+  const maxMb = tunables.num("chat.maxImageMb");
+  if (images.length > maxImages) throw new Error(`이미지는 한 번에 ${maxImages}장까지 보낼 수 있습니다`);
   const files: Array<{ file: string; data: Buffer }> = [];
   for (const image of images as Array<Partial<ChatImageInput>>) {
     const ext = EXT[String(image?.mimeType ?? "")];
     if (!ext) throw new Error("PNG·JPEG·GIF·WebP 이미지만 보낼 수 있습니다");
     const data = Buffer.from(String(image?.data ?? ""), "base64");
     if (data.length === 0) throw new Error("이미지를 읽지 못했습니다");
-    if (data.length > MAX_CHAT_IMAGE_BYTES) throw new Error(`이미지가 ${(data.length / 1024 / 1024).toFixed(1)}MB라 너무 큽니다 (5MB까지)`);
+    if (data.length > maxMb * 1024 * 1024) throw new Error(`이미지가 ${(data.length / 1024 / 1024).toFixed(1)}MB라 너무 큽니다 (${maxMb}MB까지)`);
     files.push({ file: join(paths.chatImages, `${now}-${randomUUID().slice(0, 8)}.${ext}`), data });
   }
   if (files.length === 0) return [];
@@ -48,7 +51,7 @@ export function chatImagesOf(paths: MatePaths, list: unknown): string[] {
       const rel = relative(paths.chatImages, p);
       return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
     })
-    .slice(0, MAX_CHAT_IMAGES);
+    .slice(0, mateTunables(paths.home).num("chat.maxImages"));
 }
 
 export async function removeChatImages(files: string[] | undefined): Promise<void> {

@@ -1,0 +1,19 @@
+{
+  "name": "@pi-desktop/tunables-ui",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Agent·Mate 설정 화면의 \"프롬프트와 수치\" 패널: 코드에서 꺼낸 프롬프트·수치의 용도를 보이고 고치게 한다",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/TunablesPanel.tsx",
+    "./view": "./src/tunables-view.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@pi-desktop/agent-kit": "*"
+  }
+}

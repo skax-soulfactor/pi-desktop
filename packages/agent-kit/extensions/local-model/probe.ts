@@ -1,4 +1,5 @@
 import { ollamaRoot } from "./budget";
+import { agentTunables } from "../../src/tunables";
 
 export interface OllamaProbe {
   /** 서버가 이 모델에 실제로 연 창 (/api/ps). 모델이 아직 올라가지 않았으면 없음 */
@@ -7,7 +8,6 @@ export interface OllamaProbe {
   thinking?: boolean;
 }
 
-const TIMEOUT_MS = 1500;
 
 /**
  * Ollama 서버에 이 모델의 실제 창과 사고 지원 여부를 묻는다.
@@ -17,7 +17,7 @@ export async function probeOllama(baseUrl: string, modelId: string): Promise<Oll
   const root = ollamaRoot(baseUrl);
   const result: OllamaProbe = {};
   try {
-    const res = await fetch(`${root}/api/ps`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const res = await fetch(`${root}/api/ps`, { signal: AbortSignal.timeout(agentTunables().num("localModel.probeTimeoutMs")) });
     if (res.ok) {
       const body = (await res.json()) as { models?: Array<{ name?: string; model?: string; context_length?: number }> };
       const hit = body.models?.find((m) => m.model === modelId || m.name === modelId);
@@ -31,7 +31,7 @@ export async function probeOllama(baseUrl: string, modelId: string): Promise<Oll
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ model: modelId }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(agentTunables().num("localModel.probeTimeoutMs")),
     });
     if (res.ok) {
       const body = (await res.json()) as { capabilities?: unknown };

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { looksSecret } from "../memory/extract";
 import type { CardDraft, CardSkill } from "./types";
 import { NO_SHARE_TAG, TYPE_LABEL, type MemoryType } from "../memory/types";
+import { agentDefault } from "../../src/tunables-defs";
 
 /**
  * 에이전트 카드 초안 만들기 (desktop-agent DESIGN-AGENT-NETWORK.md §2.2 "자동 생성").
@@ -19,19 +20,11 @@ export interface CardMaterial {
   current: CardDraft;
 }
 
-/** 명령줄에 싣는 짧은 지시. 재료는 stdin으로 준다 */
-export const CARD_INSTRUCTION = `입력은 이 에이전트의 지식베이스 항목 제목과 대화 주제 목록이다. 이것을 보고 다른 사람에게 공개할 "에이전트 카드"의 소개와 잘하는 것을 한국어로 써라.
-- description: 이 에이전트가 무엇을 잘 아는지 한 문장 (60자 이내)
-- skills: 3~6개. name은 20자 이내, description은 60자 이내
-- 공개되는 글이다. 사람 이름, 회사·고객·프로젝트의 내부 이름, 주소·경로·계정·비밀번호·토큰은 쓰지 마라. 기술·분야 수준으로 일반화하라
-- 재료에 근거가 없는 능력은 지어내지 마라. 재료가 적으면 적게 써라
-- 아래 JSON만 출력하라. 설명·코드 펜스 금지
-{"description":"...","skills":[{"name":"...","description":"..."}]}`;
-
-const MATERIAL_CHARS = 6000;
+/** 명령줄에 싣는 짧은 지시의 기본값. 재료는 stdin으로 준다 (peers.cardInstruction, 사용자가 바꿀 수 있다) */
+export const CARD_INSTRUCTION = agentDefault<string>("peers.cardInstruction");
 
 /** stdin으로 줄 재료. 너무 길면 뒤를 자른다 */
-export function cardMaterial(material: CardMaterial): string {
+export function cardMaterial(material: CardMaterial, limit = agentDefault<number>("peers.cardMaterialChars")): string {
   const memories = material.memories
     .filter((m) => m.type !== "user" && !m.tags.includes(NO_SHARE_TAG) && !looksSecret(m.title))
     .map((m) => `- [${TYPE_LABEL[m.type]}] ${m.title}${m.tags.length ? ` (${m.tags.join(", ")})` : ""}`);
@@ -41,7 +34,7 @@ export function cardMaterial(material: CardMaterial): string {
     `## 지식베이스 (요구사항·교훈·참조)\n${memories.join("\n") || "(없음)"}`,
     `## 대화 주제\n${names.join("\n") || "(없음)"}`,
   ].join("\n\n");
-  return text.length > MATERIAL_CHARS ? `${text.slice(0, MATERIAL_CHARS)}\n…(잘림)` : text;
+  return text.length > limit ? `${text.slice(0, limit)}\n…(잘림)` : text;
 }
 
 const clip = (text: string, max: number) => (text.length > max ? text.slice(0, max) : text);
@@ -73,8 +66,14 @@ export interface PiPrintCommand {
 }
 
 /** Pi를 한 번 불러(도구·확장·스킬·컨텍스트 파일 없음) 초안을 만든다 */
-export function generateCardDraft(pi: PiPrintCommand, material: CardMaterial, cwd: string, timeoutMs = 120_000): Promise<Pick<CardDraft, "description" | "skills">> {
-  const args = [...pi.args, "--print", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-context-files", CARD_INSTRUCTION];
+export function generateCardDraft(
+  pi: PiPrintCommand,
+  material: CardMaterial,
+  cwd: string,
+  timeoutMs = 120_000,
+  options: { instruction?: string; materialChars?: number } = {},
+): Promise<Pick<CardDraft, "description" | "skills">> {
+  const args = [...pi.args, "--print", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-context-files", options.instruction ?? CARD_INSTRUCTION];
   return new Promise((resolve, reject) => {
     const child = spawn(pi.command, args, { cwd, env: pi.env ?? process.env, windowsHide: true });
     let stdout = "";
@@ -100,6 +99,6 @@ export function generateCardDraft(pi: PiPrintCommand, material: CardMaterial, cw
         reject(error);
       }
     });
-    child.stdin.end(cardMaterial(material));
+    child.stdin.end(cardMaterial(material, options.materialChars));
   });
 }

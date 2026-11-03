@@ -25,6 +25,8 @@
     "./permissions": "./extensions/permissions/store.ts",
     "./usage": "./src/usage.ts",
     "./usage-types": "./src/usage-types.ts",
+    "./tunables-core": "./src/tunables-core.ts",
+    "./tunables-store": "./src/tunables-store.ts",
     "./elevation": "./extensions/elevation/store.ts",
     "./peers": "./extensions/peers/store.ts",
     "./peers-client": "./extensions/peers/client.ts",

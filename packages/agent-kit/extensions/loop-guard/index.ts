@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { RunGuard } from "./guard";
+import { agentTunables } from "../../src/tunables";
 
 /**
  * 제자리 돌기 차단 (설계 DESIGN-AGENT.md §4).
@@ -11,7 +12,10 @@ import { RunGuard } from "./guard";
  * 실행(run) 단위로 센다. 사용자가 새로 말을 걸면 처음부터 다시 센다.
  */
 export default function loopGuard(pi: ExtensionAPI): void {
-  const guard = new RunGuard();
+  const guard = new RunGuard(() => {
+    const tunables = agentTunables();
+    return { spinLimit: tunables.num("loopGuard.spinLimit"), minParagraph: tunables.num("loopGuard.minParagraph") };
+  });
   let stoppedNotified = false;
 
   pi.on("agent_start", async () => {

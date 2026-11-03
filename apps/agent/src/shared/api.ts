@@ -17,6 +17,7 @@ import type { UsageRange, UsageSummary } from "@pi-desktop/agent-kit/usage-types
 
 export type { UsageRange, UsageSource, UsageSummary, UsageTotals } from "@pi-desktop/agent-kit/usage-types";
 import type { Schedule } from "@pi-desktop/agent-kit/schedule-plan";
+import type { TunableItem } from "@pi-desktop/agent-kit/tunables-core";
 import type { ConnectionState } from "../vendor/shared/api";
 import type { PiSetupView } from "./pi-setup";
 import type { McpCheckResult, McpServerView } from "@pi-desktop/pi-isolation/mcp-presets";
@@ -74,6 +75,8 @@ export const IpcChannels = {
   getElevation: "agent:get-elevation",
   setElevation: "agent:set-elevation",
   setAutoLearn: "agent:set-auto-learn",
+  tunablesList: "agent:tunables-list",
+  tunableSet: "agent:tunable-set",
   listRules: "agent:list-rules",
   removeRule: "agent:remove-rule",
   listAudit: "agent:list-audit",
@@ -271,6 +274,10 @@ export interface AgentApi {
   /** 관리자 권한 실행(shell_exec_elevated)을 켰는가 */
   getElevation(): Promise<boolean>;
   setElevation(on: boolean): Promise<void>;
+  /** 설정으로 꺼낸 프롬프트와 수치 (그 호스트의 Agent 데이터 폴더, DESIGN-APPS.md §7) */
+  tunablesList(): Promise<TunableItem[]>;
+  /** 값을 바꾼다. null이면 기본값으로 되돌린다 */
+  tunableSet(id: string, value: number | string | null): Promise<TunableItem>;
   listRules(): Promise<RuleView[]>;
   removeRule(rule: RuleView): Promise<void>;
   listAudit(): Promise<AuditView[]>;

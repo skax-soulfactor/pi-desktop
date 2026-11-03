@@ -7,11 +7,9 @@ import { newTaskId, saveTask, tasksDir, type TaskRecord } from "../tasks/store";
 import { runWorker } from "../tasks/worker";
 import { describeSchedule, dueSchedules, firstRun, invalidReason, markStarted, type Schedule, type ScheduleKind } from "./plan";
 import { loadSchedules, newScheduleId, schedulesPath, updateSchedules } from "./store";
+import { agentTunables } from "../../src/tunables";
 
-/** 스케줄러가 예약을 확인하는 간격 */
-const DEFAULT_TICK_MS = 30_000;
-/** 스케줄러가 동시에 돌리는 예약 실행 수 */
-const MAX_RUNNING = 2;
+// 확인 간격(schedule.tickSeconds)과 동시에 돌리는 수(schedule.maxRunning)는 설정에서 읽는다 (src/tunables-defs.ts)
 
 /**
  * 예약 실행 (설계 DESIGN-AGENT.md §4 "예약·주기 작업").
@@ -36,7 +34,7 @@ export default function schedule(pi: ExtensionAPI): void {
     name: "schedule_task",
     label: "예약하기",
     description:
-      "정해진 때에 할 일을 예약한다. kind=once(한 번, at에 ISO 시각), interval(minutes분마다, 5분 이상), daily(매일 time HH:MM). " +
+      `정해진 때에 할 일을 예약한다. kind=once(한 번, at에 ISO 시각), interval(minutes분마다, ${agentTunables().num("schedule.minIntervalMinutes")}분 이상), daily(매일 time HH:MM). ` +
       "예약 실행에는 사람이 없어 파일 쓰기·명령 실행·웹 요청은 거부된다. 읽고 정리해 결과를 남기는 일만 맡긴다. " +
       "instruction은 실행할 때 이 대화를 모른다고 보고 혼자 끝낼 수 있게 쓴다. 앱이 켜진 적이 있어야 돈다(앱을 닫아도 돈다).",
     promptSnippet: "schedule_task: 정해진 때에 할 일을 예약한다",
@@ -52,7 +50,7 @@ export default function schedule(pi: ExtensionAPI): void {
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const now = new Date();
       const input = { kind: params.kind as ScheduleKind, at: params.at, minutes: params.minutes, time: params.time };
-      const invalid = invalidReason(input, now);
+      const invalid = invalidReason(input, now, agentTunables().num("schedule.minIntervalMinutes"));
       if (invalid) throw new Error(invalid);
       const created: Schedule = {
         id: newScheduleId(now),
@@ -113,7 +111,7 @@ function runScheduler(pi: ExtensionAPI, dir: string, path: string): void {
   const tick = async () => {
     const now = new Date();
     const due = dueSchedules(await loadSchedules(path), now).filter((s) => !running.has(s.id));
-    for (const schedule of due.slice(0, Math.max(0, MAX_RUNNING - running.size))) {
+    for (const schedule of due.slice(0, Math.max(0, agentTunables().num("schedule.maxRunning") - running.size))) {
       const taskId = newTaskId(now);
       await updateSchedules(path, (all) => all.map((s) => (s.id === schedule.id ? markStarted(s, now, taskId) : s)));
       running.add(schedule.id);
@@ -152,7 +150,7 @@ function runScheduler(pi: ExtensionAPI, dir: string, path: string): void {
 
   pi.on("session_start", async (_event, ctx) => {
     fallbackModel = { provider: ctx.model?.provider, model: ctx.model?.id };
-    const tickMs = Number(process.env.PI_DESKTOP_AGENT_SCHEDULER_TICK_MS) || DEFAULT_TICK_MS;
+    const tickMs = Number(process.env.PI_DESKTOP_AGENT_SCHEDULER_TICK_MS) || agentTunables().num("schedule.tickSeconds") * 1000;
     timer = setInterval(() => void tick().catch(() => undefined), tickMs);
     void tick().catch(() => undefined);
   });

@@ -28,11 +28,11 @@ import {
   takeRequests,
   writeRun,
 } from "./store";
-import { DEFAULT_TIMEOUT_SEC, isChangeTrigger, type Duty, type RunRecord, type RunnerState } from "./types";
+import { isChangeTrigger, type Duty, type RunRecord, type RunnerState } from "./types";
+import { mateDefault, mateTunables } from "./tunables";
 
 // 테스트에서는 PI_DESKTOP_MATE_TICK_MS로 줄인다
-const TICK_MS = Number(process.env.PI_DESKTOP_MATE_TICK_MS) || 30_000;
-const LOG_LIMIT = 1_000_000;
+const TICK_MS = Number(process.env.PI_DESKTOP_MATE_TICK_MS) || mateDefault<number>("runner.tickMs");
 
 export interface RunnerOptions {
   paths: MatePaths;
@@ -80,7 +80,7 @@ export async function log(paths: MatePaths, message: string): Promise<void> {
   try {
     await mkdir(paths.runDir, { recursive: true });
     const size = await stat(paths.log).then((s) => s.size, () => 0);
-    if (size > LOG_LIMIT) await writeFile(paths.log, "", "utf8");
+    if (size > mateTunables().num("runner.logBytes")) await writeFile(paths.log, "", "utf8");
     await appendFile(paths.log, `${new Date().toISOString()} ${message}\n`, "utf8");
   } catch {
     // 로그 실패로 실행을 멈추지 않는다
@@ -168,7 +168,7 @@ export async function runDuty(
         chatPath: paths.chat,
         blockedPath,
         sessionsDir: paths.sessions,
-        timeoutSec: duty.timeoutSec ?? DEFAULT_TIMEOUT_SEC,
+        timeoutSec: duty.timeoutSec ?? mateTunables().num("duty.defaultTimeoutSec"),
         maxCostUsd: duty.maxCostUsd ?? config.maxCostUsd,
         ...(workspace ? { workspace: { cwd: workspace.cwd, root: workspace.worktree } } : {}),
       },

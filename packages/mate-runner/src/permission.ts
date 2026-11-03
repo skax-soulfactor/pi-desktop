@@ -2,6 +2,7 @@ import { rm } from "node:fs/promises";
 import { appendChatQuestion, EXT_GRANT_PREFIX, isExtToolGrant, isMcpToolName, isToolGrant, PERMISSION_OPTIONS, readBlocked } from "@pi-desktop/mate-kit";
 import type { MatePaths } from "./paths";
 import { CHAT_DUTY_ID, type Duty } from "./types";
+import { mateTunables } from "./tunables";
 
 /**
  * 실행 중에 허용 목록에 없어 막힌 명령이 있으면, 그 명령을 이 임무에 허용할지 대화로 묻는다 (설계 §4 "권한 요청").
@@ -16,7 +17,7 @@ export async function askPermission(paths: MatePaths, duty: Duty, runId: string,
   for (const b of blocked) if (!granted.has(b.name) && !examples.has(b.name)) examples.set(b.name, b.command);
   const bash = [...examples.keys()].filter((name) => !isToolGrant(name)).sort();
   // 질문이 길어지지 않게 MCP·확장 도구는 한 번에 다섯 개까지 묻는다. 나머지는 다음 실행에서 다시 막히면 묻는다
-  const mcp = [...examples.keys()].filter(isToolGrant).sort().slice(0, MAX_MCP_PER_QUESTION);
+  const mcp = [...examples.keys()].filter(isToolGrant).sort().slice(0, mateTunables().num("duty.maxMcpPerQuestion"));
   const commands = [...bash, ...mcp];
   if (commands.length === 0) return false;
   const lines = [`"${duty.name}"${duty.id === CHAT_DUTY_ID ? "가" : " 임무가"} 아직 허용하지 않은 것을 쓰려다 막혔어요.`];
@@ -48,7 +49,6 @@ export async function askPermission(paths: MatePaths, duty: Duty, runId: string,
   );
 }
 
-const MAX_MCP_PER_QUESTION = 5;
 
 /** mcp__<서버>__<도구>를 나눈다 (서버 이름의 -는 Pi가 _로 바꾼 것이라 _로 보인다) */
 export function splitMcpToolName(name: string): { server: string; tool: string } {

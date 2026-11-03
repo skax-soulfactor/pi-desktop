@@ -29,6 +29,7 @@
     "@pi-desktop/host-protocol": "*",
     "@pi-desktop/pi-isolation": "*",
     "@pi-desktop/pi-resources": "*",
+    "@pi-desktop/tunables-ui": "*",
     "@pi-desktop/web-shell": "*",
     "@pi-desktop/window-state": "*",
     "@types/react": "^19.3.0",

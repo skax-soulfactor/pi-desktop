@@ -30,6 +30,7 @@ import { DEFAULT_PEER_PORT, type CardDraft, type PeerPolicy, type PeerSettings }
 import { normalizeAddress } from "../extensions/peers/protocol";
 import { readSessionUsage, readUsageLog, rangeBuckets, summarizeUsage, type UsageRange } from "./usage";
 import { searchSessions, type SearchableSession } from "./history-search";
+import { agentTunables } from "./tunables";
 import { approvePairing, checkPairings, forgetPeer, networkState, pairWith, previewPeer, rejectPairing, saveCard, setNetworkSettings, setPeerPolicy } from "./network";
 
 /**
@@ -89,11 +90,21 @@ export function appApi(ctx: AppApiContext): AppApi {
     kbBulk: (ids: string[], action: BulkAction, tag?: string) => bulkUpdate(kb(), ids, action, tag),
     kbMerge: async (keepId: string, dropIds: string[]) => void (await mergeEntries(kb(), keepId, dropIds)),
     kbReviewed: async (id: string) => void (await markReviewed(kb(), id)),
-    kbReview: async () => needsReview(await loadEntries(kb())),
+    kbReview: async () => {
+      const tunables = agentTunables(ctx.dataDir);
+      return needsReview(await loadEntries(kb()), new Date(), {
+        dupThreshold: tunables.num("memory.dupThreshold"),
+        staleDays: tunables.num("memory.staleDays"),
+      });
+    },
     kbStats: async () => knowledgeStats(await loadEntries(kb(), { includeArchived: true })),
     kbPreview: async (prompt: string) => {
       // 클라우드 모델의 예산(8,000자)으로 보인다. 로컬 모델이면 창에 맞춰 더 줄어든다
-      const { text, injected } = buildKnowledgeSection(await loadEntries(kb()), prompt ?? "", 8000);
+      const tunables = agentTunables(ctx.dataDir);
+      const { text, injected } = buildKnowledgeSection(await loadEntries(kb()), prompt ?? "", 8000, {
+        minRelevance: tunables.num("memory.minRelevance"),
+        intro: tunables.text("memory.sectionIntro"),
+      });
       return { text: text ?? "", chars: text?.length ?? 0, injected: injected.length };
     },
     /** 내보낼 Markdown 글 (파일은 앱이 이 PC에 저장한다) */
@@ -140,8 +151,17 @@ export function appApi(ctx: AppApiContext): AppApi {
     suggestCard: async (current: CardDraft, sessionNames: string[], overrides?: PiOverrides) => {
       const memories = (await loadEntries(kb())).map((m) => ({ type: m.type, title: m.title, tags: m.tags }));
       const cwd = await mkdtemp(join(tmpdir(), "agent-card-"));
-      return generateCardDraft(await pi(overrides), { memories, sessionNames: (sessionNames ?? []).slice(0, 50), current }, cwd);
+      const tunables = agentTunables(ctx.dataDir);
+      return generateCardDraft(await pi(overrides), { memories, sessionNames: (sessionNames ?? []).slice(0, 50), current }, cwd, undefined, {
+        instruction: tunables.text("peers.cardInstruction"),
+        materialChars: tunables.num("peers.cardMaterialChars"),
+      });
     },
+
+    // 설정으로 꺼낸 프롬프트와 수치 (DESIGN-APPS.md §7). 확장은 파일이 바뀌면 다음 사용부터 새 값을 읽는다
+    tunablesList: async () => agentTunables(ctx.dataDir).items(),
+    /** value가 null이면 기본값으로 되돌린다 */
+    tunableSet: async (id: string, value: number | string | null) => agentTunables(ctx.dataDir).set(id, value),
 
     // 네트워크(피어). 수신 서버는 그 호스트의 스케줄러 세션이 띄우므로 상태도 그 호스트에서 본다
     networkState: () => networkState(ctx.dataDir),

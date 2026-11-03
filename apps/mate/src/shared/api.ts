@@ -16,6 +16,7 @@ import type { ChatView, DutyDraft, DutyView, InboxView, ObserveView, Overview, R
 export type { ChatView, DutyDraft, DutyView, InboxView, ObserveView, Overview, RunnerView, TranscriptItem };
 import type { SkillInput, SkillView } from "@pi-desktop/agent-kit/skill-types";
 import type { UsageRange, UsageSummary } from "@pi-desktop/agent-kit/usage-types";
+import type { TunableItem } from "@pi-desktop/agent-kit/tunables-core";
 import type { McpCheckResult, McpServerView } from "@pi-desktop/pi-isolation/mcp-presets";
 import type { AppId, Importables, PackageResult, PackageView } from "@pi-desktop/pi-resources/types";
 import type { SshHostConfig } from "@pi-desktop/host-deploy/types";
@@ -107,6 +108,8 @@ export const IpcChannels = {
   skillDelete: "mate:skill-delete",
   skillOpenFolder: "mate:skill-open-folder",
   listMcp: "mate:list-mcp",
+  tunablesList: "mate:tunables-list",
+  tunableSet: "mate:tunable-set",
   usageSummary: "mate:usage-summary",
   addMcpPreset: "mate:add-mcp-preset",
   setMcpEnabled: "mate:set-mcp-enabled",
@@ -202,6 +205,10 @@ export interface MateApi {
   skillOpenFolder(): Promise<void>;
   /** Mate 홈 mcp.json의 서버 (키 값은 보내지 않는다) */
   listMcp(): Promise<McpServerView[]>;
+  /** 설정으로 꺼낸 프롬프트와 수치 (그 호스트의 Mate 홈, DESIGN-APPS.md §7) */
+  tunablesList(): Promise<TunableItem[]>;
+  /** 값을 바꾼다. null이면 기본값으로 되돌린다 */
+  tunableSet(id: string, value: number | string | null): Promise<TunableItem>;
   /** 기간별 토큰·비용 (Mate 대화와 임무 실행) */
   usageSummary(range: UsageRange): Promise<UsageSummary>;
   /** 미리 정한 서버를 넣는다. 키가 필요한 서버는 key를 env에 넣는다 */

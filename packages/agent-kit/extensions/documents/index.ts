@@ -8,6 +8,7 @@ import { docxText } from "./docx";
 import { pdfText } from "./pdf";
 import { recordUsage } from "../../src/usage";
 import { dataDir } from "../permissions/store";
+import { agentTunables } from "../../src/tunables";
 
 /**
  * 큰 문서 처리 (설계 DESIGN-AGENT.md §4 "큰 입력 처리", "docx 첨부 변환").
@@ -48,7 +49,7 @@ export default function documents(pi: ExtensionAPI): void {
       for (const [i, chunk] of chunks.entries()) {
         if (signal?.aborted) throw new Error("중단했다");
         progress(i);
-        results.push(await ask(ctx, signal, mode === "transform" ? TRANSFORM_SYSTEM : REDUCE_SYSTEM, `지시: ${params.instruction}\n\n[부분 ${i + 1}/${chunks.length}]\n${chunk}`));
+        results.push(await ask(ctx, signal, agentTunables().text(mode === "transform" ? "documents.transformSystem" : "documents.reduceSystem"), `지시: ${params.instruction}\n\n[부분 ${i + 1}/${chunks.length}]\n${chunk}`));
       }
       progress(chunks.length);
 
@@ -63,15 +64,11 @@ export default function documents(pi: ExtensionAPI): void {
       const answer =
         results.length === 1
           ? results[0]!
-          : await ask(ctx, signal, COMBINE_SYSTEM, `지시: ${params.instruction}\n\n${results.map((r, i) => `[부분 ${i + 1}에서 뽑은 것]\n${r}`).join("\n\n")}`);
+          : await ask(ctx, signal, agentTunables().text("documents.combineSystem"), `지시: ${params.instruction}\n\n${results.map((r, i) => `[부분 ${i + 1}에서 뽑은 것]\n${r}`).join("\n\n")}`);
       return { content: [{ type: "text", text: answer }], details: { mode, chunks: chunks.length } };
     },
   });
 }
-
-const TRANSFORM_SYSTEM = "너는 긴 문서의 한 부분을 지시대로 바꾼다. 바꾼 본문만 출력하라. 설명·머리말·맺음말을 붙이지 말고, 빠뜨리는 문장 없이 처리하라.";
-const REDUCE_SYSTEM = "너는 긴 문서의 한 부분을 읽고, 지시에 답하는 데 필요한 내용만 간결하게 뽑아 적는다. 관련 내용이 없으면 '관련 없음'이라고만 적어라.";
-const COMBINE_SYSTEM = "문서를 부분별로 읽고 뽑아 둔 내용이다. 이것을 모아 지시에 답하라. '관련 없음'인 부분은 무시하라.";
 
 function absolute(cwd: string, path: string): string {
   return isAbsolute(path) ? path : resolve(cwd, path);

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { UpdateState } from "../shared/api";
 import { piSetupIssues, type PiSetupView } from "../shared/pi-setup";
 import { PiDesktopButton } from "./PiSetupBanner";
+import { TunablesPanel } from "@pi-desktop/tunables-ui";
 import { HostSettings } from "./HostSettings";
 
 /**
@@ -93,6 +94,14 @@ export function SettingsPage({
             비밀번호는 OS 인증 창(Windows UAC 등)이 직접 받습니다. 예약·백그라운드 작업에서는 쓸 수 없습니다. 다음 요청부터 바로 적용됩니다.
           </p>
         </section>
+
+        <TunablesPanel
+          load={() => window.piAgent.tunablesList()}
+          save={(id, value) => window.piAgent.tunableSet(id, value)}
+          onError={onError}
+          file="~/.pi-desktop-agent/data/tunables.json (대화가 도는 호스트)"
+          applyNote="대부분 다음 요청부터 바로 반영됩니다. 도구 설명에 들어가는 값(웹 기본 글자 수, 예약 최소 간격)은 새 대화부터, 예약 확인 간격은 앱을 다시 켠 뒤부터 반영됩니다."
+        />
 
         <section className="card">
           <h3>업데이트</h3>

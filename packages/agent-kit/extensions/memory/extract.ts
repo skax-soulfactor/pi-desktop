@@ -1,4 +1,5 @@
 import { MEMORY_TYPES, type KnowledgeEntry, type MemoryType } from "./types";
+import { agentDefault } from "../../src/tunables-defs";
 
 /**
  * 턴이 끝난 뒤 따로 모델을 불러 기억을 뽑는 패스의 순수 로직 (desktop-agent src/main/memory/extract.ts를 옮김).
@@ -89,34 +90,11 @@ export function digestRun(messages: readonly unknown[]): RunDigest {
   return { transcript: lines.join("\n"), failures, verified, hasUser };
 }
 
-export const EXTRACT_SYSTEM = `너는 데스크톱 에이전트의 지식베이스 관리자다. 방금 끝난 대화를 검토해 다음 대화에서도 알아야 할 것만 지식베이스에 남긴다.
+/** 정리 지시의 기본값. 실행에는 agentTunables().text("memory.extractSystem")을 쓴다 (사용자가 바꿀 수 있다) */
+export const EXTRACT_SYSTEM = agentDefault<string>("memory.extractSystem");
 
-종류(type):
-- user: 사용자의 역할·전문성·쓰는 환경·선호 (예: "커밋 메시지는 한글로", "회사 PC는 Windows")
-- requirement: 진행 중인 일·목표·제약·결정 사항
-- lesson: 에이전트의 실수와 재발 방지 규칙. 본문은 반드시 아래 네 항목을 빈 줄로 나눠 쓴다
-  "**상황:** ...\\n\\n**실수:** ...\\n\\n**원인:** ...\\n\\n**재발 방지:** ..."
-- reference: 자료·문서·저장소·주소 같은 외부 자원 위치
-
-규칙:
-- title은 한 줄 요약, content는 Markdown 본문, tags는 찾기 쉬운 낱말 몇 개. 모두 한국어로.
-- 같은 주제가 이미 있으면 create 대신 update(id 포함)로 고친다. 중복 금지.
-- 사용자 말이 기존 항목과 어긋나면 그 항목을 update하거나 archive한다.
-- 이번 대화에만 필요한 것, 일회성 내용은 저장하지 않는다.
-- 검증되지 않은 진단이나 해결책을 사실로 저장하지 않는다. "A로 B를 해결했다"는 사용자가 해결을 확인했을 때만.
-- 비밀번호·API 키·토큰 등 민감 정보는 절대 저장하지 않는다.
-- 실패 신호(도구 오류, 승인 거부)가 있으면 lesson을 먼저 검토한다. 단, 거부 자체를 교훈으로 삼지 말고 사용자가 원한 방식이 드러났을 때만 남긴다.
-- 저장할 것이 없으면 ops를 빈 배열로 반환한다. 대부분의 대화는 그렇다.
-
-출력: 아래 JSON만 출력한다. 설명·인사·코드 펜스 금지.
-{"ops":[{"op":"create","type":"user|requirement|lesson|reference","title":"한 줄 요약","content":"본문","tags":["태그"]},{"op":"update","id":"기존 id","content":"고친 본문"},{"op":"archive","id":"기존 id"}]}`;
-
-/** 관찰 도구가 하나도 성공하지 않은 턴에 덧붙인다. 사실이 아니라 출처를 기준으로 자른다 */
-export const UNVERIFIED_RULE = `
-
-이번 대화에서는 도구로 확인한 것이 하나도 없다.
-- 그러므로 에이전트가 설명한 외부 사실(제품 버전·가격·정책, 도구 동작 원리 등)은 저장하지 않는다. 확신에 차서 말했든 출처를 적었든 마찬가지다.
-- 사용자가 직접 말한 것만 저장한다: 선호, 쓰는 환경·도구, 요구사항, 결정, 계획.`;
+/** 관찰 도구가 하나도 성공하지 않은 턴에 덧붙이는 규칙의 기본값 (memory.unverifiedRule) */
+export const UNVERIFIED_RULE = agentDefault<string>("memory.unverifiedRule");
 
 /** 추출 요청 본문. 기록은 끝(가장 최근)을 남기고 앞을 자른다 */
 export function extractPrompt(existing: KnowledgeEntry[], digest: RunDigest, budgetChars: number): string {
