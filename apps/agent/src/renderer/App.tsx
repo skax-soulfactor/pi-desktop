@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ResizeHandle } from "../../../desktop/src/renderer/ResizeHandle";
 import { Toasts } from "../../../desktop/src/renderer/ExtensionUi";
 import { OPEN_CHAT_COMMAND, type ChatSummary, type CurrentHost, type PiSetupView, type StoredChat, type UpdateState } from "../shared/api";
 import { FolderBrowser } from "../../../desktop/src/renderer/FolderBrowser";
@@ -361,6 +362,7 @@ export function App() {
           {setup?.piVersion && <span className="muted small-text">Pi {setup.piVersion}</span>}
         </div>
       </nav>
+      <ResizeHandle storageKey="pi-agent.nav-width" cssVar="--nav-width" defaultWidth={230} min={180} max={480} label="옆 메뉴 너비" />
 
       <main className="main">
         {error && (

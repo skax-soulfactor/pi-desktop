@@ -13,6 +13,7 @@
     "./client": "./src/client/boot.ts",
     "./build": "./src/build.ts",
     "./client.css": "./src/client/shell.css",
+    "./drawer": "./src/client/drawer.ts",
     "./stubs/updater": "./src/stubs/updater.ts",
     "./stubs/autostart": "./src/stubs/autostart.ts",
     "./notify": "./src/client/notify.ts",

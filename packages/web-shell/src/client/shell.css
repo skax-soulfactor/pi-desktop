@@ -309,17 +309,7 @@
   font-size: 13px !important;
 }
 
-/* 좁은 화면의 위쪽 띠와 서랍 (BootOptions.drawer). 서랍이 될 옆 메뉴의 모양은 앱별 web.css가 정한다 */
-.ws-bar,
-.ws-drawer-backdrop {
-  display: none;
-}
-
 @media (max-width: 720px) {
-  :root {
-    --ws-bar: calc(44px + env(safe-area-inset-top));
-  }
-
   body.ws-has-bar {
     --ws-menu-top: calc(2px + env(safe-area-inset-top));
     --ws-menu-right: 4px;
@@ -329,47 +319,6 @@
     border: none;
     box-shadow: none;
     background: transparent;
-  }
-
-  .ws-bar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: var(--ws-bar);
-    padding: env(safe-area-inset-top) 52px 0 4px;
-    z-index: 1900;
-    background: var(--ws-bar-bg, var(--ws-bg));
-    color: var(--ws-bar-text, var(--ws-text));
-    border-bottom: 1px solid var(--ws-bar-border, var(--ws-border));
-    font: 600 16px system-ui, sans-serif;
-  }
-
-  .ws-bar-toggle {
-    width: 40px;
-    height: 40px;
-    border: none;
-    background: transparent;
-    color: inherit;
-    font-size: 20px;
-    cursor: pointer;
-  }
-
-  .ws-bar-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  body.ws-drawer-open .ws-drawer-backdrop {
-    display: block;
-    position: fixed;
-    inset: var(--ws-bar) 0 0 0;
-    z-index: 1700;
-    background: rgb(0 0 0 / 40%);
   }
 }
 

@@ -1214,13 +1214,39 @@ button.small {
 }
 
 .sidebar {
-  width: 260px;
+  width: var(--sidebar-width, 260px);
 }
 
 .tree-panel {
-  width: 360px;
+  width: var(--tree-width, 360px);
   border-right: 0;
   border-left: 1px solid var(--border);
+}
+
+/* 옆 창 너비 손잡이 (ResizeHandle.tsx): 경계선 위에 얇게 겹쳐 둔다 */
+.resize-handle {
+  flex-shrink: 0;
+  width: 7px;
+  margin: 0 -3px;
+  position: relative;
+  z-index: 6;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.resize-handle:hover,
+.resize-handle:active {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+body.resizing-columns {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* 끄는 동안 iframe(작업 공간)이 포인터를 가로채지 않게 */
+body.resizing-columns iframe {
+  pointer-events: none;
 }
 
 .sidebar-title {
@@ -3637,6 +3663,11 @@ details > summary.settings-section {
   }
 
   .workspace .sidebar {
+    display: none;
+  }
+
+  /* 서랍·겹친 패널에서는 너비 손잡이를 쓰지 않는다 */
+  .resize-handle {
     display: none;
   }
 
