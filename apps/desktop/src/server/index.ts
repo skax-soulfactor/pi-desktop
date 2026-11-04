@@ -20,6 +20,7 @@ import { ReplayCollector } from "../main/replay-collector";
 import { SshHostStore } from "../main/ssh-hosts";
 import { TerminalService } from "../main/terminal";
 import { WebRouter } from "./web-router";
+import { webWorkspacesState } from "./web-workspaces";
 import { sessionNote } from "./session-notify";
 import { FileManager } from "./file-manager";
 import { FILE_DOWNLOAD_PATH, FileChannels, sessionOpenValue } from "../shared/web-files";
@@ -117,6 +118,13 @@ router.handle(IpcChannels.checkForUpdates, () => noUpdates);
 router.handle(IpcChannels.confirmUpdate, () => undefined);
 router.handle(IpcChannels.installUpdate, () => undefined);
 router.handle(IpcChannels.openRelease, () => undefined);
+// 작업 공간 (DESIGN-ONE-APP.md P4): 함께 뜬 Agent·Mate 웹 서버를 작업 공간 막대에 띄운다. 켜고 끄기는 pi-web 명령이 한다
+router.handle(IpcChannels.workspacesState, () => webWorkspacesState(dataDir));
+router.handle(IpcChannels.setWorkspaceEnabled, () => {
+  throw new Error("휴대폰 웹에서는 pi-web 명령으로 켜고 끕니다 (pi-web agent start, pi-web mate stop)");
+});
+router.handle(IpcChannels.workspaceShown, () => undefined);
+router.handle(IpcChannels.workspaceReady, () => undefined);
 
 // 파일 관리자 (설계 §5.10): 서버(Termux)의 홈 폴더 아래를 화면에서 다룬다
 const files = new FileManager();

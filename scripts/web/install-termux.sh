@@ -103,8 +103,15 @@ for app in desktop agent mate; do
     desktop) pid_file="$PI_WEB_HOME/data/server.pid" ;;
     *) pid_file="$PI_WEB_HOME/$app/server.pid" ;;
   esac
+  if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then was_running="$was_running $app"; fi
+done
+# 먼저 켜져 있던 것을 다 적은 뒤 끈다 (새 실행 명령의 "pi-web stop"은 세 앱을 함께 끈다)
+for app in $was_running; do
+  case "$app" in
+    desktop) pid_file="$PI_WEB_HOME/data/server.pid" ;;
+    *) pid_file="$PI_WEB_HOME/$app/server.pid" ;;
+  esac
   if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-    was_running="$was_running $app"
     if [ "$app" = desktop ]; then
       # 예전 실행 명령(v0.1.12까지)은 앱 이름을 모른다. Pi Desktop은 이름 없이 끈다
       PI_WEB_HOME="$PI_WEB_HOME" sh "$PI_WEB_HOME/app/bin/pi-web" stop || true

@@ -1,6 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import type { WorkspaceId, WorkspacesState } from "../shared/api";
 import { App } from "./App";
+import { isWebClient } from "./clipboard-images";
+
+/**
+ * 휴대폰 웹에서는 Agent·Mate가 같은 기기의 다른 포트에서 돈다. 서버가 아는 주소(127.0.0.1)를
+ * 지금 Pi Web을 연 주소로 바꿔, 다른 기기(같은 와이파이)에서 열어도 그 기기가 찾아가게 한다.
+ */
+function frameUrl(url: string): string {
+  if (!isWebClient()) return url;
+  try {
+    const next = new URL(url);
+    next.hostname = window.location.hostname;
+    return next.href;
+  } catch {
+    return url;
+  }
+}
 
 /**
  * 창의 뿌리 (설계 DESIGN-ONE-APP.md): 작업 공간 막대 + 작업 공간들.
@@ -33,9 +49,15 @@ export function Shell() {
     });
     // 읽지 않은 알림 수가 바뀌었을 때
     const offChanged = window.piDesktop.onWorkspacesChanged(refresh);
+    // 휴대폰 웹: Agent·Mate 서버는 pi-web 명령으로 켜고 끈다. 화면으로 돌아올 때 다시 본다
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       offShow();
       offChanged();
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [refresh, show]);
 
@@ -46,9 +68,9 @@ export function Shell() {
   }, [active, state, plugins, show]);
 
   return (
-    <div className="ws-root">
+    <div className="space-root">
       {plugins.length > 0 ? (
-        <nav className="ws-bar" aria-label="작업 공간">
+        <nav className="space-bar" aria-label="작업 공간">
           <button type="button" className={active === "pi" ? "on" : ""} title="Pi" aria-label="Pi 작업 공간" onClick={() => show("pi")}>
             Pi
           </button>
@@ -56,7 +78,7 @@ export function Shell() {
             <button key={p.id} type="button" className={active === p.id ? "on" : ""} title={p.name} aria-label={`${p.name} 작업 공간`} onClick={() => show(p.id)}>
               {p.id === "agent" ? "A" : p.id === "mate" ? "M" : String(p.id).slice(0, 1).toUpperCase()}
               {p.unread ? (
-                <span className="ws-badge" aria-label={`읽지 않은 알림 ${p.unread}개`}>
+                <span className="space-badge" aria-label={`읽지 않은 알림 ${p.unread}개`}>
                   {p.unread > 99 ? "99+" : p.unread}
                 </span>
               ) : null}
@@ -64,17 +86,17 @@ export function Shell() {
           ))}
         </nav>
       ) : null}
-      <div className="ws-pane" hidden={active !== "pi"}>
+      <div className="space-pane" hidden={active !== "pi"}>
         <App />
       </div>
       {plugins
         .filter((p) => opened[p.id])
         .map((p) => (
-          <div key={p.id} className="ws-pane" hidden={active !== p.id}>
+          <div key={p.id} className="space-pane" hidden={active !== p.id}>
             <iframe
-              className="ws-frame"
+              className="space-frame"
               title={p.name}
-              src={p.url}
+              src={frameUrl(p.url!)}
               onLoad={() => void window.piDesktop.workspaceReady(p.id).catch(() => undefined)}
             />
           </div>

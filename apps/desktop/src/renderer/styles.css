@@ -87,12 +87,12 @@ textarea {
 }
 
 /* 작업 공간 (DESIGN-ONE-APP.md, Shell.tsx): 왼쪽 막대 + 작업 공간 화면. 켠 플러그인이 없으면 막대가 없다 */
-.ws-root {
+.space-root {
   display: flex;
   height: 100%;
 }
 
-.ws-bar {
+.space-bar {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -102,7 +102,7 @@ textarea {
   flex-shrink: 0;
 }
 
-.ws-bar button {
+.space-bar button {
   width: 36px;
   height: 36px;
   padding: 0;
@@ -110,17 +110,35 @@ textarea {
   font-weight: 600;
 }
 
-.ws-bar button.on {
+.space-bar button.on {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.ws-bar button {
+.space-bar button {
   position: relative;
 }
 
+/* 휴대폰 웹: 작업 공간 막대를 아래에 가로로 둔다 (엄지가 닿는 곳) */
+:root[data-client="web"] .space-root {
+  flex-direction: column-reverse;
+}
+
+:root[data-client="web"] .space-bar {
+  flex-direction: row;
+  justify-content: center;
+  border-right: 0;
+  border-top: 1px solid var(--border);
+  padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
+}
+
+:root[data-client="web"] .space-pane {
+  height: auto;
+  min-height: 0;
+}
+
 /* 그 작업 공간을 보지 않는 동안 생긴 알림 수 */
-.ws-badge {
+.space-badge {
   position: absolute;
   top: -5px;
   right: -5px;
@@ -136,17 +154,17 @@ textarea {
   text-align: center;
 }
 
-.ws-pane {
+.space-pane {
   flex: 1;
   min-width: 0;
   height: 100%;
 }
 
-.ws-pane[hidden] {
+.space-pane[hidden] {
   display: none;
 }
 
-.ws-frame {
+.space-frame {
   display: block;
   width: 100%;
   height: 100%;
