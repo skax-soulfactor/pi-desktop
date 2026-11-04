@@ -531,6 +531,16 @@ export interface PiDesktopApi {
   onUpdateState(listener: (state: UpdateState) => void): () => void;
   /** 메뉴바에서 고른 명령 id (app-menu.ts) */
   onMenuCommand(listener: (id: string) => void): () => void;
+  /** 작업 공간 상태 (DESIGN-ONE-APP.md). 웹·예전 main이면 실패하므로 화면은 Pi만 보인다 */
+  workspacesState(): Promise<WorkspacesState>;
+  /** 작업 공간을 켜고 끈다 (지금은 Agent 미리 보기) */
+  setWorkspaceEnabled(id: PluginWorkspaceId, on: boolean): Promise<WorkspacesState>;
+  /** 지금 보이는 작업 공간을 main에 알린다 (알림·메뉴바가 따른다) */
+  workspaceShown(id: WorkspaceId): Promise<void>;
+  /** 작업 공간 프레임이 다 불러와졌다 */
+  workspaceReady(id: PluginWorkspaceId): Promise<void>;
+  /** main이 작업 공간을 보이라고 할 때 (알림을 누름·메뉴바) */
+  onShowWorkspace(listener: (id: WorkspaceId) => void): () => void;
   /** 작업 기록 (최근 것부터) */
   listActionLog(limit?: number): Promise<ActionLogEntry[]>;
   /** 화면에서 시작한 작업을 기록에 남긴다 (터미널에서 실행한 설치·제거 명령 등) */
@@ -648,6 +658,12 @@ export const IpcChannels = {
   openRelease: "pi:open-release",
   updateStateChanged: "pi:update-state-changed",
   menuCommand: "pi:menu-command",
+  // 작업 공간 (DESIGN-ONE-APP.md). 설치본(Electron)에서만 처리한다
+  workspacesState: "pi:workspaces-state",
+  setWorkspaceEnabled: "pi:set-workspace-enabled",
+  workspaceShown: "pi:workspace-shown",
+  workspaceReady: "pi:workspace-ready",
+  showWorkspace: "pi:show-workspace",
   logAction: "pi:log-action",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",
@@ -697,3 +713,13 @@ export const IpcChannels = {
   filesChanged: "pi:files-changed",
   playgroundOutput: "pi:playground-output",
 } as const;
+
+/** 작업 공간 (DESIGN-ONE-APP.md): "pi"는 Pi Desktop 화면, 나머지는 내장 플러그인 */
+export type PluginWorkspaceId = "agent";
+export type WorkspaceId = "pi" | PluginWorkspaceId;
+
+export interface WorkspacesState {
+  /** 켠 플러그인 작업 공간과 그 화면 주소. 주소가 없으면 이 실행에서는 열 수 없다 (reason) */
+  plugins: Array<{ id: PluginWorkspaceId; name: string; enabled: boolean; url?: string; reason?: string }>;
+}
+

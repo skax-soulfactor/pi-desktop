@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell, type MenuItemConstructorOptions } from "electron";
 import { loadWindowState, trackWindowState } from "@pi-desktop/window-state";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,9 @@ import { agentVersion } from "./agent-build";
 import { initAppTunables } from "./app-tunables";
 import { hostEventHandlers, registerHandlers, type Router } from "./ipc-handlers";
 import { revealWindow, usesSingleInstanceLock } from "./single-instance";
+import { Workspaces } from "./workspaces";
+import { appMenuTemplate as agentMenuTemplate } from "../../../agent/src/main/app-menu";
+import type { PluginWorkspaceId, WorkspaceId } from "../shared/api";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -80,6 +83,8 @@ function createWindow(): void {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      // 작업 공간 화면(Agent 등)은 이 창 안의 iframe이다. preload가 그 프레임에서도 돌아 그 앱의 API를 만든다 (preload/index.ts가 주소로 가른다)
+      nodeIntegrationInSubFrames: true,
     },
   });
   if (windowState.maximized) mainWindow.maximize();
@@ -100,6 +105,77 @@ function createWindow(): void {
   } else {
     void mainWindow.loadFile(join(here, "../renderer/index.html"));
   }
+}
+
+/** 작업 공간 (DESIGN-ONE-APP.md). 지금은 Agent 미리 보기 */
+const workspaces = new Workspaces({
+  window: () => mainWindow,
+  sendToShell: (channel, ...args) => sendToRenderer(channel, ...args),
+  rendererFile: (id) => join(here, "../renderer", id, "index.html"),
+  onActiveChanged: () => setAppMenu(),
+  openPiManager: () => {
+    workspaces.show("pi");
+    sendToRenderer(IpcChannels.menuCommand, "pi-manager");
+  },
+});
+
+/** 메뉴바 "작업 공간": 작업 공간 바꾸기와 플러그인 켜기·끄기 */
+function workspaceMenu(): MenuItemConstructorOptions {
+  const state = workspaces.state();
+  const current = workspaces.current;
+  const go = (id: WorkspaceId) => () => workspaces.show(id);
+  return {
+    label: "작업 공간",
+    submenu: [
+      { label: "Pi", type: "radio", checked: current === "pi", click: go("pi") },
+      ...state.plugins
+        .filter((p) => p.enabled && p.url)
+        .map((p): MenuItemConstructorOptions => ({ label: p.name, type: "radio", checked: current === p.id, click: go(p.id) })),
+      { type: "separator" },
+      ...state.plugins.map(
+        (p): MenuItemConstructorOptions => ({
+          label: `${p.name} 켜기`,
+          type: "checkbox",
+          checked: p.enabled,
+          click: () => {
+            workspaces.setEnabled(p.id as PluginWorkspaceId, !p.enabled);
+            sendToRenderer(IpcChannels.showWorkspace, workspaces.current);
+            setAppMenu();
+          },
+        }),
+      ),
+    ],
+  };
+}
+
+let updaterRef: Updater | undefined;
+
+/** 지금 작업 공간에 맞는 메뉴바. Agent를 보는 동안은 Agent 메뉴(기능 화면은 메뉴바에서 연다)에 "작업 공간"을 더한다 */
+function setAppMenu(): void {
+  const about = () =>
+    void dialog.showMessageBox({
+      type: "info",
+      title: "Pi Desktop 정보",
+      message: `Pi Desktop ${app.getVersion()}`,
+      detail: `Pi coding agent를 포크하지 않고 GUI로 쓰는 데스크톱 앱\nElectron ${process.versions.electron} · Node ${process.versions.node}\nhttps://github.com/skax-soulfactor/pi-desktop`,
+    });
+  const base =
+    workspaces.current === "agent"
+      ? agentMenuTemplate(process.platform, app.isPackaged, {
+          command: (id) => workspaces.agentMenuCommand(id),
+          checkForUpdates: () => void updaterRef?.check(true),
+          openReleases: () => void updaterRef?.openRelease(),
+          about,
+        })
+      : appMenuTemplate(process.platform, {
+          command: (id) => mainWindow?.webContents.send(IpcChannels.menuCommand, id),
+          openUrl: (url) => void shell.openExternal(url),
+          about,
+        });
+  // "도움말" 앞에 둔다 (없으면 끝에)
+  const help = base.findIndex((m) => m.role === "help" || m.label === "도움말");
+  base.splice(help >= 0 ? help : base.length, 0, workspaceMenu());
+  Menu.setApplicationMenu(Menu.buildFromTemplate(base));
 }
 
 const terminals = new TerminalService({ data: IpcChannels.terminalData, exit: IpcChannels.terminalExit });
@@ -147,22 +223,21 @@ app.whenReady().then(() => {
     },
     appTunables: initAppTunables(app.getPath("userData")),
   });
-  // 앱 기능 메뉴: 항목은 화면(지금 탭)에 명령 id를 보낸다 (app-menu.ts)
-  Menu.setApplicationMenu(
-    Menu.buildFromTemplate(
-      appMenuTemplate(process.platform, {
-        command: (id) => mainWindow?.webContents.send(IpcChannels.menuCommand, id),
-        openUrl: (url) => void shell.openExternal(url),
-        about: () =>
-          void dialog.showMessageBox({
-            type: "info",
-            title: "Pi Desktop 정보",
-            message: `Pi Desktop ${app.getVersion()}`,
-            detail: `Pi coding agent를 포크하지 않고 GUI로 쓰는 데스크톱 앱\nElectron ${process.versions.electron} · Node ${process.versions.node}\nhttps://github.com/skax-soulfactor/pi-desktop`,
-          }),
-      }),
-    ),
-  );
+  // 앱 기능 메뉴: 항목은 화면(지금 탭)에 명령 id를 보낸다 (app-menu.ts). 작업 공간에 따라 바뀐다 (setAppMenu)
+  setAppMenu();
+  // 작업 공간 (DESIGN-ONE-APP.md): 상태·켜기·바뀐 작업 공간·프레임 준비. 켜 둔 플러그인은 지금 시작한다
+  ipcMain.handle(IpcChannels.workspacesState, () => workspaces.state());
+  ipcMain.handle(IpcChannels.setWorkspaceEnabled, (_event, id: PluginWorkspaceId, on: boolean) => {
+    const state = workspaces.setEnabled(id, on === true);
+    setAppMenu();
+    // 화면(작업 공간 막대)이 상태를 다시 읽게 한다
+    sendToRenderer(IpcChannels.showWorkspace, workspaces.current);
+    return state;
+  });
+  ipcMain.handle(IpcChannels.workspaceShown, (_event, id: WorkspaceId) => workspaces.shown(id));
+  ipcMain.handle(IpcChannels.workspaceReady, (_event, id: PluginWorkspaceId) => workspaces.ready(id));
+  workspaces.registerAgentStubs(() => ({ status: "disabled", current: app.getVersion(), mode: "notify" }));
+  workspaces.start();
   createWindow();
 
   // 자동 업데이트 (설치한 앱에서만 확인한다)
@@ -173,6 +248,7 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.installUpdate, () => updater.install());
   ipcMain.handle(IpcChannels.openRelease, () => updater.openRelease());
   updater.start();
+  updaterRef = updater;
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -187,4 +263,5 @@ app.on("window-all-closed", () => {
 app.on("will-quit", () => {
   terminals.dispose();
   hosts?.dispose();
+  workspaces.dispose();
 });

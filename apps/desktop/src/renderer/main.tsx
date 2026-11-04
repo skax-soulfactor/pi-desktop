@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./App";
+import { Shell } from "./Shell";
 import "./styles.css";
 import { loadAppTunables } from "./app-tunables";
 
@@ -8,7 +8,7 @@ import { loadAppTunables } from "./app-tunables";
 void loadAppTunables().finally(() =>
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <App />
+      <Shell />
     </StrictMode>,
   ),
 );

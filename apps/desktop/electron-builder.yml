@@ -28,6 +28,20 @@ extraResources:
     to: host-agent/host-agent.mjs
   - from: ../../packages/host-agent/package.json
     to: host-agent/package.json
+  # Agent 작업 공간 (DESIGN-ONE-APP.md): Pi가 jiti로 불러오는 agent-kit 확장과 앱 홈의 MCP·문맥 파일을 읽는 pi-isolation.
+  # 단독 Agent 앱과 같은 방식으로 소스 그대로 싣는다 (apps/agent/electron-builder.yml)
+  - from: ../../packages/agent-kit
+    to: agent-kit
+    filter:
+      - package.json
+      - src/**
+      - extensions/**
+  - from: ../../packages/pi-isolation
+    to: pi-isolation
+    filter:
+      - package.json
+      - src/**
+      - extensions/**
   # Linux 창 아이콘 (main/index.ts의 windowIcon). 실행 파일에 아이콘이 없어 창에 직접 준다.
   - from: build/icon.png
     to: icon.png
