@@ -34,6 +34,18 @@ export interface SessionStats {
 /** 이 이벤트가 오면 사용량이 바뀌었을 수 있으므로 다시 읽는다 */
 const STATS_REFRESH_ON = new Set(["agent_settled", "compaction_end", "message_end"]);
 
+/**
+ * 보던 대화의 Pi 프로세스가 없어졌다 (Pi Desktop use-session의 LostSession과 같은 뜻).
+ * - exited: Pi 프로세스가 끝났다 (오류, 또는 데몬을 바꾸느라 끝냄)
+ * - missing: 다시 붙은 데몬에 그 대화가 없다 (Host Agent 업데이트·재시작)
+ * 대화는 화면에 남기고, 같은 세션 파일로 다시 열면 이어 간다.
+ */
+export interface LostChat {
+  reason: "exited" | "missing";
+  cwd: string;
+  sessionFile?: string;
+}
+
 /** agent-kit이 세션에 올라갔는지 (설계 DESIGN-AGENT.md §2.1) */
 export type KitState = "checking" | "ready" | "missing";
 
@@ -56,6 +68,13 @@ export function useAgentSession() {
   const [ui, setUi] = useState<ExtensionUiState>(initialExtensionUiState);
   const [kit, setKit] = useState<KitState>();
   const [model, setModel] = useState<ModelRef>();
+  const [lost, setLost] = useState<LostChat>();
+  const lostRef = useRef<LostChat>(undefined);
+  lostRef.current = lost;
+  /** 지금 대화의 세션 파일 (Pi가 알려 준 뒤에 생긴다. 다시 열 때 쓴다) */
+  const fileRef = useRef<string>(undefined);
+  /** 데몬이 바뀐 뒤 저절로 다시 연 대화 (한 번만 시도한다) */
+  const autoReopened = useRef<string>(undefined);
   const [models, setModels] = useState<ModelRef[]>([]);
   /** 세션 전체 토큰·비용과 컨텍스트 사용량 */
   const [stats, setStats] = useState<SessionStats>();
@@ -63,6 +82,8 @@ export function useAgentSession() {
   /** attach 중에 알림으로 온 이벤트. 결과를 적용한 뒤에 순번으로 걸러 적용한다 */
   const attachQueueRef = useRef<SessionEventNotification[]>(undefined);
 
+  /** 다시 붙었을 때의 효과가 최신 open을 부르도록 */
+  const openRef = useRef<(cwd: string, from?: SessionSource) => Promise<boolean>>(async () => false);
   /** 이벤트 리스너가 최신 refreshStats를 부르도록 (리스너는 처음 한 번만 단다) */
   const statsRef = useRef<(sessionId: string) => void>(() => {});
 
@@ -85,9 +106,14 @@ export function useAgentSession() {
       if (STATS_REFRESH_ON.has(String((n.event as { type?: unknown } | null)?.type))) statsRef.current(n.sessionId);
     });
     const offExit = api().onSessionExit((n) => {
-      if (n.sessionId !== sessionRef.current?.sessionId) return;
-      const detail = n.stderrTail.trim().split("\n").slice(-5).join("\n");
-      notice("error", `Pi 프로세스가 종료되었습니다 (code ${n.exitCode ?? n.signal})${detail ? `\n${detail}` : ""}`);
+      const current = sessionRef.current;
+      if (n.sessionId !== current?.sessionId) return;
+      // 대화는 화면에 남기고 "다시 열기"를 보인다. 정상 종료(데몬을 바꾸느라 끝냄 등)는 따로 알리지 않는다
+      setLost({ reason: "exited", cwd: current.cwd, ...(fileRef.current ?? current.sessionFile ? { sessionFile: fileRef.current ?? current.sessionFile } : {}) });
+      if (n.exitCode !== 0) {
+        const detail = n.stderrTail.trim().split("\n").slice(-5).join("\n");
+        notice("error", `Pi 프로세스가 종료되었습니다 (code ${n.exitCode ?? n.signal})${detail ? `\n${detail}` : ""}`);
+      }
     });
     const offResolved = api().onUiResolved((n) => {
       if (n.sessionId === sessionRef.current?.sessionId) setUi((prev) => resolveDialog(prev, n.id));
@@ -122,7 +148,9 @@ export function useAgentSession() {
   /** 세션의 지금 모델과 고를 수 있는 모델을 읽는다 */
   const refreshModel = useCallback(async (sessionId: string) => {
     const state = await api().sendCommand(sessionId, { type: "get_state" });
-    const current = (state.data as { model?: ModelRef } | undefined)?.model;
+    const data = state.data as { model?: ModelRef; sessionFile?: string } | undefined;
+    if (data?.sessionFile && sessionRef.current?.sessionId === sessionId) fileRef.current = data.sessionFile;
+    const current = data?.model;
     setModel(current ? { provider: current.provider, id: current.id, name: current.name, input: current.input } : undefined);
     const available = await api().sendCommand(sessionId, { type: "get_available_models" });
     const list = (available.data as { models?: ModelRef[] } | undefined)?.models ?? [];
@@ -132,6 +160,8 @@ export function useAgentSession() {
   /** 세션에 처음부터 붙는다. 저널 앞부분이 잘렸으면 Pi가 가진 대화 전체로 다시 그린다 */
   const attachTo = useCallback(
     async (target: SessionSummary) => {
+      setLost(undefined);
+      fileRef.current = target.sessionFile;
       setChat(initialChatState);
       setUi(initialExtensionUiState);
       setKit(undefined);
@@ -228,7 +258,11 @@ export function useAgentSession() {
   const close = useCallback(async () => {
     const current = sessionRef.current;
     if (!current) return;
-    await api().closeSession(current.sessionId);
+    // 없어진 대화(Pi 프로세스가 없음)는 데몬이 모른다고 답한다. 그래도 화면은 비운다
+    await api().closeSession(current.sessionId).catch((error: unknown) => {
+      if (!lostRef.current) throw error;
+    });
+    setLost(undefined);
     sessionRef.current = undefined;
     setSession(undefined);
     setStats(undefined);
@@ -291,6 +325,37 @@ export function useAgentSession() {
 
   const dismiss = useCallback((key: string) => setUi((prev) => dismissToast(prev, key)), []);
 
+  /** 없어진 대화를 같은 세션 파일로 다시 연다 (파일이 없으면 같은 폴더의 새 대화) */
+  const reopenLost = useCallback(async () => {
+    const current = sessionRef.current;
+    const target = lost ?? (current ? { reason: "missing" as const, cwd: current.cwd, sessionFile: fileRef.current ?? current.sessionFile } : undefined);
+    if (!target) return;
+    await open(target.cwd, target.sessionFile ? { sessionFile: target.sessionFile } : undefined);
+  }, [lost, open]);
+
+  // 다시 붙으면 보던 대화가 새 데몬에도 있는지 본다. Host Agent를 업데이트하면(데몬 교체) 대화의 Pi 프로세스가 끝나므로
+  // 같은 세션 파일로 저절로 다시 연다 (한 번만. 안 되면 "다시 열기"를 남긴다)
+  useEffect(() => {
+    if (connection.status !== "connected") return;
+    const current = sessionRef.current;
+    if (!current) return;
+    void (async () => {
+      const open = await api().listSessions().catch(() => undefined);
+      if (!open || sessionRef.current?.sessionId !== current.sessionId) return;
+      if (open.some((s) => s.sessionId === current.sessionId && s.state === "running")) return;
+      const missing: LostChat = { reason: "missing", cwd: current.cwd, ...(fileRef.current ?? current.sessionFile ? { sessionFile: fileRef.current ?? current.sessionFile } : {}) };
+      setLost(missing);
+      if (autoReopened.current === current.sessionId) return;
+      autoReopened.current = current.sessionId;
+      try {
+        await openRef.current(missing.cwd, missing.sessionFile ? { sessionFile: missing.sessionFile } : undefined);
+      } catch {
+        // "다시 열기"가 남는다
+      }
+    })();
+  }, [connection.status]);
+
   statsRef.current = (sessionId: string) => void refreshStats(sessionId);
-  return { connection, session, opening, chat, ui, kit, model, models, stats, open, attachTo, moveTo, changeModel, close, send, clearQueue, abort, answer, dismiss, notice };
+  openRef.current = open;
+  return { connection, session, opening, chat, ui, kit, model, models, stats, lost, open, attachTo, moveTo, changeModel, close, send, clearQueue, abort, answer, dismiss, notice, reopenLost };
 }

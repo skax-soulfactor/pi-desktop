@@ -73,7 +73,9 @@ export function ChatPage({
   prefill?: { text: string; tick: number };
   guard: (action: () => Promise<void>) => void;
 }) {
-  const { session, chat, ui, kit, model, models, stats } = agent;
+  const { session, chat, ui, kit, model, models, stats, lost } = agent;
+  /** 입력할 수 있는 대화 (Pi 프로세스가 없어진 대화는 "다시 열기" 전까지 입력하지 않는다) */
+  const live = session && !lost ? session : undefined;
   // 쓰던 글은 대화마다 따로 보관한다 (다른 대화·다른 화면에 갔다 와도 남는다)
   const [draft, setDraft] = useDraftText(session ? `pi-agent.draft.${session.sessionFile ?? session.sessionId}` : undefined);
   const [renaming, setRenaming] = useState<string>();
@@ -342,6 +344,17 @@ export function ChatPage({
         <ChatView items={chat.items} running={chat.running} onResend={setDraft} actions={{}} />
       )}
 
+      {lost && connected && (
+        <div className="banner warn lost-banner">
+          <span>
+            {lost.reason === "missing" ? "Host Agent가 다시 시작되어(업데이트 등) 이 대화의 Pi 프로세스가 없습니다." : "이 대화의 Pi 프로세스가 종료되었습니다."}
+            {lost.sessionFile ? " 같은 대화 기록으로 다시 열면 이어 갈 수 있습니다." : " 대화 기록 파일이 없어 같은 폴더의 새 대화로 열립니다."}
+          </span>
+          <button type="button" className="primary" disabled={Boolean(agent.opening)} onClick={() => guard(() => agent.reopenLost())}>
+            {agent.opening ? "여는 중…" : "다시 열기"}
+          </button>
+        </div>
+      )}
       <Widgets ui={ui} placement="aboveEditor" />
       <QueuePanel queue={chat.queue} onClear={clearQueue} />
       <div className="composer">
@@ -376,7 +389,7 @@ export function ChatPage({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
-            disabled={!session || !connected}
+            disabled={!live || !connected}
             placeholder={session ? enterHint("메시지 입력 (Enter 전송, Shift+Enter 줄바꿈, 이미지는 붙여 넣기도 됩니다)") : "먼저 새 대화를 여세요"}
           />
           {/* 아래 한 줄: 왼쪽은 첨부, 오른쪽은 보내기 (실행 중이면 끼어들기·끝나면 보내기·중단) */}
@@ -384,7 +397,7 @@ export function ChatPage({
             <div className="composer-tools">
               <button
                 className="tool-button"
-                disabled={!session}
+                disabled={!live}
                 title="파일 첨부 (이미지는 함께 보내고, 나머지는 경로를 적습니다)"
                 aria-label="파일 첨부"
                 onClick={() =>
@@ -395,10 +408,10 @@ export function ChatPage({
               >
                 📎
               </button>
-              <button className="tool-button" disabled={!session} onClick={() => void pasteFromClipboard()} title="클립보드의 이미지 붙이기" aria-label="클립보드의 이미지 붙이기">
+              <button className="tool-button" disabled={!live} onClick={() => void pasteFromClipboard()} title="클립보드의 이미지 붙이기" aria-label="클립보드의 이미지 붙이기">
                 📋
               </button>
-              <button className="tool-button" disabled={!session} onClick={() => imageInput.current?.click()} title="이 기기에서 이미지 고르기" aria-label="이 기기에서 이미지 고르기">
+              <button className="tool-button" disabled={!live} onClick={() => imageInput.current?.click()} title="이 기기에서 이미지 고르기" aria-label="이 기기에서 이미지 고르기">
                 🖼
               </button>
               <input
@@ -432,7 +445,7 @@ export function ChatPage({
                   </>
                 )
               ) : (
-                <button className="primary" disabled={!session || !hasDraft} onClick={() => submit()}>
+                <button className="primary" disabled={!live || !hasDraft} onClick={() => submit()}>
                   보내기
                 </button>
               )}

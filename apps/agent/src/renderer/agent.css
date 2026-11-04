@@ -437,3 +437,8 @@
 .composer-box textarea {
   flex: none;
 }
+
+/* 대화의 Pi 프로세스가 없어졌을 때 "다시 열기" (use-agent-session.ts LostChat) */
+.lost-banner {
+  margin: 0 16px 8px;
+}
