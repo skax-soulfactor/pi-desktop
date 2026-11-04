@@ -215,7 +215,7 @@ interface PiDesktopPlugin {
 | 단계 | 내용 | 확인 |
 |---|---|---|
 | **P1 셸과 Agent 작업 공간 (미리 보기)** | Agent main을 창과 떼어 `createAgentMain(ctx)`로, preload API를 `createAgentApi`로 나눈다(단독 Agent 앱은 그대로). Pi Desktop에 작업 공간 막대·Agent 프레임·프레임별 preload·메뉴바 전환·"작업 공간" 메뉴. 빌드가 Agent 화면을 `out/renderer/agent/`에, 설치본이 agent-kit·pi-isolation을 리소스로 싣는다. 메뉴바 "작업 공간 → Agent 켜기"로 켠다 | Electron으로 띄워: 막대·Agent 프레임 API·Agent 데몬 연결·메뉴바 전환·Agent 메뉴 명령·"Pi Desktop 열기"→Pi 관리 |
-| **P2 Mate 작업 공간 (미리 보기)** | Mate main을 같은 방식으로 떼고 Pi Desktop에 Mate 작업 공간. 실행기·로그인 시작·업데이트 전 멈춤은 계약으로 | Mate 테스트, Electron 실행, 실행기 자동 시작 (Windows는 PC에서) |
+| **P2 Mate 작업 공간 (미리 보기)** | Mate main을 `createMateMain(ctx)`로, preload API를 `createMateApi`로 나눈다(단독 Mate 앱은 창·단일 실행·로그인 시작·업데이트만). Pi Desktop에 Mate 프레임(`window.mate`)·Mate 메뉴바(편집·보기·작업 공간·도움말). 상태 파일은 `userData/mate/`, Mate 홈(`~/.pi-desktop-mate`)과 실행기는 단독 앱과 같다. 로그인 시작은 미리 보기에서 "단독 Mate 앱에서 켭니다"로 두고 0.7.0에서 옮긴다. Pi Desktop 업데이트 설치 직전에 이 PC의 실행기를 멈춘다. 설치본이 mate-runner·mate-kit을 리소스로 싣는다 | Electron으로 띄워: 프레임별 API 분리(mate·piAgent·piDesktop), 실행기 연결(alive), 메뉴바 전환, 로그인 시작 안내, Agent↔Mate 전환. Windows 업데이트 전 실행기 멈춤은 PC에서 |
 | **P3 연결·설정·알림 합치기** | Agent `vendor/`를 Pi Desktop 연결 코드로 바꾼다 (HostManager가 홈별 연결). 설정 칸(§7), "프롬프트와 수치" 한 목록, 알림 모음, SSH 호스트 목록 하나 | Agent 테스트·실제 Pi 계약 테스트, 두 데몬이 한 호스트에서 함께 도는지 |
 | **P4 휴대폰 웹 하나로** | 웹 서버·묶음 하나에 작업 공간 막대 | 웹 빌드, 휴대폰 화면 |
 | **P5 0.7.0 합치기** | 미리 보기 표시를 떼고 기본으로 켠다. userData 이전(§9), Agent·Mate 징검다리 0.7.0, 릴리스 워크플로를 설치본 하나로 | 옛 0.6.x 설치본에서 0.7.0으로 올라오는지 (Windows·macOS는 PC에서) |

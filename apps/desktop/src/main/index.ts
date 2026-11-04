@@ -107,7 +107,7 @@ function createWindow(): void {
   }
 }
 
-/** 작업 공간 (DESIGN-ONE-APP.md). 지금은 Agent 미리 보기 */
+/** 작업 공간 (DESIGN-ONE-APP.md). 지금은 Agent·Mate 미리 보기 */
 const workspaces = new Workspaces({
   window: () => mainWindow,
   sendToShell: (channel, ...args) => sendToRenderer(channel, ...args),
@@ -150,7 +150,34 @@ function workspaceMenu(): MenuItemConstructorOptions {
 
 let updaterRef: Updater | undefined;
 
-/** 지금 작업 공간에 맞는 메뉴바. Agent를 보는 동안은 Agent 메뉴(기능 화면은 메뉴바에서 연다)에 "작업 공간"을 더한다 */
+/** Mate를 보는 동안의 메뉴바: Mate는 기능 화면을 화면 안의 탭으로 열므로 편집·보기만 둔다 ("작업 공간"은 setAppMenu가 더한다) */
+function mateMenuTemplate(about: () => void): MenuItemConstructorOptions[] {
+  const mac = process.platform === "darwin";
+  return [
+    ...(mac ? [{ role: "appMenu" } as MenuItemConstructorOptions] : []),
+    { role: "editMenu", label: "편집" },
+    {
+      label: "보기",
+      submenu: [
+        ...(app.isPackaged ? [] : [{ role: "toggleDevTools" } as MenuItemConstructorOptions]),
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+      ],
+    },
+    {
+      label: "도움말",
+      submenu: [
+        { label: "업데이트 확인", click: () => void updaterRef?.check(true) },
+        { label: "Pi Desktop 정보", click: about },
+      ],
+    },
+  ];
+}
+
+/** 지금 작업 공간에 맞는 메뉴바. Agent를 보는 동안은 Agent 메뉴(기능 화면은 메뉴바에서 연다), Mate는 Mate 메뉴에 "작업 공간"을 더한다 */
 function setAppMenu(): void {
   const about = () =>
     void dialog.showMessageBox({
@@ -167,7 +194,9 @@ function setAppMenu(): void {
           openReleases: () => void updaterRef?.openRelease(),
           about,
         })
-      : appMenuTemplate(process.platform, {
+      : workspaces.current === "mate"
+        ? mateMenuTemplate(about)
+        : appMenuTemplate(process.platform, {
           command: (id) => mainWindow?.webContents.send(IpcChannels.menuCommand, id),
           openUrl: (url) => void shell.openExternal(url),
           about,
@@ -236,12 +265,17 @@ app.whenReady().then(() => {
   });
   ipcMain.handle(IpcChannels.workspaceShown, (_event, id: WorkspaceId) => workspaces.shown(id));
   ipcMain.handle(IpcChannels.workspaceReady, (_event, id: PluginWorkspaceId) => workspaces.ready(id));
-  workspaces.registerAgentStubs(() => ({ status: "disabled", current: app.getVersion(), mode: "notify" }));
+  workspaces.registerUpdateStubs(() => ({ status: "disabled", current: app.getVersion(), mode: "notify" }));
   workspaces.start();
   createWindow();
 
   // 자동 업데이트 (설치한 앱에서만 확인한다)
-  const updater = new Updater((state) => sendToRenderer(IpcChannels.updateStateChanged, state), () => mainWindow);
+  // 설치 직전에 Mate 작업 공간의 실행기를 멈춘다 (실행기가 이 앱 실행 파일을 Node로 쓰면 설치 파일을 잡고 있지 않게)
+  const updater = new Updater(
+    (state) => sendToRenderer(IpcChannels.updateStateChanged, state),
+    () => mainWindow,
+    () => workspaces.beforeInstall(),
+  );
   ipcMain.handle(IpcChannels.updateState, () => updater.current);
   ipcMain.handle(IpcChannels.checkForUpdates, (_event, interactive?: boolean) => updater.check(interactive === true));
   ipcMain.handle(IpcChannels.confirmUpdate, () => updater.confirmUpdate());

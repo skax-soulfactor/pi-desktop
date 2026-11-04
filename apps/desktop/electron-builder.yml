@@ -42,6 +42,15 @@ extraResources:
       - package.json
       - src/**
       - extensions/**
+  # Mate 작업 공간: 앱 밖의 node·Pi가 읽는 실행기와 mate-kit 확장 (apps/mate/electron-builder.yml과 같다. pi-isolation은 위에 있다)
+  - from: ../../packages/mate-runner/dist/mate-runner.mjs
+    to: mate-runner/mate-runner.mjs
+  - from: ../../packages/mate-kit
+    to: mate-kit
+    filter:
+      - package.json
+      - extensions/**
+      - src/**
   # Linux 창 아이콘 (main/index.ts의 windowIcon). 실행 파일에 아이콘이 없어 창에 직접 준다.
   - from: build/icon.png
     to: icon.png

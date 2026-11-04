@@ -5,7 +5,7 @@ import { App } from "./App";
 /**
  * 창의 뿌리 (설계 DESIGN-ONE-APP.md): 작업 공간 막대 + 작업 공간들.
  * - "pi" 작업 공간은 지금까지의 Pi Desktop 화면(App)이다. 켜고 끄거나 바꿔도 다시 그리지 않도록 늘 같은 자리에 두고 숨기기만 한다.
- * - 켠 플러그인(지금은 Agent 미리 보기)은 그 앱의 화면을 iframe으로 연다. 한 번 연 프레임은 숨겨도 남아 대화가 이어진다.
+ * - 켠 플러그인(지금은 Agent·Mate 미리 보기)은 그 앱의 화면을 iframe으로 연다. 한 번 연 프레임은 숨겨도 남아 대화가 이어진다.
  * - 켠 플러그인이 없으면(기본, 웹) 막대 없이 지금과 똑같다.
  */
 export function Shell() {
@@ -48,7 +48,7 @@ export function Shell() {
           </button>
           {plugins.map((p) => (
             <button key={p.id} type="button" className={active === p.id ? "on" : ""} title={p.name} aria-label={`${p.name} 작업 공간`} onClick={() => show(p.id)}>
-              {p.id === "agent" ? "A" : String(p.id).slice(0, 1).toUpperCase()}
+              {p.id === "agent" ? "A" : p.id === "mate" ? "M" : String(p.id).slice(0, 1).toUpperCase()}
             </button>
           ))}
         </nav>

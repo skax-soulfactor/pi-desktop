@@ -38,6 +38,8 @@ export class Updater {
     private readonly broadcast: (state: UpdateState) => void,
     /** 묻는 창을 띄울 앱 창 (없으면 창 없이 띄운다) */
     private readonly window: () => BrowserWindow | undefined = () => undefined,
+    /** 설치 직전에 부른다 (Mate 작업 공간의 실행기를 멈춘다) */
+    private readonly beforeInstall: () => Promise<void> = async () => undefined,
   ) {
     const current = app.getVersion();
     this.state = !app.isPackaged
@@ -120,12 +122,14 @@ export class Updater {
   /** 내려받은 업데이트를 지금 설치할지 묻는다 */
   private async askRestart(): Promise<void> {
     if (this.state.status !== "downloaded" || !this.state.version) return;
-    if ((await this.show(restartPrompt(this.state.version))) === 0) this.install();
+    if ((await this.show(restartPrompt(this.state.version))) === 0) await this.install();
   }
 
   /** 내려받은 업데이트를 설치하며 다시 시작한다 */
-  install(): void {
-    if (this.state.status === "downloaded") autoUpdater.quitAndInstall();
+  async install(): Promise<void> {
+    if (this.state.status !== "downloaded") return;
+    await this.beforeInstall().catch(() => undefined);
+    autoUpdater.quitAndInstall();
   }
 
   /** 알리기만 하는 곳에서 릴리스 페이지를 연다 */
