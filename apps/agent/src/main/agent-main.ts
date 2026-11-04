@@ -19,17 +19,17 @@ import {
   type TrashItem,
 } from "@pi-desktop/host-protocol";
 import type { TaskRecord } from "@pi-desktop/agent-kit/task-types";
-import { agentBuildId } from "../vendor/main/agent-build";
-import { devSessionOverrides } from "../vendor/main/dev-overrides";
+import { agentBuildId } from "../../../desktop/src/main/agent-build";
+import { devSessionOverrides } from "../../../desktop/src/main/dev-overrides";
 import type { CardDraft } from "@pi-desktop/agent-kit/peers";
 import type { McpCheckResult } from "@pi-desktop/pi-isolation/mcp-presets";
 import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
-import { HostConnection, type LaunchSpec } from "../vendor/main/host-connection";
+import { HostConnection, type LaunchSpec } from "../../../desktop/src/main/host-connection";
 import { listWslDistros, readHostChoice, SshHostStore, writeHostChoice, type SshHostConfig } from "@pi-desktop/host-deploy";
 import { LOCAL_HOST_ID, prepareAgentSsh, prepareAgentWsl, SSH_PREFIX, WSL_PREFIX, type HostPaths, type Prepared } from "./hosts";
 import { schedulerDirFor, sessionParamsFor, sessionsDirFor } from "./host-session";
-import { resolveNodeRuntime } from "../vendor/main/node-runtime";
-import { ReplayCollector } from "../vendor/main/replay-collector";
+import { resolveNodeRuntime } from "../../../desktop/src/main/node-runtime";
+import { ReplayCollector } from "../../../desktop/src/main/replay-collector";
 import {
   IpcChannels,
   OPEN_CHAT_COMMAND,
@@ -50,6 +50,9 @@ import { appNum, appTunableStore, initAppTunables } from "./app-tunables";
  * 창을 직접 갖지 않고 컨텍스트로 받아, 단독 Agent 앱(index.ts)과 Pi Desktop의 Agent 작업 공간이 같은 코드를 쓴다.
  * IPC 채널은 모두 "agent:"로 시작해 한 프로세스에서 Pi Desktop의 "pi:" 채널과 부딪히지 않는다.
  */
+/** SSH 호스트 목록이 해 주는 것 (host-deploy의 SshHostStore, Pi Desktop의 SshHostStore가 같은 모양) */
+export type SshHostList = Pick<SshHostStore, "list" | "get" | "save" | "remove">;
+
 export interface AgentMainContext {
   /** 대화상자의 부모 창 */
   window(): BrowserWindow | undefined;
@@ -57,12 +60,16 @@ export interface AgentMainContext {
   send(channel: string, ...args: unknown[]): void;
   /** Agent 화면을 사용자가 지금 보고 있는가 (보고 있으면 OS 알림을 띄우지 않는다) */
   isViewing(): boolean;
+  /** 사용자에게 알릴 것이 생겼다 (합친 앱은 작업 공간 막대에 표시한다). 단독 앱은 생략 */
+  onNotify?(): void;
   /** 창을 앞으로 가져오고 Agent 화면을 보인다. 화면이 준비되면 then을 부른다 (알림을 누를 때) */
   reveal(then?: () => void): void;
   /** Agent 화면을 다시 불러온다 (호스트를 바꿀 때) */
   reload(): void;
   /** 이 앱의 상태 파일 폴더 (지금 호스트·SSH 호스트·앱 수치) */
   userData: string;
+  /** SSH 호스트 목록. 합친 앱은 Pi Desktop 것을 함께 쓴다 (DESIGN-ONE-APP.md §6). 생략하면 userData의 ssh-hosts.json */
+  sshHosts?: SshHostList;
   /** Pi 관리: 단독 앱은 Pi Desktop을 찾아 열고, 합친 앱은 Pi 작업 공간의 Pi 관리를 연다 */
   piDesktop: {
     path(): string | undefined;
@@ -115,6 +122,7 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
     // 피어가 작업을 맡기면 사람이 승인해야 시작되므로 창을 보고 있어도 알린다
     if (task.status === "waiting") {
       if (task.origin !== "peer-in" || task.approval !== "pending") return;
+      ctx.onNotify?.();
       new Notification({
         title: `작업 요청: ${task.peer?.name ?? "피어"}`,
         body: `"${task.title}" — 네트워크 화면에서 폴더를 골라 승인하거나 거절하세요`,
@@ -132,6 +140,7 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
             ? `${task.peer?.name ?? "피어"}가 맡긴 작업`
             : "작업";
     const body = (task.status === "failed" ? task.error : task.result)?.slice(0, 200) ?? "";
+    ctx.onNotify?.();
     new Notification({ title: `${origin} ${status}: ${task.title}`, body }).show();
   }
 
@@ -205,6 +214,7 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
       if (!cwd || !hostPaths || cwd === schedulerDir()) return;
       const note = sessionNote(n.event, basename(cwd) || cwd);
       if (!note) return;
+      ctx.onNotify?.();
       const shown = new Notification({ title: note.title, body: note.body });
       shown.on("click", () => {
         // 창(합친 앱이면 Agent 작업 공간)을 앞으로 가져온 뒤, 화면이 준비되면 그 대화로 간다
@@ -230,8 +240,8 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
   const hostChoiceFile = () => join(ctx.userData, "agent-host.json");
   let currentHostId = LOCAL_HOST_ID;
   let hostPaths: HostPaths | undefined;
-  let sshHostStore: SshHostStore | undefined;
-  const sshHosts = () => (sshHostStore ??= new SshHostStore(join(ctx.userData, "ssh-hosts.json")));
+  let sshHostStore: SshHostList | undefined;
+  const sshHosts = () => (sshHostStore ??= ctx.sshHosts ?? new SshHostStore(join(ctx.userData, "ssh-hosts.json")));
 
   function requirePaths(): HostPaths {
     if (!hostPaths) throw new Error("호스트에 아직 연결되지 않았습니다");

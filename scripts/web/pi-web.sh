@@ -3,10 +3,11 @@
 #
 #   pi-web [앱] [명령]
 #
-# 앱:   (없음)  Pi Desktop  — Pi 관리·로그인·채팅 (포트 8787)
-#       agent   Pi Desktop Agent — 승인·지식베이스·스킬·예약 작업 (포트 8788)
-#       mate    Pi Desktop Mate — 임무 시간표·인박스·텔레그램 (포트 8789)
-#       all     세 앱 모두 (start·stop·restart·status)
+# 앱:   (없음)  start·stop·restart·status·url은 세 앱 모두, 그 밖의 명령은 Pi Desktop
+#       desktop Pi Desktop  — Pi 관리·로그인·채팅 (포트 8787). Agent·Mate가 켜져 있으면 화면 아래 작업 공간 막대로 함께 연다
+#       agent   Agent 작업 공간 — 승인·지식베이스·스킬·예약 작업 (포트 8788)
+#       mate    Mate 작업 공간 — 임무 시간표·인박스·텔레그램 (포트 8789)
+#       all     세 앱 모두 (start·stop·restart·status·url)
 # 명령: start(기본: 켜고 브라우저를 연다) | run(앞에서 실행) | stop | restart | status | url | open | log
 #       update | uninstall | version (앱과 상관없이 묶음 전체)
 #
@@ -82,7 +83,7 @@ show_url() {
   if [ -f "$URL_FILE" ]; then
     echo "$NAME 주소: $(cat "$URL_FILE")"
   else
-    if [ "$APP" = desktop ]; then hint="pi-web start"; else hint="pi-web $APP start"; fi
+    if [ "$APP" = desktop ]; then hint="pi-web desktop start"; else hint="pi-web $APP start"; fi
     echo "$NAME: 아직 주소가 없습니다. $hint로 켜세요."
   fi
 }
@@ -143,8 +144,8 @@ status() {
   fi
 }
 
-# 앱 이름이 먼저 오면 그 앱. 없으면 Pi Desktop
-target=desktop
+# 앱 이름이 먼저 오면 그 앱. 없으면 켜고 끄는 명령은 세 앱 모두(한 화면의 작업 공간이므로), 그 밖은 Pi Desktop
+target=
 case "${1:-}" in
   agent | mate | all | desktop)
     target=$1
@@ -153,11 +154,18 @@ case "${1:-}" in
 esac
 cmd=${1:-start}
 [ $# -gt 0 ] && shift
+if [ -z "$target" ]; then
+  case "$cmd" in
+    start | stop | restart | status | url) target=all ;;
+    *) target=desktop ;;
+  esac
+fi
 
 if [ "$target" = all ]; then
   case "$cmd" in
     start | stop | restart | status | url)
-      for a in desktop agent mate; do
+      # Agent·Mate를 먼저 켠다: Pi Desktop 화면이 열릴 때 작업 공간 막대에 바로 보이게
+      for a in agent mate desktop; do
         # 브라우저는 Pi Desktop 하나만 연다
         if [ "$a" = desktop ]; then sh "$0" "$a" "$cmd" "$@"; else PI_WEB_NO_OPEN=1 sh "$0" "$a" "$cmd" "$@"; fi
       done

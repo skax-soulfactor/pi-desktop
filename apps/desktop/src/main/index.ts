@@ -107,11 +107,15 @@ function createWindow(): void {
   }
 }
 
+/** SSH 호스트 목록 (앱이 준비되면 만든다). Agent·Mate 작업 공간도 이 목록을 쓴다 */
+let sshHostsRef: SshHostStore | undefined;
+
 /** 작업 공간 (DESIGN-ONE-APP.md). 지금은 Agent·Mate 미리 보기 */
 const workspaces = new Workspaces({
   window: () => mainWindow,
   sendToShell: (channel, ...args) => sendToRenderer(channel, ...args),
   rendererFile: (id) => join(here, "../renderer", id, "index.html"),
+  sshHosts: () => sshHostsRef,
   onActiveChanged: () => setAppMenu(),
   openPiManager: () => {
     workspaces.show("pi");
@@ -231,6 +235,7 @@ app.whenReady().then(() => {
   if (!isPrimaryInstance) return;
   const script = agentScriptPath();
   const sshHosts = new SshHostStore(join(app.getPath("userData"), "ssh-hosts.json"));
+  sshHostsRef = sshHosts;
   hosts = new HostManager({
     agentScript: script,
     agentVersion: agentVersion(script),

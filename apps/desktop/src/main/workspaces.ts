@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { IpcChannels, type PluginWorkspaceId, type WorkspaceId, type WorkspacesState } from "../shared/api";
-import { createAgentMain, type AgentMain } from "../../../agent/src/main/agent-main";
+import { createAgentMain, type AgentMain, type SshHostList } from "../../../agent/src/main/agent-main";
 import { IpcChannels as AgentChannels } from "../../../agent/src/shared/api";
 import { createMateMain, type MateMain } from "../../../mate/src/main/mate-main";
 import { IpcChannels as MateChannels } from "../../../mate/src/shared/api";
@@ -37,6 +37,8 @@ export interface WorkspaceHost {
   rendererFile(id: PluginWorkspaceId): string;
   /** 메뉴바를 지금 작업 공간에 맞춘다 */
   onActiveChanged(id: WorkspaceId): void;
+  /** Pi Desktop의 SSH 호스트 목록 (Agent·Mate 작업 공간이 함께 쓴다) */
+  sshHosts(): SshHostList | undefined;
   /** Pi 관리를 연다 (Agent 화면의 "Pi Desktop에서 관리") */
   openPiManager(): void;
 }
@@ -50,6 +52,8 @@ export class Workspaces {
   private mateStarted = false;
   private readyWaiters: Partial<Record<PluginWorkspaceId, Array<() => void>>> = {};
   private readySet: Partial<Record<PluginWorkspaceId, boolean>> = {};
+  /** 작업 공간을 보지 않는 동안 생긴 알림 수 (막대에 보인다) */
+  private unread: Partial<Record<PluginWorkspaceId, number>> = {};
 
   constructor(private readonly host: WorkspaceHost) {
     this.file = join(app.getPath("userData"), "workspaces.json");
@@ -80,7 +84,8 @@ export class Workspaces {
         const file = this.host.rendererFile(p.id);
         // 개발 서버(http)로 띄운 창은 file:// 프레임을 열 수 없다. 빌드한 화면으로 실행해야 한다
         const reason = process.env.ELECTRON_RENDERER_URL && !app.isPackaged ? "개발 서버 실행에서는 열 수 없습니다 (빌드한 뒤 실행하세요)" : !existsSync(file) ? `화면 파일이 없습니다: ${file}` : undefined;
-        return { id: p.id, name: p.name, enabled, ...(reason ? { reason } : { url: pathToFileURL(file).href }) };
+        const unread = this.unread[p.id] ?? 0;
+        return { id: p.id, name: p.name, enabled, ...(unread > 0 ? { unread } : {}), ...(reason ? { reason } : { url: pathToFileURL(file).href }) };
       }),
     };
   }
@@ -112,6 +117,17 @@ export class Workspaces {
   shown(id: WorkspaceId): void {
     this.active = id;
     this.host.onActiveChanged(id);
+    if (id !== "pi" && this.unread[id]) {
+      this.unread[id] = 0;
+      this.host.sendToShell(IpcChannels.workspacesChanged);
+    }
+  }
+
+  /** 플러그인이 알림을 띄웠다: 그 작업 공간을 보고 있지 않으면 막대에 수를 올린다 (셸의 알림 모음) */
+  private notified(id: PluginWorkspaceId): void {
+    if (this.host.window()?.isFocused() && this.active === id) return;
+    this.unread[id] = (this.unread[id] ?? 0) + 1;
+    this.host.sendToShell(IpcChannels.workspacesChanged);
   }
 
   /** main에서 작업 공간을 보이게 한다 (알림을 누름·메뉴바) */
@@ -172,10 +188,12 @@ export class Workspaces {
       window: () => this.host.window(),
       send: (channel, ...args) => this.sendTo("agent", channel, ...args),
       isViewing: () => Boolean(this.host.window()?.isFocused()) && this.active === "agent",
+      onNotify: () => this.notified("agent"),
       reveal: (then) => this.reveal("agent", then),
       reload: () => this.reload("agent"),
       // Agent 상태 파일(지금 호스트·SSH 호스트·앱 수치)은 Pi Desktop 데이터 폴더 안의 agent/에 둔다 (단독 Agent 앱과 섞지 않는다)
       userData: join(app.getPath("userData"), "agent"),
+      sshHosts: this.host.sshHosts(),
       piDesktop: {
         // 이 앱이 Pi Desktop이다: "설치하세요" 대신 Pi 관리를 연다
         path: () => process.execPath,
@@ -203,10 +221,12 @@ export class Workspaces {
       window: () => this.host.window(),
       send: (channel, ...args) => this.sendTo("mate", channel, ...args),
       isViewing: () => Boolean(this.host.window()?.isFocused()) && this.active === "mate",
+      onNotify: () => this.notified("mate"),
       reveal: () => this.reveal("mate"),
       reload: () => this.reload("mate"),
       // Mate 상태 파일(지금 호스트·SSH 호스트·앱 수치)은 Pi Desktop 데이터 폴더 안의 mate/에 둔다. Mate 홈(~/.pi-desktop-mate)과 실행기는 단독 Mate 앱과 같다
       userData: join(app.getPath("userData"), "mate"),
+      sshHosts: this.host.sshHosts(),
       piDesktop: {
         // 이 앱이 Pi Desktop이다
         info: async () => ({ installedPath: process.execPath }),

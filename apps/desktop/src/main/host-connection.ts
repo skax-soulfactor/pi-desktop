@@ -6,6 +6,7 @@ import {
   Methods,
   Notifications,
   type DaemonStatus,
+  type SessionSummary,
   type HostInfo,
   type SessionEventNotification,
   type SessionExitNotification,
@@ -49,6 +50,11 @@ export interface HostConnectionOptions {
   onFilesChanged: (notification: FilesChangedNotification) => void;
   onPlaygroundOutput: (notification: PlaygroundOutputNotification) => void;
   onPiUpdateOutput: (notification: PiUpdateOutputNotification) => void;
+  /**
+   * 이 세션이 돌고 있으면 예전 데몬을 바로 바꾸지 않는다. 생략하면 모든 세션.
+   * Agent 작업 공간은 늘 떠 있는 예약 작업 세션을 빼서, 그 세션 때문에 데몬이 영영 바뀌지 않는 일을 막는다.
+   */
+  blocksReplace?: (session: SessionSummary) => boolean;
 }
 
 /** 예전 데몬을 쓰는 동안 세션이 모두 끝났는지 다시 보는 간격 */
@@ -290,7 +296,7 @@ export class HostConnection {
   ): Promise<"replacing" | { liveSessions: number } | undefined> {
     if (!expected || host.agentBuild === expected) return undefined;
     const status = await peer.request<DaemonStatus>(Methods.daemonStatus);
-    const liveSessions = status.sessions.filter((s) => s.state === "running").length;
+    const liveSessions = status.sessions.filter((s) => this.blocksReplace(s)).length;
     const check = checkAgent(expected, host.agentBuild, liveSessions, this.replaceTriedFor === expected);
     if (check === "replace") {
       this.replaceTriedFor = expected;
@@ -308,7 +314,7 @@ export class HostConnection {
       void peer
         .request<DaemonStatus>(Methods.daemonStatus)
         .then((status) => {
-          if (this.peer !== peer || status.sessions.some((s) => s.state === "running")) return;
+          if (this.peer !== peer || status.sessions.some((s) => this.blocksReplace(s))) return;
           // 이미 한 번 바꿨는데도 같은 데몬이 떠 있으면(교체 실패) 되풀이하지 않는다.
           if (this.replaceTriedFor === expected) return;
           this.replaceTriedFor = expected;
@@ -317,6 +323,11 @@ export class HostConnection {
         })
         .catch(() => {});
     }, appNum("app.staleCheckSec") * 1000);
+  }
+
+  /** 데몬 교체를 미루게 하는 세션인가 (돌고 있고, 앱이 빼지 않은 세션) */
+  private blocksReplace(session: SessionSummary): boolean {
+    return session.state === "running" && (this.options.blocksReplace?.(session) ?? true);
   }
 
   private stopStaleCheck(): void {

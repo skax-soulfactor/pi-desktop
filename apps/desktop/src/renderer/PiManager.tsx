@@ -6,6 +6,8 @@ import { PiDataPanel } from "./PiDataPanel";
 import { SettingsCopyPanel } from "./SettingsCopyPanel";
 import { SettingsFormPanel } from "./SettingsFormPanel";
 import { TunablesTab } from "./TunablesTab";
+import { WorkspacesTab } from "./WorkspacesTab";
+import { isWebClient } from "./clipboard-images";
 import { HostComparePanel } from "./HostComparePanel";
 import { PiInstallPanel } from "./PiInstallPanel";
 import { PiUpdatePanel } from "./PiUpdatePanel";
@@ -77,7 +79,7 @@ export function PiManager({
   hosts: HostDescriptor[];
   initialHostId: string;
   /** 처음 열 탭 (/settings, /login 등) */
-  initialTab?: "status" | "providers" | "models" | "settings" | "compare" | "tunables";
+  initialTab?: "status" | "providers" | "models" | "settings" | "compare" | "tunables" | "workspaces";
   /** 지금 탭의 작업 폴더 (설정의 프로젝트 범위 기본값) */
   projectCwd?: string;
   onClose: () => void;
@@ -91,7 +93,7 @@ export function PiManager({
   const [hostId, setHostId] = useState(initialHostId);
   const { status, latest, error, reload } = usePiStatus(hostId, true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState<"status" | "providers" | "models" | "settings" | "compare" | "tunables">(initialTab);
+  const [tab, setTab] = useState<"status" | "providers" | "models" | "settings" | "compare" | "tunables" | "workspaces">(initialTab);
   const [tunablesError, setTunablesError] = useState<string>();
   const [settingsMode, setSettingsMode] = useState<"edit" | "copy">("edit");
   const checks = status ? statusChecks(status, latest) : [];
@@ -135,6 +137,11 @@ export function PiManager({
             <button type="button" className={tab === "tunables" ? "on" : ""} onClick={() => setTab("tunables")} title="앱과 데몬의 동작 수치를 보고 고칩니다">
               수치
             </button>
+            {!isWebClient() && (
+              <button type="button" className={tab === "workspaces" ? "on" : ""} onClick={() => setTab("workspaces")} title="Agent·Mate 작업 공간을 켜고 끕니다">
+                작업 공간
+              </button>
+            )}
           </div>
           <div className="spacer" />
           <button
@@ -180,6 +187,8 @@ export function PiManager({
         {tab === "compare" && <HostComparePanel hostId={hostId} hosts={hosts} />}
         {tab === "tunables" && tunablesError && <div className="banner error">{tunablesError}</div>}
         {tab === "tunables" && <TunablesTab key={hostId} hostId={hostId} onError={setTunablesError} />}
+        {tab === "workspaces" && tunablesError && <div className="banner error">{tunablesError}</div>}
+        {tab === "workspaces" && <WorkspacesTab onError={setTunablesError} />}
         {tab === "status" && error && <div className="banner error">{error}</div>}
         {tab === "status" && !status && !error && <p className="muted">상태를 읽는 중…</p>}
         {tab === "status" && status && (
