@@ -72,6 +72,8 @@ jobs:
         run: |
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || { echo "버전은 v1.2.3 모양이어야 합니다: $RELEASE_TAG"; exit 1; }
           npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version -w "@pi-desktop/${{ matrix.app }}"
+          # Host Agent 데몬(Pi Desktop·Agent가 싣는다)도 같은 번호로 빌드한다. 안 하면 데몬이 늘 package.json의 0.0.1로 보인다
+          npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version -w @pi-desktop/host-agent
 
       - name: 설치 파일 만들기
         run: npm run dist -w "@pi-desktop/${{ matrix.app }}"
@@ -113,7 +115,7 @@ jobs:
         shell: bash
         run: |
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || { echo "버전은 v1.2.3 모양이어야 합니다: $RELEASE_TAG"; exit 1; }
-          npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version -w @pi-desktop/desktop
+          npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version -w @pi-desktop/desktop -w @pi-desktop/host-agent
 
       # 세 앱의 웹 빌드를 한 묶음으로 모은다 (루트 scripts/build-web.mjs). 버전은 위에서 맞춘 Pi Desktop 버전을 따른다
       # 설치 스크립트에는 이 저장소(GITHUB_REPOSITORY)가 들어간다
