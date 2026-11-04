@@ -1,10 +1,12 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * 입력창에 쓰던 글(초안)을 이름(key)마다 보관한다. 다른 화면·다른 대화에 갔다 와도 그대로 남는다 (Pi Desktop과 같은 방식).
  * - key가 바뀌면 그 key로 보관한 글을 바로 읽는다 (대화를 바꾸면 그 대화의 초안).
  * - key가 없을 때 쓴 글(새 대화를 여는 중에 채운 예시 등)은 다음에 생기는 key로 옮긴다.
  * - 보관은 이 기기의 localStorage. 저장하지 못해도 입력은 계속된다.
+ * - 같은 대화를 다른 창에서도 열어 두었으면(작업 공간을 새 창으로 열기) 한쪽에서 쓴 글이 다른 쪽에도 바로 보인다.
+ *   그러지 않으면 두 창이 같은 초안을 서로 덮어쓴다 (나중에 쓴 쪽만 남는다).
  */
 export function useDraftText(key: string | undefined): [string, (update: string | ((prev: string) => string)) => void] {
   const [state, setState] = useState(() => ({ key, text: loadDraft(key) }));
@@ -19,6 +21,18 @@ export function useDraftText(key: string | undefined): [string, (update: string 
     if (carried) saveDraft(key, carried);
     setState(current);
   }
+
+  // 다른 창(같은 앱 화면)이 같은 초안을 바꾸면 따라간다. storage 이벤트는 바꾼 창이 아닌 다른 창에만 온다
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      const current = keyRef.current;
+      if (!current || e.key !== current) return;
+      const text = e.newValue ?? "";
+      setState((prev) => (prev.key === current && prev.text !== text ? { key: current, text } : prev));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const setText = useCallback((update: string | ((prev: string) => string)) => {
     setState((prev) => {
