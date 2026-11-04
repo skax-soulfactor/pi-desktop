@@ -34,6 +34,8 @@ export function App() {
     setFolderPickOpener((resolve) => setFolderPick({ resolve }));
     return () => setFolderPickOpener(undefined);
   }, []);
+  // 알림을 누르면 그 알림의 탭(대화·실행 기록·인박스)으로 간다
+  useEffect(() => window.mate.onOpenTab((target) => setTab(target as Tab)), []);
   useEffect(() => {
     void window.mate.updateState().then(setUpdate);
     return window.mate.onUpdateState(setUpdate);

@@ -10,7 +10,11 @@ import { appNum } from "./app-tunables";
 export interface Note {
   title: string;
   body: string;
+  /** 누르면 열 탭 (대화 줄·실행 기록·인박스) */
+  target?: NoteTarget;
 }
+
+export type NoteTarget = "chat" | "runs" | "inbox";
 
 /** 이미 알린 것 */
 export interface NoteState {
@@ -42,10 +46,10 @@ export function newNotes(prev: NoteState | undefined, overview: Overview): { not
   for (const line of overview.chat.lines) {
     if (prev.chat.has(line.id) || line.role !== "mate") continue;
     if (line.runId) coveredRuns.add(line.runId);
-    if (line.kind === "question") notes.push({ title: "Mate의 질문", body: clip(line.text) });
+    if (line.kind === "question") notes.push({ title: "Mate의 질문", body: clip(line.text), target: "chat" });
     // 휴대폰에서 나눈 대화의 답·결과는 휴대폰으로 간다
     else if ((line.kind === "reply" || line.kind === "result") && line.source !== "telegram") {
-      notes.push({ title: line.kind === "reply" ? "Mate" : "Mate 실행 결과", body: clip(line.text) });
+      notes.push({ title: line.kind === "reply" ? "Mate" : "Mate 실행 결과", body: clip(line.text), target: "chat" });
     }
   }
   const notedRuns = new Set<string>();
@@ -54,14 +58,14 @@ export function newNotes(prev: NoteState | undefined, overview: Overview): { not
     notedRuns.add(run.id);
     const ok = run.status === "done";
     const proposals = run.proposals ? ` · 제안 ${run.proposals}건` : "";
-    notes.push({ title: `임무 ${ok ? "완료" : "실패"}: ${run.dutyName}${proposals}`, body: clip((ok ? run.summary : run.error) ?? "") });
+    notes.push({ title: `임무 ${ok ? "완료" : "실패"}: ${run.dutyName}${proposals}`, body: clip((ok ? run.summary : run.error) ?? ""), target: "runs" });
   }
   for (const item of overview.inbox) {
     if (prev.inbox.has(item.id) || item.status || notedRuns.has(item.runId) || coveredRuns.has(item.runId)) continue;
-    notes.push({ title: `새 제안: ${clip(item.title, 60)}`, body: clip(item.summary) });
+    notes.push({ title: `새 제안: ${clip(item.title, 60)}`, body: clip(item.summary), target: "inbox" });
   }
   const maxNotes = appNum("app.notifyMaxNotes");
   if (notes.length <= maxNotes) return { notes, state };
   const rest = notes.length - (maxNotes - 1);
-  return { notes: [...notes.slice(0, maxNotes - 1), { title: `Mate 알림 ${rest}건 더`, body: "앱에서 확인하세요" }], state };
+  return { notes: [...notes.slice(0, maxNotes - 1), { title: `Mate 알림 ${rest}건 더`, body: "앱에서 확인하세요", target: "inbox" }], state };
 }

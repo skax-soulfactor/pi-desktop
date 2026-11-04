@@ -541,6 +541,8 @@ export interface PiDesktopApi {
   workspaceReady(id: PluginWorkspaceId): Promise<void>;
   /** main이 작업 공간을 보이라고 할 때 (알림을 누름·메뉴바) */
   onShowWorkspace(listener: (id: WorkspaceId) => void): () => void;
+  /** 창을 앞으로 가져와 그 작업 공간을 보인다 (Pi 화면의 알림을 누름). 웹에서는 아무것도 하지 않는다 */
+  revealWorkspace(id: WorkspaceId): Promise<void>;
   /** 작업 공간 상태가 바뀌었다 (읽지 않은 알림 수 등). workspacesState를 다시 읽는다 */
   onWorkspacesChanged(listener: () => void): () => void;
   /** 작업 기록 (최근 것부터) */
@@ -667,6 +669,7 @@ export const IpcChannels = {
   workspaceReady: "pi:workspace-ready",
   showWorkspace: "pi:show-workspace",
   workspacesChanged: "pi:workspaces-changed",
+  revealWorkspace: "pi:reveal-workspace",
   logAction: "pi:log-action",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",

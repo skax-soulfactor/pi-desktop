@@ -125,6 +125,8 @@ export const IpcChannels = {
   importList: "mate:import-list",
   importSkill: "mate:import-skill",
   changed: "mate:changed",
+  /** main → 화면: 이 탭을 연다 (알림을 누름) */
+  openTab: "mate:open-tab",
 } as const;
 
 
@@ -285,4 +287,6 @@ export interface MateApi {
   chatSend(text: string, answerTo?: string, images?: ChatImage[]): Promise<void>;
   /** Mate 홈의 파일이 바뀌면 불린다. 해제 함수를 돌려준다 */
   onChanged(listener: () => void): () => void;
+  /** 알림을 눌러 열 탭 ("chat" | "runs" | "inbox") */
+  onOpenTab(listener: (tab: string) => void): () => void;
 }

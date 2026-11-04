@@ -194,14 +194,14 @@ export class Workspaces {
   }
 
   /** 창을 앞으로 가져와 그 작업 공간을 보이고, then은 화면이 뜬 뒤에 부른다 (알림을 누름) */
-  private reveal(id: PluginWorkspaceId, then?: () => void): void {
+  reveal(id: WorkspaceId, then?: () => void): void {
     const win = this.host.window();
     if (win?.isMinimized()) win.restore();
     win?.show();
     win?.focus();
     this.show(id);
     if (!then) return;
-    if (this.readySet[id] && this.frames(id).length > 0) then();
+    if (id === "pi" || (this.readySet[id] && this.frames(id).length > 0)) then();
     else (this.readyWaiters[id] ??= []).push(then);
   }
 
@@ -255,7 +255,7 @@ export class Workspaces {
       send: (channel, ...args) => this.sendTo("mate", channel, ...args),
       isViewing: () => Boolean(this.host.window()?.isFocused()) && this.active === "mate",
       onNotify: () => this.notified("mate"),
-      reveal: () => this.reveal("mate"),
+      reveal: (then) => this.reveal("mate", then),
       reload: () => this.reload("mate"),
       // Mate 상태 파일(지금 호스트·SSH 호스트·앱 수치)은 Pi Desktop 데이터 폴더 안의 mate/에 둔다. Mate 홈(~/.pi-desktop-mate)과 실행기는 단독 Mate 앱과 같다
       userData: join(app.getPath("userData"), "mate"),

@@ -284,6 +284,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle(IpcChannels.workspaceShown, (_event, id: WorkspaceId) => workspaces.shown(id));
   ipcMain.handle(IpcChannels.workspaceReady, (_event, id: PluginWorkspaceId) => workspaces.ready(id));
+  ipcMain.handle(IpcChannels.revealWorkspace, (_event, id: WorkspaceId) => workspaces.reveal(id));
   workspaces.registerUpdateStubs(() => ({ status: "disabled", current: app.getVersion(), mode: "notify" }));
   workspaces.start();
   createWindow();
