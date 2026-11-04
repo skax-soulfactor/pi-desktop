@@ -83,17 +83,15 @@
     max-width: 100%;
   }
 
-  /* 모델 고르기: 머리줄에서 제 크기로 두고 넘치면 줄인다. 휴대폰 웹에서만 줄을 채워 손가락으로 누르기 쉽게 한다 */
+  /*
+   * 모델 고르기: 머리줄에서 제 크기로 두고 넘치면 줄인다 (휴대폰 웹·PC 좁은 창 모두).
+   * 제 너비는 가장 긴 모델 이름을 따르므로 줄 대부분을 차지하지 않게 240px까지만 (고른 이름은 줄여 보인다)
+   */
   .model-select {
-    /* 제 너비는 가장 긴 모델 이름을 따른다. 좁은 창에서 줄 대부분을 차지하지 않게 줄인다 (고른 이름은 줄여 보인다) */
     max-width: min(100%, 240px);
     min-width: 0;
     flex: 0 1 auto;
-  }
-
-  :root[data-client="web"] .model-select {
-    max-width: 100%;
-    flex: 1 1 160px;
+    padding: 4px 8px;
   }
 
   .page-body {
@@ -141,7 +139,7 @@
   }
 
   :root[data-client="web"] input,
-  :root[data-client="web"] select,
+  :root[data-client="web"] select:not(.model-select),
   :root[data-client="web"] textarea {
     font-size: 16px;
   }
