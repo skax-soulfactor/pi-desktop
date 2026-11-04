@@ -141,6 +141,7 @@ import { createToken, serverHandshake, writeToken } from "./handshake";
 import { AgentSession } from "./session";
 import { AGENT_VERSION } from "./version";
 import { daemonTunables, useDaemonHome } from "./tunables";
+import { toolTextStore } from "@pi-desktop/agent-kit/tool-texts-store";
 import type { TunableItem } from "@pi-desktop/agent-kit/tunables-core";
 
 export interface DaemonOptions {
@@ -587,7 +588,8 @@ export class AgentDaemon {
         sessionFile: p.sessionFile,
         forkFrom: p.forkFrom,
         piArgs: [...(p.piArgs ?? []), ...trustArgs(p.trust), ...(bridge ? ["-e", bridge] : []), ...(manage ? ["-e", manage] : [])],
-        env: { ...this.env, ...pi.env, ...p.env },
+        // 관리 툴이 툴 설명문을 적어 두고 읽는 곳 (데몬 홈, DESIGN-APPS.md §7)
+        env: { ...this.env, ...pi.env, ...p.env, PI_DESKTOP_TOOL_TEXTS_HOME: agentHome(this.env) },
         journalCapacity: this.options.journalCapacity ?? (Number(this.env.PI_DESKTOP_JOURNAL_CAPACITY) || undefined),
         files: this.files,
         externalWriteGraceMs: Number(this.env.PI_DESKTOP_EXTERNAL_WRITE_GRACE_MS) || undefined,
@@ -670,12 +672,17 @@ export class AgentDaemon {
     });
 
     // 설정으로 꺼낸 데몬 수치 (DESIGN-APPS.md §7). Pi Desktop·Agent 설정 화면이 보고 고친다
-    peer.handle(Methods.tunablesList, async (): Promise<TunableItem[]> => daemonTunables(agentHome(this.env)).items());
+    // 데몬이 싣는 관리 툴의 설명문(daemon.tool.*)도 함께 보인다 (관리 툴이 등록할 때 데몬 홈에 적어 둔 기본값)
+    peer.handle(Methods.tunablesList, async (): Promise<TunableItem[]> => [
+      ...daemonTunables(agentHome(this.env)).items(),
+      ...toolTextStore(agentHome(this.env), "daemon.").items(),
+    ]);
     peer.handle(Methods.tunableSet, async (params): Promise<TunableItem> => {
       const p = params as TunableSetParams | undefined;
       if (!p?.id || typeof p.id !== "string") throw new JsonRpcError(ErrorCodes.InvalidParams, "id가 필요합니다");
       try {
-        return daemonTunables(agentHome(this.env)).set(p.id, p.value);
+        const home = agentHome(this.env);
+        return p.id.startsWith("daemon.tool.") ? toolTextStore(home, "daemon.").set(p.id, p.value) : daemonTunables(home).set(p.id, p.value);
       } catch (error) {
         throw new JsonRpcError(ErrorCodes.InvalidParams, error instanceof Error ? error.message : String(error));
       }

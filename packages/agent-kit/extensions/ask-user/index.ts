@@ -1,6 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { attended } from "../../src/runtime";
+import { withToolTexts } from "../../src/tool-texts";
+import { dataDir } from "../permissions/store";
 
 /** 선택지 끝에 붙여 사용자가 직접 답을 쓸 수 있게 한다 */
 export const FREE_ANSWER = "직접 입력";
@@ -13,6 +15,8 @@ export const FREE_ANSWER = "직접 입력";
  * 바깥을 바꾸지 않으므로 permissions 확장은 이 도구를 묻지 않는다.
  */
 export default function askUser(pi: ExtensionAPI): void {
+  // 툴 설명문은 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). 등록할 때 기본값을 적어 두고 바꾼 글로 바꿔 넣는다
+  pi = withToolTexts(pi, dataDir(), "ask-user");
   pi.registerTool({
     name: "ask_user",
     label: "사용자에게 묻기",

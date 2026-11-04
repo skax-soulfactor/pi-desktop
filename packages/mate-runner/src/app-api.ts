@@ -16,6 +16,7 @@ import { piReadiness } from "./pi-readiness";
 import { loadRemoteState } from "./remote/telegram-remote";
 import { nextRunAt } from "./schedule";
 import { mateTunables } from "./tunables";
+import { toolTextStore } from "@pi-desktop/agent-kit/tool-texts-store";
 import { parseTranscript } from "./session-transcript";
 import {
   addRequest,
@@ -136,9 +137,11 @@ export function mateAppApi(ctx: MateAppContext): MateAppApi {
     config: () => loadConfig(paths),
     saveConfig: (patch: ConfigPatch) => saveConfig(paths, patch),
     // 설정으로 꺼낸 프롬프트와 수치 (DESIGN-APPS.md §7). 실행기는 파일이 바뀌면 다음 사용부터 새 값을 읽는다
-    tunablesList: async () => mateTunables(paths.home).items(),
+    // 툴 설명문(tool.*)도 함께 보인다. mate-kit 확장이 툴을 등록할 때 Mate 홈에 적어 둔 기본값으로 항목을 만든다
+    tunablesList: async () => [...mateTunables(paths.home).items(), ...toolTextStore(paths.home).items()],
     /** value가 null이면 기본값으로 되돌린다 */
-    tunableSet: async (id: string, value: number | string | null) => mateTunables(paths.home).set(id, value),
+    tunableSet: async (id: string, value: number | string | null) =>
+      String(id).startsWith("tool.") ? toolTextStore(paths.home).set(id, value) : mateTunables(paths.home).set(id, value),
 
     // 임무
     saveDuty: async (draft: DutyDraft) => {

@@ -6,6 +6,7 @@ import { dataDir } from "../permissions/store";
 import { argvLine, compileElevated, ELEVATED_OPS, ELEVATED_TOOL, SERVICE_ACTIONS, type ElevatedInput } from "./compile";
 import { linuxPackageManager, runElevated } from "./run";
 import { loadElevationEnabled } from "./store";
+import { withToolTexts } from "../../src/tool-texts";
 
 /**
  * 권한 상승 (설계 DESIGN-AGENT.md §4 "권한 상승", desktop-agent docs/DESIGN-PRIVILEGE-ELEVATION.md).
@@ -16,6 +17,8 @@ import { loadElevationEnabled } from "./store";
  * - 승인은 매번, 한 번만. 규칙으로 저장되지 않는다 (permissions가 "이번만 허용·거부"로만 묻는다).
  */
 export default function elevation(pi: ExtensionAPI): void {
+  // 툴 설명문은 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). 등록할 때 기본값을 적어 두고 바꾼 글로 바꿔 넣는다
+  pi = withToolTexts(pi, dataDir(), "elevation");
   const dir = dataDir();
 
   /** 지금 이 세션에서 쓸 수 있는가 */

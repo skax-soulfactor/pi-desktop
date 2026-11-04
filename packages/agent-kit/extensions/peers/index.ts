@@ -13,6 +13,7 @@ import { delegateToPeer, isFinished, peerTaskPrompt, refreshRemoteTask } from ".
 import { startPeerServer } from "./server";
 import { findPeer, loadCardDraft, loadPeers, loadPeerSettings, peersDir, type Peer } from "./store";
 import { agentTunables } from "../../src/tunables";
+import { withToolTexts } from "../../src/tool-texts";
 
 /** 시스템 프롬프트에서 피어 목록이 들어가는 섹션 이름 */
 export const PEERS_SECTION = "agent_peers";
@@ -34,6 +35,8 @@ const TASK_POLL_MS = Number(process.env.PI_DESKTOP_AGENT_PEER_TASK_POLL_MS) || 1
  *   받은 작업은 스케줄러가 그 폴더에 갇힌 무인 워커로 돌린다 (실행·네트워크 막힘, 선호 기억 안 실림)
  */
 export default function peers(pi: ExtensionAPI): void {
+  // 툴 설명문은 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). 등록할 때 기본값을 적어 두고 바꾼 글로 바꿔 넣는다
+  pi = withToolTexts(pi, dataDir(), "peers");
   const dir = dataDir();
   // 워커를 먼저 거른다. 스케줄러가 띄운 워커(받은 작업 등)는 스케줄러의 환경 변수를 물려받아
   // 스케줄러 표시도 켜져 있으므로, 순서가 바뀌면 워커 안에서도 피어 서버·동기화가 돈다 (다른 확장과 같은 순서)

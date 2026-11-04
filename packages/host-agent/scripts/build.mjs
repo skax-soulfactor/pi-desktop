@@ -19,6 +19,8 @@ await build({
     __AGENT_VERSION__: JSON.stringify(pkg.version),
     // 확장 관리 툴의 소스 (Pi가 -e로 불러오도록 데몬이 파일로 써 둔다)
     __MANAGE_EXTENSION_SOURCE__: JSON.stringify(await readFile(at("../../pi-resources/extensions/manage.ts"), "utf8")),
+    // 관리 툴이 import하는 툴 설명문 도우미 (관리 툴 파일 옆에 tool-texts.ts로 써 둔다)
+    __TOOL_TEXTS_SOURCE__: JSON.stringify(await readFile(at("../../pi-resources/extensions/tool-texts.ts"), "utf8")),
   },
   logLevel: "warning",
 });

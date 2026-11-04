@@ -4,6 +4,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { isScheduler, isWorker } from "../../src/runtime";
 import { saveSkill, toSkillName, userSkillsDir, validSkillName } from "./store";
+import { withToolTexts } from "../../src/tool-texts";
+import { dataDir } from "../permissions/store";
 
 /**
  * 스킬 저장 (설계 DESIGN-AGENT.md §4 "스킬"). 대화에서 다듬은 작업 방법을 Pi 스킬(SKILL.md)로 남겨 다음에도 같은 방식으로 하게 한다.
@@ -11,6 +13,8 @@ import { saveSkill, toSkillName, userSkillsDir, validSkillName } from "./store";
  * 스킬을 보고 고치는 일은 앱의 스킬 화면에서 한다.
  */
 export default function skills(pi: ExtensionAPI): void {
+  // 툴 설명문은 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). 등록할 때 기본값을 적어 두고 바꾼 글로 바꿔 넣는다
+  pi = withToolTexts(pi, dataDir(), "skills");
   if (isWorker() || isScheduler()) return;
 
   pi.registerTool({

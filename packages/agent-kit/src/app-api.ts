@@ -31,6 +31,7 @@ import { normalizeAddress } from "../extensions/peers/protocol";
 import { readSessionUsage, readUsageLog, rangeBuckets, summarizeUsage, type UsageRange } from "./usage";
 import { searchSessions, type SearchableSession } from "./history-search";
 import { agentTunables } from "./tunables";
+import { toolTextStore } from "./tool-texts-store";
 import { approvePairing, checkPairings, forgetPeer, networkState, pairWith, previewPeer, rejectPairing, saveCard, setNetworkSettings, setPeerPolicy } from "./network";
 
 /**
@@ -159,9 +160,11 @@ export function appApi(ctx: AppApiContext): AppApi {
     },
 
     // 설정으로 꺼낸 프롬프트와 수치 (DESIGN-APPS.md §7). 확장은 파일이 바뀌면 다음 사용부터 새 값을 읽는다
-    tunablesList: async () => agentTunables(ctx.dataDir).items(),
+    // 툴 설명문(tool.*)도 함께 보인다. 확장이 툴을 등록할 때 적어 둔 기본값으로 항목을 만든다
+    tunablesList: async () => [...agentTunables(ctx.dataDir).items(), ...toolTextStore(ctx.dataDir).items()],
     /** value가 null이면 기본값으로 되돌린다 */
-    tunableSet: async (id: string, value: number | string | null) => agentTunables(ctx.dataDir).set(id, value),
+    tunableSet: async (id: string, value: number | string | null) =>
+      String(id).startsWith("tool.") ? toolTextStore(ctx.dataDir).set(id, value) : agentTunables(ctx.dataDir).set(id, value),
 
     // 네트워크(피어). 수신 서버는 그 호스트의 스케줄러 세션이 띄우므로 상태도 그 호스트에서 본다
     networkState: () => networkState(ctx.dataDir),
