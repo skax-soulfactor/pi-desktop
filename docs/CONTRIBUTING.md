@@ -1,6 +1,6 @@
 # 개발 방식
 
-이 저장소의 세 앱(Pi Desktop·Pi Desktop Agent·Pi Desktop Mate)과 공용 패키지에 함께 적용하는 규칙이다.
+이 저장소의 앱(Pi Desktop과 그 안의 Pi·Agent·Mate 작업 공간)과 공용 패키지에 함께 적용하는 규칙이다.
 처음에는 [DESIGN.md](DESIGN.md) §11에 있었고, 앱이 늘면서 여기로 옮겼다.
 
 ## 1. 언어 규칙
@@ -77,18 +77,18 @@ CI 작업 이름(`.github/workflows/ci.yml`의 매트릭스)을 바꾸면 룰셋
 
 ## 6. 릴리스
 
-0.6.4부터 세 앱과 웹 묶음을 **태그 하나(`v*`, 예: `v0.6.4`), 워크플로 하나(`.github/workflows/release.yml`), 릴리스 하나**로 올린다. 그 릴리스가 Latest다. 0.7.0부터 설치본은 Pi Desktop 하나다 (Agent·Mate는 그 안의 작업 공간, v0.7.0에만 옛 단독 앱의 징검다리 파일이 있다. 저장소 [CLAUDE.md](../CLAUDE.md) §3).
+태그 하나(`vX.Y.Z`), 워크플로 하나(`.github/workflows/release.yml`), 릴리스 하나로 올린다. 그 릴리스가 Latest다. **0.7.0부터 설치본은 Pi Desktop 하나다** (Agent·Mate는 그 안의 작업 공간).
 
-| 앱 | 설치 파일 이름 | 자동 업데이트 정보 파일 |
+| 올라가는 것 | 파일 이름 | 자동 업데이트 정보 파일 |
 |---|---|---|
-| Pi Desktop (+ 웹 묶음) | `Pi-Desktop-*` | `latest.yml`·`latest-mac.yml`·`latest-linux.yml` (Latest 릴리스를 봄) |
-| Pi Desktop Agent | `Pi-Desktop-Agent-*` | `agent.yml`·`agent-mac.yml`·`agent-linux.yml` |
-| Pi Desktop Mate | `Pi-Desktop-Mate-*` | `mate.yml`·`mate-mac.yml`·`mate-linux.yml` |
+| Pi Desktop (Agent·Mate 포함) | `Pi-Desktop-*` | `latest.yml`·`latest-mac.yml`·`latest-linux.yml` (Latest 릴리스를 봄) |
+| 휴대폰 웹 묶음 | `pi-web.tar.gz`, `install-termux.sh` | 없음 (`pi-web update`가 Latest를 받음) |
+| 옛 단독 Agent·Mate 징검다리 (**v0.7.0에만**) | `Pi-Desktop-Agent-*`, `Pi-Desktop-Mate-*` | `agent*.yml`, `mate*.yml` |
 
-0.6.3까지는 앱마다 태그(`v*`·`agent-v*`·`mate-v*`)와 릴리스가 따로 있었다. `agent-v0.6.4`·`mate-v0.6.4`는 옛 설치본이 0.6.4로 올라오는 징검다리 릴리스이므로 지우지 않는다.
-
-- **세 앱은 같은 버전 번호로 함께 릴리스한다** (0.6.0부터). Host Agent 데몬(`packages/host-agent`)도 릴리스 때 같은 번호로 빌드한다 (워크플로가 `package.json` 버전을 맞춘다. 저장소의 `0.0.1`은 개발 빌드에서만 보인다). 한 앱만 바뀌었어도 함께 낸다. 자세한 규칙은 저장소 [CLAUDE.md](../CLAUDE.md) §3.
+- 옛 단독 Agent·Mate 설치본은 가장 높은 `v*` 릴리스의 자기 채널 파일을 본다. v0.7.0 뒤 릴리스에는 그 파일이 없어 0.7.0 징검다리에 머문다. **v0.7.0 릴리스는 지우지 않는다.** 워크플로는 v0.7.0에서만 Agent·Mate를 만든다 (만들기만 할 때 `bridge`를 켜면 미리 만들어 볼 수 있다).
+- 0.6.3까지는 앱마다 태그(`v*`·`agent-v*`·`mate-v*`)와 릴리스가 따로 있었다. `agent-v0.6.4`·`mate-v0.6.4`는 옛 설치본이 0.6.4로 올라오는 징검다리 릴리스이므로 지우지 않는다.
+- 태그를 push할 수 없는 곳(클라우드 세션 등)에서는 Actions의 "Release"를 `version`(예: `v0.7.1`)을 넣어 돌린다. 고른 브랜치의 커밋에 태그를 만들고 올린다. `version`을 비우면 만들기만 한다.
+- **Pi Desktop과 웹 묶음은 같은 버전 번호로 함께 릴리스한다** (0.6.0부터 세 앱이 같은 번호였다). Host Agent 데몬(`packages/host-agent`)도 릴리스 때 같은 번호로 빌드한다 (워크플로가 `package.json` 버전을 맞춘다. 저장소의 `0.0.1`은 개발 빌드에서만 보인다). 자세한 규칙은 저장소 [CLAUDE.md](../CLAUDE.md) §3.
 - 문서만 바뀌었으면 릴리스하지 않는다.
 - 릴리스를 겹쳐 돌리지 않는다. 앞 빌드가 끝난 뒤 다음 번호를 붙인다.
 - 태그는 주석 태그로 붙인다: `git tag -a v0.6.4 -m "Pi Desktop v0.6.4"`.
-- Actions 탭에서 워크플로를 손으로 돌리면 만들기만 하고 올리지 않는다 (릴리스 전 미리 확인).

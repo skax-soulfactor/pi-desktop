@@ -11,8 +11,8 @@
   "main": "out/main/index.js",
   "scripts": {
     "predev": "npm run build -w @pi-desktop/mate-runner",
-    "dev": "electron-vite dev",
-    "dev:mock": "node scripts/dev-mock.mjs",
+    "dev": "npm run start:all -w @pi-desktop/desktop",
+    "dev:mock": "npm run dev:mock:all -w @pi-desktop/desktop",
     "build": "npm run build -w @pi-desktop/mate-runner && electron-vite build",
     "build:web": "npm run build -w @pi-desktop/mate-runner && node scripts/build-web.mjs",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
