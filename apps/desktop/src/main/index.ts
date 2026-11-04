@@ -14,6 +14,7 @@ import { Updater } from "./updater";
 import { appMenuTemplate } from "./app-menu";
 import { ReplayCollector } from "./replay-collector";
 import { agentVersion } from "./agent-build";
+import { initAppTunables } from "./app-tunables";
 import { hostEventHandlers, registerHandlers, type Router } from "./ipc-handlers";
 import { revealWindow, usesSingleInstanceLock } from "./single-instance";
 
@@ -144,6 +145,7 @@ app.whenReady().then(() => {
       shell.showItemInFolder(path);
       return true;
     },
+    appTunables: initAppTunables(app.getPath("userData")),
   });
   // 앱 기능 메뉴: 항목은 화면(지금 탭)에 명령 id를 보낸다 (app-menu.ts)
   Menu.setApplicationMenu(

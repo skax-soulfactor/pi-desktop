@@ -1,4 +1,5 @@
 import type { Overview } from "../shared/api";
+import { appNum } from "./app-tunables";
 
 /**
  * PC 알림 (설계 DESIGN-MATE.md §2 "알림"). 실행기가 "바뀌었다"고 알릴 때마다 overview를 앞의 것과 견줘
@@ -19,7 +20,6 @@ export interface NoteState {
 }
 
 /** 한 번에 띄우는 알림 수. 넘으면 나머지는 한 줄로 묶는다 */
-const MAX_NOTES = 3;
 const clip = (text: string, n = 160) => {
   const one = text.replace(/\s+/g, " ").trim();
   return one.length > n ? `${one.slice(0, n)}…` : one;
@@ -60,7 +60,8 @@ export function newNotes(prev: NoteState | undefined, overview: Overview): { not
     if (prev.inbox.has(item.id) || item.status || notedRuns.has(item.runId) || coveredRuns.has(item.runId)) continue;
     notes.push({ title: `새 제안: ${clip(item.title, 60)}`, body: clip(item.summary) });
   }
-  if (notes.length <= MAX_NOTES) return { notes, state };
-  const rest = notes.length - (MAX_NOTES - 1);
-  return { notes: [...notes.slice(0, MAX_NOTES - 1), { title: `Mate 알림 ${rest}건 더`, body: "앱에서 확인하세요" }], state };
+  const maxNotes = appNum("app.notifyMaxNotes");
+  if (notes.length <= maxNotes) return { notes, state };
+  const rest = notes.length - (maxNotes - 1);
+  return { notes: [...notes.slice(0, maxNotes - 1), { title: `Mate 알림 ${rest}건 더`, body: "앱에서 확인하세요" }], state };
 }

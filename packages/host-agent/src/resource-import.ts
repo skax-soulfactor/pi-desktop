@@ -4,6 +4,7 @@ import { dirname, extname, join, resolve, sep } from "node:path";
 import type { ResourceImportParams, ResourceImportResult } from "@pi-desktop/host-protocol";
 import { backupLocation, movePath } from "./import-manage";
 import { resourceNameProblem } from "./resource-files";
+import { daemonDefault } from "./tunables";
 
 /**
  * 개별 스킬·프롬프트 가져오기 (설계 §4.6 "개별 스킬·프롬프트 가져오기"), 다른 호스트에서 복사한 확장 쓰기 (§5.9).
@@ -16,8 +17,9 @@ import { resourceNameProblem } from "./resource-files";
  * - 임시 폴더에 다 쓴 뒤 이름을 바꿔, 중간에 실패해도 반쯤 쓴 스킬이 남지 않게 한다
  */
 
-export const MAX_IMPORT_FILES = 200;
-export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+// 보안 한도라 바꿀 수 없다 (설정 화면에는 읽기 전용으로 보인다)
+export const MAX_IMPORT_FILES = daemonDefault("daemon.importMaxFiles");
+export const MAX_IMPORT_BYTES = daemonDefault("daemon.importMaxMb") * 1024 * 1024;
 
 /** 스킬 폴더 기준 상대 경로가 안전한지. 안전하면 정규화한 조각들, 아니면 undefined */
 export function safeRelativeParts(path: string): string[] | undefined {

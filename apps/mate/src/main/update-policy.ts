@@ -1,3 +1,4 @@
+import { appDefault } from "../shared/app-tunables";
 /**
  * Mate 자동 업데이트 규칙 (설계 DESIGN-MATE.md §11). electron 없이 판단하는 순수 함수라 테스트한다.
  * 확인 창의 말과 방식은 Pi Desktop(apps/desktop/src/main/update-policy.ts)과 같게 하되, 앱끼리 import하지 않으려고 따로 둔다.
@@ -120,5 +121,5 @@ export function resultPrompt(status: "none" | "error" | "disabled" | "downloadin
 }
 
 /** 시작한 뒤 처음 확인까지와 그 뒤 확인 간격 */
-export const FIRST_CHECK_MS = 20_000;
-export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const FIRST_CHECK_MS = appDefault("app.updateFirstCheckSec") * 1000;
+export const CHECK_INTERVAL_MS = appDefault("app.updateIntervalHours") * 60 * 60 * 1000;

@@ -4,7 +4,9 @@ import { ModelSelect } from "./PiSetup";
 import type { Act } from "./App";
 import { relativeTime } from "./mate-view";
 import { GrantChips } from "./GrantChips";
+import { describeTunables } from "@pi-desktop/agent-kit/tunables-core";
 import { TunablesPanel } from "@pi-desktop/tunables-ui";
+import { WEB_TUNABLES } from "@pi-desktop/web-shell/tunables";
 import { HostSettings } from "./HostSettings";
 
 /** Mate 전체 설정과 실행기 상태 */
@@ -137,10 +139,13 @@ export function SettingsView({
       </div>
 
       <TunablesPanel
-        load={() => window.mate.tunablesList()}
-        save={(id, value) => window.mate.tunableSet(id, value)}
+        load={async () => {
+          const [runner, local] = await Promise.all([window.mate.tunablesList(), window.mate.appTunablesList()]);
+          return [...runner, ...local, ...describeTunables(WEB_TUNABLES, {})];
+        }}
+        save={(id, value) => (id.startsWith("app.") ? window.mate.appTunableSet(id, value) : window.mate.tunableSet(id, value))}
         onError={(message) => void act(() => Promise.reject(new Error(message)))}
-        file={`${overview.home}/tunables.json`}
+        file={`${overview.home}/tunables.json (실행기), 이 PC 앱 데이터 폴더의 app-tunables.json (앱)`}
         applyNote="실행기가 다음 실행·대화부터 바로 읽습니다. 실행기를 다시 시작할 필요가 없습니다."
       />
 

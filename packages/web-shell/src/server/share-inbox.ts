@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { webDefault } from "../tunables-defs";
 
 /**
  * 휴대폰에 설치한 웹앱으로 "공유"한 이미지 받기 (Web Share Target, manifest의 share_target → POST /ws-share).
@@ -10,9 +11,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
  */
 
 export const SHARE_PATH = "/ws-share";
-const MAX_BYTES = 30 * 1024 * 1024;
-const MAX_FILES = 10;
-const KEEP_MS = 2 * 60_000;
+const MAX_BYTES = webDefault("webShell.shareMaxMb") * 1024 * 1024;
+const MAX_FILES = webDefault("webShell.shareMaxFiles");
+const KEEP_MS = webDefault("webShell.shareKeepSeconds") * 1000;
 const IMAGE_EXT: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", heic: "image/heic" };
 
 interface SharedFile {

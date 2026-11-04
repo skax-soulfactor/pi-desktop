@@ -1,4 +1,5 @@
 import { SERVICE_WORKER_PATH, ShellChannels } from "../protocol";
+import { webDefault } from "../tunables-defs";
 
 /**
  * 휴대폰 알림의 화면 쪽 (설계 DESIGN.md §5.11 "알림"). web-shell 앱(Agent·Mate)과 Pi Web(apps/desktop/src/web)이 함께 쓴다.
@@ -38,7 +39,7 @@ export function reportVisibility(transport: NotifyTransport): void {
 }
 
 const NOTIFY_ASKED_KEY = "pi-web-notify-asked";
-const ASK_AGAIN_MS = 24 * 60 * 60_000;
+const ASK_AGAIN_MS = webDefault("webShell.notifyAskAgainHours") * 60 * 60_000;
 
 /**
  * 휴대폰 알림 (웹 푸시). 서비스 워커를 올리고, 알림이 허용되어 있으면 구독을 서버에 보낸다.
@@ -133,7 +134,7 @@ const OPEN_PARAM = "ws-open";
 const PENDING_CACHE = "ws-pending";
 const PENDING_OPEN = "/ws-pending/open";
 /** 알림을 누른 지 이만큼 지난 맡김은 버린다 */
-const PENDING_MAX_MS = 3 * 60_000;
+const PENDING_MAX_MS = webDefault("webShell.pendingMaxSeconds") * 1000;
 
 /**
  * 휴대폰 알림을 눌러 이 화면이 열리거나 앞으로 왔을 때, 알림의 open 값(서버가 정한다)을 handler에 넘긴다.

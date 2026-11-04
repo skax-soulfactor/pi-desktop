@@ -1,3 +1,5 @@
+import { rnum } from "./app-tunables";
+import { appDefault } from "../shared/app-tunables";
 /**
  * 확장 UI 요청(extension_ui_request)을 화면 상태로 바꾸는 순수 함수 (rpc-extension-ui.md, 설계 §4.1).
  *
@@ -59,7 +61,7 @@ export const initialExtensionUiState: ExtensionUiState = {
 };
 
 /** 이보다 오래된 notify·set_editor_text는 재생된 것으로 보고 무시한다 */
-export const FRESH_MS = 10_000;
+export const FRESH_MS = appDefault("app.extensionUiFreshSeconds") * 1000;
 
 const DIALOGS = new Set<string>(["select", "confirm", "input", "editor"]);
 
@@ -81,7 +83,7 @@ export function applyUiEvent(
   if (event.type !== "extension_ui_request" || typeof event.id !== "string" || typeof event.method !== "string") {
     return next;
   }
-  const fresh = !replay && now - at < FRESH_MS;
+  const fresh = !replay && now - at < rnum("app.extensionUiFreshSeconds") * 1000;
 
   if (DIALOGS.has(event.method)) {
     const timeout = typeof event.timeout === "number" ? event.timeout : undefined;

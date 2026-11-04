@@ -21,6 +21,7 @@ import {
   type DialogRequest,
   type ExtensionUiState,
 } from "./extension-ui-state";
+import { rnum } from "./app-tunables";
 
 type Action =
   | { type: "event"; seq: number; event: unknown }
@@ -93,7 +94,6 @@ function isMissingCwdError(error: unknown): boolean {
  * 이 시간 안에 수정된 세션 파일은 다른 곳(TUI 등)에서 쓰는 중일 수 있다고 본다.
  * TUI는 사용자 입력과 응답이 끝날 때 파일에 덧붙이므로, 대화 중이면 보통 몇 분 안에 수정된다.
  */
-const RECENTLY_WRITTEN_MS = 2 * 60_000;
 
 export interface LostSession extends RememberedSession {
   reason: "missing" | "exited";
@@ -432,7 +432,7 @@ export function useSession(tabId: string = MAIN_TAB) {
       }
       if (mode === "auto") {
         const info = await api().inspectStored(hostRef.current, stored.path);
-        if (!info.ownedBy && !info.closedHere && Date.now() - info.modified < RECENTLY_WRITTEN_MS) {
+        if (!info.ownedBy && !info.closedHere && Date.now() - info.modified < rnum("app.recentlyWrittenMinutes") * 60_000) {
           setPendingOpen(stored);
           return;
         }

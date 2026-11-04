@@ -11,6 +11,7 @@ import {
   writePreview,
   type DiffLine,
 } from "./tool-view";
+import { rnum } from "./app-tunables";
 
 type ToolItem = Extract<ChatItem, { kind: "tool" }>;
 
@@ -22,7 +23,6 @@ export interface ToolCardActions {
 }
 
 /** 한 번에 그리는 diff 줄 수. 넘으면 나머지는 "더 보기"로 */
-const DIFF_PAGE = 400;
 
 /**
  * 툴 호출 카드 (설계 §4.1). 툴마다 알맞은 모양으로 보여준다.
@@ -119,7 +119,7 @@ function DiffCard({ item, lines, onReveal }: { item: ToolItem; lines: DiffLine[]
 }
 
 export function DiffView({ lines }: { lines: DiffLine[] }) {
-  const [shown, setShown] = useState(DIFF_PAGE);
+  const [shown, setShown] = useState(() => rnum("app.diffPageLines"));
   const showNumbers = lines.some((l) => l.oldNo !== undefined || l.newNo !== undefined);
   return (
     <div className="diff">
@@ -142,7 +142,7 @@ export function DiffView({ lines }: { lines: DiffLine[] }) {
         </tbody>
       </table>
       {lines.length > shown && (
-        <button type="button" className="small diff-more" onClick={() => setShown(shown + DIFF_PAGE)}>
+        <button type="button" className="small diff-more" onClick={() => setShown(shown + rnum("app.diffPageLines"))}>
           {lines.length - shown}줄 더 보기
         </button>
       )}

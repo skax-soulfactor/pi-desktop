@@ -91,6 +91,10 @@ export const Methods = {
   archiveSet: "archive.set",
   /** 에이전트 앱의 데이터 함수(agent-kit app-api)를 이 호스트에서 부른다. 데몬 홈이 Agent 홈이다 (DESIGN-APPS.md §6 D4) */
   agentCall: "agent.call",
+  /** 데몬의 설정으로 꺼낸 수치 (DESIGN-APPS.md §7). 데몬 홈의 tunables.json */
+  tunablesList: "tunables.list",
+  /** 데몬 수치 하나를 바꾼다. value가 null이면 기본값으로 되돌린다 */
+  tunableSet: "tunables.set",
   /** Pi 세션 폴더의 기간별 토큰·비용 (Pi Desktop 사용량 화면) */
   usageSummary: "usage.summary",
   storedRead: "stored.read",
@@ -999,6 +1003,12 @@ export interface TrashEmptyResult {
 export interface UsageSummaryParams {
   /** "today" | "7d" | "30d" | "12m" (agent-kit UsageRange) */
   range: string;
+}
+
+export interface TunableSetParams {
+  id: string;
+  /** null이면 기본값으로 되돌린다 */
+  value: number | string | null;
 }
 
 export interface AgentCallParams {

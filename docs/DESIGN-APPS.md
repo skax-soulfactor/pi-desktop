@@ -163,14 +163,15 @@ Agent와 같은 방식으로 Mate 홈에 따로 두고, Pi Desktop의 것은 섞
 ## 7. 설정으로 꺼낸 프롬프트와 수치
 
 앱이 모델에게 주는 지시(프롬프트)와 동작을 정하는 수치를 코드에 박지 않고 **항목 목록(정의)** 으로 모은다.
-사용자는 Agent·Mate 설정 화면의 "프롬프트와 수치"에서 항목마다 **어디에 쓰이는지** 보고, 바꿀 수 있는 것은 고친다.
+사용자는 Agent·Mate 설정 화면의 "프롬프트와 수치"와 Pi Desktop의 Pi 관리 "수치" 탭에서 항목마다 **어디에 쓰이는지** 보고, 바꿀 수 있는 것은 고친다.
 
-| | Agent | Mate |
-|---|---|---|
-| 정의 (기본값·범위·용도·출처) | `packages/agent-kit/src/tunables-defs.ts` | `packages/mate-runner/src/tunables.ts` |
-| 사용자가 바꾼 값 | 그 호스트의 `~/.pi-desktop-agent/data/tunables.json` | 그 호스트의 `~/.pi-desktop-mate/tunables.json` |
-| 읽는 곳 | agent-kit 확장(Pi 안), 데몬의 `agent.call` (`tunablesList`·`tunableSet`) | 실행기, `mate.call` (`tunablesList`·`tunableSet`) |
-| 화면 | 설정 탭 | 설정 탭 |
+| 어디의 값 | 정의 (기본값·범위·용도·출처) | 사용자가 바꾼 값 | 읽는 곳 | 화면 |
+|---|---|---|---|---|
+| Agent (agent-kit) | `packages/agent-kit/src/tunables-defs.ts` | 그 호스트의 `~/.pi-desktop-agent/data/tunables.json` | 확장(Pi 안), 데몬 `agent.call`의 `tunablesList`·`tunableSet` | Agent 설정 |
+| Mate 실행기 | `packages/mate-runner/src/tunables.ts` | 그 호스트의 `~/.pi-desktop-mate/tunables.json` | 실행기, `mate.call`의 `tunablesList`·`tunableSet` | Mate 설정 |
+| Host Agent 데몬 | `packages/host-agent/src/tunables.ts` (id `daemon.*`) | 그 호스트의 데몬 홈(`~/.pi-desktop`, `~/.pi-desktop-agent`)의 `tunables.json` | 데몬, RPC `tunables.list`·`tunables.set` | Pi Desktop Pi 관리 "수치" 탭, Agent 설정 |
+| 앱 본체 (메인·화면, 웹 서버) | 앱마다 `apps/<앱>/src/shared/app-tunables.ts` (id `app.*`) | 이 PC 앱 데이터 폴더(userData, 웹 서버는 그 데이터 폴더)의 `app-tunables.json` | 메인은 `main/app-tunables.ts`, 화면은 시작할 때 받아 둔다 (`tunables-ui/app-tunables`) | 각 앱 설정 |
+| 휴대폰 웹 껍데기 | `packages/web-shell/src/tunables-defs.ts` (id `webShell.*`, 모두 읽기 전용) | 없음 | web-shell 코드가 기본값을 쓴다 | 세 앱 설정 (확인만) |
 
 - **공용 코드**: 형식·검사·자리표시 채우기는 `agent-kit/src/tunables-core.ts`(화면에서도 씀), 파일 읽기·쓰기는 `tunables-store.ts`, 화면 패널은 `packages/tunables-ui`.
 - **저장 파일에는 바꾼 값만** 둔다. 기본값과 같은 값이나 "기본값으로 되돌리기"는 파일에서 뺀다. 그래서 업데이트로 기본값이 바뀌면 바꾸지 않은 항목은 새 기본값을 따른다.
@@ -181,6 +182,11 @@ Agent와 같은 방식으로 Mate 홈에 따로 두고, Pi Desktop의 것은 섞
   - 다른 에이전트와 맞춰야 하는 값: 피어를 거쳐 부르는 깊이
   - 이미 저장된 데이터·세션을 알아보는 표시: 지식베이스 칸 이름, 공유 제외 태그, Mate 관찰자 지시 첫머리
   - 실행기의 기본 박자와 외부 서버에 맞춘 값: Mate 실행기·대화 확인 간격, 텔레그램 롱 폴링 시간
+  - 연결 약속(앱·데몬, 휴대폰 화면·웹 서버가 같은 값): 데몬 인사·인증 줄, 받음 확인 묶음
+  - 보내는 쪽과 받는 쪽이 맞춰야 하는 한도: 가져오기 파일 수·크기 (데몬·GitHub 가져오기)
+  - 보안 한도: 웹 업로드·공유 받기 크기, 내려받기 주소 유효 시간, 휴대폰 연결 코드 유효 시간
+  - 화면을 불러오기 전에 도는 코드의 값: 휴대폰 웹의 다시 연결·이벤트 맡김·알림
 - **글 항목의 자리표시** `{{이름}}`은 실행할 때 실제 값(임무 이름, 도구 이름, 하루 실행 상한 등)으로 바뀐다. 정의의 `placeholders`에 뜻을 적고, 빠지면 화면이 경고한다.
 - 정의를 더할 때: 코드의 상수를 지우고 `agentTunables().num(id)`(Agent)·`mateTunables().num(id)`(Mate)로 읽는다. 앱 화면이 불러오는 순수 파일(예: `schedule/plan.ts`, `memory/types.ts`)은 저장소를 import하지 않고 인자나 `agentDefault(id)`를 쓴다. 정의 점검 테스트(`definitionProblems`)가 id 중복·범위·용도·출처를 본다.
-- **아직 꺼내지 않은 것**: Pi Desktop·Host Agent 데몬·web-shell의 수치(연결·재시도·업로드 한도 등)와 툴·인자 설명문(모델이 언제 어떤 툴을 쓸지 정하는 글). 툴 설명은 코드와 짝이라 바꾸면 업데이트 뒤 어긋날 수 있어 따로 다룬다. Mate 설정(`config.json`)에 이미 있는 값(하루 실행 상한·비용 상한·조용한 시간)은 그 화면에서 바꾼다.
+- **화면 값**: 화면은 파일을 읽지 못하므로 시작할 때 메인(웹이면 웹 서버)에서 받아 두고, 설정 화면에서 바꾸면 그 자리에서 고친다. 받기 전에는 기본값이다.
+- **넣지 않은 것**: 화면 배치 값(입력창 높이 비율, 드래그 판정 픽셀 등), 이름·주소·저장 키 같은 문자열 상수, Agent의 `vendor/`(Pi Desktop에서 복사한 연결·채팅 모듈이라 고치지 않는다 — Agent에서는 그 기본값이 쓰인다), 툴·인자 설명문(모델이 언제 어떤 툴을 쓸지 정하는 글. 코드와 짝이라 바꾸면 업데이트 뒤 어긋날 수 있고, Pi RPC에 툴 목록을 받는 명령이 없어 따로 다룬다). Mate 설정(`config.json`)에 이미 있는 값(하루 실행 상한·비용 상한·조용한 시간)은 그 화면에서 바꾼다.

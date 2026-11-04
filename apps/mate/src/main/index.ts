@@ -25,6 +25,7 @@ import {
 } from "./telegram-setup";
 import { Updater } from "./updater";
 import { newNotes, type NoteState } from "./notifier";
+import { appTunableStore, initAppTunables } from "./app-tunables";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const paths = matePaths(mateHome());
@@ -64,6 +65,8 @@ function localRunnerFiles(): Promise<{ runnerScript: string; kitDir: string }> {
 // 개발 실행은 설치본과 userData(창 상태·단일 인스턴스 잠금)를 나눈다.
 // 같으면 설치본이 켜져 있을 때 개발 실행이 잠금에 걸려 바로 끝나고, 설치본 창을 앞으로 불러낸다.
 if (!app.isPackaged) app.setPath("userData", join(app.getPath("appData"), "Pi Desktop Mate (dev)"));
+// 앱 수치(app-tunables.json)는 userData에 둔다 (DESIGN-APPS.md §7)
+initAppTunables(app.getPath("userData"));
 
 // 개발·E2E 검증용 Chrome DevTools Protocol. 설치본은 환경 변수로 열지 않는다 (Pi Desktop과 같은 이유).
 if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
@@ -332,6 +335,8 @@ function registerIpc(): void {
   forward(IpcChannels.listMcp, "mcpList");
   forward(IpcChannels.tunablesList, "tunablesList");
   forward(IpcChannels.tunableSet, "tunableSet");
+  ipcMain.handle(IpcChannels.appTunablesList, () => appTunableStore().items());
+  ipcMain.handle(IpcChannels.appTunableSet, (_e, id: string, value: number | string | null) => appTunableStore().set(String(id), value));
   forward(IpcChannels.usageSummary, "usageSummary");
   forward(IpcChannels.addMcpPreset, "mcpAddPreset");
   forward(IpcChannels.setMcpEnabled, "mcpSetEnabled");

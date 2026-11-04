@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { PiLatest, PiLocation, PiStatus, PiVersions } from "@pi-desktop/host-protocol";
 import { locatePi, PI_PACKAGE_NAME } from "./pi-locator";
+import { daemonTunables } from "./tunables";
 
 const execFileAsync = promisify(execFile);
 
@@ -184,10 +185,10 @@ async function isDir(path: string): Promise<boolean> {
   }
 }
 
-/** 최신 버전 조회 결과 캐시 (1시간). npm 레지스트리에 자주 묻지 않기 위해서다 */
-const LATEST_TTL_MS = 60 * 60 * 1000;
-/** 조회에 실패했으면 이만큼만 기억한다 */
-const LATEST_ERROR_TTL_MS = 60 * 1000;
+// 최신 버전 조회 결과 캐시. npm 레지스트리에 자주 묻지 않기 위해서다. 실패했으면 짧게만 기억한다
+// (설정으로 꺼냈다: daemon.latestCacheMinutes·latestErrorCacheSeconds)
+const LATEST_TTL_MS = () => daemonTunables().num("daemon.latestCacheMinutes") * 60_000;
+const LATEST_ERROR_TTL_MS = () => daemonTunables().num("daemon.latestErrorCacheSeconds") * 1000;
 let latestCache: { at: number; value: PiLatest } | undefined;
 
 /**
@@ -200,7 +201,7 @@ export async function latestPiVersion(
   now: () => number = Date.now,
 ): Promise<PiLatest> {
   // 실패(네트워크가 아직 안 붙은 WSL 시작 직후 등)는 잠깐만 기억해, 업데이트 표시가 한 시간씩 막히지 않게 한다.
-  const ttl = latestCache?.value.error ? LATEST_ERROR_TTL_MS : LATEST_TTL_MS;
+  const ttl = latestCache?.value.error ? LATEST_ERROR_TTL_MS() : LATEST_TTL_MS();
   if (!force && latestCache && now() - latestCache.at < ttl) return latestCache.value;
   let value: PiLatest;
   try {
@@ -293,7 +294,7 @@ export async function piVersions(
   view: () => Promise<string[]> = npmViewVersions,
   now: () => number = Date.now,
 ): Promise<PiVersions> {
-  if (versionsCache && now() - versionsCache.at < LATEST_TTL_MS) return versionsCache.value;
+  if (versionsCache && now() - versionsCache.at < LATEST_TTL_MS()) return versionsCache.value;
   let value: PiVersions;
   try {
     value = { versions: await view() };

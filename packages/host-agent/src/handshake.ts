@@ -3,6 +3,7 @@ import { chmod, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Socket } from "node:net";
 import { runDir } from "./paths";
+import { daemonDefault } from "./tunables";
 
 /**
  * 데몬 소켓의 상호 인증 (보안 검토, 설계 §3.4).
@@ -20,11 +21,11 @@ import { runDir } from "./paths";
  */
 
 /** 데몬이 인사를 보내지 않으면(예전 데몬) 기다리는 시간 */
-export const HELLO_WAIT_MS = 1500;
+export const HELLO_WAIT_MS = daemonDefault("daemon.helloWaitMs");
 /** 인증 단계 한 줄을 기다리는 최대 시간 */
-const LINE_WAIT_MS = 5000;
+const LINE_WAIT_MS = daemonDefault("daemon.authLineWaitMs");
 /** 인증 줄의 최대 길이 (이보다 길면 프로토콜이 아니다) */
-const MAX_LINE = 1024;
+const MAX_LINE = daemonDefault("daemon.authLineMax");
 
 export function tokenPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(runDir(env), "agentd.token");

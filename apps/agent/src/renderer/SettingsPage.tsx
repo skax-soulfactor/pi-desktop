@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import type { UpdateState } from "../shared/api";
 import { piSetupIssues, type PiSetupView } from "../shared/pi-setup";
 import { PiDesktopButton } from "./PiSetupBanner";
+import { describeTunables } from "@pi-desktop/agent-kit/tunables-core";
 import { TunablesPanel } from "@pi-desktop/tunables-ui";
+import { WEB_TUNABLES } from "@pi-desktop/web-shell/tunables";
 import { HostSettings } from "./HostSettings";
 
 /**
@@ -96,10 +98,26 @@ export function SettingsPage({
         </section>
 
         <TunablesPanel
-          load={() => window.piAgent.tunablesList()}
-          save={(id, value) => window.piAgent.tunableSet(id, value)}
+          load={async () => {
+            const [kit, daemon, local] = await Promise.all([
+              window.piAgent.tunablesList(),
+              window.piAgent.daemonTunablesList().catch((error: unknown) => {
+                onError(`데몬 수치를 읽지 못했습니다 (예전 데몬이면 다시 연결하면 됩니다): ${String(error)}`);
+                return [];
+              }),
+              window.piAgent.appTunablesList(),
+            ]);
+            return [...kit, ...daemon, ...local, ...describeTunables(WEB_TUNABLES, {})];
+          }}
+          save={(id, value) =>
+            id.startsWith("daemon.")
+              ? window.piAgent.daemonTunableSet(id, value)
+              : id.startsWith("app.")
+                ? window.piAgent.appTunableSet(id, value)
+                : window.piAgent.tunableSet(id, value)
+          }
           onError={onError}
-          file="~/.pi-desktop-agent/data/tunables.json (대화가 도는 호스트)"
+          file="대화가 도는 호스트의 ~/.pi-desktop-agent/data/tunables.json(에이전트)·~/.pi-desktop-agent/tunables.json(데몬), 이 PC 앱 데이터 폴더의 app-tunables.json(앱)"
           applyNote="대부분 다음 요청부터 바로 반영됩니다. 도구 설명에 들어가는 값(웹 기본 글자 수, 예약 최소 간격)은 새 대화부터, 예약 확인 간격은 앱을 다시 켠 뒤부터 반영됩니다."
         />
 

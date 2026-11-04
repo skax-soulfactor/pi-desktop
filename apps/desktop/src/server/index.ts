@@ -11,6 +11,7 @@ import { ShellChannels } from "@pi-desktop/web-shell/protocol";
 import { IpcChannels, type UpdateState } from "../shared/api";
 import { ActionLog } from "../main/action-log";
 import { agentVersion } from "../main/agent-build";
+import { initAppTunables } from "../main/app-tunables";
 import { CopyStore } from "../main/copies";
 import { HostManager } from "../main/host-manager";
 import { ImportStore } from "../main/imports";
@@ -106,6 +107,7 @@ registerHandlers(router, {
   // 브라우저는 서버의 OS 대화상자를 띄울 수 없다. 화면은 대신 폴더 탐색 창을 쓴다 (shell === "web")
   pickDirectory: async () => undefined,
   revealPath: () => false,
+  appTunables: initAppTunables(dataDir),
 });
 
 // 앱 자동 업데이트는 데스크톱 앱 것이다. 웹 묶음은 `pi-web update`(설치 스크립트)로 바꾼다.

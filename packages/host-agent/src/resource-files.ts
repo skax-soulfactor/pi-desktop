@@ -4,6 +4,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from "node:p
 import { homedir } from "node:os";
 import type { ExtensionTemplate, ResourceFile, ResourceKind, ResourceWriteResult } from "@pi-desktop/host-protocol";
 import { extensionSource } from "./extension-templates";
+import { daemonDefault, daemonTunables } from "./tunables";
 
 /**
  * 리소스 파일 읽기·쓰기·만들기 (설계 §4.2~4.5, §5.7 ConfigService).
@@ -20,7 +21,8 @@ import { extensionSource } from "./extension-templates";
  */
 
 /** 한 번에 읽고 쓰는 최대 크기 */
-export const MAX_RESOURCE_BYTES = 512 * 1024;
+export const MAX_RESOURCE_BYTES = daemonDefault("daemon.resourceMaxKb") * 1024;
+const maxResourceBytes = () => daemonTunables().num("daemon.resourceMaxKb") * 1024;
 
 const CONTEXT_FILE_NAMES = new Set(["agents.md", "claude.md"]);
 const CODE_EXTENSIONS = new Set([".ts", ".js", ".mts", ".mjs", ".cts", ".cjs"]);
@@ -81,7 +83,7 @@ export async function readResourceFile(path: string, cwd: string, agentDir: stri
   const target = requireResourcePath(path, cwd, agentDir);
   const info = await stat(target).catch(() => undefined);
   if (!info?.isFile()) throw new Error(`파일이 없습니다: ${target}`);
-  if (info.size > MAX_RESOURCE_BYTES) throw new Error(`파일이 너무 큽니다 (${info.size} 바이트): ${target}`);
+  if (info.size > maxResourceBytes()) throw new Error(`파일이 너무 큽니다 (${info.size} 바이트): ${target}`);
   return { path: target, content: await readFile(target, "utf8"), mtimeMs: info.mtimeMs };
 }
 
@@ -104,7 +106,7 @@ export async function writeResourceFile(
   backupDir?: string,
 ): Promise<ResourceWriteResult> {
   const target = requireResourcePath(path, cwd, agentDir);
-  if (Buffer.byteLength(content, "utf8") > MAX_RESOURCE_BYTES) throw new Error("내용이 너무 큽니다");
+  if (Buffer.byteLength(content, "utf8") > maxResourceBytes()) throw new Error("내용이 너무 큽니다");
   const info = await stat(target).catch(() => undefined);
   if (baseMtime === undefined && info) throw new Error(`이미 있는 파일입니다: ${target}`);
   if (baseMtime !== undefined) {

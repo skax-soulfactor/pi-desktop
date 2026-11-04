@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { ChatView } from "../vendor/renderer/ChatView";
 import { StatusLine, Widgets } from "../vendor/renderer/ExtensionUi";
-import { acceptsImages, MAX_IMAGE_BYTES, splitAttachments, withAttachments } from "./attachments";
+import { acceptsImages, splitAttachments, withAttachments } from "./attachments";
+import { useAppNumber } from "./app-number";
 import {
   canReadClipboard,
   enterHint,
@@ -77,6 +78,7 @@ export function ChatPage({
   const [draft, setDraft] = useDraftText(session ? `pi-agent.draft.${session.sessionFile ?? session.sessionId}` : undefined);
   const [renaming, setRenaming] = useState<string>();
   /** 메시지와 함께 보낼 이미지 (보내면 비운다) */
+  const maxImageMb = useAppNumber("app.chatImageMaxMb");
   const [images, setImages] = useState<Array<Required<Pick<ImageAttachment, "name" | "mimeType" | "data">>>>([]);
   // 붙여 둔 이미지를 보관해, 화면이 새로 열려도(휴대폰 공유 등) 남긴다
   useDraftImages(session ? `agent:${session.sessionId}` : undefined, images, setImages);
@@ -171,7 +173,7 @@ export function ChatPage({
     void Promise.all(
       files.map(async (file): Promise<ImageAttachment> => {
         const name = file.name || "붙여 넣은 이미지";
-        if (file.size > MAX_IMAGE_BYTES) return { name, mimeType: file.type, error: "5MB보다 큽니다" };
+        if (file.size > maxImageMb * 1024 * 1024) return { name, mimeType: file.type, error: `${maxImageMb}MB보다 큽니다` };
         return readBase64(file).then(
           (data) => ({ name, mimeType: file.type, data }),
           () => ({ name, mimeType: file.type, error: "읽지 못했습니다" }),

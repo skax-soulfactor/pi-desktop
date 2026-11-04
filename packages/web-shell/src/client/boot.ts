@@ -5,6 +5,7 @@ import { watchSharedImages } from "./share";
 import { showVersion } from "./version";
 import { ResumableTransport, type LinkStatus } from "./transport";
 import "./shell.css";
+import { webDefault } from "../tunables-defs";
 
 /**
  * 웹 껍데기 화면의 시작점 (설계 DESIGN.md §5.11). Electron 앱의 창 자리를 맡는다.
@@ -56,7 +57,7 @@ function store(key: string, value: string): void {
 
 /** 서버에 닿기 전의 알림 누름 (탭 저장소). 화면이 새로 읽혀도 다시 보낸다 */
 const PENDING_CLICK_KEY = "ws-pending-click";
-const PENDING_CLICK_MS = 60_000;
+const PENDING_CLICK_MS = webDefault("webShell.pendingClickSeconds") * 1000;
 /** 서버가 받은 뒤 이만큼 화면이 살아 있으면 처리된 것으로 본다 */
 const PENDING_CLICK_SETTLE_MS = 4_000;
 

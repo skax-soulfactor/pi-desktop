@@ -27,6 +27,7 @@
   "devDependencies": {
     "@pi-desktop/agent-kit": "*",
     "@pi-desktop/host-protocol": "*",
+    "@pi-desktop/tunables-ui": "*",
     "@pi-desktop/web-shell": "*",
     "@pi-desktop/window-state": "*",
     "@types/react": "^19.3.0",

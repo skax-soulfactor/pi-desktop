@@ -1,6 +1,7 @@
 import { mkdir, readdir, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { FsListDirResult } from "@pi-desktop/host-protocol";
+import { daemonDefault, daemonTunables } from "./tunables";
 
 /**
  * 폴더 탐색 창용 하위 폴더 목록 (설계 §5.5, M3).
@@ -12,7 +13,7 @@ import type { FsListDirResult } from "@pi-desktop/host-protocol";
  */
 
 /** 한 폴더에서 돌려줄 최대 하위 폴더 수 */
-export const MAX_DIRS = 2000;
+export const MAX_DIRS = daemonDefault("daemon.dirListMax");
 
 /** 입력 경로를 호스트의 절대 경로로 푼다 */
 export function resolveDirPath(input: string | undefined, home: string): string {
@@ -48,8 +49,8 @@ export async function listDirectories(input: string | undefined, home: string): 
     path,
     ...(parent !== path ? { parent } : {}),
     home: resolve(home),
-    dirs: dirs.slice(0, MAX_DIRS),
-    truncated: dirs.length > MAX_DIRS,
+    dirs: dirs.slice(0, daemonTunables().num("daemon.dirListMax")),
+    truncated: dirs.length > daemonTunables().num("daemon.dirListMax"),
   };
 }
 

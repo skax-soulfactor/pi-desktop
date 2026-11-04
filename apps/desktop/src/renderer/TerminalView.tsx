@@ -27,9 +27,9 @@ import {
   setInputDebug,
   visible as shown,
 } from "./terminal-input-settings";
+import { rnum } from "./app-tunables";
 
 /** 첫 입력은 Pi 화면이 다 그려지고 출력이 이만큼 잠잠해진 뒤 보낸다 */
-const INITIAL_INPUT_QUIET_MS = 1200;
 const MAC = /Mac/.test(navigator.platform);
 /** 손가락으로 쓰는 기기(휴대폰·태블릿)면 기능키 줄을 보이고 끌기로 스크롤한다 (terminal-touch.ts) */
 const TOUCH = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
@@ -167,7 +167,7 @@ export function TerminalView({
           initialSent = true;
           window.piDesktop.terminalWrite(id, spec.initialInput!);
         }
-      }, INITIAL_INPUT_QUIET_MS);
+      }, rnum("app.terminalInputQuietMs"));
     };
 
     const offData = window.piDesktop.onTerminalData((tid, data) => {

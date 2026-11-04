@@ -22,16 +22,18 @@
     "./share-inbox": "./src/server/share-inbox.ts",
     "./push": "./src/server/push.ts",
     "./service-worker": "./src/server/service-worker.ts",
-    "./protocol": "./src/protocol.ts"
+    "./protocol": "./src/protocol.ts",
+    "./tunables": "./src/tunables-defs.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@pi-desktop/agent-kit": "*",
+    "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.2",
-    "ws": "^8.22.0",
     "web-push": "^3.6.7",
-    "@types/web-push": "^3.6.4"
+    "ws": "^8.22.0"
   }
 }

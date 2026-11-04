@@ -1,5 +1,6 @@
 import { DaemonEvents } from "@pi-desktop/host-protocol/messages";
 import { formatTokens } from "./format";
+import { rnum } from "./app-tunables";
 
 /**
  * Pi RPC 이벤트를 채팅 화면 상태로 바꾸는 순수 함수 (설계 §4.1).
@@ -320,9 +321,9 @@ function bashKey(id: unknown): string {
 }
 
 /** 셸 출력이 아주 길면 화면에는 뒷부분만 남긴다 (전체는 Pi가 세션에 저장). */
-const BASH_OUTPUT_LIMIT = 200_000;
 function keepTail(text: string): string {
-  return text.length > BASH_OUTPUT_LIMIT ? `…${text.slice(-BASH_OUTPUT_LIMIT)}` : text;
+  const limit = rnum("app.bashOutputChars");
+  return text.length > limit ? `…${text.slice(-limit)}` : text;
 }
 
 const COMPACTION_REASONS: Record<string, string> = {

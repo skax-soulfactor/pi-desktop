@@ -77,6 +77,10 @@ export const IpcChannels = {
   setAutoLearn: "agent:set-auto-learn",
   tunablesList: "agent:tunables-list",
   tunableSet: "agent:tunable-set",
+  appTunablesList: "agent:app-tunables-list",
+  appTunableSet: "agent:app-tunable-set",
+  daemonTunablesList: "agent:daemon-tunables-list",
+  daemonTunableSet: "agent:daemon-tunable-set",
   listRules: "agent:list-rules",
   removeRule: "agent:remove-rule",
   listAudit: "agent:list-audit",
@@ -278,6 +282,12 @@ export interface AgentApi {
   tunablesList(): Promise<TunableItem[]>;
   /** 값을 바꾼다. null이면 기본값으로 되돌린다 */
   tunableSet(id: string, value: number | string | null): Promise<TunableItem>;
+  /** 이 앱(이 PC의 메인)의 수치 */
+  appTunablesList(): Promise<TunableItem[]>;
+  appTunableSet(id: string, value: number | string | null): Promise<TunableItem>;
+  /** 그 호스트 데몬의 수치 */
+  daemonTunablesList(): Promise<TunableItem[]>;
+  daemonTunableSet(id: string, value: number | string | null): Promise<TunableItem>;
   listRules(): Promise<RuleView[]>;
   removeRule(rule: RuleView): Promise<void>;
   listAudit(): Promise<AuditView[]>;

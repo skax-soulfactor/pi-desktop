@@ -8,9 +8,9 @@ import {
 } from "./activity-view";
 import type { ActionLogEntry } from "../shared/api";
 import { baseName, formatRelative } from "./format";
+import { rnum } from "./app-tunables";
 
 /** 세션 목록을 다시 읽는 주기. 데몬은 붙어 있지 않은 세션의 이벤트를 보내지 않으므로 주기적으로 읽는다 */
-const POLL_MS = 3000;
 /** 이 이벤트가 오면 기다리지 않고 바로 다시 읽는다 */
 const REFRESH_ON = new Set(["agent_start", "agent_settled"]);
 
@@ -45,7 +45,7 @@ export function useActivity(hosts: readonly HostRef[]): ActivityEntry[] {
       if (timer) clearTimeout(timer);
       timer = setTimeout(async () => {
         await load();
-        if (!cancelled) schedule(POLL_MS);
+        if (!cancelled) schedule(rnum("app.activityPollSec") * 1000);
       }, delay);
     };
     schedule(0);

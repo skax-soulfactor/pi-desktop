@@ -1,4 +1,6 @@
 import type { SessionEventNotification } from "@pi-desktop/host-protocol/messages";
+import { rnum } from "./app-tunables";
+import { appDefault } from "../shared/app-tunables";
 
 /**
  * Event Inspector의 이벤트 보관소와 순수 함수들 (설계 §4.11, §1 "모르는 이벤트와 필드는 버리지 않고 raw로").
@@ -8,7 +10,7 @@ import type { SessionEventNotification } from "@pi-desktop/host-protocol/message
  */
 
 /** 세션마다 남기는 최근 이벤트 수 */
-export const KEEP_PER_SESSION = 2000;
+export const KEEP_PER_SESSION = appDefault("app.eventLogPerSession");
 
 export interface LoggedEvent {
   seq: number;
@@ -86,7 +88,7 @@ export class EventLog {
   private sessions = new Map<string, LoggedEvent[]>();
   private listeners = new Set<() => void>();
 
-  constructor(private readonly keep = KEEP_PER_SESSION) {}
+  constructor(private readonly keep = rnum("app.eventLogPerSession")) {}
 
   static key(hostId: string, sessionId: string): string {
     return `${hostId}|${sessionId}`;

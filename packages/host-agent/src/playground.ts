@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { PiLocation, PlaygroundRunResult } from "@pi-desktop/host-protocol";
+import { daemonTunables } from "./tunables";
 
 /**
  * SDK Playground (설계 §4.10): 앱에서 쓴 스크립트를 이 호스트에서 이 호스트의 Pi SDK로 실행한다.
@@ -16,10 +17,7 @@ import type { PiLocation, PlaygroundRunResult } from "@pi-desktop/host-protocol"
  * 사용자가 쓴 코드를 그대로 실행하는 기능이므로 터미널처럼 그 사용자의 권한으로 돈다.
  */
 
-/** 기본 제한 시간 */
-export const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
-/** 출력 한도 (넘으면 그 뒤는 버리고 알린다) */
-export const OUTPUT_LIMIT = 1024 * 1024;
+// 기본 제한 시간과 출력 한도(넘으면 그 뒤는 버리고 알린다)는 설정으로 꺼냈다 (daemon.playground*)
 
 /** 사용자 스크립트 앞에 붙이는 줄: 설치된 Pi의 SDK를 pi로 불러온다 */
 export function playgroundSource(pi: PiLocation, code: string): string {
@@ -58,7 +56,7 @@ export class Playground {
           if (truncated) return;
           const text = chunk.toString("utf8");
           size += text.length;
-          if (size > OUTPUT_LIMIT) {
+          if (size > daemonTunables().num("daemon.playgroundOutputKb") * 1024) {
             truncated = true;
             options.onOutput("stderr", "\n[출력이 너무 많아 여기까지만 보입니다]\n");
             return;
@@ -70,7 +68,7 @@ export class Playground {
         const timer = setTimeout(() => {
           timedOut = true;
           child.kill();
-        }, params.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+        }, params.timeoutMs ?? daemonTunables().num("daemon.playgroundTimeoutSec") * 1000);
         const finish = (exitCode: number | null, signal: string | null) => {
           clearTimeout(timer);
           this.runs.delete(params.runId);

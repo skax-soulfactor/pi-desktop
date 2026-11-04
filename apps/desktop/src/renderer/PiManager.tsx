@@ -5,16 +5,16 @@ import { statusChecks } from "./pi-manager-view";
 import { PiDataPanel } from "./PiDataPanel";
 import { SettingsCopyPanel } from "./SettingsCopyPanel";
 import { SettingsFormPanel } from "./SettingsFormPanel";
+import { TunablesTab } from "./TunablesTab";
 import { HostComparePanel } from "./HostComparePanel";
 import { PiInstallPanel } from "./PiInstallPanel";
 import { PiUpdatePanel } from "./PiUpdatePanel";
 import { ModelsPanel } from "./ModelsPanel";
 import { ProvidersPanel } from "./ProvidersPanel";
+import { rnum } from "./app-tunables";
 
 /** 최신 버전 조회가 실패했을 때 다시 묻는 간격 */
-const LATEST_RETRY_MS = 2 * 60_000;
 /** 최신 버전을 다시 묻는 간격 (데몬 캐시가 1시간이라 그보다 길게) */
-const LATEST_REFRESH_MS = 6 * 60 * 60_000;
 
 /** 한 호스트의 Pi 상태와 최신 버전. 최신 버전은 데몬이 1시간(실패는 1분) 캐시한다 */
 export function usePiStatus(hostId: string, enabled: boolean) {
@@ -53,7 +53,7 @@ export function usePiStatus(hostId: string, enabled: boolean) {
           .then(setLatest)
           .catch(() => {});
       },
-      latest.error ? LATEST_RETRY_MS : LATEST_REFRESH_MS,
+      latest.error ? rnum("app.piLatestRetryMinutes") * 60_000 : rnum("app.piLatestRefreshHours") * 60 * 60_000,
     );
     return () => clearTimeout(timer);
   }, [enabled, hostId, latest]);
@@ -77,7 +77,7 @@ export function PiManager({
   hosts: HostDescriptor[];
   initialHostId: string;
   /** 처음 열 탭 (/settings, /login 등) */
-  initialTab?: "status" | "providers" | "models" | "settings" | "compare";
+  initialTab?: "status" | "providers" | "models" | "settings" | "compare" | "tunables";
   /** 지금 탭의 작업 폴더 (설정의 프로젝트 범위 기본값) */
   projectCwd?: string;
   onClose: () => void;
@@ -91,7 +91,8 @@ export function PiManager({
   const [hostId, setHostId] = useState(initialHostId);
   const { status, latest, error, reload } = usePiStatus(hostId, true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState<"status" | "providers" | "models" | "settings" | "compare">(initialTab);
+  const [tab, setTab] = useState<"status" | "providers" | "models" | "settings" | "compare" | "tunables">(initialTab);
+  const [tunablesError, setTunablesError] = useState<string>();
   const [settingsMode, setSettingsMode] = useState<"edit" | "copy">("edit");
   const checks = status ? statusChecks(status, latest) : [];
 
@@ -130,6 +131,9 @@ export function PiManager({
             </button>
             <button type="button" className={tab === "compare" ? "on" : ""} onClick={() => setTab("compare")}>
               비교
+            </button>
+            <button type="button" className={tab === "tunables" ? "on" : ""} onClick={() => setTab("tunables")} title="앱과 데몬의 동작 수치를 보고 고칩니다">
+              수치
             </button>
           </div>
           <div className="spacer" />
@@ -174,6 +178,8 @@ export function PiManager({
           </>
         )}
         {tab === "compare" && <HostComparePanel hostId={hostId} hosts={hosts} />}
+        {tab === "tunables" && tunablesError && <div className="banner error">{tunablesError}</div>}
+        {tab === "tunables" && <TunablesTab key={hostId} hostId={hostId} onError={setTunablesError} />}
         {tab === "status" && error && <div className="banner error">{error}</div>}
         {tab === "status" && !status && !error && <p className="muted">상태를 읽는 중…</p>}
         {tab === "status" && status && (

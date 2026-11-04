@@ -5,6 +5,7 @@
  * preload가 이 인터페이스만 `window.piDesktop`으로 노출한다 (설계 §5.8).
  */
 import type { UsageRange, UsageSummary } from "@pi-desktop/agent-kit/usage-types";
+import type { TunableItem } from "@pi-desktop/agent-kit/tunables-core";
 import type {
   AuthCheckResult,
   DataBackupResult,
@@ -423,6 +424,13 @@ export interface PiDesktopApi {
   piLatest(hostId: string, force?: boolean): Promise<PiLatest>;
   /** 이 호스트의 Pi가 쓸 수 있는 모델 (pi --list-models). 설정 폼의 프로바이더·모델 선택지 */
   piModels(hostId: string): Promise<PiModelsResult>;
+  /** 이 앱(이 PC의 메인, 웹이면 웹 서버)의 수치 (DESIGN-APPS.md §7) */
+  appTunablesList(): Promise<TunableItem[]>;
+  /** 앱 수치 하나를 바꾼다. null이면 기본값으로 */
+  appTunableSet(id: string, value: number | string | null): Promise<TunableItem>;
+  /** 그 호스트 데몬의 수치 */
+  daemonTunablesList(hostId: string): Promise<TunableItem[]>;
+  daemonTunableSet(hostId: string, id: string, value: number | string | null): Promise<TunableItem>;
   /**
    * Pi 업데이트 (pi update). 끝날 때까지 기다린다. 진행 출력은 onPiUpdateOutput으로 taskId와 함께 온다.
    */
@@ -656,6 +664,10 @@ export const IpcChannels = {
   piStatus: "pi:pi-status",
   piLatest: "pi:pi-latest",
   piModels: "pi:pi-models",
+  appTunablesList: "pi:app-tunables-list",
+  appTunableSet: "pi:app-tunable-set",
+  daemonTunablesList: "pi:daemon-tunables-list",
+  daemonTunableSet: "pi:daemon-tunable-set",
   piVersions: "pi:pi-versions",
   dataBackup: "pi:data-backup",
   dataDelete: "pi:data-delete",

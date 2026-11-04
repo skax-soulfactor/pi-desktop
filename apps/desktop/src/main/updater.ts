@@ -3,8 +3,8 @@ import electronUpdater from "electron-updater";
 import type { UpdateState } from "../shared/api";
 import {
   availablePrompt,
-  CHECK_INTERVAL_MS,
-  FIRST_CHECK_MS,
+  checkIntervalMs,
+  firstCheckMs,
   isLocalBuild,
   releaseUrl,
   restartPrompt,
@@ -65,8 +65,8 @@ export class Updater {
       void this.askRestart();
     });
     autoUpdater.on("error", (error) => this.set({ status: "error", error: error instanceof Error ? error.message : String(error) }));
-    setTimeout(() => void this.check(), FIRST_CHECK_MS).unref?.();
-    setInterval(() => void this.check(), CHECK_INTERVAL_MS).unref?.();
+    setTimeout(() => void this.check(), firstCheckMs()).unref?.();
+    setInterval(() => void this.check(), checkIntervalMs()).unref?.();
   }
 
   get current(): UpdateState {

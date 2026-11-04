@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readFile, stat } from "node:fs/promises";
 import type { PiLocation, SessionHistoryParams, StoredReadResult, StoredSession } from "@pi-desktop/host-protocol";
+import { daemonTunables } from "./tunables";
 
 /**
  * 설치된 Pi의 SDK를 동적으로 불러와 쓴다 (설계 §2 "SDK는 메타데이터 조회에만").
@@ -56,8 +57,7 @@ export function loadPiSdk(pi: PiLocation): Promise<PiSdk> {
   return sdk;
 }
 
-const DEFAULT_LIMIT = 200;
-const FIRST_MESSAGE_MAX = 200;
+// 목록 기본 개수와 첫 질문 길이는 설정으로 꺼냈다 (daemon.sessionListLimit·firstMessageChars)
 
 /** Pi가 저장한 세션 목록. 최근 수정 순. */
 export async function listStoredSessions(sdk: PiSdk, params: SessionHistoryParams): Promise<StoredSession[]> {
@@ -67,7 +67,7 @@ export async function listStoredSessions(sdk: PiSdk, params: SessionHistoryParam
   const sessions = infos
     .map((info) => toStoredSession(info))
     .sort((a, b) => b.modified - a.modified)
-    .slice(0, params.limit ?? DEFAULT_LIMIT);
+    .slice(0, params.limit ?? daemonTunables().num("daemon.sessionListLimit"));
   await markMissingCwds(sessions);
   return sessions;
 }
@@ -97,7 +97,7 @@ function toStoredSession(info: PiSessionInfo): StoredSession {
     created: toMs(info.created),
     modified: toMs(info.modified),
     messageCount: info.messageCount,
-    firstMessage: (info.firstMessage ?? "").slice(0, FIRST_MESSAGE_MAX),
+    firstMessage: (info.firstMessage ?? "").slice(0, daemonTunables().num("daemon.firstMessageChars")),
   };
   if (info.name) session.name = info.name;
   if (info.parentSessionPath) session.parentSessionPath = info.parentSessionPath;

@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { agentBuildId } from "./agent-build";
+import { appNum } from "./app-tunables";
+import { appDefault } from "../shared/app-tunables";
 
 /**
  * 다른 호스트(WSL 배포판, SSH 서버)에 Host Agent를 올리는 공통 절차 (설계 §3.2 "배포와 부트스트랩").
@@ -11,7 +13,7 @@ import { agentBuildId } from "./agent-build";
  */
 
 /** Pi가 요구하는 최소 Node 주 버전 */
-export const MIN_NODE_MAJOR = 22;
+export const MIN_NODE_MAJOR = appDefault("app.minNodeMajor");
 
 /** POSIX 셸용 작은따옴표 인용. 어떤 문자열이든 단일 인자로 전달된다. */
 export function shQuote(value: string): string {
@@ -127,9 +129,8 @@ export function stderrTail(stderr: string): string {
 
 /** 명령을 실행해 표준 출력을 돌려준다. 실패하면 stderr 끝부분을 담은 오류. stdin으로 바이트를 넘길 수 있다. */
 /** 원격 확인·Agent 올리기 명령 하나를 기다리는 최대 시간. 연결은 됐는데 응답이 멈춘 경우에도 끝나게 한다 */
-const RUN_TIMEOUT_MS = 60_000;
 
-export function runCommand(command: string, args: string[], label: string, input?: Buffer, timeoutMs = RUN_TIMEOUT_MS): Promise<string> {
+export function runCommand(command: string, args: string[], label: string, input?: Buffer, timeoutMs = appNum("app.remoteCommandTimeoutSec") * 1000): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
     let stdout = "";
