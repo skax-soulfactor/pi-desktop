@@ -189,4 +189,9 @@ Agent와 같은 방식으로 Mate 홈에 따로 두고, Pi Desktop의 것은 섞
 - **글 항목의 자리표시** `{{이름}}`은 실행할 때 실제 값(임무 이름, 도구 이름, 하루 실행 상한 등)으로 바뀐다. 정의의 `placeholders`에 뜻을 적고, 빠지면 화면이 경고한다.
 - 정의를 더할 때: 코드의 상수를 지우고 `agentTunables().num(id)`(Agent)·`mateTunables().num(id)`(Mate)로 읽는다. 앱 화면이 불러오는 순수 파일(예: `schedule/plan.ts`, `memory/types.ts`)은 저장소를 import하지 않고 인자나 `agentDefault(id)`를 쓴다. 정의 점검 테스트(`definitionProblems`)가 id 중복·범위·용도·출처를 본다.
 - **화면 값**: 화면은 파일을 읽지 못하므로 시작할 때 메인(웹이면 웹 서버)에서 받아 두고, 설정 화면에서 바꾸면 그 자리에서 고친다. 받기 전에는 기본값이다.
-- **넣지 않은 것**: 화면 배치 값(입력창 높이 비율, 드래그 판정 픽셀 등), 이름·주소·저장 키 같은 문자열 상수, Agent의 `vendor/`(Pi Desktop에서 복사한 연결·채팅 모듈이라 고치지 않는다 — Agent에서는 그 기본값이 쓰인다), 툴·인자 설명문(모델이 언제 어떤 툴을 쓸지 정하는 글. 코드와 짝이라 바꾸면 업데이트 뒤 어긋날 수 있고, Pi RPC에 툴 목록을 받는 명령이 없어 따로 다룬다). Mate 설정(`config.json`)에 이미 있는 값(하루 실행 상한·비용 상한·조용한 시간)은 그 화면에서 바꾼다.
+- **툴 설명문** (모델이 언제 어떤 툴을 쓸지 정하는 글): 정의를 따로 두지 않고 코드의 글을 기본값으로 쓴다.
+  - 확장이 `withToolTexts(pi, 홈, 확장 이름)`으로 감싼 pi에 툴을 등록하면, 기본 설명(설명·한 줄 소개·맨 위 인자 설명)을 `<홈>/tool-defaults/<툴>.json`에 적고, `<홈>/tool-texts.json`에 바꾼 글이 있으면 바꿔 넣는다. 그래서 **새 대화부터** 반영된다.
+  - 홈과 id: Agent 툴은 agent-kit 데이터 폴더(`tool.<툴>.*`), Mate 툴은 Mate 홈(`tool.<툴>.*`), 데몬이 싣는 관리 툴(resources_list 등)은 데몬 홈(`daemon.tool.<툴>.*`, 데몬이 `PI_DESKTOP_TOOL_TEXTS_HOME`으로 알린다). 목록은 각 `tunablesList`(데몬은 `tunables.list`)에 함께 나온다.
+  - 툴을 한 번도 등록하지 않았으면(그 앱에서 대화를 연 적이 없으면) 목록에 없다. 업데이트로 기본 설명이 바뀌면 다음 등록 때 다시 적는다.
+  - 도우미 `tool-texts.ts`는 Pi가 소스 그대로 불러와 패키지를 넘어 import할 수 없어 세 곳에 같은 내용으로 둔다(원본 `packages/pi-resources/extensions/tool-texts.ts`, 사본 agent-kit·mate-kit의 `src/`). agent-kit 테스트가 같은지 본다. 관리 툴은 데몬이 소스를 써 둘 때 옆에 함께 써 둔다.
+- **넣지 않은 것**: 화면 배치 값(입력창 높이 비율, 드래그 판정 픽셀 등), 이름·주소·저장 키 같은 문자열 상수, Agent의 `vendor/`(Pi Desktop에서 복사한 연결·채팅 모듈이라 고치지 않는다 — Agent에서는 그 기본값이 쓰인다), 툴 인자의 이름·형식(설명만 바꿀 수 있다), Pi 자체의 내장 툴(read·bash 등). Mate 설정(`config.json`)에 이미 있는 값(하루 실행 상한·비용 상한·조용한 시간)은 그 화면에서 바꾼다.

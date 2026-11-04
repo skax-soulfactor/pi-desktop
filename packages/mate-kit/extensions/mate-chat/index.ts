@@ -2,6 +2,7 @@ import { Type } from "typebox";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendChatQuestion, appendChatAction } from "../../src/chat";
 import { ASK_TOOL, DO_TOOL, MATE_ENV } from "../../src/shared";
+import { withToolTexts } from "../../src/tool-texts";
 
 /**
  * Mate 대화 도구 (설계 DESIGN-MATE.md §13).
@@ -10,6 +11,8 @@ import { ASK_TOOL, DO_TOOL, MATE_ENV } from "../../src/shared";
  * 환경 변수가 없으면(터미널 pi에 설치) 등록하지 않는다.
  */
 export default function mateChatExtension(pi: ExtensionAPI): void {
+  // 툴 설명문은 Mate 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). Mate 홈은 pi-isolation이 알려 준다
+  pi = withToolTexts(pi, process.env.PI_ISOLATION_HOME, "mate-chat");
   const chat = process.env[MATE_ENV.chat];
   const actions = process.env[MATE_ENV.actions];
   const profile = process.env[MATE_ENV.profile];

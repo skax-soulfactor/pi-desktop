@@ -5,6 +5,7 @@ import { attended, isWorker } from "../../src/runtime";
 import { loadTasks, newTaskId, saveTask, tasksDir, type TaskRecord } from "./store";
 import { runWorker } from "./worker";
 import { agentTunables } from "../../src/tunables";
+import { withToolTexts } from "../../src/tool-texts";
 
 // 한 세션에서 동시에 돌릴 워커 수(tasks.maxRunning)와 대화에 넣는 결과 길이(tasks.resultChars)는 설정에서 읽는다 (src/tunables-defs.ts)
 
@@ -18,6 +19,8 @@ export const TASK_MESSAGE = "agent-task";
  * 워커 안에서는 이 도구들을 등록하지 않는다 (일을 다시 맡기며 끝없이 퍼지지 않게).
  */
 export default function tasks(pi: ExtensionAPI): void {
+  // 툴 설명문은 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). 등록할 때 기본값을 적어 두고 바꾼 글로 바꿔 넣는다
+  pi = withToolTexts(pi, dataDir(), "tasks");
   if (isWorker()) return;
   const dir = tasksDir(dataDir());
   const running = new Map<string, { record: TaskRecord; abort: AbortController }>();

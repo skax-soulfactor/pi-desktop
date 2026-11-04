@@ -2,6 +2,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { htmlTitle, htmlToText } from "./html";
 import { agentTunables } from "../../src/tunables";
+import { withToolTexts } from "../../src/tool-texts";
+import { dataDir } from "../permissions/store";
 
 // 받아 올 크기 상한(web.maxKb)·기다리는 시간(web.timeoutSeconds)·기본 글자 수(web.defaultMaxChars)는 설정에서 읽는다 (src/tunables-defs.ts)
 
@@ -13,6 +15,8 @@ import { agentTunables } from "../../src/tunables";
  * 큰 결과는 local-model 확장이 창에 맞게 한 번 더 줄인다.
  */
 export default function web(pi: ExtensionAPI): void {
+  // 툴 설명문은 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). 등록할 때 기본값을 적어 두고 바꾼 글로 바꿔 넣는다
+  pi = withToolTexts(pi, dataDir(), "web");
   const defaultMaxChars = agentTunables().num("web.defaultMaxChars");
   pi.registerTool({
     name: "web_fetch",

@@ -9,6 +9,7 @@ import { pdfText } from "./pdf";
 import { recordUsage } from "../../src/usage";
 import { dataDir } from "../permissions/store";
 import { agentTunables } from "../../src/tunables";
+import { withToolTexts } from "../../src/tool-texts";
 
 /**
  * 큰 문서 처리 (설계 DESIGN-AGENT.md §4 "큰 입력 처리", "docx 첨부 변환").
@@ -20,6 +21,8 @@ import { agentTunables } from "../../src/tunables";
  * .docx·.pdf는 본문 글을 뽑아 다룬다(pdf.ts). read 도구로 읽을 수 없으므로, 읽기만 할 때도 이 도구를 쓴다.
  */
 export default function documents(pi: ExtensionAPI): void {
+  // 툴 설명문은 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). 등록할 때 기본값을 적어 두고 바꾼 글로 바꿔 넣는다
+  pi = withToolTexts(pi, dataDir(), "documents");
   pi.registerTool({
     name: "process_document",
     label: "문서 처리",

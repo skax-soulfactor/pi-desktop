@@ -22,6 +22,7 @@ import {
   upsertByTitle,
   type KnowledgeEntry,
 } from "./store";
+import { withToolTexts } from "../../src/tool-texts";
 
 /** 시스템 프롬프트에서 지식베이스가 들어가는 섹션 이름 (XML 태그 이름이 된다) */
 export const MEMORY_SECTION = agentDefault<string>("memory.sectionName");
@@ -38,6 +39,8 @@ export const MEMORY_SECTION = agentDefault<string>("memory.sectionName");
  * - 피어 질문에 답하는 워커에는 사용자(user) 항목과 "공유제외" 태그 항목을 싣지 않는다.
  */
 export default function memory(pi: ExtensionAPI): void {
+  // 툴 설명문은 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). 등록할 때 기본값을 적어 두고 바꾼 글로 바꿔 넣는다
+  pi = withToolTexts(pi, dataDir(), "memory");
   const dir = memoryDir(dataDir());
   /** 마지막 실행의 메시지 (agent_end에서 받아 agent_settled에서 쓴다) */
   let lastRun: readonly unknown[] | undefined;

@@ -8,6 +8,7 @@ import { runWorker } from "../tasks/worker";
 import { describeSchedule, dueSchedules, firstRun, invalidReason, markStarted, type Schedule, type ScheduleKind } from "./plan";
 import { loadSchedules, newScheduleId, schedulesPath, updateSchedules } from "./store";
 import { agentTunables } from "../../src/tunables";
+import { withToolTexts } from "../../src/tool-texts";
 
 // 확인 간격(schedule.tickSeconds)과 동시에 돌리는 수(schedule.maxRunning)는 설정에서 읽는다 (src/tunables-defs.ts)
 
@@ -21,6 +22,8 @@ import { agentTunables } from "../../src/tunables";
  * 사람이 없는 워커에서는 쓰기·실행·네트워크가 모두 거부되므로, 예약 실행은 읽고 정리해 알리는 일에 맞다.
  */
 export default function schedule(pi: ExtensionAPI): void {
+  // 툴 설명문은 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). 등록할 때 기본값을 적어 두고 바꾼 글로 바꿔 넣는다
+  pi = withToolTexts(pi, dataDir(), "schedule");
   if (isWorker()) return;
   const dir = dataDir();
   const path = schedulesPath(dir);

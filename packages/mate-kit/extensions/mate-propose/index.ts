@@ -2,6 +2,7 @@ import { Type } from "typebox";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendProposal, installError, makeProposal } from "../../src/proposal";
 import { MATE_ENV, PROPOSE_TOOL, type InstallProposal, type Severity } from "../../src/shared";
+import { withToolTexts } from "../../src/tool-texts";
 
 /**
  * `mate_propose`: 사용자에게 알릴 것·제안할 일을 Mate 인박스에 남긴다 (설계 DESIGN-MATE.md §5).
@@ -9,6 +10,8 @@ import { MATE_ENV, PROPOSE_TOOL, type InstallProposal, type Severity } from "../
  * 인박스 위치 환경 변수가 없으면(터미널 pi에 설치) 도구를 등록하지 않는다.
  */
 export default function mateProposeExtension(pi: ExtensionAPI): void {
+  // 툴 설명문은 Mate 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). Mate 홈은 pi-isolation이 알려 준다
+  pi = withToolTexts(pi, process.env.PI_ISOLATION_HOME, "mate-propose");
   const inbox = process.env[MATE_ENV.inbox];
   if (!inbox) return;
   const ids = { dutyId: process.env[MATE_ENV.dutyId] ?? "manual", runId: process.env[MATE_ENV.runId] ?? "manual" };

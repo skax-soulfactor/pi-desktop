@@ -156,8 +156,24 @@ export function manageSource(): string {
   return readFileSync(fileURLToPath(new URL("../../pi-resources/extensions/manage.ts", import.meta.url)), "utf8");
 }
 
-/** 내용 해시를 이름에 넣은 관리 확장 파일을 dir에 두고 그 경로를 돌려준다 */
+declare const __TOOL_TEXTS_SOURCE__: string | undefined;
+
+/** 관리 툴이 `./tool-texts`로 import하는 툴 설명문 도우미 (DESIGN-APPS.md §7) */
+export function toolTextsSource(): string {
+  if (typeof __TOOL_TEXTS_SOURCE__ === "string") return __TOOL_TEXTS_SOURCE__;
+  return readFileSync(fileURLToPath(new URL("../../pi-resources/extensions/tool-texts.ts", import.meta.url)), "utf8");
+}
+
+/** 내용 해시를 이름에 넣은 관리 확장 파일을 dir에 두고 그 경로를 돌려준다. import하는 tool-texts.ts도 옆에 둔다 */
 export async function ensureManage(dir: string): Promise<string> {
+  await mkdir(dir, { recursive: true });
+  const helper = join(dir, "tool-texts.ts");
+  const helperSource = toolTextsSource();
+  if (!existsSync(helper) || readFileSync(helper, "utf8") !== helperSource) {
+    const tmp = `${helper}.${process.pid}.tmp`;
+    await writeFile(tmp, helperSource, "utf8");
+    await rename(tmp, helper);
+  }
   const source = manageSource();
   const hash = createHash("sha256").update(source).digest("hex").slice(0, 12);
   const path = join(dir, `pi-desktop-manage-${hash}.ts`);

@@ -1,6 +1,6 @@
 // Pi Desktop·Agent가 Pi를 띄울 때 -e로 넣는 확장입니다 (DESIGN-APPS.md §3.5 3단계).
 // 에이전트가 대화로 자기 앱의 스킬·프롬프트·MCP 서버·Pi 패키지를 보고 고칠 수 있게 한다.
-// Pi가 소스 그대로 불러오고(Pi Desktop은 데몬이 문자열로 써 둔다) node 내장 모듈과 Pi가 넣어 주는 typebox 말고는 import하지 않는다.
+// Pi가 소스 그대로 불러오고(Pi Desktop은 데몬이 문자열로 써 둔다) node 내장 모듈과 Pi가 넣어 주는 typebox, 옆에 같이 써 두는 ./tool-texts 말고는 import하지 않는다.
 //
 // - 관리하는 홈: PI_RESOURCES_HOME (Agent: 앱 홈). 없으면 Pi 설정 폴더 (Pi Desktop: ~/.pi/agent)
 // - 고치기 전에 묻는다 (ctx.ui.confirm). Agent는 permissions 확장이 대신 물으므로 PI_RESOURCES_CONFIRM=0
@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFile
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Type } from "typebox";
+import { withToolTexts } from "./tool-texts";
 
 type Json = Record<string, unknown>;
 
@@ -167,6 +168,8 @@ const text = (t: string) => ({ content: [{ type: "text" as const, text: t }], de
 const AFTER = () => (appHome() ? "새 대화부터 적용됩니다." : "지금 세션에 쓰려면 /reload, 아니면 새 세션부터 적용됩니다.");
 
 export default function manage(pi: any): void {
+  // 툴 설명문은 Pi Desktop·Agent 설정에서 바꿀 수 있다 (DESIGN-APPS.md §7). 데몬이 홈을 알려 줄 때만 (id는 daemon.tool.*)
+  pi = withToolTexts(pi, process.env.PI_DESKTOP_TOOL_TEXTS_HOME, "manage", "daemon.");
   const confirmFirst = process.env.PI_RESOURCES_CONFIRM !== "0";
   const kinds = process.env.PI_RESOURCES_NO_SKILL === "1" ? ["prompt"] : ["skill", "prompt"];
   const ask = async (ctx: any, title: string, body: string) => {
