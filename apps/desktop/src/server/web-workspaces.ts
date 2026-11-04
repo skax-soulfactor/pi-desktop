@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PluginWorkspaceId, WorkspacesState } from "../shared/api";
+import type { WebEmbed } from "@pi-desktop/web-shell/embed";
 
 /**
  * 휴대폰 웹의 작업 공간 (설계 DESIGN-ONE-APP.md P4).
@@ -26,9 +27,14 @@ function alive(pidFile: string): boolean {
 }
 
 /** dataDir: Pi Web 서버의 데이터 폴더 ($PI_WEB_HOME/data) */
-export function webWorkspacesState(dataDir: string): WorkspacesState {
+export function webWorkspacesState(dataDir: string, embed?: WebEmbed): WorkspacesState {
   return {
     plugins: PLUGINS.map((p) => {
+      // 한 프로세스로 띄웠으면(pi-web start) 그 서버가 알린 주소를 쓴다
+      if (embed) {
+        const url = embed.urls[p.id];
+        return url ? { id: p.id, name: p.name, enabled: true, url } : { id: p.id, name: p.name, enabled: false, reason: "띄우지 못했습니다 (pi-web log)" };
+      }
       const dir = join(dataDir, "..", p.id);
       const urlFile = join(dir, "url");
       // 서버가 뜨면 url을 쓰고(pi-web이 켤 때 지운다), pi-web이 pid를 적는다. pid 파일이 없으면(직접 띄움) url만 본다

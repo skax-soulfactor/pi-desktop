@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { parseArgs } from "node:util";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Methods, type SessionEventNotification, type SessionSummary } from "@pi-desktop/host-protocol";
 import { listenWebServer } from "@pi-desktop/web-shell/http-server";
 import { isLoopbackAddress } from "@pi-desktop/web-shell/auth";
@@ -21,6 +21,7 @@ import { SshHostStore } from "../main/ssh-hosts";
 import { TerminalService } from "../main/terminal";
 import { WebRouter } from "./web-router";
 import { webWorkspacesState } from "./web-workspaces";
+import { setWebEmbed, type WebEmbed } from "@pi-desktop/web-shell/embed";
 import { sessionNote } from "./session-notify";
 import { FileManager } from "./file-manager";
 import { FILE_DOWNLOAD_PATH, FileChannels, sessionOpenValue } from "../shared/web-files";
@@ -41,6 +42,8 @@ const { values: flags } = parseArgs({
     port: { type: "string" },
     host: { type: "string" },
     home: { type: "string" },
+    // Agent·Mate 웹 서버를 이 프로세스에서 함께 띄운다 (pi-web start). 각자 자기 포트(8788·8789)에서 듣는다
+    workspaces: { type: "boolean" },
   },
 });
 
@@ -51,6 +54,20 @@ const dataDir = flags.home ?? process.env.PI_WEB_DATA ?? join(homedir(), ".pi-we
 const publicDir = process.env.PI_WEB_PUBLIC ?? join(here, "public");
 const agentScript = process.env.PI_DESKTOP_AGENT_SCRIPT ?? join(here, "host-agent", "host-agent.mjs");
 const loopbackOnly = isLoopbackAddress(listenHost);
+
+/**
+ * 한 프로세스로 띄우는 Agent·Mate 웹 서버 (--workspaces, DESIGN-ONE-APP.md). 데이터 폴더는 pi-web과 같게 Pi Web 데이터 폴더 옆의 agent·mate.
+ * 서버 묶음(agent/server.mjs·mate/server.mjs)은 Pi Web이 뜬 뒤에 불러온다 (아래 loadWorkspaces).
+ */
+const embed: WebEmbed | undefined = flags.workspaces
+  ? {
+      host: listenHost,
+      agent: { port: Number(process.env.PI_WEB_AGENT_PORT ?? 8788), dataDir: join(dataDir, "..", "agent") },
+      mate: { port: Number(process.env.PI_WEB_MATE_PORT ?? 8789), dataDir: join(dataDir, "..", "mate") },
+      urls: {},
+      shutdowns: [],
+    }
+  : undefined;
 
 function appVersion(): string {
   try {
@@ -119,7 +136,7 @@ router.handle(IpcChannels.confirmUpdate, () => undefined);
 router.handle(IpcChannels.installUpdate, () => undefined);
 router.handle(IpcChannels.openRelease, () => undefined);
 // 작업 공간 (DESIGN-ONE-APP.md P4): 함께 뜬 Agent·Mate 웹 서버를 작업 공간 막대에 띄운다. 켜고 끄기는 pi-web 명령이 한다
-router.handle(IpcChannels.workspacesState, () => webWorkspacesState(dataDir));
+router.handle(IpcChannels.workspacesState, () => webWorkspacesState(dataDir, embed));
 router.handle(IpcChannels.setWorkspaceEnabled, () => {
   throw new Error("휴대폰 웹에서는 pi-web 명령으로 켜고 끕니다 (pi-web agent start, pi-web mate stop)");
 });
@@ -183,6 +200,13 @@ if (!loopbackOnly) console.log(`주의: ${listenHost}에 열었습니다. 같은
 
 // 서버를 꺼도 각 호스트의 데몬과 Pi 세션은 계속 돈다. 연결기와 터미널만 정리한다 (설계 §3.4).
 function shutdown(): void {
+  for (const close of embed?.shutdowns ?? []) {
+    try {
+      close();
+    } catch {
+      // 하나가 실패해도 나머지는 끈다
+    }
+  }
   terminals.dispose();
   hosts.dispose();
   running.close();
@@ -190,3 +214,18 @@ function shutdown(): void {
 }
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+/** Agent·Mate 웹 서버를 이 프로세스에서 띄운다. 하나가 실패해도 Pi Web과 다른 하나는 그대로 둔다 */
+async function loadWorkspaces(config: WebEmbed): Promise<void> {
+  setWebEmbed(config);
+  for (const id of ["agent", "mate"] as const) {
+    const entry = join(here, id, "server.mjs");
+    if (!existsSync(entry)) continue;
+    try {
+      await import(pathToFileURL(entry).href);
+    } catch (error) {
+      console.error(`${id === "agent" ? "Agent" : "Mate"} 작업 공간을 띄우지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+}
+if (embed) await loadWorkspaces(embed);

@@ -3,11 +3,12 @@
 #
 #   pi-web [앱] [명령]
 #
-# 앱:   (없음)  start·stop·restart·status·url은 세 앱 모두, 그 밖의 명령은 Pi Desktop
-#       desktop Pi Desktop  — Pi 관리·로그인·채팅 (포트 8787). Agent·Mate가 켜져 있으면 화면 아래 작업 공간 막대로 함께 연다
-#       agent   Agent 작업 공간 — 승인·지식베이스·스킬·예약 작업 (포트 8788)
-#       mate    Mate 작업 공간 — 임무 시간표·인박스·텔레그램 (포트 8789)
-#       all     세 앱 모두 (start·stop·restart·status·url)
+# 앱:   (없음)  Pi Web과 Agent·Mate 작업 공간을 한 프로세스로 (포트 8787·8788·8789). 화면 아래 작업 공간 막대로 바꾼다
+#               log·open·update 등 그 밖의 명령은 Pi Web
+#       desktop Pi Web만 — Pi 관리·로그인·채팅 (포트 8787)
+#       agent   Agent만 따로 — 승인·지식베이스·스킬·예약 작업 (포트 8788)
+#       mate    Mate만 따로 — 임무 시간표·인박스·텔레그램 (포트 8789)
+#       all     (없음)과 같다
 # 명령: start(기본: 켜고 브라우저를 연다) | run(앞에서 실행) | stop | restart | status | url | open | log
 #       update | uninstall | version (앱과 상관없이 묶음 전체)
 #
@@ -88,6 +89,9 @@ show_url() {
   fi
 }
 
+# 한 프로세스로 띄울 때 Pi Web 서버에 주는 인자 (Agent·Mate 서버를 함께 불러온다)
+EXTRA_ARGS=""
+
 start() {
   if [ ! -f "$APP_DIR/server.mjs" ]; then
     echo "$NAME이(가) 이 묶음에 없습니다. pi-web update로 업데이트하세요." >&2
@@ -102,7 +106,7 @@ start() {
   mkdir -p "$DATA_DIR"
   rm -f "$URL_FILE"
   wake_lock
-  PI_WEB_DATA="$DATA_DIR" nohup node "$APP_DIR/server.mjs" --port "$PORT" ${PI_WEB_HOST:+--host "$PI_WEB_HOST"} "$@" >>"$LOG" 2>&1 &
+  PI_WEB_DATA="$DATA_DIR" nohup node "$APP_DIR/server.mjs" --port "$PORT" ${PI_WEB_HOST:+--host "$PI_WEB_HOST"} $EXTRA_ARGS "$@" >>"$LOG" 2>&1 &
   echo $! >"$PID_FILE"
   # 서버가 주소 파일을 쓰면 뜬 것이다
   i=0
@@ -154,26 +158,18 @@ case "${1:-}" in
 esac
 cmd=${1:-start}
 [ $# -gt 0 ] && shift
+[ "$target" = all ] && target=""
 if [ -z "$target" ]; then
+  # 한 프로세스: Pi Web 서버가 Agent·Mate 서버를 함께 불러온다 (--workspaces). pid·기록은 Pi Web 것 하나
+  target=desktop
   case "$cmd" in
-    start | stop | restart | status | url) target=all ;;
-    *) target=desktop ;;
-  esac
-fi
-
-if [ "$target" = all ]; then
-  case "$cmd" in
-    start | stop | restart | status | url)
-      # Agent·Mate를 먼저 켠다: Pi Desktop 화면이 열릴 때 작업 공간 막대에 바로 보이게
-      for a in agent mate desktop; do
-        # 브라우저는 Pi Desktop 하나만 연다
-        if [ "$a" = desktop ]; then sh "$0" "$a" "$cmd" "$@"; else PI_WEB_NO_OPEN=1 sh "$0" "$a" "$cmd" "$@"; fi
+    start | restart | run) EXTRA_ARGS="--workspaces" ;;
+    stop)
+      # 따로 띄운 Agent·Mate(pi-web agent start 등)도 함께 끈다
+      for a in agent mate; do
+        use_app "$a"
+        if running; then stop; fi
       done
-      exit 0
-      ;;
-    *)
-      echo "all과 함께 쓰는 명령은 start·stop·restart·status·url입니다." >&2
-      exit 1
       ;;
   esac
 fi
@@ -185,7 +181,7 @@ case "$cmd" in
   run)
     mkdir -p "$DATA_DIR"
     wake_lock
-    PI_WEB_DATA="$DATA_DIR" exec node "$APP_DIR/server.mjs" --port "$PORT" ${PI_WEB_HOST:+--host "$PI_WEB_HOST"} "$@"
+    PI_WEB_DATA="$DATA_DIR" exec node "$APP_DIR/server.mjs" --port "$PORT" ${PI_WEB_HOST:+--host "$PI_WEB_HOST"} $EXTRA_ARGS "$@"
     ;;
   stop) stop ;;
   restart)

@@ -68,7 +68,7 @@ Mate ───────── mate-runner → pi --mode json -e mate-kit     
 
 ## Android 휴대폰에서 쓰기 (웹 버전 pi-web)
 
-세 앱은 휴대폰 브라우저에서 쓰는 웹 버전 **pi-web**도 있습니다 (`pi-web start`가 세 앱을 함께 켜고, Pi Web 화면 아래 막대에서 Agent·Mate로 바꿉니다. 하나만 켜려면 `pi-web desktop|agent|mate start`). Electron 앱은 Android에서 돌지 않으므로, 휴대폰의 [Termux](https://termux.dev)에서 Pi와 웹 서버를 돌리고 휴대폰 브라우저(Chrome·삼성 인터넷)로 같은 화면을 엽니다. VS Code의 code-server와 같은 방식입니다 (설계 §5.10).
+세 앱은 휴대폰 브라우저에서 쓰는 웹 버전 **pi-web**도 있습니다 (`pi-web start`가 세 앱을 한 프로세스로 켜고, Pi Web 화면 아래 막대에서 Agent·Mate로 바꿉니다. 하나만 켜려면 `pi-web desktop|agent|mate start`). Electron 앱은 Android에서 돌지 않으므로, 휴대폰의 [Termux](https://termux.dev)에서 Pi와 웹 서버를 돌리고 휴대폰 브라우저(Chrome·삼성 인터넷)로 같은 화면을 엽니다. VS Code의 code-server와 같은 방식입니다 (설계 §5.10).
 
 ```bash
 curl -fsSL https://github.com/skax-soulfactor/pi-desktop/releases/latest/download/install-termux.sh | bash

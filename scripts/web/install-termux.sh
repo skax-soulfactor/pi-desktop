@@ -173,15 +173,18 @@ LLM 로그인: 화면의 "프로바이더"에서 API 키를 넣습니다. OAuth 
 EOF
 
 if [ -n "$was_running" ]; then
-  # 업데이트: 켜져 있던 것만 다시 켠다 (브라우저는 Pi Desktop이 켜져 있었으면 그것만 연다)
-  for app in $was_running; do
-    # 하나를 켜지 못해도 나머지는 켠다
-    if [ "$app" = desktop ]; then
-      sh "$PI_WEB_HOME/app/bin/pi-web" desktop start || warn "Pi Web을 다시 켜지 못했습니다 (pi-web log)"
-    else
-      PI_WEB_NO_OPEN=1 sh "$PI_WEB_HOME/app/bin/pi-web" "$app" start || warn "pi-web $app을 다시 켜지 못했습니다 (pi-web $app log)"
-    fi
-  done
+  # 업데이트: 켜져 있던 것만 다시 켠다. Pi Web이 켜져 있었으면 Agent·Mate 작업 공간과 한 프로세스로 켠다 (브라우저도 그것만 연다)
+  case " $was_running " in
+    *" desktop "*)
+      sh "$PI_WEB_HOME/app/bin/pi-web" start || warn "Pi Web을 다시 켜지 못했습니다 (pi-web log)"
+      ;;
+    *)
+      for app in $was_running; do
+        # 하나를 켜지 못해도 나머지는 켠다
+        PI_WEB_NO_OPEN=1 sh "$PI_WEB_HOME/app/bin/pi-web" "$app" start || warn "pi-web $app을 다시 켜지 못했습니다 (pi-web $app log)"
+      done
+      ;;
+  esac
 elif [ "$START" = 1 ]; then
   sh "$PI_WEB_HOME/app/bin/pi-web" start
 fi
