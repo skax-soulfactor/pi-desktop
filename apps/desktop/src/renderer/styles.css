@@ -2032,13 +2032,22 @@ button .spinner {
   max-width: calc(100vw - 32px);
 }
 
-/* 머리줄: 글자는 줄바꿈하지 않고, 창이 좁으면 항목 단위로 다음 줄로 넘긴다 */
+/* 머리줄: 글자는 줄바꿈하지 않고, 창이 좁으면 항목 단위로 다음 줄로 넘긴다.
+   항목이 많은 탭(수치 등)을 아래로 내려도 호스트·탭·닫기가 보이도록 창 위쪽에 붙여 둔다.
+   창의 안쪽 여백(.modal padding-top)만큼 위로 올려 붙이고, 같은 만큼 안쪽을 채워 글자 자리는 그대로 둔다 */
 .pi-manager-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
+  position: sticky;
+  top: calc(-1 * var(--pi-manager-pad-top, 18px));
+  z-index: 2;
+  margin-top: calc(-1 * var(--pi-manager-pad-top, 18px));
+  padding: var(--pi-manager-pad-top, 18px) 0 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
 }
 
 .pi-manager-head > *,
@@ -3601,6 +3610,10 @@ details > summary.settings-section {
     max-width: none;
     max-height: calc(100dvh - 16px);
     padding: 12px;
+  }
+
+  .modal {
+    --pi-manager-pad-top: 12px;
   }
 
   .settings-copy-head {
