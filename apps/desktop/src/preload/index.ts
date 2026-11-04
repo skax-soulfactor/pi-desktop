@@ -16,7 +16,15 @@ const page = globalThis as unknown as { top: unknown; location: { protocol: stri
 const topFrame = page.top === globalThis;
 const appFile = page.location.protocol === "file:";
 
-if (topFrame) {
+// 프레임 주소로 고른다. 작업 공간을 새 창으로 열면 그 앱 화면이 창의 맨 위 페이지가 된다 (main/index.ts openWorkspaceWindow)
+const isAgent = appFile && /\/renderer\/agent\/index\.html$/.test(page.location.pathname);
+const isMate = appFile && /\/renderer\/mate\/index\.html$/.test(page.location.pathname);
+
+if (isAgent) {
+  contextBridge.exposeInMainWorld("piAgent", createAgentApi(ipcRenderer));
+} else if (isMate) {
+  contextBridge.exposeInMainWorld("mate", createMateApi(ipcRenderer));
+} else if (topFrame) {
   const api = createPiDesktopApi(
     {
       invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
@@ -30,8 +38,4 @@ if (topFrame) {
     "electron",
   );
   contextBridge.exposeInMainWorld("piDesktop", api);
-} else if (appFile && /\/renderer\/agent\/index\.html$/.test(page.location.pathname)) {
-  contextBridge.exposeInMainWorld("piAgent", createAgentApi(ipcRenderer));
-} else if (appFile && /\/renderer\/mate\/index\.html$/.test(page.location.pathname)) {
-  contextBridge.exposeInMainWorld("mate", createMateApi(ipcRenderer));
 }

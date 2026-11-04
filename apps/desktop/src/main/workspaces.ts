@@ -56,6 +56,8 @@ export class Workspaces {
   private mateStarted = false;
   private readyWaiters: Partial<Record<PluginWorkspaceId, Array<() => void>>> = {};
   private readySet: Partial<Record<PluginWorkspaceId, boolean>> = {};
+  /** 새 창으로 연 작업 공간 (D4). 창 안의 iframe과 함께 쓴다 */
+  private readonly detached = new Map<PluginWorkspaceId, BrowserWindow>();
   /** 작업 공간을 보지 않는 동안 생긴 알림 수 (막대에 보인다) */
   private unread: Partial<Record<PluginWorkspaceId, number>> = {};
 
@@ -152,8 +154,27 @@ export class Workspaces {
   }
 
   /** 플러그인이 알림을 띄웠다: 그 작업 공간을 보고 있지 않으면 막대에 수를 올린다 (셸의 알림 모음) */
+  /** 새 창으로 연 작업 공간 창 (없거나 닫혔으면 undefined) */
+  windowOf(id: PluginWorkspaceId): BrowserWindow | undefined {
+    const win = this.detached.get(id);
+    return win && !win.isDestroyed() ? win : undefined;
+  }
+
+  /** 새 창을 이 작업 공간의 창으로 둔다 (main/index.ts가 만들어 넘긴다) */
+  attachWindow(id: PluginWorkspaceId, win: BrowserWindow): void {
+    this.detached.set(id, win);
+    win.on("closed", () => {
+      if (this.detached.get(id) === win) this.detached.delete(id);
+    });
+  }
+
+  /** 사용자가 이 작업 공간을 지금 보고 있는가 (창 안에서든, 새 창에서든) */
+  private viewing(id: PluginWorkspaceId): boolean {
+    return (Boolean(this.host.window()?.isFocused()) && this.active === id) || Boolean(this.windowOf(id)?.isFocused());
+  }
+
   private notified(id: PluginWorkspaceId): void {
-    if (this.host.window()?.isFocused() && this.active === id) return;
+    if (this.viewing(id)) return;
     this.unread[id] = (this.unread[id] ?? 0) + 1;
     this.host.sendToShell(IpcChannels.workspacesChanged);
   }
@@ -172,15 +193,22 @@ export class Workspaces {
   }
 
   /** Agent 화면에 메뉴 명령을 보낸다 (Agent 작업 공간을 보는 동안의 메뉴바) */
-  agentMenuCommand(id: string): void {
-    this.sendTo("agent", AgentChannels.menuCommand, id);
+  /** win을 주면 그 창(새 창으로 연 작업 공간)에만 보낸다 */
+  agentMenuCommand(id: string, win?: BrowserWindow): void {
+    if (win) for (const frame of this.frames("agent", win)) frame.send(AgentChannels.menuCommand, id);
+    else this.sendTo("agent", AgentChannels.menuCommand, id);
   }
 
-  private frames(id: PluginWorkspaceId): WebFrameMain[] {
-    const win = this.host.window();
-    if (!win || win.isDestroyed()) return [];
+  /** 그 작업 공간 화면의 프레임: Pi Desktop 창 안의 iframe과 새 창 (only를 주면 그 창 것만) */
+  private frames(id: PluginWorkspaceId, only?: BrowserWindow): WebFrameMain[] {
     const url = pathToFileURL(this.host.rendererFile(id)).href;
-    return win.webContents.mainFrame.framesInSubtree.filter((f) => f !== win.webContents.mainFrame && f.url.split("#")[0] === url);
+    const windows = only ? [only] : [this.host.window(), this.windowOf(id)];
+    const frames: WebFrameMain[] = [];
+    for (const win of windows) {
+      if (!win || win.isDestroyed()) continue;
+      for (const frame of win.webContents.mainFrame.framesInSubtree) if (frame.url.split("#")[0] === url) frames.push(frame);
+    }
+    return frames;
   }
 
   private sendTo(id: PluginWorkspaceId, channel: string, ...args: unknown[]): void {
@@ -195,6 +223,17 @@ export class Workspaces {
 
   /** 창을 앞으로 가져와 그 작업 공간을 보이고, then은 화면이 뜬 뒤에 부른다 (알림을 누름) */
   reveal(id: WorkspaceId, then?: () => void): void {
+    // 새 창으로 연 작업 공간이면 그 창을 앞으로
+    const own = id === "pi" ? undefined : this.windowOf(id);
+    if (own) {
+      if (own.isMinimized()) own.restore();
+      own.show();
+      own.focus();
+      if (!then) return;
+      if (own.webContents.isLoading()) own.webContents.once("did-finish-load", then);
+      else then();
+      return;
+    }
     const win = this.host.window();
     if (win?.isMinimized()) win.restore();
     win?.show();
@@ -215,7 +254,7 @@ export class Workspaces {
     this.agent ??= createAgentMain({
       window: () => this.host.window(),
       send: (channel, ...args) => this.sendTo("agent", channel, ...args),
-      isViewing: () => Boolean(this.host.window()?.isFocused()) && this.active === "agent",
+      isViewing: () => this.viewing("agent"),
       onNotify: () => this.notified("agent"),
       reveal: (then) => this.reveal("agent", then),
       reload: () => this.reload("agent"),
@@ -237,6 +276,7 @@ export class Workspaces {
   }
 
   private stopAgent(): void {
+    this.windowOf("agent")?.close();
     if (!this.agentStarted) return;
     this.agent?.dispose();
     this.agentStarted = false;
@@ -253,7 +293,7 @@ export class Workspaces {
     this.mate ??= createMateMain({
       window: () => this.host.window(),
       send: (channel, ...args) => this.sendTo("mate", channel, ...args),
-      isViewing: () => Boolean(this.host.window()?.isFocused()) && this.active === "mate",
+      isViewing: () => this.viewing("mate"),
       onNotify: () => this.notified("mate"),
       reveal: (then) => this.reveal("mate", then),
       reload: () => this.reload("mate"),
@@ -276,6 +316,7 @@ export class Workspaces {
   }
 
   private stopMate(): void {
+    this.windowOf("mate")?.close();
     if (!this.mateStarted) return;
     this.mate?.dispose();
     this.mateStarted = false;

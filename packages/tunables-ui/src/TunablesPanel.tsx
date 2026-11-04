@@ -22,13 +22,25 @@ export interface TunablesPanelProps {
   file: string;
   /** 바꾼 값이 언제 반영되는지 (앱마다 다르다) */
   applyNote: string;
+  /**
+   * 작업 공간으로 거르기 (Pi Desktop의 한 목록: Pi·Agent·Mate). 항목 id의 접두("agent:" 등)로 가른다.
+   * 접두가 없는 항목은 defaultScope. 생략하면 거르기 단추를 보이지 않는다
+   */
+  scopes?: { defaultScope: string; prefixes: Record<string, string> };
+}
+
+/** 항목이 속한 작업 공간 이름 */
+function scopeOf(id: string, scopes: NonNullable<TunablesPanelProps["scopes"]>): string {
+  for (const [prefix, label] of Object.entries(scopes.prefixes)) if (id.startsWith(prefix)) return label;
+  return scopes.defaultScope;
 }
 
 /**
  * 설정으로 꺼낸 프롬프트와 수치 (설계 DESIGN-APPS.md §7). Agent·Mate 설정 화면이 함께 쓴다.
  * 항목마다 용도·기본값·범위·출처를 보이고, 바꿀 수 있는 항목은 고치고 되돌린다. 읽기 전용 항목은 값과 까닭만 보인다.
  */
-export function TunablesPanel({ load, save, onError, file, applyNote }: TunablesPanelProps) {
+export function TunablesPanel({ load, save, onError, file, applyNote, scopes }: TunablesPanelProps) {
+  const [scope, setScope] = useState<string>();
   const [items, setItems] = useState<TunableItem[]>();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TunableFilter>("all");
@@ -36,7 +48,9 @@ export function TunablesPanel({ load, save, onError, file, applyNote }: Tunables
   useEffect(() => {
     void refresh();
   }, []);
-  const groups = useMemo(() => groupTunables(items ?? [], query, filter), [items, query, filter]);
+  const scoped = useMemo(() => (scopes && scope ? (items ?? []).filter((i) => scopeOf(i.id, scopes) === scope) : (items ?? [])), [items, scopes, scope]);
+  const groups = useMemo(() => groupTunables(scoped, query, filter), [scoped, query, filter]);
+  const scopeNames = scopes ? [scopes.defaultScope, ...Object.values(scopes.prefixes)] : [];
   const changed = items?.filter((i) => i.overridden).length ?? 0;
   const lockedCount = items?.filter((i) => i.locked).length ?? 0;
 
@@ -75,6 +89,15 @@ export function TunablesPanel({ load, save, onError, file, applyNote }: Tunables
                 </button>
               ))}
             </div>
+            {scopes && (
+              <div className="tun-filters" role="group" aria-label="작업 공간">
+                {[undefined, ...scopeNames].map((name) => (
+                  <button key={name ?? "all"} type="button" className={scope === name ? "tun-filter on" : "tun-filter"} onClick={() => setScope(name)}>
+                    {name ?? "모든 작업 공간"}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {groups.length === 0 && <p className="muted">맞는 항목이 없습니다.</p>}
           {groups.map((group) => (
