@@ -85,6 +85,11 @@ export function createMateApi(ipcRenderer: IpcRenderer): MateApi {
       ipcRenderer.on(IpcChannels.changed, handler);
       return () => ipcRenderer.removeListener(IpcChannels.changed, handler);
     },
+    onOpenTab: (listener) => {
+      const handler = (_e: unknown, tab: string) => listener(String(tab));
+      ipcRenderer.on(IpcChannels.openTab, handler);
+      return () => ipcRenderer.removeListener(IpcChannels.openTab, handler);
+    },
   };
   return api;
 }

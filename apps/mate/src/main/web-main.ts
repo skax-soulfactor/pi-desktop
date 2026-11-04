@@ -39,11 +39,12 @@ const mate = createMateMain({
   window: () => mainWindow,
   send: sendToWindow,
   isViewing: () => mainWindow?.isFocused() ?? false,
-  reveal: () => {
+  reveal: (then) => {
     if (!mainWindow) createWindow();
     if (mainWindow?.isMinimized()) mainWindow.restore();
     mainWindow?.show();
     mainWindow?.focus();
+    then?.();
   },
   reload: () => mainWindow?.webContents.reload(),
   get userData() {

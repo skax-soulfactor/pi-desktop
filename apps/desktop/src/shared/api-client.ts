@@ -85,6 +85,8 @@ export function createPiDesktopApi(t: ApiTransport, shell: PiDesktopApi["shell"]
     appTunablesList: () => t.invoke(IpcChannels.appTunablesList),
     appTunableSet: (id, value) => t.invoke(IpcChannels.appTunableSet, id, value),
     daemonTunablesList: (hostId) => t.invoke(IpcChannels.daemonTunablesList, hostId),
+    workspaceTunablesList: (id, kind) => t.invoke(workspaceTunableChannel(id, kind, "list")),
+    workspaceTunableSet: (id, kind, itemId, value) => t.invoke(workspaceTunableChannel(id, kind, "set"), itemId, value),
     daemonTunableSet: (hostId, id, value) => t.invoke(IpcChannels.daemonTunableSet, hostId, id, value),
     searchFiles: (hostId, cwd, query) => t.invoke(IpcChannels.searchFiles, hostId, cwd, query),
     listDir: (hostId, path) => t.invoke(IpcChannels.listDir, hostId, path),
@@ -126,6 +128,7 @@ export function createPiDesktopApi(t: ApiTransport, shell: PiDesktopApi["shell"]
     workspaceShown: (id) => t.invoke(IpcChannels.workspaceShown, id),
     workspaceReady: (id) => t.invoke(IpcChannels.workspaceReady, id),
     onShowWorkspace: (listener) => t.on(IpcChannels.showWorkspace, (id) => listener(id as never)),
+    revealWorkspace: (id) => t.invoke(IpcChannels.revealWorkspace, id),
     onWorkspacesChanged: (listener) => t.on(IpcChannels.workspacesChanged, () => listener()),
     onUpdateState: (listener) => t.on(IpcChannels.updateStateChanged, (state) => listener(state as Parameters<typeof listener>[0])),
     logAction: (entry) => t.invoke(IpcChannels.logAction, entry),
@@ -153,4 +156,10 @@ export function createPiDesktopApi(t: ApiTransport, shell: PiDesktopApi["shell"]
     onPlaygroundOutput: (listener) => subscribe(t, IpcChannels.playgroundOutput, listener),
     onPiUpdateOutput: (listener) => subscribe(t, IpcChannels.piUpdateOutput, listener),
   };
+}
+
+/** Agent·Mate 작업 공간의 수치 IPC 채널 (apps/agent·mate의 shared/api.ts IpcChannels와 같은 이름) */
+function workspaceTunableChannel(id: "agent" | "mate", kind: "kit" | "daemon" | "app", action: "list" | "set"): string {
+  const name = kind === "daemon" ? "daemon-tunable" : kind === "app" ? "app-tunable" : "tunable";
+  return `${id}:${name}${action === "list" ? "s-list" : "-set"}`;
 }

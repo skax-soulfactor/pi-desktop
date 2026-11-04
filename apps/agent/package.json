@@ -11,8 +11,8 @@
   "main": "out/main/index.js",
   "scripts": {
     "predev": "npm run build -w @pi-desktop/host-agent",
-    "dev": "electron-vite dev",
-    "dev:mock": "node scripts/dev-mock.mjs",
+    "dev": "npm run start:all -w @pi-desktop/desktop",
+    "dev:mock": "npm run dev:mock:all -w @pi-desktop/desktop",
     "dev:web": "node scripts/dev-mock.mjs --web",
     "build": "electron-vite build",
     "build:web": "npm run build -w @pi-desktop/host-agent && node scripts/build-web.mjs",

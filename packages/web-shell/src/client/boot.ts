@@ -5,6 +5,7 @@ import { watchSharedImages } from "./share";
 import { showVersion } from "./version";
 import { ResumableTransport, type LinkStatus } from "./transport";
 import "./shell.css";
+import { installDrawer } from "./drawer";
 import { webDefault } from "../tunables-defs";
 
 /**
@@ -172,38 +173,6 @@ async function start(options: BootOptions, token: string): Promise<void> {
   void setupNotifications(transport, options.title).catch((error: unknown) => console.warn("알림을 준비하지 못했습니다", error));
 }
 
-
-/** 좁은 화면의 위쪽 띠(☰ 이름)와 옆 메뉴 서랍. 서랍 안의 단추를 누르면 (그 일을 한 뒤) 닫는다 */
-function installDrawer(title: string, drawer: NonNullable<BootOptions["drawer"]>): void {
-  const body = document.body;
-  body.classList.add("ws-has-bar");
-  const bar = el("div", "ws-bar");
-  const toggle = el("button", "ws-bar-toggle", "☰");
-  toggle.type = "button";
-  toggle.setAttribute("aria-label", "메뉴 열기");
-  bar.append(toggle, el("span", "ws-bar-title", title));
-  const backdrop = el("div", "ws-drawer-backdrop");
-  const set = (open: boolean) => {
-    body.classList.toggle("ws-drawer-open", open);
-    toggle.setAttribute("aria-expanded", String(open));
-  };
-  toggle.addEventListener("click", () => set(!body.classList.contains("ws-drawer-open")));
-  backdrop.addEventListener("click", () => set(false));
-  body.append(bar, backdrop);
-  document.addEventListener(
-    "click",
-    (event) => {
-      if (!body.classList.contains("ws-drawer-open")) return;
-      const target = event.target as Element | null;
-      const button = target?.closest("button, a, [role=menuitem]");
-      if (!button || !button.closest(drawer.panel)) return;
-      if (drawer.keepOpen && button.closest(drawer.keepOpen)) return;
-      // 앱이 클릭을 처리한 뒤 닫는다
-      setTimeout(() => set(false), 0);
-    },
-    true,
-  );
-}
 
 /** 서버가 시키는 일을 화면 위에 띄운다 (앱 화면과 섞이지 않게 body 끝에 둔다) */
 class ShellUi {

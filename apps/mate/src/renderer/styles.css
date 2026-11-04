@@ -120,10 +120,67 @@ textarea {
 }
 .brand {
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* 탭 줄: 창이 좁으면 옆으로 밀어 보고, 가려진 쪽은 끝을 흐리게 하고 ‹ › 단추를 보인다 (ScrollTabs.tsx) */
+.tabs-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
 }
 .tabs {
   display: flex;
   gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tabs button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.tabs-wrap.more-left .tabs {
+  mask-image: linear-gradient(to right, transparent 0, #000 36px);
+}
+.tabs-wrap.more-right .tabs {
+  mask-image: linear-gradient(to left, transparent 0, #000 36px);
+}
+.tabs-wrap.more-left.more-right .tabs {
+  mask-image: linear-gradient(to right, transparent 0, #000 36px, #000 calc(100% - 36px), transparent 100%);
+}
+.tabs-more {
+  display: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 13px;
+  font-size: 16px;
+  line-height: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
+}
+.tabs-more.left {
+  left: 0;
+}
+.tabs-more.right {
+  right: 0;
+}
+.tabs-wrap.more-left .tabs-more.left,
+.tabs-wrap.more-right .tabs-more.right {
+  display: block;
+}
+.runner-status {
+  flex-shrink: 0;
 }
 .tabs button {
   background: none;

@@ -432,6 +432,12 @@ export interface PiDesktopApi {
   daemonTunablesList(hostId: string): Promise<TunableItem[]>;
   daemonTunableSet(hostId: string, id: string, value: number | string | null): Promise<TunableItem>;
   /**
+   * Agent·Mate 작업 공간의 프롬프트와 수치 (합친 앱에서 Pi 관리 "수치" 한 목록으로 보인다).
+   * 그 작업 공간의 IPC 처리기(agent:·mate:)를 그대로 부른다. kind: kit(Agent 확장)·runner(Mate 실행기)·daemon(Agent 데몬)·app(그 작업 공간 앱 수치)
+   */
+  workspaceTunablesList(id: PluginWorkspaceId, kind: WorkspaceTunableKind): Promise<TunableItem[]>;
+  workspaceTunableSet(id: PluginWorkspaceId, kind: WorkspaceTunableKind, itemId: string, value: number | string | null): Promise<TunableItem>;
+  /**
    * Pi 업데이트 (pi update). 끝날 때까지 기다린다. 진행 출력은 onPiUpdateOutput으로 taskId와 함께 온다.
    */
   piUpdate(hostId: string, target: PiUpdateTarget, taskId: string, force?: boolean): Promise<PiUpdateResult>;
@@ -541,6 +547,8 @@ export interface PiDesktopApi {
   workspaceReady(id: PluginWorkspaceId): Promise<void>;
   /** main이 작업 공간을 보이라고 할 때 (알림을 누름·메뉴바) */
   onShowWorkspace(listener: (id: WorkspaceId) => void): () => void;
+  /** 창을 앞으로 가져와 그 작업 공간을 보인다 (Pi 화면의 알림을 누름). 웹에서는 아무것도 하지 않는다 */
+  revealWorkspace(id: WorkspaceId): Promise<void>;
   /** 작업 공간 상태가 바뀌었다 (읽지 않은 알림 수 등). workspacesState를 다시 읽는다 */
   onWorkspacesChanged(listener: () => void): () => void;
   /** 작업 기록 (최근 것부터) */
@@ -667,6 +675,7 @@ export const IpcChannels = {
   workspaceReady: "pi:workspace-ready",
   showWorkspace: "pi:show-workspace",
   workspacesChanged: "pi:workspaces-changed",
+  revealWorkspace: "pi:reveal-workspace",
   logAction: "pi:log-action",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",
@@ -719,6 +728,7 @@ export const IpcChannels = {
 
 /** 작업 공간 (DESIGN-ONE-APP.md): "pi"는 Pi Desktop 화면, 나머지는 내장 플러그인 */
 export type PluginWorkspaceId = "agent" | "mate";
+export type WorkspaceTunableKind = "kit" | "daemon" | "app";
 export type WorkspaceId = "pi" | PluginWorkspaceId;
 
 export interface WorkspacesState {

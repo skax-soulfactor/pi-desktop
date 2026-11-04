@@ -1,13 +1,12 @@
-# Pi Desktop Agent
+# Agent 작업 공간
 
-> **0.7.0부터 Agent는 Pi Desktop 창 안의 작업 공간입니다** ([DESIGN-ONE-APP.md](../../docs/DESIGN-ONE-APP.md)). 이 폴더의 본체(`src/main/agent-main.ts`)·화면·웹 서버를 Pi Desktop이 씁니다.
-> 단독 앱(`src/main/index.ts`)은 옛 설치본을 위한 징검다리만 남았습니다: 열면 "Pi Desktop으로 합쳐졌습니다"를 보이고 Pi Desktop을 엽니다. 아래 설명의 화면·기능은 Agent 작업 공간에서 그대로입니다.
+Pi를 엔진으로 쓰는 개인 에이전트입니다. **Pi Desktop 창 안의 작업 공간**이며 (0.6.x까지는 따로 설치하는 Pi Desktop Agent 앱), 기능은 Pi 패키지인
+[`packages/agent-kit`](../../packages/agent-kit)(확장·스킬)으로 구현합니다. 창 왼쪽 막대의 **A**로 엽니다.
 
-Pi를 엔진으로 쓰는 데스크톱 에이전트입니다. 0.6.x까지는 Pi Desktop과 **별도의 앱**이었으며, 기능은 Pi 패키지인
-[`packages/agent-kit`](../../packages/agent-kit)(확장·스킬)으로 구현합니다.
-
-- 설계: [docs/DESIGN-AGENT.md](../../docs/DESIGN-AGENT.md)
-- 현재 단계: P0~P4(골격·승인·로컬 모델·기본 기능·백그라운드)를 마치고 P5(네트워크·피어 작업·권한 상승)를 진행 중이며, `agent-v*` 릴리스로 배포 중. 단계별 메모는 설계 §5
+- 설계: [docs/DESIGN-AGENT.md](../../docs/DESIGN-AGENT.md), 한 앱으로 합친 구조는 [docs/DESIGN-ONE-APP.md](../../docs/DESIGN-ONE-APP.md)
+- 이 폴더: 본체(`src/main/agent-main.ts`)·preload API(`src/preload/api.ts`)·화면(`src/renderer`)·휴대폰 웹 서버(`src/server`, `src/main/web-main.ts`)를 Pi Desktop이 씁니다.
+  단독 앱(`src/main/index.ts`)은 옛 설치본을 위한 징검다리만 남았습니다: 열면 "Pi Desktop으로 합쳐졌습니다"를 보이고 Pi Desktop을 엽니다.
+- 현재 단계: P0~P4(골격·승인·로컬 모델·기본 기능·백그라운드)를 마치고 P5(네트워크·피어 작업·권한 상승)를 진행 중. 단계별 메모는 설계 §5
 - 남은 확인: qwen3.5:9b 로컬 모델 실측(설계 §7 절차), 중계 서버는 설계만(설계 §8)
 
 ## 화면
@@ -39,7 +38,7 @@ Pi를 엔진으로 쓰는 데스크톱 에이전트입니다. 0.6.x까지는 Pi 
 ## 구조
 
 ```
-apps/agent/            이 앱 (main · preload · React 렌더러)
+apps/agent/            Agent 작업 공간 (본체 · preload API · React 화면 · 웹 서버)
 packages/agent-kit     에이전트 기능 묶음 (Pi 패키지: 확장·스킬, 터미널 pi에도 설치 가능)
 packages/host-agent    Pi Desktop과 같은 Host Agent (데몬 홈만 따로 씀)
 packages/pi-isolation  앱 홈의 데이터만 Pi에 올리는 실행 옵션과 MCP·문맥 파일 확장 (Mate와 함께 씀)
@@ -52,31 +51,23 @@ packages/pi-isolation  앱 홈의 데이터만 Pi에 올리는 실행 옵션과 
 
 ## 실행
 
-API 키 없이 mock LLM으로 실행합니다 (포트 18912, Pi Desktop의 dev:mock과 동시에 띄울 수 있음).
+Pi Desktop을 세 작업 공간과 함께 띄웁니다. API 키 없이 mock LLM으로:
 
 ```bash
 npm run dev:mock -w @pi-desktop/agent
 ```
 
+(= `npm run dev:mock:all -w @pi-desktop/desktop`). 빌드한 앱을 띄우므로 화면을 고쳤으면 다시 실행합니다.
+
 - 프롬프트 예: `안녕` → echo, `read:package.json` → read 툴 호출(묻지 않음), `bash:echo hi` → 승인 화면, `/agent:status` → agent-kit 버전 알림
-- 데몬 홈은 저장소의 `.dev/agent-home`, Pi 설정은 `.dev/pi-agent`로 격리됩니다.
+- Agent 데몬 홈은 저장소의 `.dev/agent-home`(환경 변수 `PI_DESKTOP_AGENT_DAEMON_HOME`), Pi 설정은 `.dev/pi-agent`로 격리됩니다.
+- 설치된 Pi로 띄울 때는 `npm run dev -w @pi-desktop/agent` (= `npm run start:all -w @pi-desktop/desktop`).
+- 휴대폰 웹의 Agent만 띄울 때는 `npm run dev:web -w @pi-desktop/agent` (데이터는 `.dev/agent-web`).
 
-설치된 Pi로 실행할 때는 `npm run dev -w @pi-desktop/agent`를 씁니다.
+## 설치와 릴리스
 
-## 설치 파일과 릴리스
-
-```bash
-npm run dist -w @pi-desktop/agent
-```
-
-지금 OS용 설치 파일을 `apps/agent/release/`에 만듭니다 (올리지 않음). 설치본은 Host Agent 번들과 agent-kit 소스를 리소스로 싣고,
-**대상 PC에 설치된 Pi**(`npm install -g @earendil-works/pi-coding-agent`)를 씁니다.
-
-릴리스는 0.6.4부터 세 앱이 함께 나갑니다. `v`로 시작하는 태그를 올리면 `.github/workflows/release.yml`이 세 앱을 세 OS에서 만들어
-이 저장소의 GitHub Releases 한 릴리스에 올립니다 (규칙은 저장소 [CLAUDE.md](../../CLAUDE.md) §3).
-Agent의 자동 업데이트 정보는 Pi Desktop의 latest.yml과 겹치지 않게 agent.yml·agent-linux.yml(·agent-mac.yml)입니다.
-
-Actions 탭에서 "Release"를 손으로 돌리면 만들기만 하고 올리지 않습니다. 코드 서명은 하지 않습니다 ([루트 README의 "코드 서명"](../../README.md#코드-서명)).
+Agent는 Pi Desktop 설치 파일에 들어 있습니다 (Host Agent 번들, agent-kit·pi-isolation 소스를 리소스로 싣는다). **대상 PC에 설치된 Pi**를 씁니다.
+릴리스·코드 서명은 [루트 README](../../README.md#설치)를 보세요. 옛 단독 Agent 설치본은 v0.7.0 릴리스의 징검다리(`Pi-Desktop-Agent-*`, `agent*.yml`)로 마지막 업데이트를 받습니다.
 
 ## 테스트
 

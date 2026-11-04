@@ -1,13 +1,12 @@
-# Pi Desktop Mate
-
-> **0.7.0부터 Mate는 Pi Desktop 창 안의 작업 공간입니다** ([DESIGN-ONE-APP.md](../../docs/DESIGN-ONE-APP.md)). 이 폴더의 본체(`src/main/mate-main.ts`)·화면·웹 서버를 Pi Desktop이 쓰고, "로그인할 때 실행기 시작"은 Pi Desktop을 `--mate-runner-only`로 띄운다.
-> 단독 앱(`src/main/index.ts`)은 옛 설치본을 위한 징검다리만 남았습니다: 자기 로그인 항목을 Pi Desktop에 넘기고 "Pi Desktop으로 합쳐졌습니다"를 보입니다.
+# Mate 작업 공간
 
 묻기 전에 먼저 살펴보고 알려 주는 **능동형 코딩 동료**. 정한 때에 Pi가 작업 폴더를 읽기만 하며 살펴보고, 결과와 제안을 인박스에 남긴다.
-설계는 [docs/DESIGN-MATE.md](../../docs/DESIGN-MATE.md).
+**Pi Desktop 창 안의 작업 공간**이다 (0.6.x까지는 따로 설치하는 Pi Desktop Mate 앱). 창 왼쪽 막대의 **M**으로 연다.
 
-Pi Desktop(`apps/desktop`)·Pi Desktop Agent(`apps/agent`)와는 별도 앱이다. 데이터 홈도 따로 쓴다(`~/.pi-desktop-mate`).
-Pi 설정·로그인(`~/.pi/agent`)은 같이 쓰므로 API 키를 다시 넣을 필요가 없다.
+- 설계: [docs/DESIGN-MATE.md](../../docs/DESIGN-MATE.md), 한 앱으로 합친 구조는 [docs/DESIGN-ONE-APP.md](../../docs/DESIGN-ONE-APP.md)
+- 이 폴더: 본체(`src/main/mate-main.ts`)·preload API·화면·휴대폰 웹 서버(`src/server`, `src/main/web-main.ts`)를 Pi Desktop이 쓴다.
+  단독 앱(`src/main/index.ts`)은 옛 설치본을 위한 징검다리만 남았다: 자기 로그인 항목을 Pi Desktop에 넘기고 "Pi Desktop으로 합쳐졌습니다"를 보인다.
+- 데이터 홈은 따로 쓴다(`~/.pi-desktop-mate`). Pi 설정·로그인(`~/.pi/agent`)은 같이 쓰므로 API 키를 다시 넣을 필요가 없다.
 
 ## 구성
 
@@ -79,18 +78,20 @@ PC의 실행기가 텔레그램에 바깥으로만 연결하므로 포트를 열
 
 ## 설치와 릴리스
 
-- 설치 파일: GitHub Releases의 `v*` 릴리스에서 `Pi-Desktop-Mate-`로 시작하는 파일 (0.6.3까지는 `mate-v*` 릴리스. Windows `Pi-Desktop-Mate-Setup-*.exe`, macOS dmg, Linux AppImage/deb). 코드 서명이 없어 처음 실행할 때 경고가 나올 수 있다 ([루트 README의 "코드 서명"](../../README.md#코드-서명)).
-- 릴리스 만들기: 0.6.4부터 세 앱이 함께 나간다. `v`로 시작하는 태그를 올리면 `.github/workflows/release.yml`이 세 앱을 만들어 한 릴리스에 올린다. Mate의 자동 업데이트 정보는 mate.yml·mate-linux.yml(·mate-mac.yml)이다.
-- **자동 업데이트**(v0.3.0부터): 새 버전이 나오면 상단에 "새 버전" 배지가 뜨고, 누르면 내려받아 다시 시작할 때 설치한다(Windows·AppImage. macOS는 릴리스 페이지 안내). 설정의 "업데이트 확인"으로 바로 확인할 수 있다. v0.2.0 이하는 v0.3.0을 한 번 직접 설치해야 한다.
-- 로컬에서 만들기: `npm run dist -w @pi-desktop/mate` (지금 OS용, 결과는 `apps/mate/release/`)
+- Mate는 Pi Desktop 설치 파일에 들어 있습니다 (mate-runner·mate-kit·pi-isolation을 리소스로 싣는다). 릴리스·코드 서명은 [루트 README](../../README.md#설치)를 보세요.
+- 업데이트는 Pi Desktop이 맡습니다. 설치 직전에 이 PC의 실행기를 멈춰, 실행기가 앱 실행 파일을 잡고 있지 않게 합니다.
+- **로그인할 때 실행기 시작**(설정): Pi Desktop을 `--mate-runner-only`로 띄우는 로그인 항목을 둡니다. 창 없이 실행기만 확인하고 끝납니다. Mate 작업 공간을 끄면 함께 꺼집니다.
+- 옛 단독 Mate 설치본은 v0.7.0 릴리스의 징검다리(`Pi-Desktop-Mate-*`, `mate*.yml`)로 마지막 업데이트를 받고, 자기 로그인 항목을 Pi Desktop에 넘깁니다.
 
 ## 개발
+
+Pi Desktop을 세 작업 공간과 함께 띄웁니다. API 키 없이 mock LLM으로:
 
 ```bash
 npm run dev:mock -w @pi-desktop/mate
 ```
 
-API 키 없이 mock LLM(포트 18913)으로 띄운다. Mate 홈은 `.dev/mate-home`, Pi 설정은 `.dev/mate-pi-agent`라 실제 데이터와 Pi Desktop·Agent 개발 실행을 건드리지 않는다.
+(= `npm run dev:mock:all -w @pi-desktop/desktop`). 빌드한 앱을 띄우므로 화면을 고쳤으면 다시 실행합니다. Mate 홈은 `.dev/mate-home`(기본 모델은 mock), Pi 설정은 `.dev/pi-agent`라 실제 데이터를 건드리지 않는다.
 임무 지시에 다음을 넣으면 mock이 그대로 행동한다.
 
 - `안녕` → `echo: 안녕` (보고 결과 확인)

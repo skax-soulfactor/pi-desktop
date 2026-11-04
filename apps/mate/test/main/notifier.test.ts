@@ -26,12 +26,12 @@ describe("PC 알림 (notifier)", () => {
       }),
     );
     expect(next.notes).toEqual([
-      { title: "Mate의 질문", body: "웹 검색을 켤까요?" },
-      { title: "임무 완료: 아침 날씨", body: "서울 맑음" },
+      { title: "Mate의 질문", body: "웹 검색을 켤까요?", target: "chat" },
+      { title: "임무 완료: 아침 날씨", body: "서울 맑음", target: "runs" },
     ]);
     // 실행 중이던 것이 끝나면 그때 알린다
     const done = newNotes(next.state, overview({ chat: [], runs: [run("r3", "failed", { error: "시간 초과" })] }));
-    expect(done.notes).toEqual([{ title: "임무 실패: 아침 날씨", body: "시간 초과" }]);
+    expect(done.notes).toEqual([{ title: "임무 실패: 아침 날씨", body: "시간 초과", target: "runs" }]);
   });
 
   it("대화 결과가 있는 실행과 그 실행의 제안은 따로 알리지 않고, 휴대폰 대화의 답은 PC에 알리지 않는다", () => {
@@ -53,9 +53,9 @@ describe("PC 알림 (notifier)", () => {
       }),
     );
     expect(notes).toEqual([
-      { title: "Mate 실행 결과", body: "브리핑 끝" },
-      { title: "임무 완료: 아침 날씨 · 제안 1건", body: "s" },
-      { title: "새 제안: 린트 경고", body: "경고 3개" },
+      { title: "Mate 실행 결과", body: "브리핑 끝", target: "chat" },
+      { title: "임무 완료: 아침 날씨 · 제안 1건", body: "s", target: "runs" },
+      { title: "새 제안: 린트 경고", body: "경고 3개", target: "inbox" },
     ]);
   });
 

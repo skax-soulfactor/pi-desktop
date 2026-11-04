@@ -36,6 +36,8 @@ export function Shell() {
 
   const show = useCallback((id: WorkspaceId) => {
     setActive(id);
+    // Pi 화면이 숨었는지 알 수 있게 둔다 (App.tsx의 알림: 다른 작업 공간을 보는 동안에는 지금 탭 소식도 알린다)
+    document.documentElement.dataset.workspace = id;
     if (id !== "pi") setOpened((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
     void window.piDesktop.workspaceShown(id).catch(() => undefined);
   }, []);

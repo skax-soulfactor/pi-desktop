@@ -2,7 +2,7 @@
 
 > 관련 문서: [세 앱의 역할과 데이터 경계](DESIGN-APPS.md), [Pi Desktop 설계](DESIGN.md), [Agent 설계](DESIGN-AGENT.md), [Mate 설계](DESIGN-MATE.md), [Mate 원격 실행기](DESIGN-MATE-REMOTE.md)
 >
-> 상태: **0.7.0에서 합쳤다** (2026-11-04). §0의 결정대로 P1~P5를 마쳤다. 미룬 것은 §10 각 단계에 적었다.
+> 상태: **0.7.0에서 합쳤다** (2026-11-04). §0의 결정대로 P1~P5를 마쳤고, 미뤘던 셋(수치 한 목록, 새 창으로 열기, 웹 한 프로세스)도 0.7.1에서 했다 (§10 끝).
 
 Pi Desktop·Agent·Mate를 **설치본 하나(Pi Desktop)** 로 합치고, Agent와 Mate는 그 안의 **내장 플러그인(작업 공간)** 으로 둔다.
 데이터는 지금처럼 앱마다 나눈 채로 두고, 창·설치·업데이트·호스트 연결·설정 화면만 하나로 만든다.
@@ -219,6 +219,14 @@ interface PiDesktopPlugin {
 | **P3 연결·설정·알림 합치기** | Agent `vendor/`를 Pi Desktop 연결 코드로 바꾼다 (HostManager가 홈별 연결). 설정 칸(§7), "프롬프트와 수치" 한 목록, 알림 모음, SSH 호스트 목록 하나 | Agent 테스트·실제 Pi 계약 테스트, 두 데몬이 한 호스트에서 함께 도는지 |
 | **P4 휴대폰 웹 하나로** | 묶음은 이미 하나(`pi-web.tar.gz`). `pi-web start`(앱 이름 없이)가 세 서버를 함께 켜고 끈다(Agent·Mate 먼저). Pi Web 화면이 켜진 Agent·Mate 서버 주소(`$PI_WEB_HOME/agent·mate/url`)를 받아 **화면 아래 작업 공간 막대**와 iframe으로 연다 (다른 기기에서 열면 그 주소의 호스트로 바꾼다). 서버 프로세스는 셋 그대로 — 각 앱 웹 서버가 자기 토큰·WebSocket·푸시를 갖기 때문이다. 하나의 프로세스로 합치는 것은 각 앱 화면이 경로 접두(`/agent/`)를 받아야 해서 미룬다 | 웹 빌드, 360~412폭 휴대폰 화면에서 막대·Agent·Mate 프레임, 설치 스크립트 업데이트 때 켜져 있던 서버를 모두 다시 켬 |
 | **P5 0.7.0 합치기** | 미리 보기 표시를 떼고 기본으로 켠다 (끈 것만 `workspaces.json`에 적는다). 처음 실행할 때 옛 Agent·Mate userData의 지금 호스트·앱 수치를 `userData/agent·mate/`로, SSH 호스트는 없는 이름만 더한다 (`migrate.ts`, `migrated-from.json`). Mate "로그인할 때 실행기 시작"을 Pi Desktop으로: 로그인 항목이 Pi Desktop을 `--mate-runner-only`로 띄워 창 없이 실행기만 확인한다. 업데이트 전 실행기 멈춤. 단독 Agent·Mate 앱은 **징검다리**만 남긴다: 열면 "Pi Desktop으로 합쳐졌습니다" → Pi Desktop 열기/내려받기, Mate는 자기 로그인 항목을 지우고 Pi Desktop이 이어받을 표시(`mate-autostart-wanted`)를 남긴다. 업데이트 확인 없음. 릴리스 워크플로는 v0.7.0에서만 Agent·Mate를 만든다. **미룬 것:** D4 작업 공간을 새 창으로 열기 (필요할 때) | 단위 테스트(이전), Electron으로 기본 켜짐·작업 공간 전환, 징검다리 빌드. 옛 0.6.x 설치본에서 0.7.0으로 올라오는지는 PC에서 |
+
+### 0.7.1: 미뤘던 것
+
+| 미룬 것 | 한 것 |
+|---|---|
+| "프롬프트와 수치" 한 목록 (P3) | Pi 관리 "수치" 탭이 켜 둔 Agent·Mate 작업 공간의 항목(Agent 확장·데몬·앱, Mate 실행기·앱)도 보이고 "작업 공간"(Pi·Agent·Mate)으로 거른다. 그 작업 공간의 IPC 처리기를 그대로 불러 읽고 저장하므로 각 작업 공간 설정 화면과 같은 값이다. id는 `agent:<종류>:<원래 id>`로 감싸 저장할 곳을 가른다 |
+| 작업 공간을 새 창으로 (D4) | 메뉴바 "작업 공간 → Agent·Mate를 새 창으로 열기". 그 앱 화면을 창의 맨 위 페이지로 열고, preload가 주소로 API를 고른다. 창 안의 작업 공간과 함께 쓰고(같은 본체에 붙음), 알림을 누르면 새 창을 앞으로, 그 창을 보는 동안 메뉴바는 그 작업 공간 것이다 |
+| 휴대폰 웹 서버 한 프로세스 (P4) | `pi-web start`가 Pi Web 서버를 `--workspaces`로 띄우면 같은 프로세스에서 Agent·Mate 서버 묶음을 불러온다 (`web-shell/embed`). 각 묶음은 자기 electron 대체를 따로 가지고 자기 포트(8788·8789)에서 듣는다. 프로세스에 하나뿐인 것(명령줄 인자, `process.resourcesPath`, 신호, `process.exit`)은 embed 설정과 앱 이름의 환경 변수로 대신한다. 한 작업 공간이 뜨지 못해도 Pi Web은 그대로다. `pi-web agent start`처럼 따로 띄우는 것도 된다 |
 
 ## 11. 위험과 대응
 

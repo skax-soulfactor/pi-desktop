@@ -92,7 +92,8 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
    * 세션·스킬·프롬프트·MCP·AGENTS.md·agent-kit 상태도 여기 둔다. Pi의 로그인·모델·설정(`~/.pi/agent`)만 함께 쓴다.
    */
   function agentHome(): string {
-    return process.env.PI_DESKTOP_HOME || join(homedir(), ".pi-desktop-agent");
+    // PI_DESKTOP_HOME은 Pi 작업 공간 데몬의 것이다 (한 앱 안에서 두 데몬 홈이 섞이지 않게 Agent는 이름을 따로 쓴다)
+    return process.env.PI_DESKTOP_AGENT_DAEMON_HOME || join(homedir(), ".pi-desktop-agent");
   }
 
   /** 번들된 Host Agent 위치. 설치본은 앱 리소스, 개발 중에는 워크스페이스의 빌드 결과 */
@@ -123,10 +124,12 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
     if (task.status === "waiting") {
       if (task.origin !== "peer-in" || task.approval !== "pending") return;
       ctx.onNotify?.();
-      new Notification({
+      const ask = new Notification({
         title: `작업 요청: ${task.peer?.name ?? "피어"}`,
         body: `"${task.title}" — 네트워크 화면에서 폴더를 골라 승인하거나 거절하세요`,
-      }).show();
+      });
+      ask.on("click", () => ctx.reveal(() => sendToRenderer(IpcChannels.menuCommand, "page:network")));
+      ask.show();
       return;
     }
     if (ctx.isViewing()) return;
@@ -141,7 +144,10 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
             : "작업";
     const body = (task.status === "failed" ? task.error : task.result)?.slice(0, 200) ?? "";
     ctx.onNotify?.();
-    new Notification({ title: `${origin} ${status}: ${task.title}`, body }).show();
+    const done = new Notification({ title: `${origin} ${status}: ${task.title}`, body });
+    // 누르면 창(합친 앱이면 Agent 작업 공간)을 앞으로 가져와 작업·예약 화면을 연다
+    done.on("click", () => ctx.reveal(() => sendToRenderer(IpcChannels.menuCommand, "page:tasks")));
+    done.show();
   }
 
   /** 알림에 쓸 대화의 폴더 (세션 id → cwd). 모르는 세션이 오면 목록을 다시 읽는다 */

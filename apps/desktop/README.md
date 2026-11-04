@@ -3,15 +3,16 @@
 [Pi coding agent](https://pi.dev)를 **포크하지 않고**, 설치된 `pi` 그대로 GUI로 쓰는 데스크톱 앱입니다.
 Pi를 업데이트하면 앱도 그대로 따라갑니다.
 
-이 모노레포의 첫 앱이며, Pi 설치·로그인·프로바이더·모델 관리는 이 앱이 맡습니다. 다른 두 앱([Pi Desktop Agent](../agent/README.md), [Pi Desktop Mate](../mate/README.md))도 여기서 설정한 Pi를 함께 씁니다.
+이 폴더는 앱의 **셸**(창·작업 공간 막대·메뉴바·업데이트·옛 앱 설정 옮기기)과 **Pi 작업 공간**입니다. Pi 설치·로그인·프로바이더·모델 관리도 여기서 합니다.
+같은 창의 [Agent](../agent/README.md)·[Mate](../mate/README.md) 작업 공간도 여기서 설정한 Pi를 함께 씁니다 (구조는 [DESIGN-ONE-APP.md](../../docs/DESIGN-ONE-APP.md)).
 
 - 설계: [docs/DESIGN.md](../../docs/DESIGN.md)
-- 현재 단계: 로드맵 M1~M5(채팅, Pi 관리·프로바이더, WSL·SSH, 리소스·Marketplace·호스트 간 복사, 개발자 도구·배포)를 마치고 `v*` 릴리스로 배포 중
+- 현재 단계: 로드맵 M1~M5(채팅, Pi 관리·프로바이더, WSL·SSH, 리소스·Marketplace·호스트 간 복사, 개발자 도구·배포)를 마쳤고, 0.7.0부터 Agent·Mate를 작업 공간으로 담아 `v*` 릴리스로 배포 중
 
 ## 구조
 
 ```
-apps/desktop/          Electron 앱 (main · preload · React 렌더러)
+apps/desktop/          Electron 앱 (main · preload · React 렌더러). main/workspaces.ts가 Agent·Mate 작업 공간을 띄운다
 packages/host-protocol 앱 ↔ Host Agent 메시지 형식 (JSONL, JSON-RPC 2.0)
 packages/host-agent    대상 호스트에서 도는 상주 데몬(agentd)과 연결기(connect)
 ```
@@ -35,14 +36,14 @@ packages/host-agent    대상 호스트에서 도는 상주 데몬(agentd)과 �
 - 직접 확인했는데 새 버전이 없으면 "최신 버전입니다"라고 알리고, 확인하지 못하면 이유를 보입니다.
  `npm run dist`로 직접 만든 빌드(버전 0.0.1)는 확인하지 않습니다.
 
-**코드 서명**: 세 앱 모두 서명하지 않습니다. 처음 실행할 때의 경고와 넘어가는 법은 [루트 README의 "코드 서명"](../../README.md#코드-서명)을 보세요. macOS는 서명이 없으면 자동 설치가 거부되므로, 앱은 새 버전을 알리고 릴리스 페이지를 엽니다.
+**코드 서명**: 서명하지 않습니다. 처음 실행할 때의 경고와 넘어가는 법은 [루트 README의 "코드 서명"](../../README.md#코드-서명)을 보세요. macOS는 서명이 없으면 자동 설치가 거부되므로, 앱은 새 버전을 알리고 릴리스 페이지를 엽니다.
 
 **릴리스를 올리는 곳**: 지금은 이 저장소의 GitHub Releases입니다(공개 저장소라 토큰 없이 확인합니다). `apps/desktop/electron-builder.yml`의 `publish`만 바꾸면 다른 곳을 쓸 수 있습니다.
 - 다른 GitHub 저장소: `owner`·`repo`를 바꿉니다. 예를 들어 소스는 비공개로 두고 배포용 공개 저장소만 따로 둘 수 있습니다.
 - 내 웹 서버·S3·Cloudflare R2 등: `provider: generic`과 `url`을 씁니다. 그 주소에 설치 파일과 `latest*.yml`을 올리면 됩니다. `provider: s3`로 S3에 직접 올릴 수도 있습니다.
 - 비공개 GitHub 저장소: 앱이 확인할 때 토큰이 필요해 일반 배포에는 맞지 않습니다.
 
-**릴리스 만들기**(관리자): 버전 태그를 올리면 GitHub Actions(`.github/workflows/release.yml`)가 세 OS에서 설치 파일을 만들어 Releases에 올립니다. 앱 버전은 태그를 따릅니다.
+**릴리스 만들기**(관리자): 버전 태그를 올리면 GitHub Actions(`.github/workflows/release.yml`)가 세 OS에서 설치 파일과 휴대폰 웹 묶음을 만들어 Releases에 올립니다. 앱 버전은 태그를 따릅니다. 태그를 push할 수 없으면 Actions의 "Release"를 `version`을 넣어 돌립니다 ([개발 방식 §6](../../docs/CONTRIBUTING.md#6-릴리스)).
 
 ```bash
 git tag -a v0.1.0 -m "Pi Desktop v0.1.0"
@@ -73,14 +74,14 @@ Electron 앱은 Android에서 돌지 않습니다. 대신 휴대폰의 [Termux](
 
 | 명령 | 하는 일 |
 |---|---|
-| `pi-web` | 서버를 켜고 브라우저를 엽니다 (`pi-web start`) |
+| `pi-web` | Pi Web과 Agent·Mate 작업 공간을 **한 프로세스로** 켜고 브라우저를 엽니다 (`pi-web start`, 포트 8787·8788·8789). 화면 아래 막대의 Pi·A·M으로 바꿉니다 |
 | `pi-web url` | 토큰이 든 주소를 보여 줍니다 (다른 브라우저에서 열 때) |
 | `pi-web stop` / `restart` / `status` / `log` | 끄기·다시 켜기·상태·서버 기록 |
-| `pi-web update` | 최신 릴리스로 업데이트 (토큰·설정은 그대로) |
-| `pi-web uninstall` | 지우기 (데이터 `~/.pi-web/data`는 남깁니다) |
-| `pi-web agent` | **Pi Desktop Agent** 웹 버전을 켜고 엽니다 (포트 8788). 승인·지식베이스·스킬·예약 작업. 기능 화면은 오른쪽 위 ⋮ 메뉴에서 엽니다 |
-| `pi-web mate` | **Pi Desktop Mate** 웹 버전을 켜고 엽니다 (포트 8789). 임무 시간표·인박스·텔레그램. 서버를 꺼도 실행기는 임무를 계속 돌립니다 |
-| `pi-web all` | 세 앱을 모두 켭니다. `stop`·`status`·`url`도 앱 이름 뒤에 씁니다 (예: `pi-web mate stop`, `pi-web all status`) |
+| `pi-web update` | 최신 릴리스로 업데이트 (토큰·설정은 그대로, 켜져 있던 것은 다시 켭니다) |
+| `pi-web uninstall` | 지우기 (데이터 `~/.pi-web/data`·`agent`·`mate`는 남깁니다) |
+| `pi-web desktop start` | Pi Web만 켭니다 |
+| `pi-web agent start` | Agent만 따로 켭니다 (포트 8788). 기능 화면은 오른쪽 위 ⋮ 메뉴에서 엽니다 |
+| `pi-web mate start` | Mate만 따로 켭니다 (포트 8789). 서버를 꺼도 실행기는 임무를 계속 돌립니다 |
 
 - 설치 중 `CANNOT LINK EXECUTABLE "curl": cannot locate symbol …`이 나오면 Termux 패키지가 일부만 업데이트된 것입니다. `pkg upgrade -y` 뒤에 설치 명령을 다시 실행하세요 (v0.1.1부터 설치 스크립트가 먼저 업그레이드합니다).
 - **파일 관리자**: ⋮ 메뉴 → **파일 관리자**에서 Termux 홈 폴더를 훑고, 새 폴더·파일, 이름 바꾸기, 복사·이동, 지우기, 글 파일 보기·고치기를 합니다. **올리기**로 휴대폰의 사진·문서를 넣고, 파일의 ⋯ → **휴대폰으로 내려받기**로 꺼냅니다. **📱 저장소**는 휴대폰 공용 저장소(`~/storage`, 한 번 `termux-setup-storage`를 실행해야 생깁니다)입니다. **이 폴더에서 새 세션**으로 바로 Pi 세션을 엽니다.
@@ -90,7 +91,7 @@ Electron 앱은 Android에서 돌지 않습니다. 대신 휴대폰의 [Termux](
 - 갤럭시가 Termux를 멈추지 않게: 설정 → 애플리케이션 → Termux → 배터리 → **제한 없음**, 개발자 옵션 → **하위 프로세스 제한 사용 중지**(Android 14 이상). `pi-web`은 켤 때 Termux wake lock을 겁니다.
 - 서버는 휴대폰 안(127.0.0.1)에서만 열립니다. 다른 기기(태블릿·PC)에서 휴대폰의 Pi를 쓰려면 `PI_WEB_HOST=0.0.0.0 pi-web restart`로 열 수 있지만, 같은 Wi-Fi의 누구나 접속을 시도할 수 있으니 Tailscale 같은 VPN 안에서만 쓰기를 권합니다.
 - 일반 Linux 서버에서도 같은 스크립트로 설치할 수 있습니다 (Node.js 22.19 이상, 명령은 `~/.local/bin/pi-web`).
-- 웹은 같은 앱의 다른 빌드 대상입니다. Pi Desktop 웹 빌드(`src/server`·`src/web`, `vite.web.config.ts`)는 `npm run build:web -w @pi-desktop/desktop` → `apps/desktop/out/web/`이고, 개발 실행(mock LLM)은 `npm run dev:web -w @pi-desktop/desktop`입니다.
+- 웹은 같은 앱의 다른 빌드 대상입니다. Pi Desktop 웹 빌드(`src/server`·`src/web`, `vite.web.config.ts`)는 `npm run build:web -w @pi-desktop/desktop` → `apps/desktop/out/web/`이고, 개발 실행(mock LLM)은 `npm run dev:web -w @pi-desktop/desktop`(Pi만)·`npm run dev:web:all -w @pi-desktop/desktop`(세 작업 공간 한 프로세스)입니다.
 - 세 앱을 담은 묶음은 루트에서 만듭니다: `npm run dist:web` → `release/web/` (루트 `scripts/build-web.mjs`). 릴리스 태그(`v*`)를 올리면 Actions가 두 파일을 Releases에 함께 올립니다.
 
 ## 개발 환경
@@ -109,7 +110,8 @@ npm 11은 설치 스크립트를 기본으로 막습니다. Electron 바이너�
 npm run dev:mock -w @pi-desktop/desktop
 ```
 
-- 저장소의 Pi devDependency(1.3.0)와 OpenAI 호환 mock LLM(포트 18911)을 씁니다.
+- 저장소의 Pi devDependency(1.5.0)와 OpenAI 호환 mock LLM(포트 18911)을 씁니다.
+- 개발 서버로 띄워 Pi 화면을 고치면 바로 바뀝니다. Agent·Mate 작업 공간까지 함께 보려면 `npm run dev:mock:all -w @pi-desktop/desktop`을 씁니다 (빌드한 앱을 띄운다. Agent·Mate 홈도 `.dev/agent-home`·`.dev/mate-home`으로 격리).
 - Pi 설정과 데몬 홈은 저장소의 `.dev/` 아래로 격리되어 실제 `~/.pi`, `~/.pi-desktop`과 섞이지 않습니다.
 - 프롬프트 예: `안녕` → 그대로 echo, `read:package.json` → read 툴 호출 후 내용 응답, `bash:<명령>` → bash 툴 호출, `tool:<툴 이름> <JSON 인자>` → 그 툴 호출 (예: `tool:edit {"path":"a.txt","edits":[{"oldText":"a","newText":"b"}]}`). `fail:529` → 그 HTTP 상태의 오류 응답 (자동 재시도 확인용). 개발 실행에서는 grep·find·ls 툴도 켜져 있습니다.
 - `-- --demo-ext`를 붙이면 Pi에 들어 있는 rpc-demo 확장을 함께 불러옵니다. 확장 UI(다이얼로그·알림·위젯·상태)를 확인할 때 씁니다.
@@ -121,7 +123,7 @@ npm run dev:mock -w @pi-desktop/desktop
 npm run dev -w @pi-desktop/desktop
 ```
 
-루트의 `npm run dev`도 같은 명령입니다. 상단의 호스트 선택에서 Pi가 설치된 곳을 고릅니다.
+루트의 `npm run dev`도 같은 명령입니다. Agent·Mate 작업 공간까지 함께 보려면 `npm run start:all -w @pi-desktop/desktop`. 상단의 호스트 선택에서 Pi가 설치된 곳을 고릅니다.
 
 - **로컬 (Windows)**: `npm install -g @earendil-works/pi-coding-agent`로 설치하고 `pi`에서 `/login`을 해 두어야 합니다.
 - **WSL: <배포판>**: WSL 안에 Pi가 설치되어 있고(공식 설치기 또는 npm) 로그인되어 있으면 됩니다.
@@ -147,7 +149,7 @@ npm test -w @pi-desktop/host-protocol -w @pi-desktop/host-agent -w @pi-desktop/d
 ```
 
 - `host-protocol`: 프레이밍(U+2028, 멀티바이트 경계 등)과 JSON-RPC
-- `host-agent`: 가짜 Pi로 데몬·재연결·저널 잘림 검증, **실제 Pi 1.3.0 + mock LLM 계약 테스트**
+- `host-agent`: 가짜 Pi로 데몬·재연결·저널 잘림 검증, **실제 Pi + mock LLM 계약 테스트**
 - `desktop`: 이벤트 → 채팅 상태 리듀서
 
 ## 여러 프로젝트를 탭으로

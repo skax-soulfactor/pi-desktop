@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ScrollTabs } from "./ScrollTabs";
 import type { CurrentHost, Overview, PiSetupView, UpdateState } from "../shared/api";
 import { FolderPicker } from "./FolderPicker";
 import { setFolderPickOpener } from "./folder-pick";
@@ -33,6 +34,8 @@ export function App() {
     setFolderPickOpener((resolve) => setFolderPick({ resolve }));
     return () => setFolderPickOpener(undefined);
   }, []);
+  // 알림을 누르면 그 알림의 탭(대화·실행 기록·인박스)으로 간다
+  useEffect(() => window.mate.onOpenTab((target) => setTab(target as Tab)), []);
   useEffect(() => {
     void window.mate.updateState().then(setUpdate);
     return window.mate.onUpdateState(setUpdate);
@@ -100,7 +103,7 @@ export function App() {
     <div className="app">
       <header className="top">
         <div className="brand">Pi Desktop Mate{host?.remote && <span className="count"> · {hostLabel(host.id)}</span>}</div>
-        <nav className="tabs">
+        <ScrollTabs active={tab}>
           <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
             대화{openQuestions > 0 && <span className="badge">{openQuestions}</span>}
             {overview.chat.busy && <span className="count"> …</span>}
@@ -132,7 +135,7 @@ export function App() {
           <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>
             설정
           </button>
-        </nav>
+        </ScrollTabs>
         <div className="runner-status" title={runner.pid ? `실행기 pid ${runner.pid}` : undefined}>
           {update && (update.status === "available" || update.status === "downloading" || update.status === "downloaded") && (
             <button className="small primary" onClick={() => void act(() => window.mate.confirmUpdate())} disabled={update.status === "downloading"}>

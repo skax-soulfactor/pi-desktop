@@ -94,6 +94,8 @@ function createWindow(): void {
   });
   if (windowState.maximized) mainWindow.maximize();
   trackWindowState(mainWindow, windowStateFile);
+  // 새 창으로 연 작업 공간에서 돌아오면 메뉴바를 이 창의 작업 공간에 맞춘다
+  mainWindow.on("focus", () => setAppMenu());
 
   // 응답 속 링크가 앱 창을 다른 페이지로 바꾸지 않게 한다. http(s) 링크만 외부 브라우저로 연다.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -128,6 +130,47 @@ const workspaces = new Workspaces({
   },
 });
 
+/**
+ * 작업 공간을 새 창으로 연다 (설계 DESIGN-ONE-APP.md D4). 그 앱 화면을 창의 맨 위 페이지로 열고, preload가 주소로 그 앱 API를 만든다.
+ * Pi Desktop 창 안의 작업 공간도 그대로 쓸 수 있다 (같은 본체에 함께 붙는다). 이미 열려 있으면 앞으로 가져온다.
+ */
+function openWorkspaceWindow(id: PluginWorkspaceId): void {
+  const existing = workspaces.windowOf(id);
+  if (existing) {
+    if (existing.isMinimized()) existing.restore();
+    existing.focus();
+    return;
+  }
+  const plugin = workspaces.state().plugins.find((p) => p.id === id);
+  if (!plugin?.enabled || !plugin.url) return;
+  const win = new BrowserWindow({
+    width: 1000,
+    height: 760,
+    minWidth: 360,
+    minHeight: 420,
+    title: `${plugin.name} — Pi Desktop`,
+    backgroundColor: "#16171d",
+    ...windowIcon(),
+    webPreferences: {
+      preload: join(here, "../preload/index.cjs"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  win.webContents.on("will-navigate", (event, url) => {
+    if (url !== win.webContents.getURL()) event.preventDefault();
+  });
+  // 이 창을 보는 동안 메뉴바는 이 작업 공간의 것 (Agent 메뉴 명령은 이 창으로만 간다)
+  win.on("focus", () => setAppMenu({ id, win }));
+  workspaces.attachWindow(id, win);
+  void win.loadFile(join(here, "../renderer", id, "index.html"));
+}
+
 /** 메뉴바 "작업 공간": 작업 공간 바꾸기와 플러그인 켜기·끄기 */
 function workspaceMenu(): MenuItemConstructorOptions {
   const state = workspaces.state();
@@ -140,6 +183,10 @@ function workspaceMenu(): MenuItemConstructorOptions {
       ...state.plugins
         .filter((p) => p.enabled && p.url)
         .map((p): MenuItemConstructorOptions => ({ label: p.name, type: "radio", checked: current === p.id, click: go(p.id) })),
+      { type: "separator" },
+      ...state.plugins
+        .filter((p) => p.enabled && p.url)
+        .map((p): MenuItemConstructorOptions => ({ label: `${p.name}를 새 창으로 열기`, click: () => openWorkspaceWindow(p.id as PluginWorkspaceId) })),
       { type: "separator" },
       ...state.plugins.map(
         (p): MenuItemConstructorOptions => ({
@@ -187,7 +234,8 @@ function mateMenuTemplate(about: () => void): MenuItemConstructorOptions[] {
 }
 
 /** 지금 작업 공간에 맞는 메뉴바. Agent를 보는 동안은 Agent 메뉴(기능 화면은 메뉴바에서 연다), Mate는 Mate 메뉴에 "작업 공간"을 더한다 */
-function setAppMenu(): void {
+function setAppMenu(target?: { id: PluginWorkspaceId; win: BrowserWindow }): void {
+  const current = target?.id ?? workspaces.current;
   const about = () =>
     void dialog.showMessageBox({
       type: "info",
@@ -196,14 +244,14 @@ function setAppMenu(): void {
       detail: `Pi coding agent를 포크하지 않고 GUI로 쓰는 데스크톱 앱\nElectron ${process.versions.electron} · Node ${process.versions.node}\nhttps://github.com/skax-soulfactor/pi-desktop`,
     });
   const base =
-    workspaces.current === "agent"
+    current === "agent"
       ? agentMenuTemplate(process.platform, app.isPackaged, {
-          command: (id) => workspaces.agentMenuCommand(id),
+          command: (id) => workspaces.agentMenuCommand(id, target?.win),
           checkForUpdates: () => void updaterRef?.check(true),
           openReleases: () => void updaterRef?.openRelease(),
           about,
         })
-      : workspaces.current === "mate"
+      : current === "mate"
         ? mateMenuTemplate(about)
         : appMenuTemplate(process.platform, {
           command: (id) => mainWindow?.webContents.send(IpcChannels.menuCommand, id),
@@ -284,6 +332,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle(IpcChannels.workspaceShown, (_event, id: WorkspaceId) => workspaces.shown(id));
   ipcMain.handle(IpcChannels.workspaceReady, (_event, id: PluginWorkspaceId) => workspaces.ready(id));
+  ipcMain.handle(IpcChannels.revealWorkspace, (_event, id: WorkspaceId) => workspaces.reveal(id));
   workspaces.registerUpdateStubs(() => ({ status: "disabled", current: app.getVersion(), mode: "notify" }));
   workspaces.start();
   createWindow();

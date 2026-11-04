@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ResizeHandle } from "./ResizeHandle";
 import type { ConfiguredPackageInfo, StoredSession } from "@pi-desktop/host-protocol/messages";
 import type { PendingQueue } from "./chat-state";
 import { ChatView } from "./ChatView";
@@ -1150,6 +1151,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
             : {})}
           refreshKey={historyRefresh}
         />
+        <ResizeHandle storageKey="pi-desktop.sidebar-width" cssVar="--sidebar-width" defaultWidth={260} min={180} max={560} label="세션 목록 너비" />
         <div className="main">
 
       {connection.status === "disconnected" && !connection.gaveUp && (
@@ -1345,6 +1347,9 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
         onUpdate={(key, fields) => setDockTerminals((prev) => prev.map((t) => (t.key === key ? { ...t, ...fields } : t)))}
       />
         </div>
+        {session && treeOpen && (
+          <ResizeHandle storageKey="pi-desktop.tree-width" cssVar="--tree-width" defaultWidth={360} min={240} max={720} side="right" label="대화 나무 너비" />
+        )}
         {session && treeOpen && (
           <TreePanel
             hostId={hostId}

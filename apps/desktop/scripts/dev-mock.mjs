@@ -7,11 +7,13 @@
 //
 // --demo-ext: Pi 패키지에 들어 있는 rpc-demo 확장을 함께 불러온다 (확장 UI 다이얼로그 확인용).
 // --web: 앱 대신 웹 서버(pi-web)를 묶어서 띄운다. 브라우저로 출력된 주소를 연다 (데이터는 .dev/pi-web).
+// --workspaces: Agent·Mate 작업 공간까지 함께 본다. 작업 공간 화면은 빌드한 파일(iframe)이라 개발 서버 대신
+//   빌드해서 띄운다 (화면을 고치면 다시 실행). Agent·Mate의 dev:mock이 이것을 부른다. 웹이면 세 서버를 한 프로세스로.
 //
 // 앱을 껐다 켜도 같은 데몬·세션에 다시 붙는지 확인할 수 있도록 경로와 포트를 고정한다.
 // mock-llm.ts는 Node 22.18+/24의 TypeScript 타입 제거 기능으로 바로 import한다.
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +22,7 @@ const devDir = join(repo, ".dev");
 const piAgentDir = join(devDir, "pi-agent");
 const port = Number(process.env.MOCK_LLM_PORT ?? 18911);
 const web = process.argv.includes("--web");
+const withWorkspaces = process.argv.includes("--workspaces");
 const demoExtension = process.argv.includes("--demo-ext")
   ? join(repo, "node_modules", "@earendil-works", "pi-coding-agent", "examples", "extensions", "rpc-demo.ts")
   : undefined;
@@ -78,7 +81,16 @@ const env = {
     .trim(),
   PI_CODING_AGENT_DIR: piAgentDir,
   PI_CODING_AGENT_SESSION_DIR: join(piAgentDir, "sessions"),
+  // Agent·Mate 작업 공간의 홈도 .dev/ 아래로 (실제 ~/.pi-desktop-agent, ~/.pi-desktop-mate와 섞이지 않게)
+  PI_DESKTOP_AGENT_DAEMON_HOME: join(devDir, "agent-home"),
+  MATE_HOME: join(devDir, "mate-home"),
 };
+
+// Mate 처음 실행이면 기본 모델을 mock으로 (실제 기본값은 anthropic/claude-haiku-5-5)
+mkdirSync(env.MATE_HOME, { recursive: true });
+if (!existsSync(join(env.MATE_HOME, "config.json"))) {
+  writeFileSync(join(env.MATE_HOME, "config.json"), JSON.stringify({ model: "mock/mock-model" }, null, 2));
+}
 
 console.log(`[dev-mock] mock LLM: ${llm.baseUrl}`);
 console.log(`[dev-mock] 프롬프트 예: "안녕" → echo, "read:package.json" → read 툴 호출, "bash:<명령>" → bash 툴 호출`);
@@ -87,13 +99,26 @@ if (demoExtension) {
 }
 
 const appDir = fileURLToPath(new URL("..", import.meta.url));
-if (web) {
-  const built = spawnSync("npm", ["run", "build:web"], { cwd: appDir, stdio: "inherit", shell: process.platform === "win32" });
+const npm = (args, cwd = appDir) => {
+  const built = spawnSync("npm", args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
   if (built.status !== 0) process.exit(built.status ?? 1);
+};
+let child;
+if (web && withWorkspaces) {
+  // 웹, 세 작업 공간: 루트 묶음(out/pi-web)을 만들어 Pi Web 서버가 Agent·Mate 서버를 한 프로세스로 띄운다
+  npm(["run", "build:web"], repo);
+  child = spawn(process.execPath, [join(repo, "out", "pi-web", "server.mjs"), "--home", join(devDir, "pi-web", "data"), "--workspaces"], { env, stdio: "inherit" });
+} else if (web) {
+  npm(["run", "build:web"]);
+  child = spawn(process.execPath, [join(appDir, "out", "web", "server.mjs"), "--home", join(devDir, "pi-web")], { env, stdio: "inherit" });
+} else if (withWorkspaces) {
+  // 작업 공간 화면은 빌드한 파일이라 빌드한 앱을 띄운다
+  npm(["run", "build"]);
+  const electron = (await import("electron")).default;
+  child = spawn(electron, ["."], { cwd: appDir, env, stdio: "inherit" });
+} else {
+  child = spawn("npm", ["run", "dev"], { cwd: appDir, env, stdio: "inherit", shell: process.platform === "win32" });
 }
-const child = web
-  ? spawn(process.execPath, [join(appDir, "out", "web", "server.mjs"), "--home", join(devDir, "pi-web")], { env, stdio: "inherit" })
-  : spawn("npm", ["run", "dev"], { cwd: appDir, env, stdio: "inherit", shell: process.platform === "win32" });
 child.on("exit", async (code) => {
   await llm.close();
   process.exit(code ?? 0);

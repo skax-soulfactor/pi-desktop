@@ -61,8 +61,8 @@ export interface MateMainContext {
   isViewing(): boolean;
   /** 사용자에게 알릴 것이 생겼다 (합친 앱은 작업 공간 막대에 표시한다). 단독 앱은 생략 */
   onNotify?(): void;
-  /** 창을 앞으로 가져오고 Mate 화면을 보인다 (알림을 누를 때) */
-  reveal(): void;
+  /** 창을 앞으로 가져오고 Mate 화면을 보인다 (알림을 누를 때). then은 화면이 준비된 뒤에 부른다 */
+  reveal(then?: () => void): void;
   /** Mate 화면을 다시 불러온다 (호스트를 바꿀 때) */
   reload(): void;
   /** 이 앱의 상태 파일 폴더 (지금 호스트·SSH 호스트·앱 수치) */
@@ -263,7 +263,8 @@ export function createMateMain(ctx: MateMainContext): MateMain {
     if (!current.config.desktopNotify || !Notification.isSupported() || ctx.isViewing()) return;
     for (const note of fresh) {
       const shown = new Notification({ title: note.title, body: note.body });
-      shown.on("click", () => ctx.reveal());
+      // 창(합친 앱이면 Mate 작업 공간)을 앞으로 가져온 뒤, 화면이 준비되면 그 알림의 탭을 연다
+      shown.on("click", () => ctx.reveal(() => ctx.send(IpcChannels.openTab, note.target ?? "inbox")));
       shown.show();
     }
   }

@@ -57,8 +57,10 @@ export function App() {
     const kind = attentionFor(before, status);
     if (!kind) return;
     // 지금 보는 탭은 창을 보고 있으면 화면에 이미 보인다. 창을 내려 두었거나 다른 창을 보고 있으면 알린다
+    // 합친 앱에서 Agent·Mate 작업 공간을 보는 동안에는 Pi 화면이 숨어 있다
+    const piHidden = (document.documentElement.dataset.workspace ?? "pi") !== "pi";
     if (id === activeRef.current) {
-      if (document.visibilityState === "visible" && document.hasFocus()) return;
+      if (document.visibilityState === "visible" && document.hasFocus() && !piHidden) return;
     } else {
       setAttention((prev) => ({ ...prev, [id]: kind }));
     }
@@ -298,6 +300,8 @@ function notify(title: string, kind: Attention, onClick: () => void): void {
     const notification = new Notification(`Pi Desktop — ${title}`, { body, silent: kind === "done" });
     notification.onclick = () => {
       window.focus();
+      // 창을 앞으로 가져오고(내려 둔 창도) Pi 작업 공간으로 바꾼 뒤 그 탭(대화)을 연다
+      void window.piDesktop.revealWorkspace("pi").catch(() => undefined);
       onClick();
     };
   } catch {

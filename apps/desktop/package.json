@@ -13,12 +13,15 @@
     "predev": "npm run build -w @pi-desktop/host-agent",
     "dev": "electron-vite dev",
     "dev:mock": "node scripts/dev-mock.mjs",
+    "dev:mock:all": "node scripts/dev-mock.mjs --workspaces",
     "dev:web": "node scripts/dev-mock.mjs --web",
+    "dev:web:all": "node scripts/dev-mock.mjs --web --workspaces",
     "build": "electron-vite build && npm run build -w @pi-desktop/agent && npm run build -w @pi-desktop/mate && node scripts/copy-workspaces.mjs",
     "build:web": "npm run build -w @pi-desktop/host-agent && node scripts/build-web.mjs",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "test": "vitest run",
-    "dist": "npm run build -w @pi-desktop/host-agent && npm run build && electron-builder --config electron-builder.yml --publish never"
+    "dist": "npm run build -w @pi-desktop/host-agent && npm run build && electron-builder --config electron-builder.yml --publish never",
+    "start:all": "npm run build && electron ."
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
