@@ -31,7 +31,8 @@ copyFileSync(join(app, "build", "icon.png"), join(out, "public", "icon.png"));
 await bundleServer({
   entry: join(app, "src", "server", "index.ts"),
   outfile: join(out, "server.mjs"),
-  replace: [{ module: join(app, "src", "main", "updater"), with: shellStubs.updater }],
+  // 업데이트는 Pi Desktop이 맡아 Agent에는 업데이터가 없다 (0.7.0)
+  replace: [],
 });
 
 // Agent 설치본의 extraResources (electron-builder.yml)

@@ -18,6 +18,8 @@ import { initAppTunables } from "./app-tunables";
 import { hostEventHandlers, registerHandlers, type Router } from "./ipc-handlers";
 import { revealWindow, usesSingleInstanceLock } from "./single-instance";
 import { Workspaces } from "./workspaces";
+import { migrateFromOldApps, oldApps } from "./migrate";
+import { isRunnerOnlyLaunch } from "../../../mate/src/main/autostart";
 import { appMenuTemplate as agentMenuTemplate } from "../../../agent/src/main/app-menu";
 import type { PluginWorkspaceId, WorkspaceId } from "../shared/api";
 
@@ -42,8 +44,11 @@ if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
 
 // 설치본은 한 번만 뜬다 (single-instance.ts). 잠금을 못 잡은 두 번째 실행은 창·연결기를 만들지 않고 끝나고,
 // 처음 실행이 second-instance를 받아 기존 창을 앞으로 가져온다.
-const isPrimaryInstance = !usesSingleInstanceLock(app.isPackaged) || app.requestSingleInstanceLock();
-if (!isPrimaryInstance) app.quit();
+// 로그인할 때 띄운 실행(--mate-runner-only, Mate 작업 공간의 "로그인할 때 실행기 시작")은 창 없이 실행기만 확인하고 끝난다.
+// 이 실행은 잠금을 잡지 않는다 (사용자가 연 창과 부딪히지 않게)
+const runnerOnlyLaunch = isRunnerOnlyLaunch();
+const isPrimaryInstance = !runnerOnlyLaunch && (!usesSingleInstanceLock(app.isPackaged) || app.requestSingleInstanceLock());
+if (!isPrimaryInstance && !runnerOnlyLaunch) app.quit();
 
 let mainWindow: BrowserWindow | undefined;
 let hosts: HostManager | undefined;
@@ -231,11 +236,20 @@ app.on("second-instance", () => {
   if (!revealWindow(mainWindow) && app.isReady()) createWindow();
 });
 
+if (runnerOnlyLaunch) {
+  void app.whenReady().then(async () => {
+    await workspaces.loginLaunch().catch(() => undefined);
+    app.quit();
+  });
+}
+
 app.whenReady().then(() => {
   if (!isPrimaryInstance) return;
   const script = agentScriptPath();
   const sshHosts = new SshHostStore(join(app.getPath("userData"), "ssh-hosts.json"));
   sshHostsRef = sshHosts;
+  // 0.7.0: 옛 단독 Agent·Mate 앱의 지금 호스트·앱 수치·SSH 호스트를 처음 한 번 옮긴다 (DESIGN-ONE-APP.md §9)
+  migrateFromOldApps({ userData: app.getPath("userData"), apps: oldApps(app.getPath("appData")), sshHosts });
   hosts = new HostManager({
     agentScript: script,
     agentVersion: agentVersion(script),

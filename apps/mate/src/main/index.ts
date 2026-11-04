@@ -1,126 +1,82 @@
-import { app, BrowserWindow, ipcMain, screen, shell } from "electron";
-import { loadWindowState, trackWindowState } from "@pi-desktop/window-state";
+import { app, dialog, shell } from "electron";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { IpcChannels } from "../shared/api";
-import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
-import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
-import { Updater } from "./updater";
-import { createMateMain } from "./mate-main";
+import { getAutostart, isRunnerOnlyLaunch, linuxDesktopFile, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
+import { findPiDesktop, PI_DESKTOP_REPO } from "./pi-desktop-install";
+import { openPiDesktop } from "./pi-setup";
 
 /**
- * 단독 Pi Desktop Mate 앱: 창·단일 실행·로그인 시작·자동 업데이트만 여기 있고, 실행기 연결·IPC·알림은 mate-main.ts가 맡는다.
- * Pi Desktop의 Mate 작업 공간도 mate-main.ts를 같은 방식으로 쓴다 (설계 DESIGN-ONE-APP.md).
+ * 징검다리 Pi Desktop Mate 0.7.0 (설계 DESIGN-ONE-APP.md §9, D3).
+ *
+ * 0.7.0부터 Mate는 Pi Desktop 창 안의 작업 공간이다. 옛 단독 Mate 설치본은 이 버전으로 마지막 업데이트를 받고:
+ * - "로그인할 때 실행기 시작"을 켜 두었으면 자기 로그인 항목을 지우고, Pi Desktop이 이어받도록 표시를 남긴다
+ * - 로그인할 때 띄운 실행이면 Pi Desktop이 있을 때 그것을 --mate-runner-only로 띄워 실행기를 확인하게 하고 끝난다
+ * - 열면 "Pi Desktop으로 합쳐졌습니다"를 보이고 Pi Desktop을 열거나(있으면) 내려받을 곳을 연다. 스스로 지우지는 않는다
+ * 업데이트 확인은 하지 않는다 (이 뒤로 mate*.yml을 올리지 않는다). 실행기는 그대로 돌고, Pi Desktop의 Mate 작업 공간이 붙는다.
  */
-const here = fileURLToPath(new URL(".", import.meta.url));
 
-// 개발 실행은 설치본과 userData(창 상태·단일 인스턴스 잠금)를 나눈다.
-// 같으면 설치본이 켜져 있을 때 개발 실행이 잠금에 걸려 바로 끝나고, 설치본 창을 앞으로 불러낸다.
-if (!app.isPackaged) app.setPath("userData", join(app.getPath("appData"), "Pi Desktop Mate (dev)"));
+/** Pi Desktop의 workspaces.ts MATE_AUTOSTART_WISH와 같은 이름. Pi Desktop의 userData(appData/Pi Desktop)에 둔다 */
+const AUTOSTART_WISH = "mate-autostart-wanted";
 
-// 개발·E2E 검증용 Chrome DevTools Protocol. 설치본은 환경 변수로 열지 않는다 (Pi Desktop과 같은 이유).
-if (process.env.PI_DESKTOP_REMOTE_DEBUG_PORT && !app.isPackaged) {
-  app.commandLine.appendSwitch("remote-debugging-port", process.env.PI_DESKTOP_REMOTE_DEBUG_PORT);
+/** 이 앱의 로그인 항목인가 (Linux 자동 시작 파일은 Pi Desktop과 이름이 같아, 실행 파일로 가른다) */
+function ownAutostart(): boolean {
+  if (!getAutostart().enabled) return false;
+  if (process.platform !== "linux") return true;
+  try {
+    const text = readFileSync(linuxDesktopFile(), "utf8");
+    return text.includes(process.env.APPIMAGE || process.execPath);
+  } catch {
+    return false;
+  }
 }
 
-let mainWindow: BrowserWindow | undefined;
-
-/**
- * 창에 알린다. 앱을 닫는 중에는 창이 먼저 없어지고 연결 정리·업데이트 알림이 뒤에 올 수 있다.
- * 없어진 창에 보내면 "Object has been destroyed"로 main 프로세스 오류 창이 뜨므로 건너뛴다.
- */
-function sendToWindow(channel: string, ...args: unknown[]): void {
-  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
-  mainWindow.webContents.send(channel, ...args);
+async function handOverAutostart(): Promise<void> {
+  if (!ownAutostart()) return;
+  try {
+    const desktopData = join(app.getPath("appData"), "Pi Desktop");
+    mkdirSync(desktopData, { recursive: true });
+    writeFileSync(join(desktopData, AUTOSTART_WISH), `${new Date().toISOString()}\n`, "utf8");
+    await setAutostart(false);
+  } catch {
+    // 못 하면 다음 실행에 다시 한다
+  }
 }
 
-const mate = createMateMain({
-  window: () => mainWindow,
-  send: sendToWindow,
-  isViewing: () => mainWindow?.isFocused() ?? false,
-  reveal: () => {
-    if (!mainWindow) createWindow();
-    if (mainWindow?.isMinimized()) mainWindow.restore();
-    mainWindow?.show();
-    mainWindow?.focus();
-  },
-  reload: () => mainWindow?.webContents.reload(),
-  get userData() {
-    return app.getPath("userData");
-  },
-  piDesktop: {
-    info: () => piDesktopInfo(),
-    open: () => openPiDesktop(),
-    install: () => installPiDesktop(mainWindow, (received, total) => sendToWindow(IpcChannels.installProgress, received, total)),
-  },
-  autostart: { get: getAutostart, set: setAutostart },
+app.whenReady().then(async () => {
+  app.setAppUserModelId("dev.pi-desktop.mate");
+  await handOverAutostart();
+  const desktop = await findPiDesktop();
+
+  if (isRunnerOnlyLaunch()) {
+    // 로그인할 때: 이번 부팅에서도 시간표가 돌도록 Pi Desktop에 실행기 확인을 맡긴다 (창 없음)
+    if (desktop && existsSync(desktop) && process.platform !== "darwin") {
+      spawn(desktop, [RUNNER_ONLY_ARG], { detached: true, stdio: "ignore" }).unref();
+    }
+    app.quit();
+    return;
+  }
+
+  const { response } = await dialog.showMessageBox({
+    type: "info",
+    title: "Pi Desktop Mate",
+    message: "Pi Desktop Mate는 Pi Desktop으로 합쳐졌습니다",
+    detail: [
+      "0.7.0부터 Mate는 Pi Desktop 창 왼쪽 막대의 Mate 작업 공간입니다.",
+      "임무·인박스·대화 등 데이터(~/.pi-desktop-mate)와 실행기는 그대로 이어집니다. 로그인할 때 실행기 시작도 Pi Desktop이 이어받습니다.",
+      "",
+      "이 앱은 더 업데이트되지 않습니다. 확인한 뒤 지워도 됩니다 (Windows: 설정 → 앱).",
+      ...(desktop ? [] : ["", "이 PC에서 Pi Desktop을 찾지 못했습니다. 내려받아 설치하세요."]),
+    ].join("\n"),
+    buttons: [desktop ? "Pi Desktop 열기" : "Pi Desktop 내려받기", "닫기"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response === 0) {
+    if (desktop) await openPiDesktop().catch(() => undefined);
+    else await shell.openExternal(`https://github.com/${PI_DESKTOP_REPO}/releases/latest`);
+  }
+  app.quit();
 });
 
-function createWindow(): void {
-  // 지난번 창 크기·위치·최대화를 되살린다 (화면 밖이면 위치는 버린다)
-  const windowStateFile = join(app.getPath("userData"), "window-state.json");
-  const windowState = loadWindowState(
-    windowStateFile,
-    { width: 1100, height: 760, minWidth: 720, minHeight: 480 },
-    screen.getAllDisplays().map((d) => d.workArea),
-  );
-  mainWindow = new BrowserWindow({
-    ...(windowState.x !== undefined && windowState.y !== undefined ? { x: windowState.x, y: windowState.y } : {}),
-    width: windowState.width,
-    height: windowState.height,
-    minWidth: 720,
-    minHeight: 480,
-    title: "Pi Desktop Mate",
-    // Linux 설치본은 실행 파일에 아이콘이 없어 창에 직접 준다 (electron-builder.yml extraResources)
-    ...(process.platform === "linux" && app.isPackaged ? { icon: join(process.resourcesPath, "icon.png") } : {}),
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: join(here, "../preload/index.cjs"),
-      sandbox: true,
-      contextIsolation: true,
-    },
-  });
-  if (windowState.maximized) mainWindow.maximize();
-  trackWindowState(mainWindow, windowStateFile);
-  mainWindow.on("closed", () => (mainWindow = undefined));
-  // 링크는 앱 안이 아니라 기본 브라우저로 연다
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) void shell.openExternal(url);
-    return { action: "deny" };
-  });
-  // 개발 서버 주소는 설치본에서 쓰지 않는다 (Pi Desktop과 같은 이유)
-  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else void mainWindow.loadFile(join(here, "../renderer/index.html"));
-}
-
-if (isRunnerOnlyLaunch()) {
-  // 로그인 때 띄운 실행: 창 없이 실행기만 확인하고 끝낸다 (실행기는 분리된 프로세스라 남는다)
-  void app.whenReady().then(async () => {
-    await mate.ensureRunner();
-    app.quit();
-  });
-} else if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
-  app.on("second-instance", (_event, argv) => {
-    if (argv.includes(RUNNER_ONLY_ARG)) return;
-    if (mainWindow?.isMinimized()) mainWindow.restore();
-    mainWindow?.focus();
-  });
-  void app.whenReady().then(async () => {
-    mate.start();
-    createWindow();
-    app.on("will-quit", () => mate.dispose());
-    // 자동 업데이트: 설치 직전에는 실행기를 멈춘다 (실행기가 Electron을 Node로 쓰는 경우 설치 파일을 잡고 있지 않게)
-    const updater = new Updater(
-      (state) => sendToWindow(IpcChannels.updateStateChanged, state),
-      () => mainWindow,
-      () => mate.stopLocalRunner(),
-    );
-    ipcMain.handle(IpcChannels.updateState, () => updater.current);
-    ipcMain.handle(IpcChannels.checkForUpdates, (_e, interactive: boolean) => updater.check(interactive === true));
-    ipcMain.handle(IpcChannels.confirmUpdate, () => updater.confirmUpdate());
-    updater.start();
-  });
-  app.on("window-all-closed", () => app.quit());
-}
+app.on("window-all-closed", () => undefined);

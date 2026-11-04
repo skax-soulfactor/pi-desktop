@@ -1,6 +1,8 @@
 # 세 앱의 역할과 데이터 경계 — 설계 문서 (v0.1)
 
-> 관련 문서: [Pi Desktop 설계](DESIGN.md), [Pi Desktop Agent 설계](DESIGN-AGENT.md), [Pi Desktop Mate 설계](DESIGN-MATE.md), [Mate 원격 실행기](DESIGN-MATE-REMOTE.md), [세 앱을 하나로 (검토 중)](DESIGN-ONE-APP.md), [개발 방식](CONTRIBUTING.md)
+> 관련 문서: [Pi Desktop 설계](DESIGN.md), [Pi Desktop Agent 설계](DESIGN-AGENT.md), [Pi Desktop Mate 설계](DESIGN-MATE.md), [Mate 원격 실행기](DESIGN-MATE-REMOTE.md), [세 앱을 하나로 (0.7.0에서 합침)](DESIGN-ONE-APP.md), [개발 방식](CONTRIBUTING.md)
+
+> 0.7.0부터 세 앱은 설치본 하나(Pi Desktop)의 세 작업 공간(Pi·Agent·Mate)이다. 아래 "앱"은 작업 공간으로 읽는다. 데이터 경계(§2·§3)는 그대로다.
 
 이 저장소의 세 앱은 같은 Pi를 엔진으로 쓰지만 하는 일이 다르다. 이 문서는 세 앱이 **무엇을 함께 쓰고 무엇을 나누는지**,
 그리고 **어디서 도는지**를 정한다. 각 앱의 설계 문서가 이 문서와 어긋나면 이 문서를 따른다.

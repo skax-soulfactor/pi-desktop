@@ -1,6 +1,9 @@
 # Pi Desktop Agent
 
-Pi를 엔진으로 쓰는 데스크톱 에이전트입니다. Pi Desktop과는 **별도의 앱**이며, 기능은 Pi 패키지인
+> **0.7.0부터 Agent는 Pi Desktop 창 안의 작업 공간입니다** ([DESIGN-ONE-APP.md](../../docs/DESIGN-ONE-APP.md)). 이 폴더의 본체(`src/main/agent-main.ts`)·화면·웹 서버를 Pi Desktop이 씁니다.
+> 단독 앱(`src/main/index.ts`)은 옛 설치본을 위한 징검다리만 남았습니다: 열면 "Pi Desktop으로 합쳐졌습니다"를 보이고 Pi Desktop을 엽니다. 아래 설명의 화면·기능은 Agent 작업 공간에서 그대로입니다.
+
+Pi를 엔진으로 쓰는 데스크톱 에이전트입니다. 0.6.x까지는 Pi Desktop과 **별도의 앱**이었으며, 기능은 Pi 패키지인
 [`packages/agent-kit`](../../packages/agent-kit)(확장·스킬)으로 구현합니다.
 
 - 설계: [docs/DESIGN-AGENT.md](../../docs/DESIGN-AGENT.md)

@@ -14,6 +14,11 @@
 #   - version(예: v0.6.4)을 넣으면 고른 브랜치의 커밋에 그 태그를 만들고 릴리스까지 올린다.
 #     태그를 push할 수 없는 곳(휴대폰의 GitHub 앱, 브랜치에만 push하는 자동화)에서 릴리스할 때 쓴다
 # 코드 서명은 하지 않는다 (README "설치와 업데이트" 참고).
+#
+# 0.7.0부터 설치본은 Pi Desktop 하나다 (Agent·Mate는 그 안의 작업 공간, DESIGN-ONE-APP.md).
+# Agent·Mate 설치 파일은 징검다리 v0.7.0에서만 만든다: 옛 단독 설치본이 이 버전으로 마지막 업데이트를 받아
+# "Pi Desktop으로 합쳐졌습니다"를 보인다. 그 뒤 릴리스에는 agent*.yml·mate*.yml이 없어 옛 설치본은 0.7.0에서 멈춘다.
+# 만들기만 할 때(version 비움) 징검다리도 만들어 보려면 bridge를 켠다.
 name: Release
 
 on:
@@ -25,6 +30,11 @@ on:
         description: "릴리스할 버전 (예: v0.6.4). 비우면 만들기만 하고 올리지 않는다"
         required: false
         default: ""
+      bridge:
+        description: "만들기만 할 때 Agent·Mate 징검다리도 만든다 (v0.7.0은 늘 만든다)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -38,6 +48,9 @@ jobs:
     name: 빌드 (${{ matrix.app }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
+    env:
+      # Pi Desktop은 늘, Agent·Mate(징검다리)는 v0.7.0에서만 만든다 (위 설명)
+      BUILD_APP: ${{ matrix.app == 'desktop' || (github.ref_type == 'tag' && github.ref_name == 'v0.7.0') || inputs.version == 'v0.7.0' || (inputs.version == '' && inputs.bridge) }}
     strategy:
       fail-fast: true
       matrix:
@@ -55,19 +68,21 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
+        if: env.BUILD_APP == 'true'
         with:
           node-version: 24
           cache: npm
 
       - name: 의존성 설치
+        if: env.BUILD_APP == 'true'
         run: npm ci
 
       - name: agent-kit 테스트
-        if: matrix.app == 'agent'
+        if: env.BUILD_APP == 'true' && matrix.app == 'desktop'
         run: npm test -w @pi-desktop/agent-kit
 
       - name: 앱 버전을 태그에 맞추기
-        if: env.RELEASE_TAG != ''
+        if: env.BUILD_APP == 'true' && env.RELEASE_TAG != ''
         shell: bash
         run: |
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || { echo "버전은 v1.2.3 모양이어야 합니다: $RELEASE_TAG"; exit 1; }
@@ -76,9 +91,11 @@ jobs:
           npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version -w @pi-desktop/host-agent
 
       - name: 설치 파일 만들기
+        if: env.BUILD_APP == 'true'
         run: npm run dist -w "@pi-desktop/${{ matrix.app }}"
 
       - name: 결과물 넘기기
+        if: env.BUILD_APP == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.app }}-${{ matrix.os }}
@@ -148,7 +165,10 @@ jobs:
         run: |
           ls -la dist
           # 앱마다 업데이트 정보 파일이 있어야 자동 업데이트가 된다 (없으면 올리지 않고 멈춘다)
-          for f in latest.yml agent.yml mate.yml latest-linux.yml agent-linux.yml mate-linux.yml; do
+          files="latest.yml latest-linux.yml"
+          # 징검다리(v0.7.0)는 옛 Agent·Mate 설치본이 볼 파일도 있어야 한다
+          [ "$RELEASE_TAG" = v0.7.0 ] && files="$files agent.yml mate.yml agent-linux.yml mate-linux.yml"
+          for f in $files; do
             [ -f "dist/$f" ] || { echo "업데이트 정보 파일이 없습니다: $f"; exit 1; }
           done
           # 손으로 돌렸으면 태그가 아직 없다. --target의 커밋(빌드한 커밋)에 태그를 만든다
@@ -156,5 +176,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Pi Desktop $RELEASE_TAG" \
-            --notes "세 앱(Pi Desktop·Pi Desktop Agent·Pi Desktop Mate)과 휴대폰 웹 버전(pi-web) 설치 파일입니다. 파일 이름 앞부분으로 앱을 구분합니다: Pi-Desktop-*, Pi-Desktop-Agent-*, Pi-Desktop-Mate-*. 설치한 앱은 앱 안에서 자동 업데이트됩니다(Windows·AppImage, macOS는 새 버전을 알림)." \
+            --notes "Pi Desktop(Agent·Mate 작업 공간 포함)과 휴대폰 웹 버전(pi-web) 설치 파일입니다. 설치한 앱은 앱 안에서 자동 업데이트됩니다(Windows·AppImage, macOS는 새 버전을 알림). v0.7.0에는 옛 단독 Agent·Mate 설치본을 위한 마지막 징검다리 파일(Pi-Desktop-Agent-*, Pi-Desktop-Mate-*)도 있습니다." \
             --generate-notes

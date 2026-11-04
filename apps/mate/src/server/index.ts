@@ -44,7 +44,7 @@ configureShell({ name: "Pi Desktop Mate", version: version(), dataDir, appPath: 
 (process as unknown as { resourcesPath: string }).resourcesPath = process.env.PI_WEB_RESOURCES ?? join(here, "resources");
 
 // Mate main: ipcMain 처리기를 걸고, app.whenReady 뒤에 실행기에 붙는다 (없으면 띄운다)
-await import("../main/index");
+await import("../main/web-main");
 
 /**
  * Pi 설치·로그인은 Pi Desktop이 맡는다. 휴대폰에서는 같은 묶음의 Pi Web(pi-web, 8787)이 그 자리다.

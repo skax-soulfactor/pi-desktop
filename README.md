@@ -1,20 +1,21 @@
 # Pi Desktop 모노레포
 
-[Pi coding agent](https://pi.dev)를 **포크하지 않고**, 설치된 `pi` 그대로 엔진으로 쓰는 데스크톱 앱 세 개를 담은 저장소입니다.
-Pi를 업데이트하면 세 앱도 그대로 따라갑니다.
+[Pi coding agent](https://pi.dev)를 **포크하지 않고**, 설치된 `pi` 그대로 엔진으로 쓰는 데스크톱 앱 **Pi Desktop**의 저장소입니다.
+Pi를 업데이트하면 앱도 그대로 따라갑니다. 0.7.0부터 Agent와 Mate는 따로 설치하는 앱이 아니라 Pi Desktop 창 안의 **작업 공간**입니다 ([DESIGN-ONE-APP.md](docs/DESIGN-ONE-APP.md)).
 
 ## 앱
 
-| 앱 | 하는 일 | 설명서 | 설계 | 릴리스 태그 |
-|---|---|---|---|---|
-| **Pi Desktop** | 설치된 Pi를 GUI로 쓴다. 채팅, 여러 프로젝트 탭, 로컬·WSL·SSH 호스트, Pi 설치·로그인·모델 관리, 리소스·Marketplace | [apps/desktop](apps/desktop/README.md) | [DESIGN.md](docs/DESIGN.md) | `v*` |
-| **Pi Desktop Agent** | Pi를 엔진으로 쓰는 데스크톱 에이전트. 승인, 지식베이스, 스킬, 예약 작업, 다른 사람의 에이전트와 연결 | [apps/agent](apps/agent/README.md) | [DESIGN-AGENT.md](docs/DESIGN-AGENT.md) | `agent-v*` |
-| **Pi Desktop Mate** | 묻기 전에 먼저 살펴보고 알려 주는 능동형 코딩 동료. 임무 시간표, 인박스, 별도 작업 공간에서 고치기, 텔레그램 | [apps/mate](apps/mate/README.md) | [DESIGN-MATE.md](docs/DESIGN-MATE.md) | `mate-v*` |
+| 작업 공간 | 하는 일 | 소스·설명서 | 설계 |
+|---|---|---|---|
+| **Pi** | 설치된 Pi를 GUI로 쓴다. 채팅, 여러 프로젝트 탭, 로컬·WSL·SSH 호스트, Pi 설치·로그인·모델 관리, 리소스·Marketplace | [apps/desktop](apps/desktop/README.md) | [DESIGN.md](docs/DESIGN.md) |
+| **Agent** | Pi를 엔진으로 쓰는 개인 에이전트. 승인, 지식베이스, 스킬, 예약 작업, 다른 사람의 에이전트와 연결 | [apps/agent](apps/agent/README.md) | [DESIGN-AGENT.md](docs/DESIGN-AGENT.md) |
+| **Mate** | 묻기 전에 먼저 살펴보고 알려 주는 능동형 코딩 동료. 임무 시간표, 인박스, 별도 작업 공간에서 고치기, 텔레그램 | [apps/mate](apps/mate/README.md) | [DESIGN-MATE.md](docs/DESIGN-MATE.md) |
 
-세 앱은 따로 설치하고 따로 업데이트합니다. Pi Desktop은 Pi를 GUI로 쓰는 놀이터, Agent는 혼자 쓰는 커스텀 Pi, Mate는 개인 데이터를 먼저 챙기는 Pi 기반 비서입니다. 함께 쓰는 것과 나눠 쓰는 것은 다음과 같습니다 (자세히는 [DESIGN-APPS.md](docs/DESIGN-APPS.md)).
+창 왼쪽 막대(휴대폰 웹은 아래 막대)에서 작업 공간을 바꿉니다. 바꿔도 다른 작업 공간의 대화·실행은 이어집니다. 쓰지 않는 작업 공간은 메뉴바 "작업 공간"이나 Pi 관리 → "작업 공간"에서 끕니다.
+Pi는 Pi를 GUI로 쓰는 놀이터, Agent는 혼자 쓰는 커스텀 Pi, Mate는 개인 데이터를 먼저 챙기는 Pi 기반 비서입니다. 함께 쓰는 것과 나눠 쓰는 것은 다음과 같습니다 (자세히는 [DESIGN-APPS.md](docs/DESIGN-APPS.md)).
 
-- **함께 씀**: Pi 설치본, 로그인, 모델·프로바이더 설정(`~/.pi/agent`의 `auth.json`·`models.json`·`settings.json`). 로그인과 모델은 Pi Desktop에서 한 번 하면 다른 두 앱도 씁니다. Agent·Mate는 Pi 관리 화면을 따로 두지 않고, Pi가 없으면 Pi Desktop을 열거나 설치하라고 안내합니다.
-- **나눠 씀**: 세션, 스킬·프롬프트·확장, MCP 서버, 사용자 지침(`AGENTS.md`), 기억·권한·작업 같은 앱 데이터, 휴지통·아카이브. Pi Desktop은 Pi의 기본 폴더(`~/.pi/agent`)를 그대로 쓰고, Agent는 `~/.pi-desktop-agent`, Mate는 `~/.pi-desktop-mate`에 둡니다. 데몬·실행기, 릴리스 태그, 개발 실행의 mock LLM 포트도 나눕니다.
+- **함께 씀**: Pi 설치본, 로그인, 모델·프로바이더 설정(`~/.pi/agent`의 `auth.json`·`models.json`·`settings.json`). 로그인과 모델은 Pi 관리에서 한 번 하면 Agent·Mate도 씁니다. SSH 호스트 목록과 설치·업데이트도 하나입니다.
+- **나눠 씀**: 세션, 스킬·프롬프트·확장, MCP 서버, 사용자 지침(`AGENTS.md`), 기억·권한·작업 같은 앱 데이터, 휴지통·아카이브. Pi Desktop은 Pi의 기본 폴더(`~/.pi/agent`)를 그대로 쓰고, Agent는 `~/.pi-desktop-agent`, Mate는 `~/.pi-desktop-mate`에 둡니다. 데몬·실행기, 개발 실행의 mock LLM 포트도 나눕니다.
 - **어디서 도는가**: 앱은 클라이언트이고, 실제로 도는 곳은 Pi가 설치된 호스트(로컬·WSL·SSH)입니다. Pi Desktop은 이미 그렇고, Agent·Mate도 같은 구조로 옮기는 중입니다.
 
 ## 구성
@@ -22,8 +23,8 @@ Pi를 업데이트하면 세 앱도 그대로 따라갑니다.
 ```
 apps/
   desktop/              Pi Desktop (Electron: main · preload · React 렌더러)
-  agent/                Pi Desktop Agent (Electron, Pi Desktop의 연결·채팅 모듈을 복사해 씀)
-  mate/                 Pi Desktop Mate (Electron)
+  agent/                Agent 작업 공간 (본체 agent-main·화면·웹 서버. 단독 앱은 0.7.0 징검다리만 남음)
+  mate/                 Mate 작업 공간 (본체 mate-main·화면·웹 서버. 단독 앱은 0.7.0 징검다리만 남음)
 packages/
   host-protocol/        앱 ↔ Host Agent 메시지 형식 (JSONL, JSON-RPC 2.0)
   host-agent/           대상 호스트에서 도는 상주 데몬(agentd)과 연결기(connect). Pi Desktop·Agent가 씀
@@ -43,20 +44,21 @@ Mate ───────── mate-runner → pi --mode json -e mate-kit     
 
 ## 설치
 
-[Releases](https://github.com/skax-soulfactor/pi-desktop/releases)에서 앱과 OS에 맞는 파일을 받습니다. 0.6.4부터 세 앱이 한 릴리스(**Latest**)에 함께 올라가며, 파일 이름 앞부분(`Pi-Desktop-`, `Pi-Desktop-Agent-`, `Pi-Desktop-Mate-`)으로 구분합니다.
+[Releases](https://github.com/skax-soulfactor/pi-desktop/releases)의 **Latest**에서 OS에 맞는 Pi Desktop 파일을 받습니다. Agent·Mate는 그 안에 들어 있습니다.
 
-| OS | Pi Desktop | Pi Desktop Agent | Pi Desktop Mate |
-|---|---|---|---|
-| Windows | `Pi-Desktop-Setup-<버전>.exe` | `Pi-Desktop-Agent-Setup-<버전>.exe` | `Pi-Desktop-Mate-Setup-<버전>.exe` |
-| macOS | `Pi-Desktop-<버전>-<arch>.dmg` | `Pi-Desktop-Agent-<버전>-<arch>.dmg` | `Pi-Desktop-Mate-<버전>-<arch>.dmg` |
-| Linux | `Pi-Desktop-<버전>-<arch>.AppImage` / `.deb` | `Pi-Desktop-Agent-<버전>-<arch>.AppImage` / `.deb` | `Pi-Desktop-Mate-<버전>-<arch>.AppImage` / `.deb` |
+| OS | 파일 |
+|---|---|
+| Windows | `Pi-Desktop-Setup-<버전>.exe` |
+| macOS | `Pi-Desktop-<버전>-<arch>.dmg` |
+| Linux | `Pi-Desktop-<버전>-<arch>.AppImage` / `.deb` |
 
-처음이라면 **Pi Desktop**을 먼저 설치해 Pi 설치와 로그인을 마친 뒤, 필요한 앱을 더하면 됩니다.
-세 앱 모두 새 버전을 스스로 확인하고, 묻기 전에는 내려받거나 설치하지 않습니다 (Windows·AppImage는 설치까지, 그 밖에는 새 버전을 알리기만). 자세한 동작은 각 앱 설명서에 있습니다.
+앱은 새 버전을 스스로 확인하고, 묻기 전에는 내려받거나 설치하지 않습니다 (Windows·AppImage는 설치까지, 그 밖에는 새 버전을 알리기만).
+
+**예전에 Agent·Mate를 따로 설치했다면**: 그 앱들은 0.7.0으로 마지막 업데이트를 받고 "Pi Desktop으로 합쳐졌습니다"를 보인 뒤 Pi Desktop을 엽니다. 데이터(`~/.pi-desktop-agent`, `~/.pi-desktop-mate`)는 그대로 이어지고, Pi Desktop이 처음 실행할 때 지금 호스트·앱 수치·SSH 호스트 설정을 옮기며, Mate의 "로그인할 때 실행기 시작"도 이어받습니다. 옛 앱은 스스로 지우지 않으니 확인한 뒤 지우면 됩니다 (Windows: 설정 → 앱).
 
 ### 코드 서명
 
-운영체제가 "이 프로그램을 누가 만들었고 그 뒤 바뀌지 않았다"를 확인하는 디지털 서명입니다. 지금은 인증서가 없어 세 앱 모두 서명하지 않으므로 다음처럼 동작합니다.
+운영체제가 "이 프로그램을 누가 만들었고 그 뒤 바뀌지 않았다"를 확인하는 디지털 서명입니다. 지금은 인증서가 없어 서명하지 않으므로 다음처럼 동작합니다.
 
 - Windows: 처음 설치할 때 SmartScreen이 "알 수 없는 게시자" 경고를 띄웁니다. "추가 정보 → 실행"을 누르면 됩니다. 자동 업데이트는 정상으로 동작합니다.
   - 서명하려면 코드 서명 인증서(연 수십만 원 수준)를 사서 CI 비밀 값으로 넣으면 됩니다.
@@ -128,7 +130,7 @@ CI(`.github/workflows/ci.yml`)는 Windows·Linux와 Node 22·24에서 타입 검
 | [docs/DESIGN-AGENT.md](docs/DESIGN-AGENT.md) | Agent 설계: agent-kit 구조, 기능 배치, 단계별 구현 메모, 중계 서버안 |
 | [docs/DESIGN-MATE.md](docs/DESIGN-MATE.md) | Mate 설계: 임무·권한 단계·인박스, 활동 관찰, 텔레그램, Mate 대화 |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | 개발 방식: 언어 규칙, 커밋 단위·메시지, 브랜치·PR, main 룰셋, 릴리스 |
-| [apps/agent/src/vendor/README.md](apps/agent/src/vendor/README.md) | Agent가 Pi Desktop에서 복사해 쓰는 모듈과 다시 가져오는 규칙 |
+| [docs/DESIGN-ONE-APP.md](docs/DESIGN-ONE-APP.md) | 세 앱을 하나로: 작업 공간(플러그인) 구조, 옮겨 가기, 단계 |
 
 ## 라이선스
 

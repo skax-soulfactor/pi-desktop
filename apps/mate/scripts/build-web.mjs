@@ -32,7 +32,6 @@ await bundleServer({
   entry: join(app, "src", "server", "index.ts"),
   outfile: join(out, "server.mjs"),
   replace: [
-    { module: join(app, "src", "main", "updater"), with: shellStubs.updater },
     { module: join(app, "src", "main", "autostart"), with: shellStubs.autostart },
   ],
 });

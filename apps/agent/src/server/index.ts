@@ -43,7 +43,7 @@ configureShell({ name: "Pi Desktop Agent", version: version(), dataDir, appPath:
 (process as unknown as { resourcesPath: string }).resourcesPath = process.env.PI_WEB_RESOURCES ?? join(here, "resources");
 
 // Agent main: ipcMain 처리기를 걸고, app.whenReady 뒤에 데몬에 붙는다
-await import("../main/index");
+await import("../main/web-main");
 
 /**
  * Pi 관리·로그인은 Pi Desktop이 맡는다. 휴대폰에서는 같은 묶음의 Pi Web(pi-web, 8787)이 그 자리다.
