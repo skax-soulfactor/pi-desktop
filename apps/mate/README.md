@@ -1,5 +1,8 @@
 # Pi Desktop Mate
 
+> **0.7.0부터 Mate는 Pi Desktop 창 안의 작업 공간입니다** ([DESIGN-ONE-APP.md](../../docs/DESIGN-ONE-APP.md)). 이 폴더의 본체(`src/main/mate-main.ts`)·화면·웹 서버를 Pi Desktop이 쓰고, "로그인할 때 실행기 시작"은 Pi Desktop을 `--mate-runner-only`로 띄운다.
+> 단독 앱(`src/main/index.ts`)은 옛 설치본을 위한 징검다리만 남았습니다: 자기 로그인 항목을 Pi Desktop에 넘기고 "Pi Desktop으로 합쳐졌습니다"를 보입니다.
+
 묻기 전에 먼저 살펴보고 알려 주는 **능동형 코딩 동료**. 정한 때에 Pi가 작업 폴더를 읽기만 하며 살펴보고, 결과와 제안을 인박스에 남긴다.
 설계는 [docs/DESIGN-MATE.md](../../docs/DESIGN-MATE.md).
 

@@ -77,7 +77,7 @@ CI 작업 이름(`.github/workflows/ci.yml`의 매트릭스)을 바꾸면 룰셋
 
 ## 6. 릴리스
 
-0.6.4부터 세 앱과 웹 묶음을 **태그 하나(`v*`, 예: `v0.6.4`), 워크플로 하나(`.github/workflows/release.yml`), 릴리스 하나**로 올린다. 그 릴리스가 Latest다.
+0.6.4부터 세 앱과 웹 묶음을 **태그 하나(`v*`, 예: `v0.6.4`), 워크플로 하나(`.github/workflows/release.yml`), 릴리스 하나**로 올린다. 그 릴리스가 Latest다. 0.7.0부터 설치본은 Pi Desktop 하나다 (Agent·Mate는 그 안의 작업 공간, v0.7.0에만 옛 단독 앱의 징검다리 파일이 있다. 저장소 [CLAUDE.md](../CLAUDE.md) §3).
 
 | 앱 | 설치 파일 이름 | 자동 업데이트 정보 파일 |
 |---|---|---|

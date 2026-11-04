@@ -1,5 +1,5 @@
 import { app, ipcMain, type BrowserWindow, type WebFrameMain } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { IpcChannels, type PluginWorkspaceId, type WorkspaceId, type WorkspacesState } from "../shared/api";
@@ -7,10 +7,14 @@ import { createAgentMain, type AgentMain, type SshHostList } from "../../../agen
 import { IpcChannels as AgentChannels } from "../../../agent/src/shared/api";
 import { createMateMain, type MateMain } from "../../../mate/src/main/mate-main";
 import { IpcChannels as MateChannels } from "../../../mate/src/shared/api";
+import { getAutostart, setAutostart } from "../../../mate/src/main/autostart";
+
+/** 징검다리 Mate 0.7.0이 남기는 표시: 옛 Mate에서 "로그인할 때 실행기 시작"이 켜져 있었다 (Pi Desktop이 이어받는다) */
+export const MATE_AUTOSTART_WISH = "mate-autostart-wanted";
 
 /**
- * 작업 공간 (설계 DESIGN-ONE-APP.md). Pi Desktop 화면("pi") 옆에 내장 플러그인을 작업 공간으로 띄운다.
- * 지금은 Agent·Mate이고 미리 보기라 기본 꺼짐이다 (설정은 userData/workspaces.json).
+ * 작업 공간 (설계 DESIGN-ONE-APP.md). Pi Desktop 화면("pi") 옆에 내장 플러그인(Agent·Mate)을 작업 공간으로 띄운다.
+ * 0.7.0부터 기본으로 켜져 있다. 끈 것만 userData/workspaces.json에 적는다.
  *
  * - 화면: 플러그인 화면(빌드된 Agent 화면, out/renderer/agent/)을 Pi Desktop 창 안의 iframe으로 연다.
  *   CSS·화면 코드가 섞이지 않고, 한 작업 공간이 멈춰도 다른 화면은 그대로다.
@@ -21,8 +25,8 @@ import { IpcChannels as MateChannels } from "../../../mate/src/shared/api";
  */
 
 const PLUGINS: Array<{ id: PluginWorkspaceId; name: string }> = [
-  { id: "agent", name: "Agent (미리 보기)" },
-  { id: "mate", name: "Mate (미리 보기)" },
+  { id: "agent", name: "Agent" },
+  { id: "mate", name: "Mate" },
 ];
 
 interface Settings {
@@ -72,15 +76,16 @@ export class Workspaces {
     }
   }
 
+  /** 켜져 있는가 (적지 않았으면 켜짐) */
   enabled(id: PluginWorkspaceId): boolean {
-    return this.settings().enabled[id] === true;
+    return this.settings().enabled[id] !== false;
   }
 
   state(): WorkspacesState {
     const settings = this.settings();
     return {
       plugins: PLUGINS.map((p) => {
-        const enabled = settings.enabled[p.id] === true;
+        const enabled = settings.enabled[p.id] !== false;
         const file = this.host.rendererFile(p.id);
         // 개발 서버(http)로 띄운 창은 file:// 프레임을 열 수 없다. 빌드한 화면으로 실행해야 한다
         const reason = process.env.ELECTRON_RENDERER_URL && !app.isPackaged ? "개발 서버 실행에서는 열 수 없습니다 (빌드한 뒤 실행하세요)" : !existsSync(file) ? `화면 파일이 없습니다: ${file}` : undefined;
@@ -94,6 +99,25 @@ export class Workspaces {
   start(): void {
     if (this.enabled("agent")) this.startAgent();
     if (this.enabled("mate")) this.startMate();
+    void this.takeMateAutostartWish();
+  }
+
+  /** 로그인할 때 띄운 실행(--mate-runner-only): 창 없이 Mate 실행기만 확인한다 */
+  async loginLaunch(): Promise<void> {
+    await this.takeMateAutostartWish();
+    if (this.enabled("mate")) await this.mateMain().ensureRunner();
+  }
+
+  /** 옛 Mate에서 켜 두었던 "로그인할 때 실행기 시작"을 Pi Desktop 로그인 항목으로 이어받는다 */
+  private async takeMateAutostartWish(): Promise<void> {
+    const wish = join(app.getPath("userData"), MATE_AUTOSTART_WISH);
+    if (!existsSync(wish)) return;
+    try {
+      if (this.enabled("mate")) await setAutostart(true);
+      rmSync(wish, { force: true });
+    } catch {
+      // 다음 실행에 다시 한다
+    }
   }
 
   setEnabled(id: PluginWorkspaceId, on: boolean): WorkspacesState {
@@ -107,7 +131,11 @@ export class Workspaces {
     }
     if (id === "mate") {
       if (on) this.startMate();
-      else this.stopMate();
+      else {
+        this.stopMate();
+        // Mate를 끄면 로그인할 때 실행기를 띄우지 않는다
+        if (getAutostart().enabled) void setAutostart(false).catch(() => undefined);
+      }
     }
     if (!on && this.active === id) this.show("pi");
     return this.state();
@@ -217,6 +245,11 @@ export class Workspaces {
 
   private startMate(): void {
     if (this.mateStarted) return;
+    this.mateMain().start();
+    this.mateStarted = true;
+  }
+
+  private mateMain(): MateMain {
     this.mate ??= createMateMain({
       window: () => this.host.window(),
       send: (channel, ...args) => this.sendTo("mate", channel, ...args),
@@ -236,14 +269,10 @@ export class Workspaces {
           return { status: "opened" };
         },
       },
-      // 로그인할 때 실행기 시작은 미리 보기에서는 단독 Mate 앱에서 켠다 (0.7.0에서 옮긴다)
-      autostart: {
-        get: () => ({ supported: false, enabled: false, reason: "미리 보기에서는 단독 Pi Desktop Mate 앱의 설정에서 켭니다" }),
-        set: () => ({ supported: false, enabled: false, reason: "미리 보기에서는 단독 Pi Desktop Mate 앱의 설정에서 켭니다" }),
-      },
+      // 로그인할 때 실행기 시작: Pi Desktop을 --mate-runner-only로 띄워 창 없이 실행기만 확인한다 (main/index.ts)
+      autostart: { get: getAutostart, set: setAutostart },
     });
-    this.mate.start();
-    this.mateStarted = true;
+    return this.mate;
   }
 
   private stopMate(): void {

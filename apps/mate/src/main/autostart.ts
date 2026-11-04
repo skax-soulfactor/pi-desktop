@@ -28,7 +28,7 @@ export function isRunnerOnlyLaunch(): boolean {
   return process.platform === "darwin" && app.isPackaged && app.getLoginItemSettings().wasOpenedAtLogin === true;
 }
 
-function linuxDesktopFile(): string {
+export function linuxDesktopFile(): string {
   return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "autostart", "pi-desktop-mate.desktop");
 }
 

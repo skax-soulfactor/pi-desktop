@@ -1,7 +1,7 @@
 # pi-desktop 작업 규칙 (Claude 세션용)
 
 이 저장소에서 일하는 모든 Claude 세션이 따른다. PC의 Claude 데스크톱 앱, 휴대폰 Claude 앱의 클라우드 세션, worktree 세션 모두 같다.
-언어·커밋 단위·커밋 메시지·브랜치·main 룰셋·릴리스 태그는 [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)를 따른다. 세 앱의 역할과 데이터 경계는 [docs/DESIGN-APPS.md](docs/DESIGN-APPS.md)를 따른다.
+언어·커밋 단위·커밋 메시지·브랜치·main 룰셋·릴리스 태그는 [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)를 따른다. 세 작업 공간(Pi·Agent·Mate)의 역할과 데이터 경계는 [docs/DESIGN-APPS.md](docs/DESIGN-APPS.md), 한 앱으로 합친 구조는 [docs/DESIGN-ONE-APP.md](docs/DESIGN-ONE-APP.md)를 따른다.
 
 ## 1. 어디서 누가 일하나
 
@@ -42,15 +42,15 @@
 
 멈추고 묻는 경우: 강제 push, 히스토리 재작성, 브랜치·태그·릴리스 삭제, 저장소 설정 변경, 메이저·마이너 버전 올리기.
 
-## 3. 릴리스: 세 앱을 같은 버전, 한 릴리스로
+## 3. 릴리스: 설치본 하나, 한 릴리스로
 
-2026-11-02부터 **세 앱(Pi Desktop·Agent·Mate)과 웹 묶음은 같은 버전 번호를 쓴다** (0.6.0부터).
-세 앱이 공용 패키지를 함께 써서 거의 늘 같이 바뀌고, "어느 앱을 릴리스할지" 고르다 빠뜨리는 일(예: agent-kit을 고치고 Agent만 릴리스)이 생겼기 때문이다.
+**0.7.0부터 설치본은 Pi Desktop 하나다.** Agent·Mate는 그 안의 작업 공간이다 ([docs/DESIGN-ONE-APP.md](docs/DESIGN-ONE-APP.md)). 웹 묶음도 같은 번호로 함께 나간다.
 
-- 0.6.4부터 **태그 하나(`vX.Y.Z`)로 세 앱과 웹 묶음을 한 릴리스에 함께 올린다** (`.github/workflows/release.yml` 하나).
-  - 한 앱만 바뀌었어도 세 앱을 함께 낸다. 바뀌지 않은 앱도 같은 번호로 다시 빌드된다.
-  - 자동 업데이트 정보 파일은 앱마다 이름이 달라 한 릴리스에서 겹치지 않는다: Pi Desktop `latest*.yml`, Agent `agent*.yml`, Mate `mate*.yml` (각 앱 `electron-builder.yml`의 `publish.channel`). 이 이름을 바꾸면 설치본이 업데이트를 못 찾는다.
-  - `agent-v*`·`mate-v*` 태그는 더 붙이지 않는다. 0.6.4의 `agent-v0.6.4`·`mate-v0.6.4` 릴리스는 0.6.3 이하 설치본이 올라오는 징검다리이므로 **지우지 않는다** (옛 설치본은 가장 높은 `agent-v*`·`mate-v*` 릴리스의 `latest.yml`을 본다).
+- **태그 하나(`vX.Y.Z`), 워크플로 하나(`.github/workflows/release.yml`), 릴리스 하나**. 그 릴리스가 Latest다.
+  - 자동 업데이트 정보 파일은 Pi Desktop의 `latest*.yml`뿐이다. 이 이름을 바꾸면 설치본이 업데이트를 못 찾는다.
+  - **징검다리:** v0.7.0 릴리스에만 옛 단독 Agent·Mate 설치 파일과 `agent*.yml`·`mate*.yml`이 있다. 옛 설치본은 가장 높은 `v*` 릴리스의 자기 채널 파일을 보므로, 0.7.0 뒤 릴리스에 그 파일이 없으면 0.7.0에 머문다. 워크플로가 v0.7.0에서만 Agent·Mate를 만든다. **v0.7.0 릴리스는 지우지 않는다.**
+  - `agent-v0.6.4`·`mate-v0.6.4` 릴리스(0.6.3 이하 설치본의 징검다리)도 **지우지 않는다**.
+- 0.6.x까지는 세 앱을 같은 번호로 한 릴리스에 따로 설치 파일을 올렸다 (0.6.0부터 같은 번호, 0.6.4부터 한 릴리스).
 - 다음 번호: 가장 높은 `v*` 태그의 **패치를 올린다** (예: 0.6.0 → 0.6.1). 마이너·메이저를 올릴 때는 사용자에게 묻는다.
 - 문서만 바뀌었으면 릴리스하지 않는다. 문서 밖의 파일(코드, 빌드 설정, 워크플로, `package.json`)이 바뀌었으면 릴리스한다.
   ```bash

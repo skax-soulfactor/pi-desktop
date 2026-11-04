@@ -2,7 +2,7 @@
 
 > 관련 문서: [세 앱의 역할과 데이터 경계](DESIGN-APPS.md), [Pi Desktop 설계](DESIGN.md), [Agent 설계](DESIGN-AGENT.md), [Mate 설계](DESIGN-MATE.md), [Mate 원격 실행기](DESIGN-MATE-REMOTE.md)
 >
-> 상태: **진행 중**. §0의 결정이 확정됐다(2026-11-04). 단계(§10)대로 진행한다. 0.7.0으로 합치기 전까지는 DESIGN-APPS.md가 그대로 기준이다.
+> 상태: **0.7.0에서 합쳤다** (2026-11-04). §0의 결정대로 P1~P5를 마쳤다. 미룬 것은 §10 각 단계에 적었다.
 
 Pi Desktop·Agent·Mate를 **설치본 하나(Pi Desktop)** 로 합치고, Agent와 Mate는 그 안의 **내장 플러그인(작업 공간)** 으로 둔다.
 데이터는 지금처럼 앱마다 나눈 채로 두고, 창·설치·업데이트·호스트 연결·설정 화면만 하나로 만든다.
@@ -218,7 +218,7 @@ interface PiDesktopPlugin {
 | **P2 Mate 작업 공간 (미리 보기)** | Mate main을 `createMateMain(ctx)`로, preload API를 `createMateApi`로 나눈다(단독 Mate 앱은 창·단일 실행·로그인 시작·업데이트만). Pi Desktop에 Mate 프레임(`window.mate`)·Mate 메뉴바(편집·보기·작업 공간·도움말). 상태 파일은 `userData/mate/`, Mate 홈(`~/.pi-desktop-mate`)과 실행기는 단독 앱과 같다. 로그인 시작은 미리 보기에서 "단독 Mate 앱에서 켭니다"로 두고 0.7.0에서 옮긴다. Pi Desktop 업데이트 설치 직전에 이 PC의 실행기를 멈춘다. 설치본이 mate-runner·mate-kit을 리소스로 싣는다 | Electron으로 띄워: 프레임별 API 분리(mate·piAgent·piDesktop), 실행기 연결(alive), 메뉴바 전환, 로그인 시작 안내, Agent↔Mate 전환. Windows 업데이트 전 실행기 멈춤은 PC에서 |
 | **P3 연결·설정·알림 합치기** | Agent `vendor/`를 Pi Desktop 연결 코드로 바꾼다 (HostManager가 홈별 연결). 설정 칸(§7), "프롬프트와 수치" 한 목록, 알림 모음, SSH 호스트 목록 하나 | Agent 테스트·실제 Pi 계약 테스트, 두 데몬이 한 호스트에서 함께 도는지 |
 | **P4 휴대폰 웹 하나로** | 묶음은 이미 하나(`pi-web.tar.gz`). `pi-web start`(앱 이름 없이)가 세 서버를 함께 켜고 끈다(Agent·Mate 먼저). Pi Web 화면이 켜진 Agent·Mate 서버 주소(`$PI_WEB_HOME/agent·mate/url`)를 받아 **화면 아래 작업 공간 막대**와 iframe으로 연다 (다른 기기에서 열면 그 주소의 호스트로 바꾼다). 서버 프로세스는 셋 그대로 — 각 앱 웹 서버가 자기 토큰·WebSocket·푸시를 갖기 때문이다. 하나의 프로세스로 합치는 것은 각 앱 화면이 경로 접두(`/agent/`)를 받아야 해서 미룬다 | 웹 빌드, 360~412폭 휴대폰 화면에서 막대·Agent·Mate 프레임, 설치 스크립트 업데이트 때 켜져 있던 서버를 모두 다시 켬 |
-| **P5 0.7.0 합치기** | 미리 보기 표시를 떼고 기본으로 켠다. userData 이전(§9), Agent·Mate 징검다리 0.7.0, 릴리스 워크플로를 설치본 하나로 | 옛 0.6.x 설치본에서 0.7.0으로 올라오는지 (Windows·macOS는 PC에서) |
+| **P5 0.7.0 합치기** | 미리 보기 표시를 떼고 기본으로 켠다 (끈 것만 `workspaces.json`에 적는다). 처음 실행할 때 옛 Agent·Mate userData의 지금 호스트·앱 수치를 `userData/agent·mate/`로, SSH 호스트는 없는 이름만 더한다 (`migrate.ts`, `migrated-from.json`). Mate "로그인할 때 실행기 시작"을 Pi Desktop으로: 로그인 항목이 Pi Desktop을 `--mate-runner-only`로 띄워 창 없이 실행기만 확인한다. 업데이트 전 실행기 멈춤. 단독 Agent·Mate 앱은 **징검다리**만 남긴다: 열면 "Pi Desktop으로 합쳐졌습니다" → Pi Desktop 열기/내려받기, Mate는 자기 로그인 항목을 지우고 Pi Desktop이 이어받을 표시(`mate-autostart-wanted`)를 남긴다. 업데이트 확인 없음. 릴리스 워크플로는 v0.7.0에서만 Agent·Mate를 만든다. **미룬 것:** D4 작업 공간을 새 창으로 열기 (필요할 때) | 단위 테스트(이전), Electron으로 기본 켜짐·작업 공간 전환, 징검다리 빌드. 옛 0.6.x 설치본에서 0.7.0으로 올라오는지는 PC에서 |
 
 ## 11. 위험과 대응
 
