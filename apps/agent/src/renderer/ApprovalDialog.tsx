@@ -1,6 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { ApprovalChoice, type ParsedApproval } from "@pi-desktop/agent-kit/approval";
-import type { DialogRequest } from "../vendor/renderer/extension-ui-state";
+import type { DialogRequest } from "../../../desktop/src/renderer/extension-ui-state";
 import { splitOption } from "./approval-option";
 
 type Answer = { value?: string; cancelled?: boolean };

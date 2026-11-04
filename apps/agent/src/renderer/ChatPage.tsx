@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
-import { ChatView } from "../vendor/renderer/ChatView";
-import { StatusLine, Widgets } from "../vendor/renderer/ExtensionUi";
+import { ChatView } from "../../../desktop/src/renderer/ChatView";
+import { StatusLine, Widgets } from "../../../desktop/src/renderer/ExtensionUi";
 import { acceptsImages, splitAttachments, withAttachments } from "./attachments";
 import { useAppNumber } from "./app-number";
 import {
@@ -23,9 +23,9 @@ import type { ImageAttachment } from "../shared/api";
 import { EXAMPLES } from "./examples";
 import { FolderMenu } from "./FolderMenu";
 import type { SessionStats, useAgentSession } from "./use-agent-session";
-import { formatCost, formatPercent, formatTokens } from "../vendor/renderer/format";
-import { QueuePanel } from "../vendor/renderer/RunStatus";
-import { restoreQueueToDraft } from "../vendor/renderer/run-status";
+import { formatCost, formatPercent, formatTokens } from "../../../desktop/src/renderer/format";
+import { QueuePanel } from "../../../desktop/src/renderer/RunStatus";
+import { restoreQueueToDraft } from "../../../desktop/src/renderer/run-status";
 
 /** Pi의 steer: 지금 하던 도구 호출이 끝나는 대로 바로 전달한다 */
 const STEER_TITLE = "끼어들기 (Alt+Enter): 지금 하던 도구 호출이 끝나는 대로 바로 전달합니다";

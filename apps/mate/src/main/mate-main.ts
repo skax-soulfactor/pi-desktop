@@ -49,6 +49,9 @@ import { appTunableStore, initAppTunables } from "./app-tunables";
  * 창을 직접 갖지 않고 컨텍스트로 받아, 단독 Mate 앱(index.ts)과 Pi Desktop의 Mate 작업 공간이 같은 코드를 쓴다.
  * IPC 채널은 모두 "mate:"로 시작해 한 프로세스에서 Pi Desktop·Agent 채널과 부딪히지 않는다.
  */
+/** SSH 호스트 목록이 해 주는 것 (host-deploy의 SshHostStore, Pi Desktop의 SshHostStore가 같은 모양) */
+export type SshHostList = Pick<SshHostStore, "list" | "get" | "save" | "remove">;
+
 export interface MateMainContext {
   /** 대화상자의 부모 창 */
   window(): BrowserWindow | undefined;
@@ -56,12 +59,16 @@ export interface MateMainContext {
   send(channel: string, ...args: unknown[]): void;
   /** Mate 화면을 사용자가 지금 보고 있는가 (보고 있으면 PC 알림을 띄우지 않는다) */
   isViewing(): boolean;
+  /** 사용자에게 알릴 것이 생겼다 (합친 앱은 작업 공간 막대에 표시한다). 단독 앱은 생략 */
+  onNotify?(): void;
   /** 창을 앞으로 가져오고 Mate 화면을 보인다 (알림을 누를 때) */
   reveal(): void;
   /** Mate 화면을 다시 불러온다 (호스트를 바꿀 때) */
   reload(): void;
   /** 이 앱의 상태 파일 폴더 (지금 호스트·SSH 호스트·앱 수치) */
   userData: string;
+  /** SSH 호스트 목록. 합친 앱은 Pi Desktop 것을 함께 쓴다 (DESIGN-ONE-APP.md §6). 생략하면 userData의 ssh-hosts.json */
+  sshHosts?: SshHostList;
   /** Pi 관리: 단독 앱은 Pi Desktop을 찾아 열고, 합친 앱은 Pi 작업 공간의 Pi 관리를 연다 */
   piDesktop: {
     info(): Promise<{ installedPath?: string }>;
@@ -168,8 +175,8 @@ export function createMateMain(ctx: MateMainContext): MateMain {
   let currentHostId = LOCAL_HOST_ID;
   /** 원격이면 그 호스트의 Mate 홈과 사용자 홈 (연결을 준비할 때 정해진다) */
   let remoteMate: RemoteMate | undefined;
-  let sshHostStore: SshHostStore | undefined;
-  const sshHosts = () => (sshHostStore ??= new SshHostStore(join(ctx.userData, "ssh-hosts.json")));
+  let sshHostStore: SshHostList | undefined;
+  const sshHosts = () => (sshHostStore ??= ctx.sshHosts ?? new SshHostStore(join(ctx.userData, "ssh-hosts.json")));
   const isRemote = () => currentHostId !== LOCAL_HOST_ID;
 
   /** 이 PC에서만 되는 일. 원격이면 이유를 알린다 */
@@ -252,6 +259,7 @@ export function createMateMain(ctx: MateMainContext): MateMain {
     }
     const { notes: fresh, state } = newNotes(notes, current);
     notes = state;
+    if (fresh.length > 0 && !ctx.isViewing()) ctx.onNotify?.();
     if (!current.config.desktopNotify || !Notification.isSupported() || ctx.isViewing()) return;
     for (const note of fresh) {
       const shown = new Notification({ title: note.title, body: note.body });

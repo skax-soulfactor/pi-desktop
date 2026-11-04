@@ -27,10 +27,16 @@ export function Shell() {
   useEffect(() => {
     refresh();
     // main이 작업 공간을 바꾸라고 할 때 (알림을 누름·메뉴바·켜고 끄기)
-    return window.piDesktop.onShowWorkspace((id) => {
+    const offShow = window.piDesktop.onShowWorkspace((id) => {
       refresh();
       show(id);
     });
+    // 읽지 않은 알림 수가 바뀌었을 때
+    const offChanged = window.piDesktop.onWorkspacesChanged(refresh);
+    return () => {
+      offShow();
+      offChanged();
+    };
   }, [refresh, show]);
 
   const plugins = (state?.plugins ?? []).filter((p) => p.enabled && p.url);
@@ -49,6 +55,11 @@ export function Shell() {
           {plugins.map((p) => (
             <button key={p.id} type="button" className={active === p.id ? "on" : ""} title={p.name} aria-label={`${p.name} 작업 공간`} onClick={() => show(p.id)}>
               {p.id === "agent" ? "A" : p.id === "mate" ? "M" : String(p.id).slice(0, 1).toUpperCase()}
+              {p.unread ? (
+                <span className="ws-badge" aria-label={`읽지 않은 알림 ${p.unread}개`}>
+                  {p.unread > 99 ? "99+" : p.unread}
+                </span>
+              ) : null}
             </button>
           ))}
         </nav>

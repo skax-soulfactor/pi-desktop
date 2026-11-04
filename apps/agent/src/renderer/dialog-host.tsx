@@ -1,6 +1,6 @@
 import { parseApprovalTitle } from "@pi-desktop/agent-kit/approval";
-import { ExtensionDialog } from "../vendor/renderer/ExtensionUi";
-import type { DialogRequest } from "../vendor/renderer/extension-ui-state";
+import { ExtensionDialog } from "../../../desktop/src/renderer/ExtensionUi";
+import type { DialogRequest } from "../../../desktop/src/renderer/extension-ui-state";
 import { ApprovalDialog } from "./ApprovalDialog";
 
 type Answer = { value?: string; confirmed?: boolean; cancelled?: boolean };

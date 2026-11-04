@@ -541,6 +541,8 @@ export interface PiDesktopApi {
   workspaceReady(id: PluginWorkspaceId): Promise<void>;
   /** main이 작업 공간을 보이라고 할 때 (알림을 누름·메뉴바) */
   onShowWorkspace(listener: (id: WorkspaceId) => void): () => void;
+  /** 작업 공간 상태가 바뀌었다 (읽지 않은 알림 수 등). workspacesState를 다시 읽는다 */
+  onWorkspacesChanged(listener: () => void): () => void;
   /** 작업 기록 (최근 것부터) */
   listActionLog(limit?: number): Promise<ActionLogEntry[]>;
   /** 화면에서 시작한 작업을 기록에 남긴다 (터미널에서 실행한 설치·제거 명령 등) */
@@ -664,6 +666,7 @@ export const IpcChannels = {
   workspaceShown: "pi:workspace-shown",
   workspaceReady: "pi:workspace-ready",
   showWorkspace: "pi:show-workspace",
+  workspacesChanged: "pi:workspaces-changed",
   logAction: "pi:log-action",
   importUpdate: "pi:import-update",
   importRemove: "pi:import-remove",
@@ -720,6 +723,7 @@ export type WorkspaceId = "pi" | PluginWorkspaceId;
 
 export interface WorkspacesState {
   /** 켠 플러그인 작업 공간과 그 화면 주소. 주소가 없으면 이 실행에서는 열 수 없다 (reason) */
-  plugins: Array<{ id: PluginWorkspaceId; name: string; enabled: boolean; url?: string; reason?: string }>;
+  /** unread: 그 작업 공간을 보지 않는 동안 생긴 알림 수 (보면 0) */
+  plugins: Array<{ id: PluginWorkspaceId; name: string; enabled: boolean; url?: string; reason?: string; unread?: number }>;
 }
 

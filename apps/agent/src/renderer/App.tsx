@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Toasts } from "../vendor/renderer/ExtensionUi";
+import { Toasts } from "../../../desktop/src/renderer/ExtensionUi";
 import { OPEN_CHAT_COMMAND, type ChatSummary, type CurrentHost, type PiSetupView, type StoredChat, type UpdateState } from "../shared/api";
-import { FolderBrowser } from "../vendor/renderer/FolderBrowser";
+import { FolderBrowser } from "../../../desktop/src/renderer/FolderBrowser";
 import { ChatPage } from "./ChatPage";
 import { connectionLabel } from "./connection-label";
 import { groupByFolder } from "./chat-groups";
@@ -470,6 +470,7 @@ export function App() {
           hostId={host.id}
           hostLabel={hostLabel(host.id)}
           initialPath={recent[0] ?? home ?? ""}
+          fs={window.piAgent}
           onPick={(folder) => {
             folderPick.resolve(folder);
             setFolderPick(undefined);

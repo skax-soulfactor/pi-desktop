@@ -9,6 +9,14 @@ interface Props {
   initialPath: string;
   onPick: (path: string) => void;
   onClose: () => void;
+  /** 폴더를 읽고 만드는 API. 생략하면 Pi Desktop 것 (Agent 화면은 window.piAgent를 넘긴다) */
+  fs?: FolderFs;
+}
+
+/** 폴더 선택 창이 쓰는 API (Pi Desktop·Agent가 같은 모양) */
+export interface FolderFs {
+  listDir(hostId: string, path?: string): Promise<FsListDirResult>;
+  makeDir(hostId: string, parent: string, name: string): Promise<string>;
 }
 
 /**
@@ -18,7 +26,8 @@ interface Props {
  * - 거르기 칸이 빈 채 Backspace를 누르면 상위 폴더로, Ctrl+Enter는 지금 폴더를 고른다
  * - 마우스는 한 번 눌러 고르고 두 번 눌러 들어간다. 터치(휴대폰 브라우저)는 두 번 누르기가 없어 한 번 눌러 들어간다
  */
-export function FolderBrowser({ hostId, hostLabel, initialPath, onPick, onClose }: Props) {
+export function FolderBrowser({ hostId, hostLabel, initialPath, onPick, onClose, fs }: Props) {
+  const api: FolderFs = fs ?? window.piDesktop;
   const [listing, setListing] = useState<FsListDirResult | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
@@ -36,7 +45,7 @@ export function FolderBrowser({ hostId, hostLabel, initialPath, onPick, onClose 
   async function open(path: string | undefined, fallbackHome = false) {
     setLoading(true);
     try {
-      const result = await window.piDesktop.listDir(hostId, path);
+      const result = await api.listDir(hostId, path);
       setListing(result);
       setTypedPath(result.path);
       setFilter("");
@@ -161,7 +170,7 @@ export function FolderBrowser({ hostId, hostLabel, initialPath, onPick, onClose 
               e.preventDefault();
               void (async () => {
                 try {
-                  const made = await window.piDesktop.makeDir(hostId, listing.path, newName);
+                  const made = await api.makeDir(hostId, listing.path, newName);
                   setNewName(undefined);
                   await open(made);
                 } catch (err) {

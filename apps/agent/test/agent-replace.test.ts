@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { SessionSummary } from "@pi-desktop/host-protocol";
-import { HostConnection } from "../src/vendor/main/host-connection";
+import { HostConnection } from "../../desktop/src/main/host-connection";
 import type { ConnectionState } from "../src/shared/api";
 
 /**

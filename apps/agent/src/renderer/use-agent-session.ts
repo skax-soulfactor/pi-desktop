@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionEventNotification, SessionSummary } from "@pi-desktop/host-protocol/messages";
 import { STATUS_COMMAND } from "@pi-desktop/agent-kit/constants";
-import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState, type PendingQueue } from "../vendor/renderer/chat-state";
+import { addNotice, applyEvent, initialChatState, snapshotState, type ChatState, type PendingQueue } from "../../../desktop/src/renderer/chat-state";
 import {
   applyUiEvent,
   dialogResponse,
@@ -11,7 +11,7 @@ import {
   resolveDialog,
   type DialogRequest,
   type ExtensionUiState,
-} from "../vendor/renderer/extension-ui-state";
+} from "../../../desktop/src/renderer/extension-ui-state";
 import type { ConnectionState, SessionSource } from "../shared/api";
 
 /** 모델 하나 (프로바이더·ID·이름) */

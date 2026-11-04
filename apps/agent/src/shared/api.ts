@@ -18,7 +18,7 @@ import type { UsageRange, UsageSummary } from "@pi-desktop/agent-kit/usage-types
 export type { UsageRange, UsageSource, UsageSummary, UsageTotals } from "@pi-desktop/agent-kit/usage-types";
 import type { Schedule } from "@pi-desktop/agent-kit/schedule-plan";
 import type { TunableItem } from "@pi-desktop/agent-kit/tunables-core";
-import type { ConnectionState } from "../vendor/shared/api";
+import type { ConnectionState } from "../../../desktop/src/shared/api";
 import type { PiSetupView } from "./pi-setup";
 import type { McpCheckResult, McpServerView } from "@pi-desktop/pi-isolation/mcp-presets";
 import type { AppId, Importables, PackageResult, PackageView } from "@pi-desktop/pi-resources/types";
@@ -222,7 +222,7 @@ export interface AgentApi {
   listSshHosts(): Promise<SshHostConfig[]>;
   saveSshHost(host: SshHostConfig, previousName?: string): Promise<SshHostConfig>;
   removeSshHost(name: string): Promise<void>;
-  /** 호스트의 폴더를 데몬으로 훑는다 (원격 호스트의 폴더 고르기). hostId는 vendor FolderBrowser와 맞춘 자리 */
+  /** 호스트의 폴더를 데몬으로 훑는다 (원격 호스트의 폴더 고르기). hostId는 Pi Desktop FolderBrowser와 맞춘 자리 */
   listDir(hostId: string, path?: string): Promise<FsListDirResult>;
   makeDir(hostId: string, parent: string, name: string): Promise<string>;
   pickDirectory(): Promise<string | undefined>;
