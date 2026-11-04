@@ -1,0 +1,120 @@
+import type { IpcRenderer, IpcRendererEvent } from "electron";
+import { IpcChannels, type AgentApi } from "../shared/api";
+
+/**
+ * Agent 화면이 쓰는 window.piAgent (설계 DESIGN-ONE-APP.md §5).
+ * 단독 Agent 앱의 preload와, Pi Desktop의 Agent 작업 공간(프레임) preload가 같은 API를 만든다.
+ */
+export function createAgentApi(ipcRenderer: IpcRenderer): AgentApi {
+  /** main이 보내는 알림을 구독하고, 해제 함수를 돌려준다. */
+  function subscribe<T>(channel: string, listener: (payload: T) => void): () => void {
+    const handler = (_event: IpcRendererEvent, payload: T) => listener(payload);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  }
+
+  const api: AgentApi = {
+    connectionState: () => ipcRenderer.invoke(IpcChannels.connectionState),
+    defaultCwd: () => ipcRenderer.invoke(IpcChannels.defaultCwd),
+    listHosts: () => ipcRenderer.invoke(IpcChannels.listHosts),
+    currentHost: () => ipcRenderer.invoke(IpcChannels.currentHost),
+    setHost: (hostId) => ipcRenderer.invoke(IpcChannels.setHost, hostId),
+    replaceAgent: () => ipcRenderer.invoke(IpcChannels.replaceAgent),
+    listSshHosts: () => ipcRenderer.invoke(IpcChannels.listSshHosts),
+    saveSshHost: (host, previousName) => ipcRenderer.invoke(IpcChannels.saveSshHost, host, previousName),
+    removeSshHost: (name) => ipcRenderer.invoke(IpcChannels.removeSshHost, name),
+    listDir: (hostId, path) => ipcRenderer.invoke(IpcChannels.listDir, hostId, path),
+    makeDir: (hostId, parent, name) => ipcRenderer.invoke(IpcChannels.makeDir, hostId, parent, name),
+    pickDirectory: () => ipcRenderer.invoke(IpcChannels.pickDirectory),
+    pickFiles: () => ipcRenderer.invoke(IpcChannels.pickFiles),
+    readImages: (paths) => ipcRenderer.invoke(IpcChannels.readImages, paths),
+    listTasks: () => ipcRenderer.invoke(IpcChannels.listTasks),
+    listSchedules: () => ipcRenderer.invoke(IpcChannels.listSchedules),
+    setScheduleEnabled: (id, enabled) => ipcRenderer.invoke(IpcChannels.setScheduleEnabled, id, enabled),
+    removeSchedule: (id) => ipcRenderer.invoke(IpcChannels.removeSchedule, id),
+    piSetup: () => ipcRenderer.invoke(IpcChannels.piSetup),
+    openPiDesktop: () => ipcRenderer.invoke(IpcChannels.openPiDesktop),
+    installPiDesktop: () => ipcRenderer.invoke(IpcChannels.installPiDesktop),
+    listSessions: () => ipcRenderer.invoke(IpcChannels.listSessions),
+    closeSession: (sessionId) => ipcRenderer.invoke(IpcChannels.closeSession, sessionId),
+    updateState: () => ipcRenderer.invoke(IpcChannels.updateState),
+    checkForUpdates: (interactive) => ipcRenderer.invoke(IpcChannels.checkForUpdates, interactive),
+    confirmUpdate: () => ipcRenderer.invoke(IpcChannels.confirmUpdate),
+    onUpdateState: (listener) => subscribe(IpcChannels.updateStateChanged, listener),
+    onMenuCommand: (listener) => subscribe(IpcChannels.menuCommand, listener),
+    kbList: (includeArchived) => ipcRenderer.invoke(IpcChannels.kbList, includeArchived),
+    skillsList: () => ipcRenderer.invoke(IpcChannels.skillsList),
+    skillSave: (previous, input) => ipcRenderer.invoke(IpcChannels.skillSave, previous, input),
+    skillDelete: (name) => ipcRenderer.invoke(IpcChannels.skillDelete, name),
+    skillOpenFolder: () => ipcRenderer.invoke(IpcChannels.skillOpenFolder),
+    kbSave: (id, input) => ipcRenderer.invoke(IpcChannels.kbSave, id, input),
+    kbBulk: (ids, action, tag) => ipcRenderer.invoke(IpcChannels.kbBulk, ids, action, tag),
+    kbMerge: (keepId, dropIds) => ipcRenderer.invoke(IpcChannels.kbMerge, keepId, dropIds),
+    kbReviewed: (id) => ipcRenderer.invoke(IpcChannels.kbReviewed, id),
+    kbReview: () => ipcRenderer.invoke(IpcChannels.kbReview),
+    kbStats: () => ipcRenderer.invoke(IpcChannels.kbStats),
+    kbPreview: (prompt) => ipcRenderer.invoke(IpcChannels.kbPreview, prompt),
+    kbExport: () => ipcRenderer.invoke(IpcChannels.kbExport),
+    getAutoLearn: () => ipcRenderer.invoke(IpcChannels.getAutoLearn),
+    setAutoLearn: (on) => ipcRenderer.invoke(IpcChannels.setAutoLearn, on),
+    getElevation: () => ipcRenderer.invoke(IpcChannels.getElevation),
+    setElevation: (on) => ipcRenderer.invoke(IpcChannels.setElevation, on),
+    tunablesList: () => ipcRenderer.invoke(IpcChannels.tunablesList),
+    tunableSet: (id, value) => ipcRenderer.invoke(IpcChannels.tunableSet, id, value),
+    appTunablesList: () => ipcRenderer.invoke(IpcChannels.appTunablesList),
+    appTunableSet: (id, value) => ipcRenderer.invoke(IpcChannels.appTunableSet, id, value),
+    daemonTunablesList: () => ipcRenderer.invoke(IpcChannels.daemonTunablesList),
+    daemonTunableSet: (id, value) => ipcRenderer.invoke(IpcChannels.daemonTunableSet, id, value),
+    listRules: () => ipcRenderer.invoke(IpcChannels.listRules),
+    removeRule: (rule) => ipcRenderer.invoke(IpcChannels.removeRule, rule),
+    listAudit: () => ipcRenderer.invoke(IpcChannels.listAudit),
+    usageSummary: (range) => ipcRenderer.invoke(IpcChannels.usageSummary, range),
+    listMcp: () => ipcRenderer.invoke(IpcChannels.listMcp),
+    addMcpPreset: (id, key) => ipcRenderer.invoke(IpcChannels.addMcpPreset, id, key),
+    setMcpEnabled: (name, enabled) => ipcRenderer.invoke(IpcChannels.setMcpEnabled, name, enabled),
+    removeMcp: (name) => ipcRenderer.invoke(IpcChannels.removeMcp, name),
+    checkMcp: () => ipcRenderer.invoke(IpcChannels.checkMcp),
+    packagesList: () => ipcRenderer.invoke(IpcChannels.packagesList),
+    packageInstall: (source) => ipcRenderer.invoke(IpcChannels.packageInstall, source),
+    packageRemove: (source) => ipcRenderer.invoke(IpcChannels.packageRemove, source),
+    importList: () => ipcRenderer.invoke(IpcChannels.importList),
+    importSkill: (from, name) => ipcRenderer.invoke(IpcChannels.importSkill, from, name),
+    networkState: () => ipcRenderer.invoke(IpcChannels.networkState),
+    setNetworkSettings: (settings) => ipcRenderer.invoke(IpcChannels.setNetworkSettings, settings),
+    saveCard: (card) => ipcRenderer.invoke(IpcChannels.saveCard, card),
+    previewPeer: (address) => ipcRenderer.invoke(IpcChannels.previewPeer, address),
+    pairWith: (address) => ipcRenderer.invoke(IpcChannels.pairWith, address),
+    checkPairings: () => ipcRenderer.invoke(IpcChannels.checkPairings),
+    approvePairing: (requestId) => ipcRenderer.invoke(IpcChannels.approvePairing, requestId),
+    rejectPairing: (requestId) => ipcRenderer.invoke(IpcChannels.rejectPairing, requestId),
+    forgetPeer: (id) => ipcRenderer.invoke(IpcChannels.forgetPeer, id),
+    setPeerPolicy: (id, policy) => ipcRenderer.invoke(IpcChannels.setPeerPolicy, id, policy),
+    approvePeerTask: (id, cwd) => ipcRenderer.invoke(IpcChannels.approvePeerTask, id, cwd),
+    rejectPeerTask: (id) => ipcRenderer.invoke(IpcChannels.rejectPeerTask, id),
+    suggestCard: (current) => ipcRenderer.invoke(IpcChannels.suggestCard, current),
+    mcpReadText: () => ipcRenderer.invoke(IpcChannels.mcpReadText),
+    mcpWriteText: (text: string) => ipcRenderer.invoke(IpcChannels.mcpWriteText, text),
+    openSession: (cwd, from) => ipcRenderer.invoke(IpcChannels.openSession, cwd, from),
+    listHistory: () => ipcRenderer.invoke(IpcChannels.listHistory),
+    searchHistory: (query) => ipcRenderer.invoke(IpcChannels.searchHistory, query),
+    deleteChat: (path) => ipcRenderer.invoke(IpcChannels.deleteChat, path),
+    setArchived: (path, archived) => ipcRenderer.invoke(IpcChannels.setArchived, path, archived),
+    listTrash: () => ipcRenderer.invoke(IpcChannels.listTrash),
+    restoreTrash: (id) => ipcRenderer.invoke(IpcChannels.restoreTrash, id),
+    emptyTrash: (ids) => ipcRenderer.invoke(IpcChannels.emptyTrash, ids),
+    attachSession: (sessionId, lastSeq) => ipcRenderer.invoke(IpcChannels.attachSession, sessionId, lastSeq),
+    sendCommand: (sessionId, command) => ipcRenderer.invoke(IpcChannels.sendCommand, sessionId, command),
+    sendRecord: (sessionId, record) => ipcRenderer.invoke(IpcChannels.sendRecord, sessionId, record),
+    onConnection: (listener) => subscribe(IpcChannels.connectionChanged, listener),
+    onSessionEvent: (listener) => subscribe(IpcChannels.sessionEvent, listener),
+    onSessionExit: (listener) => subscribe(IpcChannels.sessionExit, listener),
+    onUiResolved: (listener) => subscribe(IpcChannels.uiResolved, listener),
+    onTasksChanged: (listener) => subscribe(IpcChannels.tasksChanged, () => listener()),
+    onInstallProgress: (listener) => {
+      const handler = (_event: IpcRendererEvent, received: number, total: number) => listener(received, total);
+      ipcRenderer.on(IpcChannels.installProgress, handler);
+      return () => ipcRenderer.removeListener(IpcChannels.installProgress, handler);
+    },
+  };
+  return api;
+}
