@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const desktop = join(dirname(fileURLToPath(import.meta.url)), "..");
-for (const id of ["agent"]) {
+for (const id of ["agent", "mate"]) {
   const from = join(desktop, "..", id, "out", "renderer");
   const to = join(desktop, "out", "renderer", id);
   if (!existsSync(join(from, "index.html"))) throw new Error(`${id} 화면 빌드가 없습니다: ${from} (npm run build -w @pi-desktop/${id})`);

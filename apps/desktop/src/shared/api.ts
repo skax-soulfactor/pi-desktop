@@ -715,7 +715,7 @@ export const IpcChannels = {
 } as const;
 
 /** 작업 공간 (DESIGN-ONE-APP.md): "pi"는 Pi Desktop 화면, 나머지는 내장 플러그인 */
-export type PluginWorkspaceId = "agent";
+export type PluginWorkspaceId = "agent" | "mate";
 export type WorkspaceId = "pi" | PluginWorkspaceId;
 
 export interface WorkspacesState {
