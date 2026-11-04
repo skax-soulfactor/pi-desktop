@@ -168,6 +168,15 @@ export class Workspaces {
     });
   }
 
+  /**
+   * 대화상자(폴더 고르기·확인 창)의 부모 창: 새 창으로 연 작업 공간을 보고 있으면 그 창, 아니면 Pi Desktop 창.
+   * 대화상자는 사용자가 지금 누른 창에서 뜬다 (다른 창 뒤에 숨은 창에 붙지 않게)
+   */
+  private parentWindow(id: PluginWorkspaceId): BrowserWindow | undefined {
+    const own = this.windowOf(id);
+    return own?.isFocused() ? own : this.host.window();
+  }
+
   /** 사용자가 이 작업 공간을 지금 보고 있는가 (창 안에서든, 새 창에서든) */
   private viewing(id: PluginWorkspaceId): boolean {
     return (Boolean(this.host.window()?.isFocused()) && this.active === id) || Boolean(this.windowOf(id)?.isFocused());
@@ -252,7 +261,7 @@ export class Workspaces {
   private startAgent(): void {
     if (this.agentStarted) return;
     this.agent ??= createAgentMain({
-      window: () => this.host.window(),
+      window: () => this.parentWindow("agent"),
       send: (channel, ...args) => this.sendTo("agent", channel, ...args),
       isViewing: () => this.viewing("agent"),
       onNotify: () => this.notified("agent"),
@@ -291,7 +300,7 @@ export class Workspaces {
 
   private mateMain(): MateMain {
     this.mate ??= createMateMain({
-      window: () => this.host.window(),
+      window: () => this.parentWindow("mate"),
       send: (channel, ...args) => this.sendTo("mate", channel, ...args),
       isViewing: () => this.viewing("mate"),
       onNotify: () => this.notified("mate"),
