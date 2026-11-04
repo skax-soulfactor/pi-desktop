@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import type { PiLocation, PiUpdateTarget } from "@pi-desktop/host-protocol";
+import { daemonTunables } from "./tunables";
 
 /**
  * Pi Manager의 업데이트 실행 (설계 §4.9 "업데이트"). Pi의 `pi update`를 그대로 쓴다.
@@ -18,10 +19,7 @@ export const UPDATE_ARGS: Record<PiUpdateTarget, string[]> = {
   models: ["update", "--models"],
 };
 
-/** 출력은 끝부분만 남긴다 (응답 크기 제한) */
-const OUTPUT_LIMIT = 64 * 1024;
-/** 너무 오래 걸리면 멈춘다 (네트워크가 멈춘 경우 등) */
-const UPDATE_TIMEOUT_MS = 15 * 60 * 1000;
+// 출력은 끝부분만 남기고(응답 크기 제한), 너무 오래 걸리면 멈춘다(네트워크가 멈춘 경우 등). 설정으로 꺼냈다 (daemon.piUpdate*)
 
 export interface PiUpdateRun {
   exitCode: number | null;
@@ -52,7 +50,7 @@ export function runPiUpdate(
     let timedOut = false;
     const onData = (chunk: Buffer) => {
       const text = chunk.toString("utf8");
-      output = (output + text).slice(-OUTPUT_LIMIT);
+      output = (output + text).slice(-daemonTunables().num("daemon.piUpdateOutputKb") * 1024);
       options.onOutput?.(text);
     };
     child.stdout.on("data", onData);
@@ -60,7 +58,7 @@ export function runPiUpdate(
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill();
-    }, options.timeoutMs ?? UPDATE_TIMEOUT_MS);
+    }, options.timeoutMs ?? daemonTunables().num("daemon.piUpdateTimeoutMinutes") * 60_000);
     const finish = (exitCode: number | null) => {
       clearTimeout(timer);
       resolve({ exitCode, output, timedOut });

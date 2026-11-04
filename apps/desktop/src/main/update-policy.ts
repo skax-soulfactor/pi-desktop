@@ -1,3 +1,5 @@
+import { appNum } from "./app-tunables";
+import { appDefault } from "../shared/app-tunables";
 /**
  * 자동 업데이트 방식 (M5 인스톨러·자동 업데이트). electron 없이 판단하는 순수 함수라 테스트한다.
  *
@@ -86,5 +88,8 @@ export function resultPrompt(status: "none" | "error" | "disabled" | "downloadin
 }
 
 /** 시작한 뒤 처음 확인까지와 그 뒤 확인 간격 */
-export const FIRST_CHECK_MS = 15_000;
-export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const FIRST_CHECK_MS = appDefault("app.updateFirstCheckSec") * 1000;
+export const CHECK_INTERVAL_MS = appDefault("app.updateIntervalHours") * 60 * 60 * 1000;
+/** 앱이 시작할 때 읽는 값 (설정 app.updateFirstCheckSec·updateIntervalHours) */
+export const firstCheckMs = () => appNum("app.updateFirstCheckSec") * 1000;
+export const checkIntervalMs = () => appNum("app.updateIntervalHours") * 60 * 60 * 1000;

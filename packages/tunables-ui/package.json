@@ -7,7 +7,8 @@
   "license": "MIT",
   "exports": {
     ".": "./src/TunablesPanel.tsx",
-    "./view": "./src/tunables-view.ts"
+    "./view": "./src/tunables-view.ts",
+    "./app-tunables": "./src/app-tunables.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

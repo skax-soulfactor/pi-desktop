@@ -3,9 +3,7 @@ import electronUpdater from "electron-updater";
 import type { UpdateState } from "../shared/api";
 import {
   availablePrompt,
-  CHECK_INTERVAL_MS,
   compareVersions,
-  FIRST_CHECK_MS,
   isLocalBuild,
   latestAgentRelease,
   UPDATE_CHANNEL,
@@ -17,6 +15,7 @@ import {
   type GithubRelease,
   type UpdatePrompt,
 } from "./update-policy";
+import { appNum } from "./app-tunables";
 
 const { autoUpdater } = electronUpdater;
 
@@ -67,8 +66,8 @@ export class Updater {
       void this.askRestart();
     });
     autoUpdater.on("error", (error) => this.set({ status: "error", error: shortError(error) }));
-    setTimeout(() => void this.check(), FIRST_CHECK_MS).unref?.();
-    setInterval(() => void this.check(), CHECK_INTERVAL_MS).unref?.();
+    setTimeout(() => void this.check(), appNum("app.updateFirstCheckSec") * 1000).unref?.();
+    setInterval(() => void this.check(), appNum("app.updateIntervalHours") * 60 * 60 * 1000).unref?.();
   }
 
   get current(): UpdateState {

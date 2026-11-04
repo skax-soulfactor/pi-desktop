@@ -39,6 +39,7 @@ import { TaskWatcher } from "./task-watcher";
 import { sessionNote } from "./session-notify";
 import { appMenuTemplate } from "./app-menu";
 import { OWNER, REPO, Updater } from "./updater";
+import { appNum, appTunableStore, initAppTunables } from "./app-tunables";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -123,8 +124,7 @@ function notifySession(n: SessionEventNotification): void {
 /** 보고 있을 때 온 대화상자 (세션:요청 id → 확인 타이머). 답하면(onUiResolved) 지운다 */
 const unansweredDialogs = new Map<string, ReturnType<typeof setInterval>>();
 /** 창을 떠났는지 보는 간격과, 그만 기다리는 시간 */
-const LEFT_CHECK_MS = 5_000;
-const LEFT_CHECK_LIMIT_MS = 30 * 60_000;
+// 값은 설정으로 꺼냈다 (app.dialogLeftCheckSec·dialogLeftLimitMinutes)
 
 function remindIfLeft(n: SessionEventNotification): void {
   const id = (n.event as { type?: unknown; id?: unknown }).id;
@@ -133,11 +133,11 @@ function remindIfLeft(n: SessionEventNotification): void {
   if (unansweredDialogs.has(key)) return;
   const started = Date.now();
   const timer = setInterval(() => {
-    if (Date.now() - started > LEFT_CHECK_LIMIT_MS) return forgetDialog(n.sessionId, id);
+    if (Date.now() - started > appNum("app.dialogLeftLimitMinutes") * 60_000) return forgetDialog(n.sessionId, id);
     if (mainWindow?.isFocused()) return;
     forgetDialog(n.sessionId, id);
     showSessionNote(n);
-  }, LEFT_CHECK_MS);
+  }, appNum("app.dialogLeftCheckSec") * 1000);
   timer.unref?.();
   unansweredDialogs.set(key, timer);
 }
@@ -389,6 +389,16 @@ function registerIpc(conn: () => HostConnection): void {
   forward(IpcChannels.setAutoLearn, "setAutoLearn");
   forward(IpcChannels.tunablesList, "tunablesList");
   forward(IpcChannels.tunableSet, "tunableSet");
+  ipcMain.handle(IpcChannels.appTunablesList, () => appTunableStore().items());
+  ipcMain.handle(IpcChannels.appTunableSet, (_event, id: string, value: number | string | null) => appTunableStore().set(String(id), value));
+  ipcMain.handle(IpcChannels.daemonTunablesList, () => {
+    if (!connection) throw new Error("호스트에 아직 연결되지 않았습니다");
+    return connection.request(Methods.tunablesList);
+  });
+  ipcMain.handle(IpcChannels.daemonTunableSet, (_event, id: string, value: number | string | null) => {
+    if (!connection) throw new Error("호스트에 아직 연결되지 않았습니다");
+    return connection.request(Methods.tunableSet, { id, value });
+  });
   forward(IpcChannels.listRules, "listRules");
   forward(IpcChannels.removeRule, "removeRule");
   forward(IpcChannels.listAudit, "listAudit");
@@ -659,6 +669,8 @@ async function switchHost(hostId: string): Promise<void> {
 }
 
 app.whenReady().then(() => {
+  // 앱 수치(app-tunables.json)는 userData에 둔다 (DESIGN-APPS.md §7)
+  initAppTunables(app.getPath("userData"));
   currentHostId = readHostChoice(hostChoiceFile());
   connection = connectTo(currentHostId);
   registerIpc(() => connection!);

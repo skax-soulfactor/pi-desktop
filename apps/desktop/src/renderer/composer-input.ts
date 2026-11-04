@@ -1,3 +1,5 @@
+import { rnum } from "./app-tunables";
+import { appDefault } from "../shared/app-tunables";
 /**
  * 입력창 규칙 (설계 §4.1 입력창). 화면과 분리한 순수 함수.
  */
@@ -47,13 +49,13 @@ export function filterCommands(commands: readonly PiCommand[], query: string, li
   return [...prefix, ...contains].slice(0, limit);
 }
 
-export const HISTORY_LIMIT = 100;
+export const HISTORY_LIMIT = appDefault("app.composerHistory");
 
 /** 보낸 입력을 히스토리 끝에 넣는다. 바로 앞과 같으면 다시 넣지 않는다. */
 export function pushHistory(history: readonly string[], entry: string): string[] {
   const text = entry.trim();
   if (!text || history.at(-1) === text) return [...history];
-  return [...history, text].slice(-HISTORY_LIMIT);
+  return [...history, text].slice(-rnum("app.composerHistory"));
 }
 
 /**

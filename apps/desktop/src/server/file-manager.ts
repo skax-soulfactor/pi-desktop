@@ -5,6 +5,8 @@ import type { ServerResponse } from "node:http";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileEntry, FileListing } from "../shared/web-files";
+import { appNum } from "../main/app-tunables";
+import { appDefault } from "../shared/app-tunables";
 
 /**
  * Pi Web의 파일 관리자 (설계 §5.10 "파일 관리자"). 서버(휴대폰의 Termux)의 파일을 브라우저에서 다룬다.
@@ -12,13 +14,13 @@ import type { FileEntry, FileListing } from "../shared/web-files";
  *
  * - 다룰 수 있는 곳은 홈 폴더 아래뿐이다 (경로를 글자로 견준다. ~/storage처럼 홈 안의 링크를 따라 공용 저장소로 가는 것은 된다)
  * - 지우기는 정말 지운다 (화면이 한 번 더 묻는다)
- * - 텍스트 읽기·쓰기는 2MB까지, 올리기는 한 파일 100MB까지
+ * - 텍스트 읽기·쓰기는 기본 2MB까지(설정 app.fileTextMaxMb), 올리기는 한 파일 100MB까지
  * - 내려받기는 브라우저가 링크로 받으므로 60초짜리 일회용 티켓 주소를 준다 (토큰을 주소에 넣지 않게)
  */
 
-const MAX_TEXT_BYTES = 2 * 1024 * 1024;
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
-const TICKET_MS = 60_000;
+const maxTextBytes = () => appNum("app.fileTextMaxMb") * 1024 * 1024;
+const MAX_UPLOAD_BYTES = appDefault("app.fileUploadMaxMb") * 1024 * 1024;
+const TICKET_MS = appDefault("app.fileTicketSeconds") * 1000;
 
 export class FileManager {
   private readonly tickets = new Map<string, { path: string; expires: number }>();
@@ -110,7 +112,7 @@ export class FileManager {
     const target = this.resolvePath(path);
     const info = await stat(target);
     if (!info.isFile()) throw new Error("파일이 아닙니다");
-    if (info.size > MAX_TEXT_BYTES) throw new Error(`${(info.size / 1024 / 1024).toFixed(1)}MB라 화면에서 열기에 너무 큽니다 (2MB까지). 내려받아 보세요`);
+    if (info.size > maxTextBytes()) throw new Error(`${(info.size / 1024 / 1024).toFixed(1)}MB라 화면에서 열기에 너무 큽니다 (${appNum("app.fileTextMaxMb")}MB까지). 내려받아 보세요`);
     const data = await readFile(target);
     if (data.includes(0)) throw new Error("글 파일이 아닌 것 같습니다 (내려받아 보세요)");
     return { text: data.toString("utf8"), mtime: info.mtimeMs };
@@ -119,7 +121,7 @@ export class FileManager {
   /** baseMtime을 주면 그 사이 다른 곳에서 바뀌었을 때 덮어쓰지 않는다 */
   async writeText(path: string, text: string, baseMtime?: number): Promise<number> {
     const target = this.resolvePath(path);
-    if (Buffer.byteLength(text) > MAX_TEXT_BYTES) throw new Error("2MB가 넘어 저장할 수 없습니다");
+    if (Buffer.byteLength(text) > maxTextBytes()) throw new Error(`${appNum("app.fileTextMaxMb")}MB가 넘어 저장할 수 없습니다`);
     if (baseMtime !== undefined) {
       const now = await stat(target).catch(() => undefined);
       if (now && Math.abs(now.mtimeMs - baseMtime) > 1) throw new Error("연 뒤에 다른 곳에서 파일이 바뀌었습니다. 다시 열어 고치세요");

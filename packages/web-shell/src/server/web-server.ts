@@ -6,6 +6,7 @@ import { clickMenu, clickNotification, hub, onBackgroundNotify } from "../electr
 import { CLICK_OPEN, ShellChannels, type DirEntry, type DirListing } from "../protocol";
 import { listenWebServer } from "./http-server";
 import { PushCenter } from "./push";
+import { webDefault } from "../tunables-defs";
 
 export { hub };
 export { bearerToken, isLoopbackAddress, loadOrCreateToken, requestAllowed, tokenMatches } from "./auth";
@@ -24,7 +25,7 @@ export interface WebServerOptions {
 }
 
 /** 휴대폰에서 올린 파일 하나의 크기 한도 (base64 전) */
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = webDefault("webShell.uploadMaxMb") * 1024 * 1024;
 
 /**
  * 웹 껍데기의 서버 (설계 DESIGN.md §5.11): 화면 파일을 내주고, 토큰을 확인한 WebSocket을 IpcHub의 세션에 잇는다.

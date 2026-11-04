@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { ErrorCodes, JsonRpcError, type PiLocation } from "@pi-desktop/host-protocol";
+import { daemonDefault, daemonTunables } from "./tunables";
 
 const execFileAsync = promisify(execFile);
 
@@ -68,7 +69,7 @@ export async function locatePi(options: LocateOptions = {}): Promise<PiLocation>
 }
 
 /** 이 시간이 지난 `npm root -g` 결과는 쓰면서 뒤에서 새로 묻는다 (nvm 등으로 Node를 바꾼 경우를 따라가게) */
-export const NPM_ROOT_REFRESH_MS = 10 * 60_000;
+export const NPM_ROOT_REFRESH_MS = daemonDefault("daemon.npmRootRefreshMinutes") * 60_000;
 
 /**
  * 비싼 위치 조회 결과를 기억한다. 동시에 여러 번 물어도 조회는 한 번만 한다.
@@ -76,8 +77,10 @@ export const NPM_ROOT_REFRESH_MS = 10 * 60_000;
  * - 찾지 못한 결과(undefined)나 실패는 기억하지 않아, 설치 직후 바로 다시 찾을 수 있다.
  * - fresh: 기억한 값을 쓰지 않고 새로 조회해 기다린다 (기억한 위치가 틀렸을 때).
  * 돌려주는 cached는 기억해 둔 값인지 (낡았을 수 있다는 뜻)
+ * - refreshMs는 숫자나, 쓸 때마다 읽는 함수다 (설정 화면에서 바꾼 값이 바로 반영되도록).
  */
-export function memoizeLookup(query: () => Promise<string | undefined>, refreshMs: number, now: () => number = Date.now) {
+export function memoizeLookup(query: () => Promise<string | undefined>, refreshMs: number | (() => number), now: () => number = Date.now) {
+  const refresh = typeof refreshMs === "function" ? refreshMs : () => refreshMs;
   let last: { value: string; at: number } | undefined;
   let pending: Promise<string | undefined> | undefined;
   const run = (): Promise<string | undefined> => {
@@ -96,7 +99,7 @@ export function memoizeLookup(query: () => Promise<string | undefined>, refreshM
   return {
     async get(fresh = false): Promise<{ value: string | undefined; cached: boolean }> {
       if (fresh || !last) return { value: await run(), cached: false };
-      if (now() - last.at >= refreshMs) void run();
+      if (now() - last.at >= refresh()) void run();
       return { value: last.value, cached: true };
     },
   };
@@ -106,7 +109,7 @@ export function memoizeLookup(query: () => Promise<string | undefined>, refreshM
  * Windows에서 `npm root -g`는 셸과 npm을 띄우느라 2초 넘게 걸린다. 세션을 열 때마다(신뢰 확인, 세션 열기)
  * 부르면 그만큼 늦어지므로 데몬 안에서 기억해 둔다.
  */
-const cachedNpmGlobalRoot = memoizeLookup(npmGlobalRoot, NPM_ROOT_REFRESH_MS);
+const cachedNpmGlobalRoot = memoizeLookup(npmGlobalRoot, () => daemonTunables().num("daemon.npmRootRefreshMinutes") * 60_000);
 
 /** 관리형 설치의 버전 문자열로 허용하는 문자. 설치기의 런처 스크립트와 같은 규칙이다. */
 const MANAGED_VERSION_PATTERN = /^[0-9A-Za-z._+-]+$/;

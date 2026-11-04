@@ -4,16 +4,16 @@ import type { MyPackageInfo, PackageCreateParams, PackageCreateResult } from "@p
 import { extensionSource } from "./extension-templates";
 import { backupLocation, movePath, resourceDeleteTarget } from "./import-manage";
 import { resourceNameProblem } from "./resource-files";
+import { daemonTunables } from "./tunables";
 
-/** 내 패키지 목록에 보일 파일 수 상한 */
-const MAX_LISTED_FILES = 200;
+// 내 패키지 목록에 보일 파일 수 상한은 설정으로 꺼냈다 (daemon.packageListedFiles)
 /** 파일 목록에서 건너뛸 폴더 */
 const SKIP_DIRS = new Set(["node_modules", ".git"]);
 
 async function listPackageFiles(dir: string, base = dir, out: string[] = []): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    if (out.length >= MAX_LISTED_FILES) break;
+    if (out.length >= daemonTunables().num("daemon.packageListedFiles")) break;
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
       if (!SKIP_DIRS.has(entry.name)) await listPackageFiles(path, base, out);

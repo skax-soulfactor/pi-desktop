@@ -1,4 +1,5 @@
 import type { MarketDetail, MarketPackage, MarketSearchResult } from "../shared/api";
+import { appNum } from "./app-tunables";
 
 /**
  * Marketplace의 npm 카탈로그 (설계 §4.6). 공개 npm 레지스트리만 읽으므로 이 PC(main 프로세스)에서 조회한다.
@@ -10,9 +11,9 @@ import type { MarketDetail, MarketPackage, MarketSearchResult } from "../shared/
 
 const REGISTRY = "https://registry.npmjs.org";
 /** README가 너무 길면 자른다 */
-const README_MAX = 200_000;
+// README 길이와 버전 목록 수는 설정으로 꺼냈다 (app.marketReadmeChars·marketVersions)
 /** 상세 화면에 보일 최근 버전 수 */
-const VERSIONS_MAX = 30;
+
 
 /** npm 패키지 이름 (scope 포함). 명령에 넣기 전에 확인한다 */
 export function isNpmName(name: string): boolean {
@@ -88,7 +89,7 @@ export function parseDetail(doc: NpmDocument): MarketDetail {
   const versions = Object.keys(doc.versions ?? {})
     .filter((v) => /^\d+\.\d+\.\d+$/.test(v))
     .sort((a, b) => Date.parse(times[b] ?? "") - Date.parse(times[a] ?? "") || b.localeCompare(a))
-    .slice(0, VERSIONS_MAX);
+    .slice(0, appNum("app.marketVersions"));
   const repository = typeof doc.repository === "string" ? doc.repository : doc.repository?.url;
   const readme = doc.readme ?? "";
   return {
@@ -97,7 +98,7 @@ export function parseDetail(doc: NpmDocument): MarketDetail {
     ...(doc.description ?? manifest.description ? { description: (doc.description ?? manifest.description)! } : {}),
     ...(manifest.license ?? doc.license ? { license: (manifest.license ?? doc.license)! } : {}),
     ...(repository ? { repository: repository.replace(/^git\+/, "") } : {}),
-    readme: readme.length > README_MAX ? `${readme.slice(0, README_MAX)}\n\n…(README가 길어 잘랐습니다)` : readme,
+    readme: readme.length > appNum("app.marketReadmeChars") ? `${readme.slice(0, appNum("app.marketReadmeChars"))}\n\n…(README가 길어 잘랐습니다)` : readme,
     versions,
     ...(times[latest] ? { updated: Date.parse(times[latest]) } : {}),
     manifest: pi ? "declared" : "conventional",

@@ -1,5 +1,6 @@
 import { posix } from "node:path";
 import type { GithubCatalog, GithubFile, GithubRepoRef } from "../shared/api";
+import { appDefault } from "../shared/app-tunables";
 
 /**
  * Marketplace의 GitHub 저장소 카탈로그 (설계 §4.6). 공개 저장소만 읽으므로 이 PC(main)에서 조회한다.
@@ -13,8 +14,9 @@ import type { GithubCatalog, GithubFile, GithubRepoRef } from "../shared/api";
 const API = "https://api.github.com";
 const RAW = "https://raw.githubusercontent.com";
 /** 스킬 하나를 가져올 때의 한도 */
-export const MAX_IMPORT_FILES = 200;
-export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+// 데몬의 가져오기 한도와 같은 값이라 바꿀 수 없다 (설정 화면에는 읽기 전용)
+export const MAX_IMPORT_FILES = appDefault("app.githubImportMaxFiles");
+export const MAX_IMPORT_BYTES = appDefault("app.githubImportMaxMb") * 1024 * 1024;
 
 const SEGMENT = /^[A-Za-z0-9_.-]+$/;
 

@@ -19,7 +19,9 @@ import {
 } from "@pi-desktop/host-protocol";
 import type { ConnectionState } from "../shared/api";
 import { checkAgent, staleAgentError } from "./agent-build";
-import { MAX_AUTO_RETRIES, PREPARE_TIMEOUT_MS, REQUEST_WAIT_MS, retryDelay } from "./reconnect-policy";
+import { maxAutoRetries, prepareTimeoutMs, requestWaitMs, retryDelay } from "./reconnect-policy";
+import { appNum } from "./app-tunables";
+import { appDefault } from "../shared/app-tunables";
 
 /** 연결기(`host-agent connect`)를 띄우는 명령. 호스트 종류(로컬·WSL·SSH)마다 다르다. */
 export interface LaunchSpec {
@@ -50,7 +52,7 @@ export interface HostConnectionOptions {
 }
 
 /** 예전 데몬을 쓰는 동안 세션이 모두 끝났는지 다시 보는 간격 */
-const STALE_CHECK_MS = 30_000;
+// 예전 데몬 확인 간격은 설정으로 꺼냈다 (app.staleCheckSec)
 
 /**
  * 호스트 하나의 Host Agent 연결 (설계 §3.2).
@@ -61,7 +63,7 @@ const STALE_CHECK_MS = 30_000;
  * (reconnect-policy.ts). 연결되지 않은 동안의 요청은 잠시만 기다리고, 멈춘 뒤에는 이유와 함께 바로 실패한다.
  */
 /** 신원을 확인하지 못한 데몬에 끄기를 요청하고 기다리는 시간 */
-const UNVERIFIED_SHUTDOWN_MS = 5000;
+const UNVERIFIED_SHUTDOWN_MS = appDefault("app.unverifiedShutdownMs");
 
 export class HostConnection {
   private child: ChildProcessWithoutNullStreams | undefined;
@@ -101,7 +103,7 @@ export class HostConnection {
   }
 
   /**
-   * 연결될 때까지 기다린 뒤 요청한다. 연결을 기다리는 것은 REQUEST_WAIT_MS까지이고,
+   * 연결될 때까지 기다린 뒤 요청한다. 연결을 기다리는 것은 requestWaitMs()까지이고,
    * 다시 붙기를 멈춘 상태면 기다리지 않고 바로 실패한다(화면의 주기적 요청이 끝없이 쌓이지 않게).
    * @param timeoutMs 응답 제한 시간. 생략하면 기본값(2분), 0이면 제한 없음
    */
@@ -137,7 +139,7 @@ export class HostConnection {
         this.readyWaiters = this.readyWaiters.filter((w) => w !== waiter);
         const now = this.state;
         reject(new Error(`Host Agent 연결을 기다리다 시간이 지났습니다${now.status === "disconnected" ? `: ${now.reason}` : ""}`));
-      }, REQUEST_WAIT_MS);
+      }, requestWaitMs());
       this.readyWaiters.push(waiter);
     });
   }
@@ -178,8 +180,8 @@ export class HostConnection {
     try {
       spec = await withTimeout(
         this.options.prepare(),
-        PREPARE_TIMEOUT_MS,
-        `연결 준비가 ${PREPARE_TIMEOUT_MS / 1000}초 안에 끝나지 않았습니다. 서버가 응답하는지 확인하세요.`,
+        prepareTimeoutMs(),
+        `연결 준비가 ${prepareTimeoutMs() / 1000}초 안에 끝나지 않았습니다. 서버가 응답하는지 확인하세요.`,
       );
     } catch (error) {
       this.fail(error instanceof Error ? error.message : String(error));
@@ -314,7 +316,7 @@ export class HostConnection {
           return peer.request(Methods.daemonShutdown);
         })
         .catch(() => {});
-    }, STALE_CHECK_MS);
+    }, appNum("app.staleCheckSec") * 1000);
   }
 
   private stopStaleCheck(): void {
@@ -332,13 +334,13 @@ export class HostConnection {
     const delay = retryDelay(this.failures);
     if (this.retryTimer) clearTimeout(this.retryTimer);
     if (delay === undefined) {
-      this.setState({ status: "disconnected", reason, failures: this.failures, maxRetries: MAX_AUTO_RETRIES, gaveUp: true });
+      this.setState({ status: "disconnected", reason, failures: this.failures, maxRetries: maxAutoRetries(), gaveUp: true });
       const waiters = this.readyWaiters;
       this.readyWaiters = [];
       for (const waiter of waiters) waiter.reject(new Error(`Host Agent에 연결하지 못했습니다: ${reason}`));
       return;
     }
-    this.setState({ status: "disconnected", reason, retryAt: Date.now() + delay, failures: this.failures, maxRetries: MAX_AUTO_RETRIES });
+    this.setState({ status: "disconnected", reason, retryAt: Date.now() + delay, failures: this.failures, maxRetries: maxAutoRetries() });
     this.retryTimer = setTimeout(() => void this.connect(), delay);
   }
 

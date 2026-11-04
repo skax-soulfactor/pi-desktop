@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import type { PiLocation, PiModelRef, PiModelsResult } from "@pi-desktop/host-protocol";
+import { daemonTunables } from "./tunables";
 
 /**
  * 이 호스트의 Pi가 쓸 수 있는 모델 목록 (설정 폼의 defaultProvider·defaultModel 선택지).
@@ -9,8 +10,7 @@ import type { PiLocation, PiModelRef, PiModelsResult } from "@pi-desktop/host-pr
  * 사용자 정의 프로바이더도 들어간다. SDK의 ModelRegistry는 내부 런타임을 만들어야 해서 표면이 넓으므로 CLI 출력을 읽는다.
  */
 
-/** 너무 오래 걸리면 멈춘다 (확장 로딩이 멈춘 경우 등) */
-const LIST_TIMEOUT_MS = 60_000;
+// 너무 오래 걸리면 멈춘다 (확장 로딩이 멈춘 경우 등). 시간은 설정으로 꺼냈다 (daemon.modelListTimeoutSec)
 
 /**
  * `pi --list-models` 표를 읽는다. 첫 줄은 머리글(provider model context …)이고, 각 줄의 앞 두 칸이 프로바이더와 모델 ID다.
@@ -46,7 +46,7 @@ export function listPiModels(pi: PiLocation, env: NodeJS.ProcessEnv = process.en
     let stderr = "";
     child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString("utf8")));
     child.stderr.on("data", (chunk: Buffer) => (stderr = (stderr + chunk.toString("utf8")).slice(-4096)));
-    const timer = setTimeout(() => child.kill(), LIST_TIMEOUT_MS);
+    const timer = setTimeout(() => child.kill(), daemonTunables().num("daemon.modelListTimeoutSec") * 1000);
     child.on("error", (error) => {
       clearTimeout(timer);
       resolve({ models: [], error: error.message });

@@ -43,6 +43,7 @@ import { TreePanel } from "./TreePanel";
 import { useSessionInfo } from "./use-session-info";
 import { staleProviders } from "./session-refresh";
 import { disconnectedBadgeText } from "./connection-view";
+import { rnum } from "./app-tunables";
 
 /** 탭 표시와 백그라운드 알림에 쓰는 워크스페이스 상태 */
 export interface WorkspaceStatus {
@@ -73,14 +74,11 @@ interface WorkspaceProps {
 /** 호스트 선택 목록에서 SSH 호스트 관리 창을 여는 항목 */
 const SSH_MANAGE = "__ssh-manage__";
 /** 로그인 뒤 세션 새로고침이 필요한지 다시 보는 간격 (auth.json만 읽어 가볍다) */
-const AUTH_CHECK_MS = 30_000;
 
 /** 메뉴바 명령을 지금 탭에 전하는 창 이벤트 (detail: 명령 id) */
 export const MENU_EVENT = "pi-desktop-menu";
 
 /** Pi 설치 명령 뒤 상태를 다시 읽는 간격과 최대 시간 (설치기가 메뉴로 물어보며 기다릴 수 있다) */
-const PI_WATCH_INTERVAL_MS = 3_000;
-const PI_WATCH_LIMIT_MS = 30 * 60_000;
 
 /** 설치·제거·업데이트로 바뀌었는지 비교할 Pi 위치·버전 */
 function piFingerprint(pi: { cliPath: string; version: string } | undefined): string {
@@ -246,7 +244,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
     // 창으로 돌아올 때(브라우저 로그인 뒤 등)와, 내장 터미널의 /login처럼 창을 떠나지 않는 경우를 위해 가끔 다시 본다.
     const onFocus = () => void checkAuth();
     window.addEventListener("focus", onFocus);
-    const timer = setInterval(() => void checkAuth(), AUTH_CHECK_MS);
+    const timer = setInterval(() => void checkAuth(), rnum("app.authCheckSec") * 1000);
     return () => {
       window.removeEventListener("focus", onFocus);
       clearInterval(timer);
@@ -291,7 +289,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
           if (piFingerprint(status.pi) !== piWatch.before) done();
         })
         .catch(() => {});
-    }, PI_WATCH_INTERVAL_MS);
+    }, rnum("app.piWatchIntervalSec") * 1000);
     return () => clearInterval(timer);
   }, [piWatch, hostId, dockTerminals, reloadPi]);
   // Pi가 제거됐는데(상태가 "Pi 없음") 실행 중인 세션이 남아 있으면 모두 닫는다.
@@ -1673,7 +1671,7 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
             setPiManagerOpen(false);
             const terminalKey = openTerminal({ hostId: targetHost, kind: "shell", initialInput: `${command}\r` }, title);
             if (targetHost === hostId) {
-              setPiWatch({ terminalKey, hostId, before: piFingerprint(piState.status?.pi), until: Date.now() + PI_WATCH_LIMIT_MS });
+              setPiWatch({ terminalKey, hostId, before: piFingerprint(piState.status?.pi), until: Date.now() + rnum("app.piWatchLimitMinutes") * 60_000 });
             }
           }}
           onOAuthLogin={(targetHost, provider) => {

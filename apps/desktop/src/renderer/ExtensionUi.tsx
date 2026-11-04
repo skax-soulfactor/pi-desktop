@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { DialogRequest, ExtensionUiState, Toast } from "./extension-ui-state";
+import { rnum } from "./app-tunables";
 
 type Answer = { value?: string; confirmed?: boolean; cancelled?: boolean };
 
@@ -121,7 +122,6 @@ function useRemaining(dialog: DialogRequest): number | undefined {
   return dialog.timeout === undefined ? undefined : Math.max(0, dialog.at + dialog.timeout - now);
 }
 
-const TOAST_MS = 5_000;
 
 /** notify 알림. 몇 초 뒤 저절로 사라지고, 눌러서 닫을 수도 있다. */
 export function Toasts({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (key: string) => void }) {
@@ -136,7 +136,7 @@ export function Toasts({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (key
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (key: string) => void }) {
   useEffect(() => {
-    const timer = setTimeout(() => onDismiss(toast.key), TOAST_MS);
+    const timer = setTimeout(() => onDismiss(toast.key), rnum("app.toastSeconds") * 1000);
     return () => clearTimeout(timer);
   }, [toast.key, onDismiss]);
   return (

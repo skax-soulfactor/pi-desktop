@@ -3,6 +3,7 @@ import { cp, mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import type { ImportedInspectResult } from "@pi-desktop/host-protocol";
 import { safeRelativeParts } from "./resource-import";
+import { daemonTunables } from "./tunables";
 
 /**
  * 가져온 스킬·프롬프트 관리 (설계 §4.6: 업데이트 확인, 로컬 수정 감지, 깨끗한 제거).
@@ -13,8 +14,7 @@ import { safeRelativeParts } from "./resource-import";
  * 제거와 교체는 바로 지우지 않고 앱 홈의 백업 폴더로 옮긴다.
  */
 
-const MAX_FILES = 500;
-const MAX_TEXT_BYTES = 512 * 1024;
+// 점검할 파일 수와 크기는 설정으로 꺼냈다 (daemon.importManage*)
 
 /** git이 파일 내용에 매기는 SHA ("blob <크기>\0<내용>"의 SHA-1) */
 export function gitBlobSha(data: Buffer): string {
@@ -40,7 +40,7 @@ function requireTarget(target: string, kind: "skill" | "prompt", agentDir: strin
 
 async function listFiles(dir: string, base = dir, out: string[] = []): Promise<string[]> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (out.length >= MAX_FILES) break;
+    if (out.length >= daemonTunables().num("daemon.importManageMaxFiles")) break;
     const path = join(dir, entry.name);
     if (entry.isDirectory()) await listFiles(path, base, out);
     else if (entry.isFile()) out.push(relative(base, path).split(sep).join("/"));
@@ -69,7 +69,7 @@ export async function readImported(target: string, kind: "skill" | "prompt", pat
   }
   const info = await stat(file).catch(() => undefined);
   if (!info?.isFile()) throw new Error(`파일이 없습니다: ${file}`);
-  if (info.size > MAX_TEXT_BYTES) throw new Error(`파일이 너무 큽니다: ${file}`);
+  if (info.size > daemonTunables().num("daemon.importManageMaxKb") * 1024) throw new Error(`파일이 너무 큽니다: ${file}`);
   return readFile(file, "utf8");
 }
 

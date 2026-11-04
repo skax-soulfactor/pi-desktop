@@ -1,3 +1,5 @@
+import { rnum } from "./app-tunables";
+import { appDefault } from "../shared/app-tunables";
 /**
  * 입력창 이미지 첨부 규칙 (설계 §4.1 "이미지 붙여넣기와 드래그 앤 드롭"). 화면과 분리한 순수 함수.
  *
@@ -18,9 +20,9 @@ export interface ImageAttachment {
 
 /** Pi와 대부분의 모델이 받는 이미지 형식 */
 export const SUPPORTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
-export const MAX_ATTACHMENTS = 10;
+export const MAX_ATTACHMENTS = appDefault("app.maxAttachments");
 /** 한 장의 원본 크기 상한. Pi가 줄이긴 하지만 너무 큰 파일은 IPC·저널 부담이 크다 */
-export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = appDefault("app.maxImageMb") * 1024 * 1024;
 
 export function isSupportedImage(mimeType: string): boolean {
   return (SUPPORTED_IMAGE_TYPES as readonly string[]).includes(mimeType.toLowerCase());
@@ -41,8 +43,8 @@ export function toDataUrl(image: { mimeType: string; data: string }): string {
  */
 export function rejectReason(file: { type: string; size: number; name: string }, current: number): string | undefined {
   if (!isSupportedImage(file.type)) return `${file.name || "파일"}: PNG, JPEG, GIF, WebP 이미지만 붙일 수 있습니다`;
-  if (file.size > MAX_IMAGE_BYTES) return `${file.name || "이미지"}: 20MB보다 큰 이미지는 붙일 수 없습니다`;
-  if (current >= MAX_ATTACHMENTS) return `이미지는 한 번에 ${MAX_ATTACHMENTS}장까지 붙일 수 있습니다`;
+  if (file.size > rnum("app.maxImageMb") * 1024 * 1024) return `${file.name || "이미지"}: ${rnum("app.maxImageMb")}MB보다 큰 이미지는 붙일 수 없습니다`;
+  if (current >= rnum("app.maxAttachments")) return `이미지는 한 번에 ${rnum("app.maxAttachments")}장까지 붙일 수 있습니다`;
   return undefined;
 }
 

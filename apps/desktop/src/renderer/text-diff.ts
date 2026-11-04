@@ -1,4 +1,5 @@
 import type { DiffLine } from "./tool-view";
+import { rnum } from "./app-tunables";
 
 /**
  * 두 텍스트의 줄 단위 차이 (가져온 스킬의 로컬 수정과 원본 비교용). 툴 카드의 DiffView로 그린다.
@@ -6,14 +7,13 @@ import type { DiffLine } from "./tool-view";
  * 너무 큰 파일은 표를 만들지 않고 통째로 지우고 더한 것으로 보인다.
  */
 
-const MAX_CELLS = 2_000_000;
 
 type Op = { kind: "ctx" | "del" | "add"; text: string };
 
 function ops(a: string[], b: string[]): Op[] {
   const n = a.length;
   const m = b.length;
-  if (n * m > MAX_CELLS) return [...a.map((text) => ({ kind: "del" as const, text })), ...b.map((text) => ({ kind: "add" as const, text }))];
+  if (n * m > rnum("app.diffMaxCells")) return [...a.map((text) => ({ kind: "del" as const, text })), ...b.map((text) => ({ kind: "add" as const, text }))];
   // lcs[i][j] = a[i:]와 b[j:]의 최장 공통 부분열 길이
   const lcs = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
   for (let i = n - 1; i >= 0; i--) {

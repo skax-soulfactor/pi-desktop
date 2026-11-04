@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path";
 import type { SettingsTarget } from "@pi-desktop/host-protocol";
 import type { ActionLogEntry, CopyRecordInput, GithubImportRequest, SshHostConfig } from "../shared/api";
+import { appNum } from "./app-tunables";
 
 /**
  * 작업 기록 (설계 §4.5 보안 원칙 "설치와 제거는 모두 활동 로그에 남긴다", 앱 userData의 activity-log.jsonl).
@@ -11,8 +12,9 @@ import type { ActionLogEntry, CopyRecordInput, GithubImportRequest, SshHostConfi
  * 한 줄에 하나씩 덧붙이고, 너무 길어지면 최근 것만 남긴다.
  */
 
-const KEEP = 2000;
-const TRIM_AT = 2500;
+// 보관 수는 설정으로 꺼냈다 (app.actionLogKeep). 이보다 25% 넘게 쌓이면 잘라 낸다
+const KEEP = () => appNum("app.actionLogKeep");
+const TRIM_AT = () => Math.ceil(KEEP() * 1.25);
 
 /** 기록할 작업: 처리기 인자로 무엇을 했는지 적는다. errorsOnly면 실패만 남긴다 (성공은 다른 기록이 남기는 것) */
 interface Describer {
@@ -124,8 +126,8 @@ export class ActionLog {
     this.entries.push(full);
     try {
       mkdirSync(dirname(this.file), { recursive: true });
-      if (this.entries.length > TRIM_AT) {
-        this.entries = this.entries.slice(-KEEP);
+      if (this.entries.length > TRIM_AT()) {
+        this.entries = this.entries.slice(-KEEP());
         writeFileSync(this.file, this.entries.map((e) => JSON.stringify(e)).join("\n") + "\n");
       } else {
         appendFileSync(this.file, `${JSON.stringify(full)}\n`);
@@ -175,5 +177,5 @@ function readEntries(file: string): ActionLogEntry[] {
       // 깨진 줄은 건너뛴다.
     }
   }
-  return entries.slice(-KEEP);
+  return entries.slice(-KEEP());
 }

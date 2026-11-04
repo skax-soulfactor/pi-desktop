@@ -1,3 +1,4 @@
+import { daemonDefault, daemonTunables } from "./tunables";
 /**
  * 세션 하나의 활동 상태를 Pi 이벤트에서 추적한다 (앱의 활동 패널, 설계 §3.3).
  *
@@ -7,7 +8,7 @@
  */
 
 /** 제목으로 쓰는 첫 질문의 최대 글자 수 */
-export const TITLE_LIMIT = 80;
+export const TITLE_LIMIT = daemonDefault("daemon.activityTitleChars");
 
 export class ActivityTracker {
   busy = false;
@@ -25,7 +26,10 @@ export class ActivityTracker {
     else if (event.type === "agent_settled") this.busy = false;
     else if (event.type === "message_start" && event.message?.role === "user" && this.firstPrompt === undefined) {
       const text = promptText(event.message.content);
-      if (text) this.firstPrompt = text.length > TITLE_LIMIT ? `${text.slice(0, TITLE_LIMIT)}…` : text;
+      if (text) {
+        const limit = daemonTunables().num("daemon.activityTitleChars");
+        this.firstPrompt = text.length > limit ? `${text.slice(0, limit)}…` : text;
+      }
     }
   }
 

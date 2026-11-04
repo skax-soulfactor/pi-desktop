@@ -7,6 +7,7 @@ import { EventJournal, type JournalEntry } from "./journal";
 import { PendingDialogs } from "./pending-dialogs";
 import { PiProcess, type PiExit } from "./pi-process";
 import { TREE_COMMAND } from "./bridge";
+import { daemonTunables } from "./tunables";
 
 /** 같은 Pi 프로세스 안에서 다른 세션 파일로 옮겨 가는 명령 */
 const SESSION_SWITCHING_COMMANDS = new Set(["fork", "clone", "switch_session", "new_session"]);
@@ -126,7 +127,7 @@ export class AgentSession {
         ? await this.sendBash(command)
         : isTreeCommand(command)
           ? // 트리 이동은 떠나는 갈래를 LLM으로 요약할 수 있어 오래 걸린다. 명령이 끝나야 응답이 온다
-            await this.process.send(command, { timeoutMs: TREE_TIMEOUT_MS })
+            await this.process.send(command, { timeoutMs: daemonTunables().num("daemon.treeTimeoutMinutes") * 60_000 })
           : await this.process.send(command);
     this.externalWrite.activity();
     if (response.success === true && SESSION_SWITCHING_COMMANDS.has(String(command.type))) {
@@ -272,8 +273,7 @@ export class AgentSession {
   }
 }
 
-/** 트리 이동(요약 포함)을 기다리는 시간 */
-const TREE_TIMEOUT_MS = 10 * 60 * 1000;
+// 트리 이동(요약 포함)을 기다리는 시간은 설정으로 꺼냈다 (daemon.treeTimeoutMinutes)
 
 function isTreeCommand(command: Record<string, unknown>): boolean {
   return command.type === "prompt" && typeof command.message === "string" && command.message.startsWith(`/${TREE_COMMAND} `);

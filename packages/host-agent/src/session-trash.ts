@@ -2,6 +2,7 @@ import { mkdir, open, readdir, readFile, rm, stat, writeFile } from "node:fs/pro
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { StoredDeleteResult, TrashItem } from "@pi-desktop/host-protocol";
 import { movePath } from "./import-manage";
+import { daemonTunables } from "./tunables";
 
 /**
  * 세션 휴지통 (설계 DESIGN-APPS.md §3.2).
@@ -14,7 +15,6 @@ import { movePath } from "./import-manage";
  */
 
 const META_SUFFIX = ".meta.json";
-const FIRST_MESSAGE_MAX = 200;
 
 export function trashDirs(home: string) {
   return { trash: join(home, "session-trash"), legacy: join(home, "session-backups", "deleted") };
@@ -203,7 +203,7 @@ export function summarize(content: string): { sessionId: string; cwd: string; na
       if (!firstMessage && entry.type === "message" && entry.message?.role === "user") {
         const c = entry.message.content;
         const text = typeof c === "string" ? c : Array.isArray(c) ? (c as Part[]).filter((p) => p.type === "text").map((p) => p.text ?? "").join(" ") : "";
-        firstMessage = text.trim().slice(0, FIRST_MESSAGE_MAX);
+        firstMessage = text.trim().slice(0, daemonTunables().num("daemon.firstMessageChars"));
       }
     } catch {
       // 깨진 줄은 건너뛴다

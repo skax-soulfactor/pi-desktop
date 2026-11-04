@@ -89,6 +89,7 @@ import {
   type StoredReadResult,
   type StoredSession,
   type AgentCallParams,
+  type TunableSetParams,
   type UsageSummaryParams,
   type ArchiveSetParams,
   type TrashEmptyParams,
@@ -139,6 +140,8 @@ import { createPackage, deleteMyPackage, listMyPackages } from "./package-scaffo
 import { createToken, serverHandshake, writeToken } from "./handshake";
 import { AgentSession } from "./session";
 import { AGENT_VERSION } from "./version";
+import { daemonTunables, useDaemonHome } from "./tunables";
+import type { TunableItem } from "@pi-desktop/agent-kit/tunables-core";
 
 export interface DaemonOptions {
   env?: NodeJS.ProcessEnv;
@@ -162,7 +165,6 @@ interface Client {
   watches: Map<string, () => void>;
 }
 
-const DEFAULT_IDLE_SHUTDOWN_MS = 30 * 60 * 1000;
 
 /**
  * Host Agent 상주 데몬 (설계 §3.4).
@@ -195,8 +197,11 @@ export class AgentDaemon {
 
   constructor(private readonly options: DaemonOptions = {}) {
     this.env = options.env ?? process.env;
+    // 모듈 함수들이 이 데몬 홈의 tunables.json을 읽게 한다 (DESIGN-APPS.md §7)
+    useDaemonHome(agentHome(this.env));
     this.idleShutdownMs =
-      options.idleShutdownMs ?? (Number(this.env.PI_DESKTOP_IDLE_SHUTDOWN_MS) || DEFAULT_IDLE_SHUTDOWN_MS);
+      options.idleShutdownMs ??
+      (Number(this.env.PI_DESKTOP_IDLE_SHUTDOWN_MS) || daemonTunables(agentHome(this.env)).num("daemon.idleShutdownMinutes") * 60_000);
   }
 
   /**
@@ -662,6 +667,18 @@ export class AgentDaemon {
       const agentDir = this.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
       const sessionsDir = this.env.PI_CODING_AGENT_SESSION_DIR || join(agentDir, "sessions");
       return summarizeUsage(await readSessionUsage(sessionsDir, from, "chat"), range as UsageRange, now);
+    });
+
+    // 설정으로 꺼낸 데몬 수치 (DESIGN-APPS.md §7). Pi Desktop·Agent 설정 화면이 보고 고친다
+    peer.handle(Methods.tunablesList, async (): Promise<TunableItem[]> => daemonTunables(agentHome(this.env)).items());
+    peer.handle(Methods.tunableSet, async (params): Promise<TunableItem> => {
+      const p = params as TunableSetParams | undefined;
+      if (!p?.id || typeof p.id !== "string") throw new JsonRpcError(ErrorCodes.InvalidParams, "id가 필요합니다");
+      try {
+        return daemonTunables(agentHome(this.env)).set(p.id, p.value);
+      } catch (error) {
+        throw new JsonRpcError(ErrorCodes.InvalidParams, error instanceof Error ? error.message : String(error));
+      }
     });
 
     // 에이전트 앱의 데이터 (설계 DESIGN-APPS.md §4 Agent ③). 데몬 홈이 Agent 홈이고 그 아래 data/가 agent-kit 상태 폴더다.

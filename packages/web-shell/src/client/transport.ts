@@ -1,12 +1,13 @@
 import { packArgs, unpackArgs, type ClientData, type Control, type ServerMessage } from "../protocol";
+import { webDefault } from "../tunables-defs";
 
-const RECONNECT_MIN_MS = 500;
-const RECONNECT_MAX_MS = 10_000;
-const ACK_EVERY = 64;
-const ACK_DELAY_MS = 1000;
+const RECONNECT_MIN_MS = webDefault("webShell.reconnectMinMs");
+const RECONNECT_MAX_MS = webDefault("webShell.reconnectMaxMs");
+const ACK_EVERY = webDefault("webShell.ackEvery");
+const ACK_DELAY_MS = webDefault("webShell.ackDelayMs");
 /** 화면이 듣기 전에 온 이벤트를 맡겨 두는 시간과 개수 */
-const EARLY_KEEP_MS = 30_000;
-const EARLY_MAX = 20;
+const EARLY_KEEP_MS = webDefault("webShell.earlyKeepMs");
+const EARLY_MAX = webDefault("webShell.earlyMax");
 
 export type LinkStatus = "connecting" | "open" | "closed";
 

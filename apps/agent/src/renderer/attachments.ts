@@ -1,3 +1,4 @@
+import { appDefault } from "../shared/app-tunables";
 /**
  * 첨부 파일을 메시지에 싣는 방식 (설계 DESIGN-AGENT.md §4 "첨부").
  *
@@ -37,7 +38,8 @@ export function splitAttachments(paths: string[]): { images: string[]; files: st
 }
 
 /** 프로바이더가 받는 이미지 하나의 크기 상한 (Anthropic 5MB 기준) */
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+/** 기본값. 실제 한도는 앱 수치 app.chatImageMaxMb (ChatPage가 받아 쓴다) */
+export const MAX_IMAGE_BYTES = appDefault("app.chatImageMaxMb") * 1024 * 1024;
 
 /** 모델이 이미지를 받는가. 모델 정보에 입력 종류가 없으면 받는다고 보고 Pi·프로바이더의 오류에 맡긴다 */
 export function acceptsImages(input: string[] | undefined): boolean {

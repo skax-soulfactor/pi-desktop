@@ -1,4 +1,5 @@
 import { parseClientMessage, type ClientData, type ServerData, type ServerMessage } from "../protocol";
+import { webDefault } from "../tunables-defs";
 
 /** WebSocket 연결에서 쓰는 부분 (ws 패키지의 WebSocket이 이 모양이다) */
 export interface SessionSocket {
@@ -11,8 +12,8 @@ export interface SessionSocket {
 
 const OPEN = 1;
 /** 이만큼 받으면 ack를 바로 보낸다. 아니면 ACK_DELAY_MS 뒤에 */
-const ACK_EVERY = 64;
-const ACK_DELAY_MS = 1000;
+const ACK_EVERY = webDefault("webShell.ackEvery");
+const ACK_DELAY_MS = webDefault("webShell.ackDelayMs");
 
 export interface SessionLimits {
   /** 보냈지만 브라우저가 받았다고 하지 않은 메시지를 이만큼(바이트)까지 가지고 있는다. 넘으면 세션을 버린다 */

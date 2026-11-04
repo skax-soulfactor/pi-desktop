@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { rnum } from "./app-tunables";
 
 /**
  * 클립보드·기기에서 이미지를 받는 도우미 (Desktop·Agent·Mate 입력창이 같은 내용을 쓴다).
@@ -83,7 +84,6 @@ export function useSharedImages(onFiles: (files: File[]) => void, enabled = true
 const DRAFT_DB = "pi-draft-images";
 const DRAFT_STORE = "drafts";
 /** 이보다 오래된 보관은 되살리지 않는다 */
-const DRAFT_MAX_MS = 60 * 60_000;
 
 function draftDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -121,7 +121,7 @@ export function useDraftImages<T extends { data: string }>(key: string | undefin
     void draftRequest<{ at: number; images: T[] } | undefined>("readonly", (store) => store.get(key))
       .then((saved) => {
         if (cancelled) return;
-        if (saved && Date.now() - saved.at < DRAFT_MAX_MS && saved.images.length > 0) {
+        if (saved && Date.now() - saved.at < rnum("app.imageDraftMinutes") * 60_000 && saved.images.length > 0) {
           // 되살린 것 앞에, 그 사이 붙은 것(공유받은 이미지 등)은 뒤에. 같은 이미지는 한 번만
           setImages((prev) => [...saved.images, ...prev.filter((p) => !saved.images.some((s) => s.data === p.data))]);
         }

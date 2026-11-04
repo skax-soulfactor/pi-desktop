@@ -1,5 +1,6 @@
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { daemonDefault, daemonTunables } from "./tunables";
 
 /**
  * 파일·폴더 트리 변경 감시 (Extension Dev Mode, 설계 §4.5 "저장할 때마다 자동 reload").
@@ -10,13 +11,13 @@ import { join } from "node:path";
  */
 
 const SKIPPED = new Set(["node_modules", ".git"]);
-export const MAX_FILES = 2000;
+export const MAX_FILES = daemonDefault("daemon.treeWatchMaxFiles");
 
 /** 뿌리들 아래 파일의 "수정 시각:크기" */
 export async function snapshot(roots: readonly string[]): Promise<Map<string, string>> {
   const files = new Map<string, string>();
   const visit = async (path: string): Promise<void> => {
-    if (files.size >= MAX_FILES) return;
+    if (files.size >= daemonTunables().num("daemon.treeWatchMaxFiles")) return;
     const info = await stat(path).catch(() => undefined);
     if (!info) return;
     if (info.isFile()) {

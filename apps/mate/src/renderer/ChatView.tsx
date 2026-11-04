@@ -12,8 +12,6 @@ import { ComposerGrip, useComposerSize } from "./composer-size";
 import { useDraftText } from "./draft-text";
 
 /** 한 번에 보낼 수 있는 이미지 (실행기와 같은 한도) */
-const MAX_IMAGES = 4;
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
 /** 입력창이 "/"로 시작하면 보여 줄 명령 */
@@ -38,6 +36,17 @@ type Entry = { kind: "line"; at: number; line: ChatLine } | { kind: "item"; at: 
  */
 export function ChatView({ overview, now, act }: { overview: Overview; now: number; act: Act }) {
   const { chat } = overview;
+  // 이미지 장수·크기 한도는 실행기 설정을 따른다 (chat.maxImages·maxImageMb, DESIGN-APPS.md §7). 받기 전에는 기본값
+  const [imageLimits, setImageLimits] = useState({ count: 4, mb: 5 });
+  useEffect(() => {
+    void window.mate.tunablesList().then(
+      (items) => {
+        const value = (id: string, fallback: number) => Number(items.find((i) => i.id === id)?.value ?? fallback);
+        setImageLimits({ count: value("chat.maxImages", 4), mb: value("chat.maxImageMb", 5) });
+      },
+      () => undefined,
+    );
+  }, []);
   // 쓰던 글은 보관해, 다른 화면에 갔다 와도 남긴다
   const [text, setText] = useDraftText("pi-mate.draft.chat");
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -99,8 +108,8 @@ export function ChatView({ overview, now, act }: { overview: Overview; now: numb
     for (const file of files) {
       const name = file.name || "붙여 넣은 이미지";
       if (!IMAGE_TYPES.includes(file.type)) notes.push(`${name}: PNG·JPEG·GIF·WebP 이미지만 붙일 수 있어요`);
-      else if (file.size > MAX_IMAGE_BYTES) notes.push(`${name}: 5MB보다 커요`);
-      else if (images.length + added.length >= MAX_IMAGES) notes.push(`이미지는 한 번에 ${MAX_IMAGES}장까지예요`);
+      else if (file.size > imageLimits.mb * 1024 * 1024) notes.push(`${name}: ${imageLimits.mb}MB보다 커요`);
+      else if (images.length + added.length >= imageLimits.count) notes.push(`이미지는 한 번에 ${imageLimits.count}장까지예요`);
       else {
         try {
           added.push({ name, mimeType: file.type, data: await readBase64(file) });
@@ -109,7 +118,7 @@ export function ChatView({ overview, now, act }: { overview: Overview; now: numb
         }
       }
     }
-    if (added.length > 0) setImages((prev) => [...prev, ...added].slice(0, MAX_IMAGES));
+    if (added.length > 0) setImages((prev) => [...prev, ...added].slice(0, imageLimits.count));
     setImageNote(notes.length > 0 ? [...new Set(notes)].join("\n") : undefined);
   };
 

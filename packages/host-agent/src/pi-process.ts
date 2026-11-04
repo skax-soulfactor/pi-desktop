@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createJsonlReader, encodeJsonl, type PiResponse } from "@pi-desktop/host-protocol";
+import { daemonTunables } from "./tunables";
 
 export interface PiProcessOptions {
   /** Pi를 실행할 node 실행 파일 */
@@ -20,7 +21,6 @@ export interface PiExit {
   stderrTail: string;
 }
 
-const STDERR_TAIL_BYTES = 8 * 1024;
 
 /**
  * `pi --mode rpc` 자식 프로세스 하나를 감싼다.
@@ -57,7 +57,7 @@ export class PiProcess {
     child.stdout.on("data", (chunk: Buffer) => reader.push(chunk));
     child.stdout.on("end", () => reader.end());
     child.stderr.on("data", (chunk: Buffer) => {
-      this.stderrTail = (this.stderrTail + chunk.toString("utf8")).slice(-STDERR_TAIL_BYTES);
+      this.stderrTail = (this.stderrTail + chunk.toString("utf8")).slice(-daemonTunables().num("daemon.stderrTailKb") * 1024);
     });
     // 프로세스가 먼저 죽으면 stdin 쓰기에서 EPIPE가 날 수 있다. 종료 처리는 exit 이벤트가 맡는다.
     child.stdin.on("error", () => {});

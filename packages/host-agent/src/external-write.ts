@@ -1,5 +1,6 @@
 import { open } from "node:fs/promises";
 import type { FileChange } from "./file-watcher";
+import { daemonDefault, daemonTunables } from "./tunables";
 
 /** FileWatcher 중 이 클래스가 쓰는 부분 (테스트에서 바꿔 끼우기 위함) */
 export interface WatchFn {
@@ -10,10 +11,9 @@ export interface WatchFn {
 export type ReadRange = (path: string, from: number, to: number) => Promise<string>;
 
 /** 우리 Pi가 이 시간 동안 아무 활동이 없었는데 파일에 메시지가 덧붙으면 다른 프로그램이 쓴 것으로 본다 */
-export const DEFAULT_EXTERNAL_WRITE_GRACE_MS = 3_000;
+export const DEFAULT_EXTERNAL_WRITE_GRACE_MS = daemonDefault("daemon.externalWriteGraceSeconds") * 1000;
 
 /** 한 번에 읽을 최대 크기. 이보다 많이 덧붙었으면 앞부분만 본다 */
-const MAX_READ = 256 * 1024;
 
 /**
  * 이 데몬의 Pi가 쓰는 세션 파일에 다른 프로그램(TUI 등)이 쓴 것을 감지한다 (설계 §5.4).
@@ -39,7 +39,7 @@ export class ExternalWriteDetector {
   constructor(
     private readonly files: WatchFn,
     private readonly onDetect: (path: string, at: number) => void,
-    private readonly graceMs = DEFAULT_EXTERNAL_WRITE_GRACE_MS,
+    private readonly graceMs = daemonTunables().num("daemon.externalWriteGraceSeconds") * 1000,
     private readonly now: () => number = Date.now,
     private readonly readRange: ReadRange = readFileRange,
   ) {
@@ -102,7 +102,7 @@ export class ExternalWriteDetector {
     if (change.size <= from) return;
     if (change.modified - this.lastActivity < this.graceMs) return;
 
-    const appended = await this.readRange(change.path, from, Math.min(change.size, from + MAX_READ));
+    const appended = await this.readRange(change.path, from, Math.min(change.size, from + daemonTunables().num("daemon.externalWriteReadKb") * 1024));
     if (!/"type"\s*:\s*"message"/.test(appended)) return;
     if (change.path !== this.path || this.detected !== undefined) return;
     this.detected = this.now();

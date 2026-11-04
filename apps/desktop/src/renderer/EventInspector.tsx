@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { eventSummary, eventTime, filterEvents, HANDLED_TYPES, sharedEventLog, typeCounts, type LoggedEvent } from "./event-log";
+import { rnum } from "./app-tunables";
 
 interface Props {
   hostId: string;
@@ -11,7 +12,6 @@ interface Props {
 }
 
 /** 한 번에 그리는 줄 수 (보관은 세션마다 2000개) */
-const SHOW = 500;
 
 /**
  * Event Inspector (설계 §4.11): 지금 세션에서 Pi가 보낸 RPC 이벤트를 원본 그대로 본다.
@@ -42,7 +42,7 @@ export function EventInspector({ hostId, hostLabel, sessionId, title, onClose }:
   }, [onClose]);
 
   const counts = useMemo(() => typeCounts(events), [events]);
-  const shown = useMemo(() => filterEvents(events, hidden, query).slice(-SHOW).reverse(), [events, hidden, query]);
+  const shown = useMemo(() => filterEvents(events, hidden, query).slice(-rnum("app.eventInspectorShow")).reverse(), [events, hidden, query]);
 
   function toggleType(type: string) {
     setHidden((prev) => {

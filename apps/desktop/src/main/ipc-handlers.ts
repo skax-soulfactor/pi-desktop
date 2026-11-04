@@ -77,6 +77,8 @@ import type { ImportStore } from "./imports";
 import { compareCopy, exportKindOf, fileShas, type CopyStore } from "./copies";
 import { collectInventory } from "./host-inventory";
 import type { ActionLog } from "./action-log";
+import type { TunableStore } from "@pi-desktop/agent-kit/tunables-store";
+import type { TunableItem } from "@pi-desktop/agent-kit/tunables-core";
 import { compareLocal, compareUpstream, projectCwdOf } from "./import-status";
 import { hostPathForExplorer } from "./host-path";
 import type { ReplayCollector } from "./replay-collector";
@@ -112,6 +114,8 @@ export interface HandlerDeps {
   pickDirectory: () => Promise<string | undefined>;
   /** 파일 위치를 탐색기에서 보여준다. 못 하면 false */
   revealPath: (path: string) => boolean;
+  /** 이 앱의 수치 저장소 (app-tunables.ts, DESIGN-APPS.md §7) */
+  appTunables: TunableStore;
 }
 
 const replayKey = (hostId: string, sessionId: string) => `${hostId}::${sessionId}`;
@@ -314,6 +318,13 @@ export function registerHandlers(router: Router, deps: HandlerDeps): void {
     conn(hostId).request<PiLatest>(Methods.piLatest, { force }),
   );
   handle(IpcChannels.piModels, (_event, hostId: string) => conn(hostId).request<PiModelsResult>(Methods.piModels));
+  // 설정으로 꺼낸 수치 (DESIGN-APPS.md §7): 앱 것은 이 프로세스가, 데몬 것은 그 호스트의 데몬이 저장한다
+  handle(IpcChannels.appTunablesList, () => deps.appTunables.items());
+  handle(IpcChannels.appTunableSet, (_event, id: string, value: number | string | null) => deps.appTunables.set(String(id), value));
+  handle(IpcChannels.daemonTunablesList, (_event, hostId: string) => conn(hostId).request<TunableItem[]>(Methods.tunablesList));
+  handle(IpcChannels.daemonTunableSet, (_event, hostId: string, id: string, value: number | string | null) =>
+    conn(hostId).request<TunableItem>(Methods.tunableSet, { id, value }),
+  );
   handle(IpcChannels.piUpdate, (_event, hostId: string, target: PiUpdateTarget, taskId: string, force: boolean) =>
     // 업데이트는 몇 분 걸릴 수 있어 응답 시간 제한을 두지 않는다 (데몬이 15분에서 멈춘다).
     conn(hostId).request<PiUpdateResult>(Methods.piUpdate, { target, taskId, force }, 0),

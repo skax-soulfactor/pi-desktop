@@ -110,6 +110,8 @@ export const IpcChannels = {
   listMcp: "mate:list-mcp",
   tunablesList: "mate:tunables-list",
   tunableSet: "mate:tunable-set",
+  appTunablesList: "mate:app-tunables-list",
+  appTunableSet: "mate:app-tunable-set",
   usageSummary: "mate:usage-summary",
   addMcpPreset: "mate:add-mcp-preset",
   setMcpEnabled: "mate:set-mcp-enabled",
@@ -209,6 +211,9 @@ export interface MateApi {
   tunablesList(): Promise<TunableItem[]>;
   /** 값을 바꾼다. null이면 기본값으로 되돌린다 */
   tunableSet(id: string, value: number | string | null): Promise<TunableItem>;
+  /** 이 앱(이 PC의 메인)의 수치 */
+  appTunablesList(): Promise<TunableItem[]>;
+  appTunableSet(id: string, value: number | string | null): Promise<TunableItem>;
   /** 기간별 토큰·비용 (Mate 대화와 임무 실행) */
   usageSummary(range: UsageRange): Promise<UsageSummary>;
   /** 미리 정한 서버를 넣는다. 키가 필요한 서버는 key를 env에 넣는다 */

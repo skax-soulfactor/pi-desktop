@@ -2,6 +2,7 @@ import { net, safeStorage } from "electron";
 import { randomInt } from "node:crypto";
 import { TELEGRAM_TOKEN_ENV, type ConfigPatch, type MateConfig, type RemoteState } from "@pi-desktop/mate-runner";
 import type { TelegramView } from "../shared/api";
+import { appDefault } from "../shared/app-tunables";
 
 /**
  * 휴대폰(텔레그램) 연결 설정 (설계 DESIGN-MATE.md §12). 앱 main에서만 돈다.
@@ -18,7 +19,7 @@ export interface TelegramStore {
   remoteState(): Promise<RemoteState>;
 }
 const API = process.env.PI_DESKTOP_MATE_TELEGRAM_API || "https://api.telegram.org";
-const PAIRING_MS = 10 * 60_000;
+const PAIRING_MS = appDefault("app.telegramPairingMinutes") * 60_000;
 
 async function tg<T>(token: string, method: string, params: Record<string, unknown> = {}): Promise<T> {
   const res = await net.fetch(`${API}/bot${token}/${method}`, {

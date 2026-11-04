@@ -1,3 +1,4 @@
+import { rnum } from "./app-tunables";
 /**
  * Pi get_tree 결과(세션 항목 트리)를 화면에 그릴 행 목록으로 바꾸는 순수 함수 (설계 §4.1 세션 트리).
  *
@@ -32,7 +33,6 @@ export interface TreeRow {
   canFork: boolean;
 }
 
-const SNIPPET = 80;
 
 export function layoutTree(tree: TreeNode[], leafId: string | null | undefined): TreeRow[] {
   const active = activePath(tree, leafId);
@@ -151,5 +151,6 @@ function toolNames(content: unknown): string[] {
 
 function snippet(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > SNIPPET ? `${flat.slice(0, SNIPPET)}…` : flat;
+  const max = rnum("app.treeSnippetChars");
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }

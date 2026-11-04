@@ -4,10 +4,12 @@
 import { modelKey } from "./format";
 import { matchesQuery } from "./session-search";
 import type { ModelInfo } from "./use-session-info";
+import { rnum } from "./app-tunables";
+import { appDefault } from "../shared/app-tunables";
 
 export type PickerRow = { type: "header"; label: string } | { type: "model"; model: ModelInfo; key: string };
 
-export const RECENT_LIMIT = 5;
+export const RECENT_LIMIT = appDefault("app.recentModels");
 
 /**
  * 선택기에 보여줄 줄을 만든다.
@@ -63,5 +65,5 @@ export function moveSelection(rows: readonly PickerRow[], from: number, step: 1 
 
 /** 고른 모델을 최근 사용 맨 앞에 넣는다 (중복 제거, 개수 제한) */
 export function pushRecent(recent: readonly string[], key: string): string[] {
-  return [key, ...recent.filter((k) => k !== key)].slice(0, RECENT_LIMIT);
+  return [key, ...recent.filter((k) => k !== key)].slice(0, rnum("app.recentModels"));
 }
