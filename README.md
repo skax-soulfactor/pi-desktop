@@ -173,4 +173,4 @@ CI(`.github/workflows/ci.yml`)는 Windows·Linux와 Node 22·24에서 타입 검
 
 ## 라이선스
 
-MIT
+[MIT](LICENSE). 설치 파일과 웹 묶음에 포함된 오픈 소스 패키지의 고지는 함께 들어 있는 `THIRD_PARTY_NOTICES.txt`에 있습니다.
