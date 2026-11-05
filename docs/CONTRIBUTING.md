@@ -90,5 +90,6 @@ CI 작업 이름(`.github/workflows/ci.yml`의 매트릭스)을 바꾸면 룰셋
 - 태그를 push할 수 없는 곳(클라우드 세션 등)에서는 Actions의 "Release"를 `version`(예: `v0.7.1`)을 넣어 돌린다. 고른 브랜치의 커밋에 태그를 만들고 올린다. `version`을 비우면 만들기만 한다.
 - **Pi Desktop과 웹 묶음은 같은 버전 번호로 함께 릴리스한다** (0.6.0부터 세 앱이 같은 번호였다). Host Agent 데몬(`packages/host-agent`)도 릴리스 때 같은 번호로 빌드한다 (워크플로가 `package.json` 버전을 맞춘다. 저장소의 `0.0.1`은 개발 빌드에서만 보인다). 자세한 규칙은 저장소 [CLAUDE.md](../CLAUDE.md) §3.
 - 문서만 바뀌었으면 릴리스하지 않는다.
+- 설치 파일과 웹 묶음에는 `LICENSE`와 `THIRD_PARTY_NOTICES.txt`가 함께 들어간다. 고지는 빌드할 때 `scripts/third-party-notices.mjs`가 만든다. 묶이지 않는 빌드 도구를 새로 쓰면 그 스크립트의 `BUILD_ONLY`에 더한다.
 - 릴리스를 겹쳐 돌리지 않는다. 앞 빌드가 끝난 뒤 다음 번호를 붙인다.
 - 태그는 주석 태그로 붙인다: `git tag -a v0.6.4 -m "Pi Desktop v0.6.4"`.

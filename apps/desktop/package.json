@@ -20,7 +20,7 @@
     "build:web": "npm run build -w @pi-desktop/host-agent && node scripts/build-web.mjs",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "test": "vitest run",
-    "dist": "npm run build -w @pi-desktop/host-agent && npm run build && electron-builder --config electron-builder.yml --publish never",
+    "dist": "node ../../scripts/third-party-notices.mjs && npm run build -w @pi-desktop/host-agent && npm run build && electron-builder --config electron-builder.yml --publish never",
     "start:all": "npm run build && electron ."
   },
   "dependencies": {
