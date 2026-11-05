@@ -20,9 +20,7 @@ export function createAgentApi(ipcRenderer: IpcRenderer): AgentApi {
     currentHost: () => ipcRenderer.invoke(IpcChannels.currentHost),
     setHost: (hostId) => ipcRenderer.invoke(IpcChannels.setHost, hostId),
     replaceAgent: () => ipcRenderer.invoke(IpcChannels.replaceAgent),
-    listSshHosts: () => ipcRenderer.invoke(IpcChannels.listSshHosts),
-    saveSshHost: (host, previousName) => ipcRenderer.invoke(IpcChannels.saveSshHost, host, previousName),
-    removeSshHost: (name) => ipcRenderer.invoke(IpcChannels.removeSshHost, name),
+    openSshHosts: () => ipcRenderer.invoke(IpcChannels.openSshHosts),
     listDir: (hostId, path) => ipcRenderer.invoke(IpcChannels.listDir, hostId, path),
     makeDir: (hostId, parent, name) => ipcRenderer.invoke(IpcChannels.makeDir, hostId, parent, name),
     pickDirectory: () => ipcRenderer.invoke(IpcChannels.pickDirectory),
@@ -33,14 +31,9 @@ export function createAgentApi(ipcRenderer: IpcRenderer): AgentApi {
     setScheduleEnabled: (id, enabled) => ipcRenderer.invoke(IpcChannels.setScheduleEnabled, id, enabled),
     removeSchedule: (id) => ipcRenderer.invoke(IpcChannels.removeSchedule, id),
     piSetup: () => ipcRenderer.invoke(IpcChannels.piSetup),
-    openPiDesktop: () => ipcRenderer.invoke(IpcChannels.openPiDesktop),
-    installPiDesktop: () => ipcRenderer.invoke(IpcChannels.installPiDesktop),
+    openPiManager: () => ipcRenderer.invoke(IpcChannels.openPiManager),
     listSessions: () => ipcRenderer.invoke(IpcChannels.listSessions),
     closeSession: (sessionId) => ipcRenderer.invoke(IpcChannels.closeSession, sessionId),
-    updateState: () => ipcRenderer.invoke(IpcChannels.updateState),
-    checkForUpdates: (interactive) => ipcRenderer.invoke(IpcChannels.checkForUpdates, interactive),
-    confirmUpdate: () => ipcRenderer.invoke(IpcChannels.confirmUpdate),
-    onUpdateState: (listener) => subscribe(IpcChannels.updateStateChanged, listener),
     onMenuCommand: (listener) => subscribe(IpcChannels.menuCommand, listener),
     kbList: (includeArchived) => ipcRenderer.invoke(IpcChannels.kbList, includeArchived),
     skillsList: () => ipcRenderer.invoke(IpcChannels.skillsList),
@@ -110,11 +103,6 @@ export function createAgentApi(ipcRenderer: IpcRenderer): AgentApi {
     onSessionExit: (listener) => subscribe(IpcChannels.sessionExit, listener),
     onUiResolved: (listener) => subscribe(IpcChannels.uiResolved, listener),
     onTasksChanged: (listener) => subscribe(IpcChannels.tasksChanged, () => listener()),
-    onInstallProgress: (listener) => {
-      const handler = (_event: IpcRendererEvent, received: number, total: number) => listener(received, total);
-      ipcRenderer.on(IpcChannels.installProgress, handler);
-      return () => ipcRenderer.removeListener(IpcChannels.installProgress, handler);
-    },
   };
   return api;
 }

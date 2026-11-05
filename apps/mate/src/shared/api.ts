@@ -50,9 +50,8 @@ export type { McpCheckResult, McpServerView, SkillInput, SkillView, UsageRange, 
 
 export type { PiReadiness };
 
-/** Pi 준비 상태 + 설치된 Pi Desktop 위치 */
+/** Pi 준비 상태 (확인한 시각과 함께) */
 export interface PiSetupView extends PiReadiness {
-  piDesktopPath?: string;
   checkedAt: number;
 }
 
@@ -79,13 +78,7 @@ export const IpcChannels = {
   getAutostart: "mate:get-autostart",
   setAutostart: "mate:set-autostart",
   piReadiness: "mate:pi-readiness",
-  installPiDesktop: "mate:install-pi-desktop",
-  openPiDesktop: "mate:open-pi-desktop",
-  installProgress: "mate:install-progress",
-  updateState: "mate:update-state",
-  updateStateChanged: "mate:update-state-changed",
-  checkForUpdates: "mate:check-for-updates",
-  confirmUpdate: "mate:confirm-update",
+  openPiManager: "mate:open-pi-manager",
   telegramView: "mate:telegram-view",
   telegramSetToken: "mate:telegram-set-token",
   telegramRemove: "mate:telegram-remove",
@@ -96,9 +89,7 @@ export const IpcChannels = {
   listHosts: "mate:list-hosts",
   currentHost: "mate:current-host",
   setHost: "mate:set-host",
-  listSshHosts: "mate:list-ssh-hosts",
-  saveSshHost: "mate:save-ssh-host",
-  removeSshHost: "mate:remove-ssh-host",
+  openSshHosts: "mate:open-ssh-hosts",
   listDir: "mate:list-dir",
   makeDir: "mate:make-dir",
   applyInstall: "mate:apply-install",
@@ -129,19 +120,6 @@ export const IpcChannels = {
   openTab: "mate:open-tab",
 } as const;
 
-
-/** Mate 자동 업데이트 상태 (Pi Desktop과 같은 모양) */
-export interface UpdateState {
-  /** disabled: 개발·로컬 빌드, idle, checking, none: 최신, available, downloading, downloaded: 다시 시작하면 설치, error */
-  status: "disabled" | "idle" | "checking" | "none" | "available" | "downloading" | "downloaded" | "error";
-  current: string;
-  /** auto: 내려받아 설치(Windows·AppImage), notify: 알리기만(서명 없는 macOS·deb) */
-  mode: "auto" | "notify";
-  version?: string;
-  percent?: number;
-  error?: string;
-  checkedAt?: number;
-}
 
 /** 휴대폰(텔레그램) 연결 상태 */
 export interface TelegramView {
@@ -194,9 +172,8 @@ export interface MateApi {
   currentHost(): Promise<CurrentHost>;
   /** 호스트를 바꾼다. stopPrevious면 앞 호스트의 실행기를 멈춘다. 다시 붙고 화면을 새로 읽는다 */
   setHost(hostId: string, stopPrevious: boolean): Promise<void>;
-  listSshHosts(): Promise<SshHostConfig[]>;
-  saveSshHost(host: SshHostConfig, previousName?: string): Promise<SshHostConfig>;
-  removeSshHost(name: string): Promise<void>;
+  /** SSH 호스트를 더하거나 고친다: Pi 작업 공간의 "SSH 호스트 관리"를 연다 (목록은 Pi 작업 공간과 함께 쓴다) */
+  openSshHosts(): Promise<void>;
   /** 그 호스트의 폴더를 실행기로 훑는다 (원격 호스트의 폴더 고르기) */
   listDir(path?: string): Promise<FsListDirResult>;
   makeDir(parent: string, name: string): Promise<string>;
@@ -259,18 +236,8 @@ export interface MateApi {
   setAutostart(enabled: boolean): Promise<AutostartView>;
   /** Pi 준비 상태 (설치·로그인·모델). refresh면 캐시를 버리고 다시 확인 */
   piReadiness(refresh?: boolean): Promise<PiSetupView>;
-  /** Pi Desktop을 내려받아 설치 프로그램을 연다 */
-  installPiDesktop(): Promise<{ status: "opened" | "cancelled" | "page"; path?: string }>;
-  /** 설치된 Pi Desktop을 연다. 없으면 false */
-  openPiDesktop(): Promise<boolean>;
-  onInstallProgress(listener: (received: number, total: number) => void): () => void;
-  /** 자동 업데이트 */
-  updateState(): Promise<UpdateState>;
-  /** interactive면 결과를 창으로 알리고, 새 버전이 있으면 업데이트할지 묻는다 */
-  checkForUpdates(interactive?: boolean): Promise<UpdateState>;
-  /** 찾은 새 버전을 받을지 묻는다 (상단 배지) */
-  confirmUpdate(): Promise<void>;
-  onUpdateState(listener: (state: UpdateState) => void): () => void;
+  /** Pi 관리(설치·로그인·모델)를 연다. Pi 관리는 Pi 작업 공간에만 있다 */
+  openPiManager(): Promise<void>;
   /** 휴대폰(텔레그램) 연결 */
   telegramView(): Promise<TelegramView>;
   /** 봇 토큰을 확인하고 암호화해 저장한 뒤 실행기를 다시 띄운다 */

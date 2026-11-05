@@ -25,7 +25,7 @@ import type { CardDraft } from "@pi-desktop/agent-kit/peers";
 import type { McpCheckResult } from "@pi-desktop/pi-isolation/mcp-presets";
 import { imageMimeType, MAX_IMAGE_BYTES } from "../renderer/attachments";
 import { HostConnection, type LaunchSpec } from "../../../desktop/src/main/host-connection";
-import { listWslDistros, readHostChoice, SshHostStore, writeHostChoice, type SshHostConfig } from "@pi-desktop/host-deploy";
+import { listWslDistros, readHostChoice, SshHostStore, writeHostChoice } from "@pi-desktop/host-deploy";
 import { LOCAL_HOST_ID, prepareAgentSsh, prepareAgentWsl, SSH_PREFIX, WSL_PREFIX, type HostPaths, type Prepared } from "./hosts";
 import { schedulerDirFor, sessionParamsFor, sessionsDirFor } from "./host-session";
 import { resolveNodeRuntime } from "../../../desktop/src/main/node-runtime";
@@ -50,8 +50,8 @@ import { appNum, appTunableStore, initAppTunables } from "./app-tunables";
  * 창을 직접 갖지 않고 컨텍스트로 받아, 단독 Agent 앱(index.ts)과 Pi Desktop의 Agent 작업 공간이 같은 코드를 쓴다.
  * IPC 채널은 모두 "agent:"로 시작해 한 프로세스에서 Pi Desktop의 "pi:" 채널과 부딪히지 않는다.
  */
-/** SSH 호스트 목록이 해 주는 것 (host-deploy의 SshHostStore, Pi Desktop의 SshHostStore가 같은 모양) */
-export type SshHostList = Pick<SshHostStore, "list" | "get" | "save" | "remove">;
+/** SSH 호스트 목록에서 읽는 것 (host-deploy의 SshHostStore, Pi Desktop의 SshHostStore가 같은 모양). 고치기는 Pi 작업 공간이 한다 */
+export type SshHostList = Pick<SshHostStore, "list" | "get">;
 
 export interface AgentMainContext {
   /** 대화상자의 부모 창 */
@@ -68,14 +68,15 @@ export interface AgentMainContext {
   reload(): void;
   /** 이 앱의 상태 파일 폴더 (지금 호스트·SSH 호스트·앱 수치) */
   userData: string;
-  /** SSH 호스트 목록. 합친 앱은 Pi Desktop 것을 함께 쓴다 (DESIGN-ONE-APP.md §6). 생략하면 userData의 ssh-hosts.json */
+  /** SSH 호스트 목록. Pi 작업 공간 것을 함께 쓴다 (DESIGN-ONE-APP.md §6). 생략하면 userData의 ssh-hosts.json */
   sshHosts?: SshHostList;
-  /** Pi 관리: 단독 앱은 Pi Desktop을 찾아 열고, 합친 앱은 Pi 작업 공간의 Pi 관리를 연다 */
-  piDesktop: {
-    path(): string | undefined;
-    open(): unknown;
-    install(): Promise<{ status: string }>;
-  };
+  /**
+   * Pi 관리(설치·로그인·모델)를 연다. Pi 관리는 Pi 작업 공간에만 있다 (Agent는 Pi를 관리하지 않는다).
+   * 합친 앱은 Pi 작업 공간의 Pi 관리를, 휴대폰 웹은 Pi Web을 연다
+   */
+  openPiManager?(): unknown;
+  /** SSH 호스트 관리를 연다. 목록은 Pi 작업 공간 것을 함께 쓰고, 더하기·고치기도 거기서 한다 */
+  openSshHosts?(): unknown;
 }
 
 export interface AgentMain {
@@ -386,7 +387,7 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
   function registerIpc(conn: () => HostConnection): void {
     ipcMain.handle(IpcChannels.connectionState, () => conn().current);
     ipcMain.handle(IpcChannels.piSetup, async (): Promise<PiSetupView> => {
-      // Pi 관리는 Pi Desktop이 맡는다. 여기서는 데몬이 아는 상태를 모아 안내만 한다 (설계 DESIGN-AGENT.md §0)
+      // Pi 관리는 Pi 작업 공간이 맡는다. 여기서는 데몬이 아는 상태를 모아 안내만 한다 (설계 DESIGN-ONE-APP.md §7)
       const status = await conn().request<PiStatus>(Methods.piStatus);
       const models = status.pi
         ? await conn()
@@ -401,12 +402,13 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
         authProviders: status.data.authProviders,
         models: models.models,
         ...(models.error ? { modelsError: models.error } : {}),
-        ...(ctx.piDesktop.path() ? { piDesktopPath: ctx.piDesktop.path() } : {}),
         platform: status.platform,
       };
     });
-    ipcMain.handle(IpcChannels.openPiDesktop, () => ctx.piDesktop.open());
-    ipcMain.handle(IpcChannels.installPiDesktop, async () => ({ status: (await ctx.piDesktop.install()).status }));
+    ipcMain.handle(IpcChannels.openPiManager, async () => {
+      if (!ctx.openPiManager) throw new Error("Pi 관리는 Pi 작업 공간에서 엽니다");
+      await ctx.openPiManager();
+    });
     // 지식베이스·스킬·승인 규칙·관리자 권한은 그 호스트의 데몬이 agent-kit의 같은 함수로 같은 파일을 읽고 고친다
     // (DESIGN-APPS.md §6 D4, agent-kit src/app-api.ts). 사람이 직접 고쳐도 되는 파일이다
     const forward = (channel: string, name: string) => ipcMain.handle(channel, (_event, ...args: unknown[]) => agentCall(name, ...args));
@@ -505,7 +507,7 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
     ipcMain.handle(IpcChannels.closeSession, async (_event, sessionId: string) => {
       await conn().request(Methods.sessionClose, { sessionId });
     });
-    // 호스트 (설계 DESIGN-APPS.md §6 D3): 고르기, SSH 호스트 관리, 그 호스트의 폴더 훑기
+    // 호스트 (설계 DESIGN-APPS.md §6 D3): 고르기, 그 호스트의 폴더 훑기. SSH 호스트 목록은 Pi 작업 공간 것을 함께 쓴다
     ipcMain.handle(
       IpcChannels.listHosts,
       async (): Promise<HostView[]> => [
@@ -519,11 +521,9 @@ export function createAgentMain(ctx: AgentMainContext): AgentMain {
     ipcMain.handle(IpcChannels.currentHost, (): CurrentHost => ({ id: currentHostId, remote: currentHostId !== LOCAL_HOST_ID }));
     ipcMain.handle(IpcChannels.setHost, (_event, hostId: string) => switchHost(hostId));
     ipcMain.handle(IpcChannels.replaceAgent, () => conn().replaceAgent());
-    ipcMain.handle(IpcChannels.listSshHosts, () => sshHosts().list());
-    ipcMain.handle(IpcChannels.saveSshHost, (_event, host: SshHostConfig, previousName?: string) => sshHosts().save(host, previousName));
-    ipcMain.handle(IpcChannels.removeSshHost, async (_event, name: string) => {
-      if (currentHostId === `${SSH_PREFIX}${name}`) throw new Error("지금 쓰는 호스트입니다. 다른 호스트로 바꾼 뒤 지우세요");
-      sshHosts().remove(name);
+    ipcMain.handle(IpcChannels.openSshHosts, async () => {
+      if (!ctx.openSshHosts) throw new Error("SSH 호스트는 Pi 작업 공간의 호스트 목록에서 \"SSH 호스트 관리…\"로 더합니다");
+      await ctx.openSshHosts();
     });
     ipcMain.handle(IpcChannels.listDir, (_event, _hostId: string, path?: string) => conn().request<FsListDirResult>(Methods.fsListDir, path ? { path } : {}));
     ipcMain.handle(

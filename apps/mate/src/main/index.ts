@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAutostart, isRunnerOnlyLaunch, linuxDesktopFile, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
 import { findPiDesktop, PI_DESKTOP_REPO } from "./pi-desktop-install";
-import { openPiDesktop } from "./pi-setup";
+import { focusRunningApp } from "./focus-window";
 
 /**
  * 징검다리 Pi Desktop Mate 0.7.0 (설계 DESIGN-ONE-APP.md §9, D3).
@@ -80,3 +80,12 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => undefined);
+
+/** Pi Desktop을 연다. 이미 떠 있으면 새로 띄우지 않고 그 창으로 포커스를 옮긴다 */
+async function openPiDesktop(): Promise<void> {
+  if (await focusRunningApp("Pi Desktop", "pi-desktop")) return;
+  const path = await findPiDesktop();
+  if (!path) return;
+  const error = await shell.openPath(path);
+  if (error) throw new Error(`Pi Desktop을 열지 못했습니다: ${error}`);
+}

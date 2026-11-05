@@ -20,9 +20,7 @@ export function createMateApi(ipcRenderer: IpcRenderer): MateApi {
     listHosts: () => ipcRenderer.invoke(IpcChannels.listHosts),
     currentHost: () => ipcRenderer.invoke(IpcChannels.currentHost),
     setHost: (hostId, stopPrevious) => ipcRenderer.invoke(IpcChannels.setHost, hostId, stopPrevious),
-    listSshHosts: () => ipcRenderer.invoke(IpcChannels.listSshHosts),
-    saveSshHost: (host, previousName) => ipcRenderer.invoke(IpcChannels.saveSshHost, host, previousName),
-    removeSshHost: (name) => ipcRenderer.invoke(IpcChannels.removeSshHost, name),
+    openSshHosts: () => ipcRenderer.invoke(IpcChannels.openSshHosts),
     listDir: (path) => ipcRenderer.invoke(IpcChannels.listDir, path),
     makeDir: (parent, name) => ipcRenderer.invoke(IpcChannels.makeDir, parent, name),
     skillSave: (previous, input) => ipcRenderer.invoke(IpcChannels.skillSave, previous, input),
@@ -58,9 +56,7 @@ export function createMateApi(ipcRenderer: IpcRenderer): MateApi {
     getAutostart: () => ipcRenderer.invoke(IpcChannels.getAutostart),
     setAutostart: (enabled) => ipcRenderer.invoke(IpcChannels.setAutostart, enabled),
     piReadiness: (refresh) => ipcRenderer.invoke(IpcChannels.piReadiness, refresh === true),
-    installPiDesktop: () => ipcRenderer.invoke(IpcChannels.installPiDesktop),
-    openPiDesktop: () => ipcRenderer.invoke(IpcChannels.openPiDesktop),
-    updateState: () => ipcRenderer.invoke(IpcChannels.updateState),
+    openPiManager: () => ipcRenderer.invoke(IpcChannels.openPiManager),
     telegramView: () => ipcRenderer.invoke(IpcChannels.telegramView),
     telegramSetToken: (token) => ipcRenderer.invoke(IpcChannels.telegramSetToken, token),
     telegramRemove: () => ipcRenderer.invoke(IpcChannels.telegramRemove),
@@ -68,18 +64,6 @@ export function createMateApi(ipcRenderer: IpcRenderer): MateApi {
     telegramUnpair: () => ipcRenderer.invoke(IpcChannels.telegramUnpair),
     telegramTest: () => ipcRenderer.invoke(IpcChannels.telegramTest),
     chatSend: (text, answerTo, images) => ipcRenderer.invoke(IpcChannels.chatSend, text, answerTo, images),
-    checkForUpdates: (interactive) => ipcRenderer.invoke(IpcChannels.checkForUpdates, interactive === true),
-    confirmUpdate: () => ipcRenderer.invoke(IpcChannels.confirmUpdate),
-    onUpdateState: (listener) => {
-      const handler = (_e: unknown, state: Parameters<typeof listener>[0]) => listener(state);
-      ipcRenderer.on(IpcChannels.updateStateChanged, handler);
-      return () => ipcRenderer.removeListener(IpcChannels.updateStateChanged, handler);
-    },
-    onInstallProgress: (listener) => {
-      const handler = (_e: unknown, received: number, total: number) => listener(received, total);
-      ipcRenderer.on(IpcChannels.installProgress, handler);
-      return () => ipcRenderer.removeListener(IpcChannels.installProgress, handler);
-    },
     onChanged: (listener) => {
       const handler = () => listener();
       ipcRenderer.on(IpcChannels.changed, handler);

@@ -1,28 +1,22 @@
 import { useEffect, useState } from "react";
-import type { AutostartView, McpServerView, Overview, PiSetupView, UpdateState } from "../shared/api";
+import type { AutostartView, McpServerView, Overview, PiSetupView } from "../shared/api";
 import { ModelSelect } from "./PiSetup";
 import type { Act } from "./App";
 import { relativeTime } from "./mate-view";
 import { GrantChips } from "./GrantChips";
-import { describeTunables } from "@pi-desktop/agent-kit/tunables-core";
 import { TunablesPanel } from "@pi-desktop/tunables-ui";
-import { WEB_TUNABLES } from "@pi-desktop/web-shell/tunables";
-import { HostSettings } from "./HostSettings";
+import { isWebClient } from "./clipboard-images";
+import { setStopPreviousRunner, stopPreviousRunner } from "./HostPicker";
 
-/** Mate 전체 설정과 실행기 상태 */
-export function SettingsView({
-  overview,
-  act,
-  setup,
-  onRefreshSetup,
-  update,
-}: {
-  overview: Overview;
-  act: Act;
-  setup: PiSetupView | undefined;
-  onRefreshSetup: () => void;
-  update: UpdateState | undefined;
-}) {
+/**
+ * Mate 설정과 실행기 상태. 셸이 하나로 갖는 것은 여기 두지 않는다 (설계 DESIGN-ONE-APP.md §7):
+ * - 호스트는 머리 맨 앞에서 고르고, SSH 호스트는 Pi 작업 공간의 "SSH 호스트 관리"에서 더한다
+ * - Pi 설치·로그인·프로바이더·모델, 업데이트, 프롬프트와 수치는 Pi 관리에서 한다 (수치 탭에 Mate 항목도 함께 보인다)
+ * 휴대폰 웹은 Pi Web의 수치 탭이 작업 공간 항목을 모으지 않아(작업 공간 서버가 따로 돈다), 웹에서만 Mate 수치를 여기서 보인다.
+ */
+export function SettingsView({ overview, act, setup }: { overview: Overview; act: Act; setup: PiSetupView | undefined }) {
+  const web = isWebClient();
+  const [stopPrevious, setStopPrevious] = useState(stopPreviousRunner);
   const { config, runner } = overview;
   const [model, setModel] = useState(config.model);
   const [limit, setLimit] = useState(String(config.dailyRunLimit));
@@ -43,7 +37,12 @@ export function SettingsView({
 
   return (
     <section className="form">
-      <HostSettings act={act} />
+      <div className="muted small-text">
+        호스트는 머리 맨 앞에서 고릅니다. Pi 설치·로그인·모델{web ? "" : ", 프롬프트와 수치, 업데이트"}는 Pi 관리에서 합니다.{" "}
+        <button className="small" onClick={() => void act(() => window.mate.openPiManager())}>
+          Pi 관리 열기
+        </button>
+      </div>
 
       <h2>실행</h2>
       <label className="radio">
@@ -63,7 +62,7 @@ export function SettingsView({
           inheritLabel={`Pi 기본 모델 따르기${setup?.piDefaultModel ? ` (지금: ${setup.piDefaultModel})` : ""}`}
         />
         <span className="muted small-text">
-          임무에서 따로 정하지 않으면 이 모델을 씁니다. "Pi 기본 모델 따르기"를 고르면 Pi Desktop에서 바꾼 기본 모델을 그대로 씁니다. 목록은
+          임무에서 따로 정하지 않으면 이 모델을 씁니다. "Pi 기본 모델 따르기"를 고르면 Pi 관리에서 바꾼 기본 모델을 그대로 씁니다. 목록은
           로그인한 프로바이더의 모델({setup?.models.length ?? "…"}개)입니다.
         </span>
       </label>
@@ -118,49 +117,18 @@ export function SettingsView({
       )}
       <div className="muted small-text">처음 쓰는 도구는 대화 중에 Mate가 허용을 묻습니다. 허용한 도구만 다음부터 씁니다.</div>
 
-      <h2>Pi</h2>
-      <div className="kv">
-        <span>Pi</span>
-        <span>{setup ? (setup.pi ? `${setup.pi.version} (${setup.pi.source})` : "없음") : "확인 중…"}</span>
-        <span>로그인</span>
-        <span>{setup ? setup.authProviders.join(", ") || "없음 (환경 변수·models.json으로 쓰는 프로바이더는 모델 수에 들어감)" : "…"}</span>
-        <span>쓸 수 있는 모델</span>
-        <span>{setup ? `${setup.models.length}개` : "…"}</span>
-        <span>Pi Desktop</span>
-        <span className="path">{setup?.piDesktopPath ?? "찾지 못함 (기본 위치)"}</span>
-      </div>
-      <div className="row">
-        <button onClick={onRefreshSetup}>다시 확인</button>
-        {setup?.piDesktopPath ? (
-          <button onClick={() => void act(() => window.mate.openPiDesktop())}>Pi Desktop 열기 (Pi 설치·로그인·모델 관리)</button>
-        ) : (
-          <button onClick={() => void act(() => window.mate.installPiDesktop())}>Pi Desktop 설치</button>
-        )}
-      </div>
-
-      <TunablesPanel
-        load={async () => {
-          const [runner, local] = await Promise.all([window.mate.tunablesList(), window.mate.appTunablesList()]);
-          return [...runner, ...local, ...describeTunables(WEB_TUNABLES, {})];
-        }}
-        save={(id, value) => (id.startsWith("app.") ? window.mate.appTunableSet(id, value) : window.mate.tunableSet(id, value))}
-        onError={(message) => void act(() => Promise.reject(new Error(message)))}
-        file={`${overview.home}/tunables.json (실행기), 이 PC 앱 데이터 폴더의 app-tunables.json (앱)`}
-        applyNote="실행기가 다음 실행·대화부터 바로 읽습니다. 실행기를 다시 시작할 필요가 없습니다."
-      />
-
-      <h2>Mate</h2>
-      <div className="kv">
-        <span>버전</span>
-        <span>{update ? update.current : "…"}</span>
-        <span>업데이트</span>
-        <span>{update ? updateText(update) : "…"}</span>
-      </div>
-      <div className="row">
-        <button disabled={!update || update.status === "disabled"} onClick={() => void act(() => window.mate.checkForUpdates(true))}>
-          업데이트 확인
-        </button>
-      </div>
+      {web && (
+        <TunablesPanel
+          load={async () => {
+            const [runner, local] = await Promise.all([window.mate.tunablesList(), window.mate.appTunablesList()]);
+            return [...runner, ...local];
+          }}
+          save={(id, value) => (id.startsWith("app.") ? window.mate.appTunableSet(id, value) : window.mate.tunableSet(id, value))}
+          onError={(message) => void act(() => Promise.reject(new Error(message)))}
+          file={`${overview.home}/tunables.json (실행기), 웹 서버 데이터 폴더(~/.pi-web/mate)의 app-tunables.json (앱)`}
+          applyNote="실행기가 다음 실행·대화부터 바로 읽습니다. 실행기를 다시 시작할 필요가 없습니다."
+        />
+      )}
 
       <h2>실행기</h2>
       <div className="kv">
@@ -181,6 +149,18 @@ export function SettingsView({
         <strong>로그인할 때 실행기 시작</strong>
         <span className="muted">{autostart?.reason ?? "PC를 켜고 앱을 열지 않아도 시간표·변화 감지가 돕니다 (창은 뜨지 않음)"}</span>
       </label>
+      <label className="radio">
+        <input
+          type="checkbox"
+          checked={stopPrevious}
+          onChange={(e) => {
+            setStopPrevious(e.target.checked);
+            setStopPreviousRunner(e.target.checked);
+          }}
+        />
+        <strong>호스트를 바꿀 때 지금 호스트의 실행기 멈추기</strong>
+        <span className="muted">그대로 두면 앞 호스트의 임무도 계속 돕니다 (두 곳에서 같은 임무가 돌 수 있습니다)</span>
+      </label>
       <div className="row">
         <button onClick={() => void act(() => window.mate.restartRunner())}>실행기 다시 시작</button>
         <button onClick={() => void act(() => window.mate.revealHome())}>데이터 폴더 열기</button>
@@ -190,25 +170,4 @@ export function SettingsView({
       </p>
     </section>
   );
-}
-
-function updateText(u: UpdateState): string {
-  switch (u.status) {
-    case "disabled":
-      return u.error ?? "확인하지 않음";
-    case "idle":
-      return "곧 확인합니다 (6시간마다)";
-    case "checking":
-      return "확인 중…";
-    case "none":
-      return "최신 버전입니다";
-    case "available":
-      return `새 버전 ${u.version}이(가) 있습니다${u.mode === "notify" ? " (릴리스 페이지에서 내려받기)" : ""}`;
-    case "downloading":
-      return `내려받는 중 ${u.percent ?? 0}%`;
-    case "downloaded":
-      return `${u.version}을(를) 받았습니다. 다시 시작하면 설치합니다`;
-    case "error":
-      return `확인 실패: ${u.error ?? ""}`;
-  }
 }

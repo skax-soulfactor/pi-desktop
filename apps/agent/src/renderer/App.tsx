@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ResizeHandle } from "../../../desktop/src/renderer/ResizeHandle";
 import { Toasts } from "../../../desktop/src/renderer/ExtensionUi";
-import { OPEN_CHAT_COMMAND, type ChatSummary, type CurrentHost, type PiSetupView, type StoredChat, type UpdateState } from "../shared/api";
+import { OPEN_CHAT_COMMAND, type ChatSummary, type CurrentHost, type PiSetupView, type StoredChat } from "../shared/api";
 import { FolderBrowser } from "../../../desktop/src/renderer/FolderBrowser";
 import { ChatPage } from "./ChatPage";
 import { connectionLabel } from "./connection-label";
 import { groupByFolder } from "./chat-groups";
 import { DialogHost } from "./dialog-host";
 import { FolderMenu } from "./FolderMenu";
+import { HostPicker } from "./HostPicker";
 import { KnowledgePage } from "./KnowledgePage";
 import { SkillsPage } from "./SkillsPage";
 import { PiSetupBanner } from "./PiSetupBanner";
@@ -45,7 +46,6 @@ export function App() {
   const [historyView, setHistoryView] = useState<HistoryView>("history");
   const [sessions, setSessions] = useState<ChatSummary[]>([]);
   const [setup, setSetup] = useState<PiSetupView>();
-  const [update, setUpdate] = useState<UpdateState>();
   const [error, setError] = useState<string>();
   /** 대화 이름 바꾸기를 연다 (메뉴 F2·머리의 ✎). 값이 바뀔 때마다 ChatPage가 입력칸을 연다 */
   const [renameTick, setRenameTick] = useState(0);
@@ -102,11 +102,6 @@ export function App() {
     if (!host?.remote) return window.piAgent.pickDirectory();
     return new Promise((resolve) => setFolderPick({ resolve }));
   };
-
-  useEffect(() => {
-    void window.piAgent.updateState().then(setUpdate);
-    return window.piAgent.onUpdateState(setUpdate);
-  }, []);
 
   const noteFolder = (folder: string) => {
     rememberFolder(folder);
@@ -246,6 +241,7 @@ export function App() {
     <div className="agent-shell">
       <nav className="nav">
         <div className="nav-brand">Pi Desktop Agent</div>
+        <HostPicker current={host} onError={onError} />
         <div className="row">
           <button
             className="primary grow"
@@ -349,16 +345,9 @@ export function App() {
         </div>
 
         <div className="nav-foot">
-          {update && (update.status === "available" || update.status === "downloaded") && (
-            <button className="small primary" onClick={() => guard(() => window.piAgent.confirmUpdate())}>
-              {update.status === "downloaded" ? `${update.version} 설치하려면 다시 시작` : `새 버전 ${update.version} 업데이트…`}
-            </button>
-          )}
-          {update?.status === "downloading" && <span className="muted small-text">업데이트 내려받는 중 {update.percent ?? 0}%</span>}
           <span className={`badge ${label.tone}`} title={host ? `호스트: ${hostLabel(host.id)}` : undefined}>
             {label.text}
           </span>
-          {host?.remote && <span className="muted small-text">🖥 {hostLabel(host.id)}</span>}
           {setup?.piVersion && <span className="muted small-text">Pi {setup.piVersion}</span>}
         </div>
       </nav>
@@ -398,7 +387,7 @@ export function App() {
             <span>📁 {folderName(agent.opening)}에서 대화를 여는 중… Pi를 시작하고 있습니다.</span>
           </div>
         )}
-        {setup && page !== "settings" && <PiSetupBanner setup={setup} onRefresh={() => guard(refreshSetup)} onError={onError} />}
+        {setup && <PiSetupBanner setup={setup} onRefresh={() => guard(refreshSetup)} onError={onError} />}
         {page !== "chat" && (
           <div className="back-bar">
             <button className="small" onClick={() => setPage("chat")}>
@@ -462,7 +451,7 @@ export function App() {
             onError={onError}
           />
         )}
-        {page === "settings" && <SettingsPage setup={setup} update={update} onRefresh={() => guard(refreshSetup)} onError={onError} />}
+        {page === "settings" && <SettingsPage onError={onError} />}
       </main>
 
       {ui.dialogs[0] && <DialogHost dialog={ui.dialogs[0]} onAnswer={(reply) => guard(() => agent.answer(ui.dialogs[0]!, reply))} />}

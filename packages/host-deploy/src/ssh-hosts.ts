@@ -54,6 +54,20 @@ export class SshHostStore {
   }
 }
 
+/**
+ * 다른 프로세스·다른 저장소가 고치는 SSH 호스트 파일을 읽기만 한다 (휴대폰 웹의 Agent·Mate가 Pi Web의 목록을 함께 쓸 때).
+ * 부를 때마다 파일을 새로 읽어, Pi Web에서 더한 호스트가 바로 보인다.
+ */
+export function readOnlySshHosts(file: string): Pick<SshHostStore, "list" | "get"> {
+  return {
+    list: () => readHosts(file).map((h) => ({ ...h })),
+    get: (name) => {
+      const host = readHosts(file).find((h) => h.name === name);
+      return host ? { ...host } : undefined;
+    },
+  };
+}
+
 /** 파일이 없거나 깨졌으면 빈 목록. 형식이 맞지 않는 항목은 버린다 */
 function readHosts(file: string): SshHostConfig[] {
   try {

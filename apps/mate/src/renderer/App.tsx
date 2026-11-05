@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ScrollTabs } from "./ScrollTabs";
-import type { CurrentHost, Overview, PiSetupView, UpdateState } from "../shared/api";
+import type { CurrentHost, Overview, PiSetupView } from "../shared/api";
 import { FolderPicker } from "./FolderPicker";
+import { HostPicker } from "./HostPicker";
 import { setFolderPickOpener } from "./folder-pick";
 import { PiSetupBanner } from "./PiSetup";
 import { ActivityView } from "./ActivityView";
@@ -26,7 +27,6 @@ export function App() {
   const [tab, setTab] = useState<Tab>("chat");
   const [now, setNow] = useState(Date.now());
   const [setup, setSetup] = useState<PiSetupView>();
-  const [update, setUpdate] = useState<UpdateState>();
   /** 지금 호스트 (원격이면 머리에 보이고, 폴더는 그 호스트에서 고른다) */
   const [host, setHost] = useState<CurrentHost>();
   const [folderPick, setFolderPick] = useState<{ resolve: (folder: string | undefined) => void }>();
@@ -36,10 +36,6 @@ export function App() {
   }, []);
   // 알림을 누르면 그 알림의 탭(대화·실행 기록·인박스)으로 간다
   useEffect(() => window.mate.onOpenTab((target) => setTab(target as Tab)), []);
-  useEffect(() => {
-    void window.mate.updateState().then(setUpdate);
-    return window.mate.onUpdateState(setUpdate);
-  }, []);
   const checkSetup = useCallback((refresh = false) => {
     void window.mate.piReadiness(refresh).then(setSetup);
   }, []);
@@ -102,7 +98,8 @@ export function App() {
   return (
     <div className="app">
       <header className="top">
-        <div className="brand">Pi Desktop Mate{host?.remote && <span className="count"> · {hostLabel(host.id)}</span>}</div>
+        <div className="brand">Pi Desktop Mate</div>
+        <HostPicker current={host} act={act} />
         <ScrollTabs active={tab}>
           <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
             대화{openQuestions > 0 && <span className="badge">{openQuestions}</span>}
@@ -137,15 +134,6 @@ export function App() {
           </button>
         </ScrollTabs>
         <div className="runner-status" title={runner.pid ? `실행기 pid ${runner.pid}` : undefined}>
-          {update && (update.status === "available" || update.status === "downloading" || update.status === "downloaded") && (
-            <button className="small primary" onClick={() => void act(() => window.mate.confirmUpdate())} disabled={update.status === "downloading"}>
-              {update.status === "downloading"
-                ? `업데이트 받는 중 ${update.percent ?? 0}%`
-                : update.status === "downloaded"
-                  ? `${update.version} 설치하려면 다시 시작`
-                  : `새 버전 ${update.version}`}
-            </button>
-          )}
           {overview.config.paused && <span className="chip warn">일시 정지</span>}
           {runner.alive ? (
             <span className="chip ok">{current ? `${current.name} ${STATUS_LABELS.running}` : "실행기 대기 중"}</span>
@@ -193,7 +181,7 @@ export function App() {
           </section>
         )}
         {tab === "settings" && (
-          <SettingsView overview={overview} act={act} setup={setup} onRefreshSetup={() => checkSetup(true)} update={update} />
+          <SettingsView overview={overview} act={act} setup={setup} />
         )}
       </main>
       {folderPick && host && (

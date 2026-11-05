@@ -15,8 +15,6 @@ export interface PiSetupView {
   /** 쓸 수 있는 모델 (인증이 있는 프로바이더의 모델) */
   models: Array<{ provider: string; id: string }>;
   modelsError?: string;
-  /** 설치된 Pi Desktop 위치 */
-  piDesktopPath?: string;
   platform: string;
 }
 
@@ -34,7 +32,7 @@ export function piSetupIssues(setup: PiSetupView): SetupIssue[] {
       kind: "no-pi",
       level: "error",
       title: "Pi를 찾지 못했습니다",
-      detail: "Pi Desktop을 설치해 Pi를 설치·로그인하거나, 터미널에서 npm으로 설치하세요.",
+      detail: "Pi 관리에서 이 호스트에 Pi를 설치하고 로그인하세요.",
     });
     return issues;
   }
@@ -51,7 +49,7 @@ export function piSetupIssues(setup: PiSetupView): SetupIssue[] {
       kind: "no-models",
       level: "error",
       title: "쓸 수 있는 모델이 없습니다",
-      detail: "프로바이더 로그인·API 키·모델 설정은 Pi Desktop에서 합니다. Pi Desktop의 프로바이더 화면에서 로그인하거나 키를 넣은 뒤 \"다시 확인\"을 누르세요.",
+      detail: "프로바이더 로그인·API 키·모델 설정은 Pi 관리에서 합니다. Pi 관리의 프로바이더 화면에서 로그인하거나 키를 넣은 뒤 \"다시 확인\"을 누르세요.",
     });
   }
   if (setup.platform === "win32" && setup.gitBash && !setup.gitBash.found) {

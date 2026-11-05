@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from "electron";
+import { app, BrowserWindow, dialog, Menu, screen, shell } from "electron";
 import { loadWindowState, trackWindowState } from "@pi-desktop/window-state";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { IpcChannels } from "../shared/api";
-import { findPiDesktop, installPiDesktop, openPiDesktop } from "./pi-desktop";
+import { readOnlySshHosts } from "@pi-desktop/host-deploy";
+import { piWebSshHostsFile } from "@pi-desktop/web-shell/embed";
 import { appMenuTemplate } from "./app-menu";
 import { OWNER, REPO, Updater } from "@pi-desktop/web-shell/stubs/updater";
 import { createAgentMain } from "./agent-main";
@@ -45,11 +46,8 @@ const agent = createAgentMain({
   get userData() {
     return app.getPath("userData");
   },
-  piDesktop: {
-    path: () => findPiDesktop(),
-    open: () => openPiDesktop(),
-    install: () => installPiDesktop(mainWindow, (received, total) => sendToRenderer(IpcChannels.installProgress, received, total)),
-  },
+  // SSH 호스트는 Pi Web 목록을 함께 쓴다 (더하기·고치기는 Pi Web). Pi 관리 열기는 웹 서버가 Pi Web을 연다 (src/server/index.ts)
+  sshHosts: readOnlySshHosts(piWebSshHostsFile()),
 });
 
 /** 창 아이콘. 개발 실행은 build/icon.png, Linux 설치본은 실행 파일에 아이콘이 없어 리소스의 것을 준다 (Pi Desktop과 같음) */
@@ -105,12 +103,8 @@ function createWindow(): void {
 app.whenReady().then(() => {
   agent.start();
 
-  // 업데이트는 웹 대체 (pi-web update로 묶음째 바꾼다)
+  // 업데이트는 웹 대체 (pi-web update로 묶음째 바꾼다). 메뉴의 "업데이트 확인"이 방법을 알린다
   const updater = new Updater();
-  ipcMain.handle(IpcChannels.updateState, () => updater.current);
-  ipcMain.handle(IpcChannels.checkForUpdates, (_event, interactive?: boolean) => updater.check(interactive === true));
-  ipcMain.handle(IpcChannels.confirmUpdate, () => updater.confirmUpdate());
-  updater.start();
 
   // 기능 화면은 사이드바가 아니라 메뉴바에서 연다 (app-menu.ts)
   Menu.setApplicationMenu(

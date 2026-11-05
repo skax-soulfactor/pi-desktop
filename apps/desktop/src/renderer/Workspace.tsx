@@ -898,6 +898,10 @@ export function Workspace({ tabId, active, onStatus, appCommands }: WorkspacePro
       case "new-folder":
         setNewFolderOpen(true);
         return;
+      // Agent·Mate 호스트 목록의 "SSH 호스트 관리…" (SSH 호스트 목록은 세 작업 공간이 함께 쓴다)
+      case "ssh-hosts":
+        setSshHostsOpen(true);
+        return;
       case "pi-providers":
       case "pi-settings":
         setPiManagerTab(id === "pi-providers" ? "providers" : "settings");

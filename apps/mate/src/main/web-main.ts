@@ -1,11 +1,10 @@
-import { app, BrowserWindow, ipcMain, screen, shell } from "electron";
+import { app, BrowserWindow, screen, shell } from "electron";
 import { loadWindowState, trackWindowState } from "@pi-desktop/window-state";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { IpcChannels } from "../shared/api";
 import { getAutostart, isRunnerOnlyLaunch, RUNNER_ONLY_ARG, setAutostart } from "./autostart";
-import { installPiDesktop, openPiDesktop, piDesktopInfo } from "./pi-setup";
-import { Updater } from "@pi-desktop/web-shell/stubs/updater";
+import { readOnlySshHosts } from "@pi-desktop/host-deploy";
+import { piWebSshHostsFile } from "@pi-desktop/web-shell/embed";
 import { createMateMain } from "./mate-main";
 
 /**
@@ -50,11 +49,8 @@ const mate = createMateMain({
   get userData() {
     return app.getPath("userData");
   },
-  piDesktop: {
-    info: () => piDesktopInfo(),
-    open: () => openPiDesktop(),
-    install: () => installPiDesktop(mainWindow, (received, total) => sendToWindow(IpcChannels.installProgress, received, total)),
-  },
+  // SSH 호스트는 Pi Web 목록을 함께 쓴다 (더하기·고치기는 Pi Web). Pi 관리 열기는 웹 서버가 Pi Web을 연다 (src/server/index.ts)
+  sshHosts: readOnlySshHosts(piWebSshHostsFile()),
   autostart: { get: getAutostart, set: setAutostart },
 });
 
@@ -113,12 +109,6 @@ if (isRunnerOnlyLaunch()) {
     mate.start();
     createWindow();
     app.on("will-quit", () => mate.dispose());
-    // 업데이트는 웹 대체 (pi-web update로 묶음째 바꾼다)
-    const updater = new Updater();
-    ipcMain.handle(IpcChannels.updateState, () => updater.current);
-    ipcMain.handle(IpcChannels.checkForUpdates, (_e, interactive: boolean) => updater.check(interactive === true));
-    ipcMain.handle(IpcChannels.confirmUpdate, () => updater.confirmUpdate());
-    updater.start();
   });
   app.on("window-all-closed", () => app.quit());
 }

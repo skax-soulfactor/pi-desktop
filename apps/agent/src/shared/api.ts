@@ -38,9 +38,7 @@ export const IpcChannels = {
   currentHost: "agent:current-host",
   setHost: "agent:set-host",
   replaceAgent: "agent:replace-agent",
-  listSshHosts: "agent:list-ssh-hosts",
-  saveSshHost: "agent:save-ssh-host",
-  removeSshHost: "agent:remove-ssh-host",
+  openSshHosts: "agent:open-ssh-hosts",
   listDir: "agent:list-dir",
   makeDir: "agent:make-dir",
   pickDirectory: "agent:pick-directory",
@@ -51,13 +49,9 @@ export const IpcChannels = {
   setScheduleEnabled: "agent:set-schedule-enabled",
   removeSchedule: "agent:remove-schedule",
   piSetup: "agent:pi-setup",
-  openPiDesktop: "agent:open-pi-desktop",
-  installPiDesktop: "agent:install-pi-desktop",
+  openPiManager: "agent:open-pi-manager",
   listSessions: "agent:list-sessions",
   closeSession: "agent:close-session",
-  updateState: "agent:update-state",
-  checkForUpdates: "agent:check-for-updates",
-  confirmUpdate: "agent:confirm-update",
   kbList: "agent:kb-list",
   skillsList: "agent:skills-list",
   skillSave: "agent:skill-save",
@@ -127,8 +121,6 @@ export const IpcChannels = {
   sessionExit: "agent:session-exit",
   uiResolved: "agent:ui-resolved",
   tasksChanged: "agent:tasks-changed",
-  installProgress: "agent:install-progress",
-  updateStateChanged: "agent:update-state-changed",
   menuCommand: "agent:menu-command",
 } as const;
 
@@ -140,19 +132,6 @@ export type { ConnectionState, PiSetupView, Schedule, TaskRecord };
 /** attach 결과. attach 도중 알림으로 온 이벤트도 함께 담는다 (Pi Desktop의 AttachResult와 같음) */
 export interface AttachResult extends SessionAttachResult {
   events: SessionEventNotification[];
-}
-
-/** 자동 업데이트 상태 (Pi Desktop Mate와 같은 모양) */
-export interface UpdateState {
-  /** disabled: 개발·로컬 빌드, idle, checking, none: 최신, available, downloading, downloaded: 다시 시작하면 설치, error */
-  status: "disabled" | "idle" | "checking" | "none" | "available" | "downloading" | "downloaded" | "error";
-  current: string;
-  /** auto: 내려받아 설치(Windows·AppImage), notify: 알리기만(서명 없는 macOS·deb) */
-  mode: "auto" | "notify";
-  version?: string;
-  percent?: number;
-  error?: string;
-  checkedAt?: number;
 }
 
 /** 사이드바의 대화 하나: 데몬 세션 요약 + Pi 세션 이름 (set_session_name) */
@@ -219,9 +198,8 @@ export interface AgentApi {
   setHost(hostId: string): Promise<void>;
   /** 예전 Host Agent(업데이트 대기)를 지금 끄고 새 것으로 바꾼다. 돌고 있는 대화도 끝난다 */
   replaceAgent(): Promise<void>;
-  listSshHosts(): Promise<SshHostConfig[]>;
-  saveSshHost(host: SshHostConfig, previousName?: string): Promise<SshHostConfig>;
-  removeSshHost(name: string): Promise<void>;
+  /** SSH 호스트를 더하거나 고친다: Pi 작업 공간의 "SSH 호스트 관리"를 연다 (목록은 Pi 작업 공간과 함께 쓴다) */
+  openSshHosts(): Promise<void>;
   /** 호스트의 폴더를 데몬으로 훑는다 (원격 호스트의 폴더 고르기). hostId는 Pi Desktop FolderBrowser와 맞춘 자리 */
   listDir(hostId: string, path?: string): Promise<FsListDirResult>;
   makeDir(hostId: string, parent: string, name: string): Promise<string>;
@@ -235,21 +213,13 @@ export interface AgentApi {
   listSchedules(): Promise<Schedule[]>;
   setScheduleEnabled(id: string, enabled: boolean): Promise<void>;
   removeSchedule(id: string): Promise<void>;
-  /** Pi 준비 상태 (Pi·Node·모델·Git Bash·Pi Desktop) */
+  /** Pi 준비 상태 (Pi·Node·모델·Git Bash) */
   piSetup(): Promise<PiSetupView>;
-  /** 설치된 Pi Desktop을 연다. 없으면 false */
-  openPiDesktop(): Promise<boolean>;
-  /** Pi Desktop 최신 설치 파일을 내려받아 연다 (확인 창을 띄움) */
-  installPiDesktop(): Promise<{ status: "opened" | "cancelled" | "page" }>;
+  /** Pi 관리(설치·로그인·모델)를 연다. Pi 관리는 Pi 작업 공간에만 있다 */
+  openPiManager(): Promise<void>;
   /** 데몬에서 돌고 있는 대화 세션과 그 이름 (스케줄러 세션은 뺀다) */
   listSessions(): Promise<ChatSummary[]>;
   closeSession(sessionId: string): Promise<void>;
-  updateState(): Promise<UpdateState>;
-  /** interactive면 결과를 창으로 알리고, 새 버전이 있으면 업데이트할지 묻는다 */
-  checkForUpdates(interactive?: boolean): Promise<UpdateState>;
-  /** 찾은 새 버전을 받을지 묻는다 (사이드바 배지) */
-  confirmUpdate(): Promise<void>;
-  onUpdateState(listener: (state: UpdateState) => void): () => void;
   /** 앱 메뉴바에서 고른 명령 (app-menu.ts의 MenuCommand) */
   onMenuCommand(listener: (id: string) => void): () => void;
   /** Pi 스킬 (사용자 스킬 폴더 + ~/.agents/skills) */
@@ -360,5 +330,4 @@ export interface AgentApi {
   onUiResolved(listener: (notification: SessionUiResolvedNotification) => void): () => void;
   /** 작업 기록이 바뀌었다 (새 작업·끝난 작업) */
   onTasksChanged(listener: () => void): () => void;
-  onInstallProgress(listener: (received: number, total: number) => void): () => void;
 }
