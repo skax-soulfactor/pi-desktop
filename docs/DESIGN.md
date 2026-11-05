@@ -1278,7 +1278,8 @@ Pi는 세션 파일 잠금을 문서화하지 않았다. 그래서 **같은 세�
 - **좁은 화면**: web-shell이 위쪽 띠(☰ 이름 ⋮)와 서랍을 두고, 앱별 `web.css`가 서랍이 될 옆 메뉴와 입력창·목록을 휴대폰 폭에 맞춘다. web.css는 앱 CSS 뒤에 불러 같은 선택자를 덮는다.
   - Agent: 옆 메뉴(`.nav`)가 서랍. 열렸을 때 transform을 없애야 안의 폴더 메뉴(position: fixed)가 화면 기준으로 뜬다.
   - Mate: 위쪽 탭 줄을 옆으로 밀어 본다.
-- **Pi 관리**: Agent·Mate는 Pi 설치·로그인을 Pi Desktop에 맡긴다. 웹에서는 "Pi Desktop 열기·설치"가 같은 묶음의 Pi Web(8787) 주소(`~/.pi-web/data/url`)를 새 탭으로 연다.
+- **Pi 관리**: Agent·Mate는 Pi 설치·로그인을 Pi 작업 공간에 맡긴다. 웹에서는 "Pi 관리 열기"가 같은 묶음의 Pi Web(8787) 주소(`~/.pi-web/data/url`)를 새 탭으로 연다.
+- **SSH 호스트**: Agent·Mate 웹 서버는 SSH 호스트를 따로 두지 않고 Pi Web의 `ssh-hosts.json`을 읽기만 한다 (`readOnlySshHosts`, 부를 때마다 새로 읽음). 더하기·고치기는 Pi Web에서 한다.
 - **묶음과 실행**: 각 앱의 `npm run build:web`이 `out/web/`(server.mjs, public/, resources/: 설치본의 extraResources와 같다)을 만들고, 루트 `scripts/build-web.mjs`가 그것을 `pi-web.tar.gz` 안의 `agent/`·`mate/`로 넣는다. 버전은 Pi Web과 같다.
   - 서버는 web-shell의 `startWebServer`: 공통 바탕(`listenWebServer`) 위에서 WebSocket을 IpcHub 세션에 잇는다.
   - `pi-web agent`(8788, 데이터 `~/.pi-web/agent`), `pi-web mate`(8789, `~/.pi-web/mate`), `pi-web all`. 명령은 Pi Desktop과 같다(start·stop·status·url·log …).
