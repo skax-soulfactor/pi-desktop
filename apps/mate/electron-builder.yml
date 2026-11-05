@@ -54,7 +54,7 @@ npmRebuild: false
 # 이 url은 설치본의 app-update.yml에 들어가는 기본값이고, 실제로는 앱이 확인할 때마다 setFeedURL로 바꾼다.
 publish:
   provider: generic
-  url: https://github.com/skax-soulfactor/pi-desktop/releases/download/v${version}
+  url: https://github.com/soulfactorx/pi-desktop/releases/download/v${version}
   channel: mate
 
 win:
@@ -86,6 +86,6 @@ linux:
     - target: deb
       arch: [x64]
   category: Development
-  maintainer: skax-soulfactor
+  maintainer: soulfactorx
   syncDesktopName: true
   artifactName: Pi-Desktop-Mate-${version}-${arch}.${ext}

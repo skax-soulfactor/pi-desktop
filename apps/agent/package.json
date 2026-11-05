@@ -5,8 +5,8 @@
   "private": true,
   "type": "module",
   "description": "Pi를 엔진으로 쓰는 데스크톱 에이전트 (기능은 @pi-desktop/agent-kit)",
-  "author": "skax-soulfactor",
-  "homepage": "https://github.com/skax-soulfactor/pi-desktop",
+  "author": "soulfactorx",
+  "homepage": "https://github.com/soulfactorx/pi-desktop",
   "license": "MIT",
   "main": "out/main/index.js",
   "scripts": {

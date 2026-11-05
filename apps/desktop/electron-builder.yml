@@ -69,7 +69,7 @@ npmRebuild: false
 # 자동 업데이트가 확인하는 곳. 태그 v<버전>의 릴리스에 latest*.yml과 설치 파일이 올라간다.
 publish:
   provider: github
-  owner: skax-soulfactor
+  owner: soulfactorx
   repo: pi-desktop
   releaseType: release
 
@@ -106,7 +106,7 @@ linux:
     - target: deb
       arch: [x64]
   category: Development
-  maintainer: skax-soulfactor
+  maintainer: soulfactorx
   # .desktop 파일 이름·StartupWMClass를 desktopName(창의 Wayland app_id·X11 WM_CLASS)과 맞춰 작업 표시줄이 앱 아이콘을 찾게 한다.
   syncDesktopName: true
   artifactName: Pi-Desktop-${version}-${arch}.${ext}

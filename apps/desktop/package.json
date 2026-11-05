@@ -5,8 +5,8 @@
   "private": true,
   "type": "module",
   "description": "Pi Desktop Electron 앱",
-  "author": "skax-soulfactor",
-  "homepage": "https://github.com/skax-soulfactor/pi-desktop",
+  "author": "soulfactorx",
+  "homepage": "https://github.com/soulfactorx/pi-desktop",
   "license": "MIT",
   "main": "out/main/index.js",
   "scripts": {
