@@ -5,10 +5,10 @@
 
 ## 1. 어디서 누가 일하나
 
-- 개발은 **이 저장소(`skax-soulfactor/pi-desktop`) 한 곳에서만** 한다.
-  - PC에서는 `skax-soulfactor` 계정으로 일한다.
-  - 클라우드에서는 `soulfactorx` 계정으로 일한다. 이 계정은 이 저장소에 쓰기 권한이 있다.
-  - 두 계정 모두 이 저장소에 직접 브랜치를 만들고 PR을 연다.
+- 개발은 **이 저장소(`soulfactorx/pi-desktop`) 한 곳에서만** 한다. PC와 클라우드 모두 `soulfactorx` 계정으로 일한다.
+  - PC의 `gh` 기본 계정은 회사 일에 쓰는 `skax-soulfactor`다. 기본 계정을 바꾸지 말고 명령마다 `GH_TOKEN=$(gh auth token --user soulfactorx)`를 붙인다. git은 `origin` 주소의 계정(`https://soulfactorx@github.com/…`)으로 인증한다.
+  - 커밋 작성자는 이 저장소의 git 설정(`이준혁`, `soulfactorx`의 noreply 메일)을 쓴다. 회사 메일·소속을 넣지 않는다.
+  - 2026-11-05에 `skax-soulfactor/pi-desktop`에서 옮겼다. 옛 설치본은 옛 주소의 자동 연결로 업데이트를 받으므로, **`skax-soulfactor`에 `pi-desktop`을 다시 만들지 않는다** (만들면 연결이 영구히 끊긴다).
 - 포크 `soulfactorx/pi-desktop-mobile`에서는 개발하지도 릴리스하지도 않는다. 휴대폰 웹 버전(pi-web)은 이 저장소로 옮겼다(`packages/web-shell`, 각 앱의 `src/server`·`src/web`, 루트 `scripts/build-web.mjs`·`scripts/web`).
 - 클라우드 세션은 리눅스에서 돈다. 타입 검사·테스트·웹 빌드는 되지만, Windows 전용 동작과 Electron 창은 확인할 수 없다. 이런 것은 CI의 windows 칸에 맡기고, PR 본문에 "PC에서 확인 필요"라고 남긴다.
 

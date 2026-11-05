@@ -241,7 +241,7 @@ function setAppMenu(target?: { id: PluginWorkspaceId; win: BrowserWindow }): voi
       type: "info",
       title: "Pi Desktop 정보",
       message: `Pi Desktop ${app.getVersion()}`,
-      detail: `Pi coding agent를 포크하지 않고 GUI로 쓰는 데스크톱 앱\nElectron ${process.versions.electron} · Node ${process.versions.node}\nhttps://github.com/skax-soulfactor/pi-desktop`,
+      detail: `Pi coding agent를 포크하지 않고 GUI로 쓰는 데스크톱 앱\nElectron ${process.versions.electron} · Node ${process.versions.node}\nhttps://github.com/soulfactorx/pi-desktop`,
     });
   const base =
     current === "agent"

@@ -2,6 +2,7 @@
   "name": "@pi-desktop/host-protocol",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "앱과 Host Agent 사이의 메시지 형식(JSONL 프레이밍, JSON-RPC 2.0)",
   "exports": {

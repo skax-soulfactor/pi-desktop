@@ -2,6 +2,7 @@
   "name": "@pi-desktop/host-agent",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "대상 호스트에서 도는 Host Agent: 상주 데몬(agentd)과 연결기(connect)",
   "exports": {

@@ -21,7 +21,7 @@ export interface WebMenuGroup {
 const command = (id: string, label: string, shortcut?: string): WebMenuItem => ({ kind: "command", id, label, ...(shortcut ? { shortcut } : {}) });
 const link = (label: string, url: string): WebMenuItem => ({ kind: "link", label, url });
 
-const REPO = "https://github.com/skax-soulfactor/pi-desktop";
+const REPO = "https://github.com/soulfactorx/pi-desktop";
 
 export const WEB_MENU: WebMenuGroup[] = [
   {

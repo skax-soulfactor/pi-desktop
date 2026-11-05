@@ -38,7 +38,7 @@ Pi를 업데이트하면 앱도 그대로 따라갑니다. 휴대폰 브라우�
 
 ## 설치
 
-[Releases](https://github.com/skax-soulfactor/pi-desktop/releases)의 **Latest**에서 OS에 맞는 파일을 받습니다.
+[Releases](https://github.com/soulfactorx/pi-desktop/releases)의 **Latest**에서 OS에 맞는 파일을 받습니다.
 
 | OS | 파일 | 자동 업데이트 |
 |---|---|---|
@@ -70,7 +70,7 @@ Pi를 업데이트하면 앱도 그대로 따라갑니다. 휴대폰 브라우�
 Electron 앱은 Android에서 돌지 않으므로, 휴대폰의 [Termux](https://termux.dev)에서 Pi와 웹 서버를 돌리고 휴대폰 브라우저(Chrome·삼성 인터넷)로 같은 화면을 엽니다. VS Code의 code-server와 같은 방식입니다.
 
 ```bash
-curl -fsSL https://github.com/skax-soulfactor/pi-desktop/releases/latest/download/install-termux.sh | bash
+curl -fsSL https://github.com/soulfactorx/pi-desktop/releases/latest/download/install-termux.sh | bash
 ```
 
 | 명령 | 하는 일 |
@@ -173,4 +173,4 @@ CI(`.github/workflows/ci.yml`)는 Windows·Linux와 Node 22·24에서 타입 검
 
 ## 라이선스
 
-MIT
+[MIT](LICENSE). 설치 파일과 웹 묶음에 포함된 오픈 소스 패키지의 고지는 함께 들어 있는 `THIRD_PARTY_NOTICES.txt`에 있습니다.

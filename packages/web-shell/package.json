@@ -2,6 +2,7 @@
   "name": "@pi-desktop/web-shell",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Electron 앱(Agent·Mate)을 고치지 않고 브라우저로 쓰게 하는 웹 껍데기: Electron 대체 모듈, 이어지는 WebSocket, 웹 서버",
   "exports": {

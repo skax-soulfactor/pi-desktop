@@ -22,7 +22,7 @@ packages/host-agent    대상 호스트에서 도는 상주 데몬(agentd)과 �
 
 ## 설치와 업데이트
 
-[Releases](https://github.com/skax-soulfactor/pi-desktop/releases)에서 OS에 맞는 파일을 받습니다.
+[Releases](https://github.com/soulfactorx/pi-desktop/releases)에서 OS에 맞는 파일을 받습니다.
 
 | OS | 파일 | 자동 업데이트 |
 |---|---|---|
@@ -63,7 +63,7 @@ Electron 앱은 Android에서 돌지 않습니다. 대신 휴대폰의 [Termux](
 2. Termux에서 한 줄로 설치하고 켭니다. Node.js·Pi·pi-web을 설치하고 브라우저를 엽니다.
 
    ```bash
-   curl -fsSL https://github.com/skax-soulfactor/pi-desktop/releases/latest/download/install-termux.sh | bash
+   curl -fsSL https://github.com/soulfactorx/pi-desktop/releases/latest/download/install-termux.sh | bash
    ```
 
    - 내장 터미널(셸, OAuth `/login`)도 쓰려면 끝에 `-s -- --terminal`을 붙입니다. node-pty를 휴대폰에서 빌드하느라 빌드 도구(수백 MB)를 받습니다.

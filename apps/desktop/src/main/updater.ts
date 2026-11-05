@@ -15,7 +15,7 @@ import {
 
 const { autoUpdater } = electronUpdater;
 
-const OWNER = "skax-soulfactor";
+const OWNER = "soulfactorx";
 const REPO = "pi-desktop";
 
 /**

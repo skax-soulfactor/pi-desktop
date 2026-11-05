@@ -15,7 +15,7 @@ export interface MenuActions {
   about: () => void;
 }
 
-const REPO = "https://github.com/skax-soulfactor/pi-desktop";
+const REPO = "https://github.com/soulfactorx/pi-desktop";
 
 export function appMenuTemplate(platform: NodeJS.Platform, actions: MenuActions): MenuItemConstructorOptions[] {
   const mac = platform === "darwin";

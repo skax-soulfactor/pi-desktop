@@ -11,7 +11,7 @@ import { focusRunningApp } from "./focus-window";
  * 에이전트 앱은 Pi 설치·로그인·프로바이더·모델 관리 화면을 따로 만들지 않는다. 그 일은 Pi Desktop이 맡고,
  * 에이전트는 Pi Desktop을 쉽게 열거나 설치하게 돕는다. Pi Desktop Mate(apps/mate/src/main/pi-setup.ts)와 같은 방식이다.
  */
-export const PI_DESKTOP_REPO = "skax-soulfactor/pi-desktop";
+export const PI_DESKTOP_REPO = "soulfactorx/pi-desktop";
 
 export interface ReleaseAsset {
   name: string;

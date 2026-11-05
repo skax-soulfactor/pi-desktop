@@ -5,8 +5,8 @@
   "private": true,
   "type": "module",
   "description": "묻기 전에 먼저 살펴보고 제안하는 능동형 코딩 동료 (기능은 @pi-desktop/mate-kit, 실행은 @pi-desktop/mate-runner)",
-  "author": "skax-soulfactor",
-  "homepage": "https://github.com/skax-soulfactor/pi-desktop",
+  "author": "soulfactorx",
+  "homepage": "https://github.com/soulfactorx/pi-desktop",
   "license": "MIT",
   "main": "out/main/index.js",
   "scripts": {
@@ -17,7 +17,7 @@
     "build:web": "npm run build -w @pi-desktop/mate-runner && node scripts/build-web.mjs",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "test": "vitest run",
-    "dist": "npm run build && electron-builder --config electron-builder.yml --publish never",
+    "dist": "node ../../scripts/third-party-notices.mjs && npm run build && electron-builder --config electron-builder.yml --publish never",
     "render-icon": "electron scripts/render-icon.mjs"
   },
   "devDependencies": {

@@ -9,7 +9,7 @@ import { join } from "node:path";
  * Mate는 Pi를 설치·로그인하는 화면을 따로 만들지 않는다. Pi 관리는 Pi Desktop이 맡고,
  * Mate는 Pi Desktop을 쉽게 설치·열 수 있게 돕는다.
  */
-export const PI_DESKTOP_REPO = "skax-soulfactor/pi-desktop";
+export const PI_DESKTOP_REPO = "soulfactorx/pi-desktop";
 
 export interface ReleaseAsset {
   name: string;

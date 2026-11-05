@@ -5,8 +5,8 @@
   "private": true,
   "type": "module",
   "description": "Pi를 엔진으로 쓰는 데스크톱 에이전트 (기능은 @pi-desktop/agent-kit)",
-  "author": "skax-soulfactor",
-  "homepage": "https://github.com/skax-soulfactor/pi-desktop",
+  "author": "soulfactorx",
+  "homepage": "https://github.com/soulfactorx/pi-desktop",
   "license": "MIT",
   "main": "out/main/index.js",
   "scripts": {
@@ -18,7 +18,7 @@
     "build:web": "npm run build -w @pi-desktop/host-agent && node scripts/build-web.mjs",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "test": "vitest run",
-    "dist": "npm run build -w @pi-desktop/host-agent && electron-vite build && electron-builder --config electron-builder.yml --publish never"
+    "dist": "node ../../scripts/third-party-notices.mjs && npm run build -w @pi-desktop/host-agent && electron-vite build && electron-builder --config electron-builder.yml --publish never"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"

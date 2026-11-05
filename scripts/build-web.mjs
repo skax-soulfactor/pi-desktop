@@ -8,6 +8,7 @@
 // out/pi-web/
 //   server.mjs, public/, host-agent/, package.json   Pi Desktop 웹 빌드 (apps/desktop, npm run build:web)
 //   bin/pi-web                                      실행 명령 (scripts/web/pi-web.sh)
+//   LICENSE, THIRD_PARTY_NOTICES.txt                라이선스 고지 (scripts/third-party-notices.mjs)
 //   agent/                                          Pi Desktop Agent 웹 빌드 (apps/agent)
 //   mate/                                           Pi Desktop Mate 웹 빌드 (apps/mate)
 //
@@ -18,6 +19,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, copyFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { generateNotices } from "./third-party-notices.mjs";
 
 const at = (relative) => fileURLToPath(new URL(relative, import.meta.url));
 const root = at("..");
@@ -40,6 +42,9 @@ for (const name of ["agent", "mate"]) cpSync(buildApp(name), join(out, name), { 
 mkdirSync(join(out, "bin"), { recursive: true });
 copyFileSync(join(root, "scripts", "web", "pi-web.sh"), join(out, "bin", "pi-web"));
 chmodSync(join(out, "bin", "pi-web"), 0o755);
+
+copyFileSync(join(root, "LICENSE"), join(out, "LICENSE"));
+writeFileSync(join(out, "THIRD_PARTY_NOTICES.txt"), generateNotices(root).text);
 
 console.log(`[build-web] ${out} (버전 ${version})`);
 
