@@ -4,37 +4,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 /**
- * Pi Desktop 찾기·설치 파일 고르기 (설계 DESIGN-MATE.md §9 Pi 준비).
- *
- * Mate는 Pi를 설치·로그인하는 화면을 따로 만들지 않는다. Pi 관리는 Pi Desktop이 맡고,
- * Mate는 Pi Desktop을 쉽게 설치·열 수 있게 돕는다.
+ * Pi Desktop 찾기. 0.7.0부터 Mate는 Pi Desktop 안의 작업 공간이라, 이것은 옛 단독 Mate 앱의 징검다리(index.ts)만 쓴다
+ * ("Pi Desktop으로 합쳐졌습니다" → Pi Desktop 열기, 로그인할 때 Pi Desktop에 실행기 확인 맡기기).
+ * Mate 작업 공간의 Pi 관리는 Pi 작업 공간이 연다 (mate-main.ts openPiManager).
  */
 export const PI_DESKTOP_REPO = "soulfactorx/pi-desktop";
-
-export interface ReleaseAsset {
-  name: string;
-  size: number;
-  browser_download_url: string;
-}
-
-/**
- * Pi Desktop Latest 릴리스에서 이 OS용 설치 파일을 고른다.
- * 같은 저장소에 Mate·Agent 릴리스(Pi-Desktop-Mate-…, Pi-Desktop-Agent-…)도 있으므로 그 파일은 고르지 않는다.
- */
-export function pickPiDesktopAsset(assets: ReleaseAsset[], platform: NodeJS.Platform, arch: string): ReleaseAsset | undefined {
-  const desktop = assets.filter((a) => /^Pi-Desktop-/.test(a.name) && !/^Pi-Desktop-(Mate|Agent)-/.test(a.name));
-  const find = (re: RegExp) => desktop.find((a) => re.test(a.name));
-  switch (platform) {
-    case "win32":
-      return find(/^Pi-Desktop-Setup-.*\.exe$/);
-    case "darwin":
-      return find(new RegExp(`-${arch === "arm64" ? "arm64" : "x64"}\\.dmg$`)) ?? find(/\.dmg$/);
-    case "linux":
-      return find(/\.AppImage$/) ?? find(/\.deb$/);
-    default:
-      return undefined;
-  }
-}
 
 /**
  * 설치된 Pi Desktop 실행 파일(macOS는 .app).

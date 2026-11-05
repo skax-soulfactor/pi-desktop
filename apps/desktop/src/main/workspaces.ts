@@ -1,4 +1,4 @@
-import { app, ipcMain, type BrowserWindow, type WebFrameMain } from "electron";
+import { app, type BrowserWindow, type WebFrameMain } from "electron";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -6,7 +6,6 @@ import { IpcChannels, type PluginWorkspaceId, type WorkspaceId, type WorkspacesS
 import { createAgentMain, type AgentMain, type SshHostList } from "../../../agent/src/main/agent-main";
 import { IpcChannels as AgentChannels } from "../../../agent/src/shared/api";
 import { createMateMain, type MateMain } from "../../../mate/src/main/mate-main";
-import { IpcChannels as MateChannels } from "../../../mate/src/shared/api";
 import { getAutostart, setAutostart } from "../../../mate/src/main/autostart";
 
 /** 징검다리 Mate 0.7.0이 남기는 표시: 옛 Mate에서 "로그인할 때 실행기 시작"이 켜져 있었다 (Pi Desktop이 이어받는다) */
@@ -43,8 +42,10 @@ export interface WorkspaceHost {
   onActiveChanged(id: WorkspaceId): void;
   /** Pi Desktop의 SSH 호스트 목록 (Agent·Mate 작업 공간이 함께 쓴다) */
   sshHosts(): SshHostList | undefined;
-  /** Pi 관리를 연다 (Agent 화면의 "Pi Desktop에서 관리") */
+  /** Pi 관리를 연다 (Agent·Mate 화면의 "Pi 관리 열기"). Pi 관리는 Pi 작업 공간에만 있다 */
   openPiManager(): void;
+  /** SSH 호스트 관리를 연다 (Agent·Mate 호스트 목록의 "SSH 호스트 관리…"). 목록은 세 작업 공간이 함께 쓴다 */
+  openSshHosts(): void;
 }
 
 export class Workspaces {
@@ -270,15 +271,8 @@ export class Workspaces {
       // Agent 상태 파일(지금 호스트·SSH 호스트·앱 수치)은 Pi Desktop 데이터 폴더 안의 agent/에 둔다 (단독 Agent 앱과 섞지 않는다)
       userData: join(app.getPath("userData"), "agent"),
       sshHosts: this.host.sshHosts(),
-      piDesktop: {
-        // 이 앱이 Pi Desktop이다: "설치하세요" 대신 Pi 관리를 연다
-        path: () => process.execPath,
-        open: () => this.host.openPiManager(),
-        install: async () => {
-          this.host.openPiManager();
-          return { status: "opened" };
-        },
-      },
+      openPiManager: () => this.host.openPiManager(),
+      openSshHosts: () => this.host.openSshHosts(),
     });
     this.agent.start();
     this.agentStarted = true;
@@ -309,15 +303,8 @@ export class Workspaces {
       // Mate 상태 파일(지금 호스트·SSH 호스트·앱 수치)은 Pi Desktop 데이터 폴더 안의 mate/에 둔다. Mate 홈(~/.pi-desktop-mate)과 실행기는 단독 Mate 앱과 같다
       userData: join(app.getPath("userData"), "mate"),
       sshHosts: this.host.sshHosts(),
-      piDesktop: {
-        // 이 앱이 Pi Desktop이다
-        info: async () => ({ installedPath: process.execPath }),
-        open: () => this.host.openPiManager(),
-        install: async () => {
-          this.host.openPiManager();
-          return { status: "opened" };
-        },
-      },
+      openPiManager: () => this.host.openPiManager(),
+      openSshHosts: () => this.host.openSshHosts(),
       // 로그인할 때 실행기 시작: Pi Desktop을 --mate-runner-only로 띄워 창 없이 실행기만 확인한다 (main/index.ts)
       autostart: { get: getAutostart, set: setAutostart },
     });
@@ -340,14 +327,5 @@ export class Workspaces {
   dispose(): void {
     this.stopAgent();
     this.stopMate();
-  }
-
-  /** Pi Desktop에는 Agent·Mate 업데이트가 따로 없다 (Pi Desktop이 함께 업데이트한다). 플러그인 화면이 묻는 것에 답만 한다 */
-  registerUpdateStubs(updateState: () => unknown): void {
-    for (const channels of [AgentChannels, MateChannels]) {
-      ipcMain.handle(channels.updateState, () => updateState());
-      ipcMain.handle(channels.checkForUpdates, () => updateState());
-      ipcMain.handle(channels.confirmUpdate, () => undefined);
-    }
   }
 }

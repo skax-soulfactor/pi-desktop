@@ -163,7 +163,7 @@ export function piSetupIssues(setup: PiSetupView, model: string): SetupIssue[] {
       kind: "no-pi",
       level: "bad",
       title: "Pi가 설치되어 있지 않습니다",
-      detail: "Mate는 이 PC의 Pi로 일합니다. Pi Desktop을 설치하면 Pi 설치·로그인·모델 관리를 화면에서 할 수 있습니다.",
+      detail: "Mate는 지금 호스트의 Pi로 일합니다. Pi 관리에서 이 호스트에 Pi를 설치하고 로그인하세요.",
     });
     return issues;
   }
@@ -172,7 +172,7 @@ export function piSetupIssues(setup: PiSetupView, model: string): SetupIssue[] {
       kind: "no-models",
       level: "bad",
       title: "쓸 수 있는 모델이 없습니다",
-      detail: `Pi ${setup.pi?.version ?? ""}는 있지만 로그인한 프로바이더가 없습니다. Pi Desktop의 "프로바이더"에서 로그인하세요.${setup.modelsError ? ` (${setup.modelsError})` : ""}`,
+      detail: `Pi ${setup.pi?.version ?? ""}는 있지만 로그인한 프로바이더가 없습니다. Pi 관리의 "프로바이더"에서 로그인하세요.${setup.modelsError ? ` (${setup.modelsError})` : ""}`,
     });
   } else if (model && !setup.models.some((m) => `${m.provider}/${m.id}` === model)) {
     issues.push({

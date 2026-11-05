@@ -34,6 +34,10 @@
     font-size: 15px;
   }
 
+  .host-picker select {
+    max-width: 40vw;
+  }
+
   .runner-status {
     flex-wrap: wrap;
     justify-content: flex-end;

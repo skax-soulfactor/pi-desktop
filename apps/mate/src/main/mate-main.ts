@@ -33,7 +33,6 @@ import {
   SshHostStore,
   WSL_PREFIX,
   writeHostChoice,
-  type SshHostConfig,
 } from "@pi-desktop/host-deploy";
 import { prepareMateSsh, prepareMateWsl, type RemoteMate } from "./hosts";
 import { placeRunnerFiles } from "./stable-runtime";
@@ -49,8 +48,8 @@ import { appTunableStore, initAppTunables } from "./app-tunables";
  * 창을 직접 갖지 않고 컨텍스트로 받아, 단독 Mate 앱(index.ts)과 Pi Desktop의 Mate 작업 공간이 같은 코드를 쓴다.
  * IPC 채널은 모두 "mate:"로 시작해 한 프로세스에서 Pi Desktop·Agent 채널과 부딪히지 않는다.
  */
-/** SSH 호스트 목록이 해 주는 것 (host-deploy의 SshHostStore, Pi Desktop의 SshHostStore가 같은 모양) */
-export type SshHostList = Pick<SshHostStore, "list" | "get" | "save" | "remove">;
+/** SSH 호스트 목록에서 읽는 것 (host-deploy의 SshHostStore, Pi Desktop의 SshHostStore가 같은 모양). 고치기는 Pi 작업 공간이 한다 */
+export type SshHostList = Pick<SshHostStore, "list" | "get">;
 
 export interface MateMainContext {
   /** 대화상자의 부모 창 */
@@ -67,14 +66,15 @@ export interface MateMainContext {
   reload(): void;
   /** 이 앱의 상태 파일 폴더 (지금 호스트·SSH 호스트·앱 수치) */
   userData: string;
-  /** SSH 호스트 목록. 합친 앱은 Pi Desktop 것을 함께 쓴다 (DESIGN-ONE-APP.md §6). 생략하면 userData의 ssh-hosts.json */
+  /** SSH 호스트 목록. Pi 작업 공간 것을 함께 쓴다 (DESIGN-ONE-APP.md §6). 생략하면 userData의 ssh-hosts.json */
   sshHosts?: SshHostList;
-  /** Pi 관리: 단독 앱은 Pi Desktop을 찾아 열고, 합친 앱은 Pi 작업 공간의 Pi 관리를 연다 */
-  piDesktop: {
-    info(): Promise<{ installedPath?: string }>;
-    open(): unknown;
-    install(): Promise<unknown>;
-  };
+  /**
+   * Pi 관리(설치·로그인·모델)를 연다. Pi 관리는 Pi 작업 공간에만 있다 (Mate는 Pi를 관리하지 않는다).
+   * 합친 앱은 Pi 작업 공간의 Pi 관리를, 휴대폰 웹은 Pi Web을 연다
+   */
+  openPiManager?(): unknown;
+  /** SSH 호스트 관리를 연다. 목록은 Pi 작업 공간 것을 함께 쓰고, 더하기·고치기도 거기서 한다 */
+  openSshHosts?(): unknown;
   /** 로그인할 때 실행기 시작 (단독 앱만 지원, 합친 앱은 0.7.0에서) */
   autostart: {
     get(): AutostartState;
@@ -323,24 +323,18 @@ export function createMateMain(ctx: MateMainContext): MateMain {
     if (refresh || !readinessCache || Date.now() - readinessAt > 5 * 60_000) {
       readinessAt = Date.now();
       readinessCache = call<PiReadiness>("piReadiness").then(
-        async (status) => ({ ...status, ...(await piDesktopInfoView()), checkedAt: Date.now() }),
-        async (error: Error) => ({
+        (status) => ({ ...status, checkedAt: Date.now() }),
+        (error: Error) => ({
           stage: "no-pi" as const,
           piError: `Pi 상태를 확인하지 못했습니다: ${error.message}`,
           node: { path: "", ok: false },
           authProviders: [],
           models: [],
-          ...(await piDesktopInfoView()),
           checkedAt: Date.now(),
         }),
       );
     }
     return readinessCache;
-  }
-
-  async function piDesktopInfoView(): Promise<{ piDesktopPath?: string }> {
-    const info = await ctx.piDesktop.info();
-    return info.installedPath ? { piDesktopPath: info.installedPath } : {};
   }
 
   /** 마지막으로 받은 overview. 실행기와 끊겼을 때 화면이 비지 않게 이것에 "꺼짐"을 붙여 보인다 */
@@ -417,7 +411,7 @@ export function createMateMain(ctx: MateMainContext): MateMain {
       localOnly("데이터 폴더 열기");
       return shell.openPath(paths.home);
     });
-    // 호스트 (DESIGN-MATE-REMOTE.md §3.1): 고르기, SSH 호스트 관리, 그 호스트의 폴더 훑기
+    // 호스트 (DESIGN-MATE-REMOTE.md §3.1): 고르기, 그 호스트의 폴더 훑기. SSH 호스트 목록은 Pi 작업 공간 것을 함께 쓴다
     ipcMain.handle(
       IpcChannels.listHosts,
       async (): Promise<HostView[]> => [
@@ -437,11 +431,9 @@ export function createMateMain(ctx: MateMainContext): MateMain {
       (): CurrentHost => ({ id: currentHostId, remote: isRemote(), ...(remoteMate ? { home: remoteMate.home, userHome: remoteMate.userHome } : {}) }),
     );
     ipcMain.handle(IpcChannels.setHost, (_e, hostId: string, stopPrevious: boolean) => switchHost(String(hostId), stopPrevious !== false));
-    ipcMain.handle(IpcChannels.listSshHosts, () => sshHosts().list());
-    ipcMain.handle(IpcChannels.saveSshHost, (_e, host: SshHostConfig, previousName?: string) => sshHosts().save(host, previousName));
-    ipcMain.handle(IpcChannels.removeSshHost, (_e, name: string) => {
-      if (currentHostId === `${SSH_PREFIX}${name}`) throw new Error("지금 쓰는 호스트입니다. 다른 호스트로 바꾼 뒤 지우세요");
-      sshHosts().remove(name);
+    ipcMain.handle(IpcChannels.openSshHosts, async () => {
+      if (!ctx.openSshHosts) throw new Error("SSH 호스트는 Pi 작업 공간의 호스트 목록에서 \"SSH 호스트 관리…\"로 더합니다");
+      await ctx.openSshHosts();
     });
     forward(IpcChannels.listDir, "listDir");
     forward(IpcChannels.makeDir, "makeDir");
@@ -470,8 +462,10 @@ export function createMateMain(ctx: MateMainContext): MateMain {
       call("chatSend", String(text ?? ""), typeof answerTo === "string" ? answerTo : null, Array.isArray(images) && images.length > 0 ? images : null),
     );
     ipcMain.handle(IpcChannels.piReadiness, (_e, refresh: boolean) => readiness(refresh === true));
-    ipcMain.handle(IpcChannels.installPiDesktop, () => ctx.piDesktop.install());
-    ipcMain.handle(IpcChannels.openPiDesktop, () => ctx.piDesktop.open());
+    ipcMain.handle(IpcChannels.openPiManager, async () => {
+      if (!ctx.openPiManager) throw new Error("Pi 관리는 Pi 작업 공간에서 엽니다");
+      await ctx.openPiManager();
+    });
     ipcMain.handle(IpcChannels.setAutostart, (_e, enabled: boolean) => {
       // 로그인할 때 시작은 이 PC의 실행기만 띄운다 (원격 실행기는 그 호스트에서 돈다, DESIGN-MATE-REMOTE.md §4)
       localOnly("로그인할 때 실행기 시작");

@@ -62,8 +62,8 @@ if (embedded) {
 await import("../main/web-main");
 
 /**
- * Pi 설치·로그인은 Pi Desktop이 맡는다. 휴대폰에서는 같은 묶음의 Pi Web(pi-web, 8787)이 그 자리다.
- * "Pi Desktop 열기·설치"를 누르면 Pi Web 주소를 새 탭으로 연다.
+ * Pi 설치·로그인은 Pi 작업 공간이 맡는다. 휴대폰에서는 같은 묶음의 Pi Web(pi-web, 8787)이 그 자리다.
+ * "Pi 관리 열기"를 누르면 Pi Web 주소를 새 탭으로 연다.
  */
 function piWebUrl(): string | undefined {
   try {
@@ -81,22 +81,7 @@ function openPiWeb(): void {
 
 appReady();
 await app.whenReady();
-hub.override(IpcChannels.openPiDesktop, () => {
-  openPiWeb();
-  return true;
-});
-hub.override(IpcChannels.installPiDesktop, () => {
-  openPiWeb();
-  return { status: "opened" };
-});
-// Pi 준비 안내에 "Pi Desktop 열기"가 보이도록, Pi Web이 켜져 있으면 그 주소를 Pi Desktop 자리에 둔다
-const readiness = hub.handler(IpcChannels.piReadiness);
-if (readiness) {
-  hub.override(IpcChannels.piReadiness, async (event, ...args) => {
-    const view = (await readiness(event, ...args)) as Record<string, unknown>;
-    return piWebUrl() ? { ...view, piDesktopPath: "Pi Web" } : view;
-  });
-}
+hub.override(IpcChannels.openPiManager, () => openPiWeb());
 
 const server = await startWebServer({ app: "Pi Desktop Mate", version: version(), port, host, dataDir, publicDir }).catch((error: Error) => {
   console.error(error.message);

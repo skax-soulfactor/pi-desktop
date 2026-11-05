@@ -124,10 +124,9 @@ const workspaces = new Workspaces({
   rendererFile: (id) => join(here, "../renderer", id, "index.html"),
   sshHosts: () => sshHostsRef,
   onActiveChanged: () => setAppMenu(),
-  openPiManager: () => {
-    workspaces.show("pi");
-    sendToRenderer(IpcChannels.menuCommand, "pi-manager");
-  },
+  // Agent·Mate 화면에서 연다. 새 창으로 연 작업 공간에서 눌러도 Pi Desktop 창을 앞으로 가져와 보인다
+  openPiManager: () => workspaces.reveal("pi", () => sendToRenderer(IpcChannels.menuCommand, "pi-manager")),
+  openSshHosts: () => workspaces.reveal("pi", () => sendToRenderer(IpcChannels.menuCommand, "ssh-hosts")),
 });
 
 /**
@@ -333,7 +332,6 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.workspaceShown, (_event, id: WorkspaceId) => workspaces.shown(id));
   ipcMain.handle(IpcChannels.workspaceReady, (_event, id: PluginWorkspaceId) => workspaces.ready(id));
   ipcMain.handle(IpcChannels.revealWorkspace, (_event, id: WorkspaceId) => workspaces.reveal(id));
-  workspaces.registerUpdateStubs(() => ({ status: "disabled", current: app.getVersion(), mode: "notify" }));
   workspaces.start();
   createWindow();
 
