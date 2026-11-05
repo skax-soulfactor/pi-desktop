@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { explainSshError, remoteSh, sshArgs, sshExecutable, SshHostStore, validateSshHost } from "../src/index";
+import { explainSshError, readOnlySshHosts, remoteSh, sshArgs, sshExecutable, SshHostStore, validateSshHost } from "../src/index";
 
 const phone = { name: "phone", target: "u0_a784@10.0.0.5", port: 8022 };
 
@@ -75,5 +75,19 @@ describe("SshHostStore", () => {
     expect(new SshHostStore(file).list()).toEqual([phone]);
     writeFileSync(file, "{");
     expect(new SshHostStore(file).list()).toEqual([]);
+  });
+});
+
+describe("readOnlySshHosts", () => {
+  it("다른 저장소가 고친 SSH 호스트 파일을 부를 때마다 새로 읽는다 (휴대폰 웹의 Agent·Mate가 Pi Web 목록을 함께 쓴다)", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "ssh-ro-")), "ssh-hosts.json");
+    const shared = readOnlySshHosts(file);
+    expect(shared.list()).toEqual([]);
+    const owner = new SshHostStore(file);
+    owner.save({ name: "devbox", target: "me@devbox", port: 2222 });
+    expect(shared.list()).toEqual([{ name: "devbox", target: "me@devbox", port: 2222 }]);
+    expect(shared.get("devbox")?.target).toBe("me@devbox");
+    owner.remove("devbox");
+    expect(shared.get("devbox")).toBeUndefined();
   });
 });

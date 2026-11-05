@@ -64,6 +64,7 @@ const embed: WebEmbed | undefined = flags.workspaces
       host: listenHost,
       agent: { port: Number(process.env.PI_WEB_AGENT_PORT ?? 8788), dataDir: join(dataDir, "..", "agent") },
       mate: { port: Number(process.env.PI_WEB_MATE_PORT ?? 8789), dataDir: join(dataDir, "..", "mate") },
+      sshHostsFile: join(dataDir, "ssh-hosts.json"),
       urls: {},
       shutdowns: [],
     }
